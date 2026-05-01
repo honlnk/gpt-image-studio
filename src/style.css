@@ -1,0 +1,375 @@
+:root {
+  color: #172033;
+  background: #f7f3ea;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+label,
+select,
+input[type="file"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(26, 95, 122, 0.24);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 28px;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0)),
+    #f7f3ea;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(340px, 460px) minmax(0, 1fr);
+  gap: 18px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.panel {
+  border: 1px solid #d8d1c2;
+  border-radius: 8px;
+  background: rgba(255, 252, 246, 0.94);
+  box-shadow: 0 22px 80px rgba(55, 43, 28, 0.12);
+}
+
+.controls {
+  padding: 22px;
+}
+
+.topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: #60717c;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.intro {
+  margin-bottom: 18px;
+}
+
+.intro h1 {
+  margin: 0 0 8px;
+  color: #16202f;
+  font-size: 30px;
+  line-height: 1.14;
+  letter-spacing: 0;
+}
+
+.intro p,
+.hint,
+.status,
+.result-toolbar span,
+.empty-state p {
+  color: #667583;
+}
+
+.intro p,
+.notice,
+.hint,
+.status {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.notice {
+  margin-bottom: 18px;
+  padding: 12px;
+  border: 1px solid #ead6aa;
+  border-radius: 8px;
+  color: #6b552b;
+  background: #fff7df;
+}
+
+.field {
+  margin-bottom: 15px;
+}
+
+label,
+legend {
+  display: block;
+  margin-bottom: 7px;
+  color: #243247;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #cec6b8;
+  border-radius: 8px;
+  color: #172033;
+  background: #fffefa;
+}
+
+input,
+select {
+  min-height: 44px;
+  padding: 9px 11px;
+}
+
+input[type="file"] {
+  padding: 9px;
+}
+
+textarea {
+  min-height: 138px;
+  padding: 11px;
+  resize: vertical;
+}
+
+.hint {
+  margin: 7px 0 0;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 0 15px;
+  padding: 0;
+  border: 0;
+}
+
+.mode-switch legend {
+  grid-column: 1 / -1;
+}
+
+.mode-switch label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #cec6b8;
+  border-radius: 8px;
+  background: #fffefa;
+  cursor: pointer;
+}
+
+.mode-switch label.active {
+  border-color: #1a5f7a;
+  color: #103a4c;
+  background: #e7f3f7;
+}
+
+.mode-switch input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+.edit-block {
+  padding: 14px;
+  border: 1px solid #d8d1c2;
+  border-radius: 8px;
+  background: #fbf6ec;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.primary-action,
+.download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #1a5f7a;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary-action {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.primary-action:hover:not(:disabled),
+.download:hover {
+  background: #13495e;
+}
+
+.primary-action:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.status {
+  min-height: 22px;
+  margin: 12px 0 0;
+  white-space: pre-wrap;
+}
+
+.status.error {
+  color: #b42318;
+}
+
+.status.success {
+  color: #087443;
+}
+
+.result-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: calc(100vh - 56px);
+  overflow: hidden;
+}
+
+.result-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #d8d1c2;
+}
+
+.result-toolbar div {
+  display: grid;
+  gap: 2px;
+}
+
+.result-toolbar strong {
+  color: #172033;
+  font-size: 16px;
+}
+
+.result-toolbar span {
+  font-size: 13px;
+}
+
+.download {
+  width: 76px;
+  min-height: 38px;
+  font-size: 14px;
+}
+
+.preview {
+  display: grid;
+  min-height: 560px;
+  place-items: center;
+  padding: 18px;
+  background:
+    linear-gradient(45deg, rgba(26, 95, 122, 0.06) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(26, 95, 122, 0.06) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(26, 95, 122, 0.06) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(26, 95, 122, 0.06) 75%);
+  background-color: #fdfaf3;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0;
+  background-size: 20px 20px;
+}
+
+.preview img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 150px);
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(19, 29, 43, 0.24);
+  object-fit: contain;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  gap: 14px;
+  color: #667583;
+  text-align: center;
+}
+
+.empty-state span {
+  width: 78px;
+  height: 78px;
+  border: 1px solid #cfc7b8;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, transparent 49%, #cfc7b8 50%, transparent 51%),
+    linear-gradient(45deg, transparent 49%, #cfc7b8 50%, transparent 51%),
+    #fffefa;
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    padding: 16px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .result-panel {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 560px) {
+  .controls {
+    padding: 18px;
+  }
+
+  .intro h1 {
+    font-size: 25px;
+  }
+
+  .mode-switch,
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
