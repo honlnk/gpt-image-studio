@@ -65,7 +65,7 @@ function autoResize(event: Event) {
 
 function handleComposerKeydown(event: KeyboardEvent) {
   if (event.key !== "Enter" || event.isComposing) return;
-  if (event.shiftKey || event.ctrlKey || event.metaKey) return;
+  if (event.shiftKey) return;
 
   event.preventDefault();
   if (props.canSend) {
