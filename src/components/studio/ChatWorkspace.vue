@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import type { Conversation, EditorKey, ImageAsset, Message } from "../../types/studio";
+import type {
+  Conversation,
+  EditorKey,
+  GenerationParams,
+  ImageAsset,
+  Message,
+} from "../../types/studio";
 
 defineProps<{
   activeAttachments: ImageAsset[];
@@ -25,11 +31,11 @@ defineProps<{
   qualityLabel: string;
   qualityOptions: readonly { value: string; label: string }[];
   sizeLabel: string;
-  sizePresets: readonly string[];
+  sizePresets: readonly GenerationParams["size"][];
 }>();
 
 const emit = defineEmits<{
-  applySizePreset: [preset: string];
+  applySizePreset: [preset: GenerationParams["size"]];
   attachImage: [id: string];
   closeAllEditors: [];
   removeAttachment: [id: string];
@@ -44,6 +50,12 @@ const emit = defineEmits<{
   "update:outputFormat": [value: string];
   "update:quality": [value: string];
 }>();
+
+function autoResize(event: Event) {
+  const el = event.target as HTMLTextAreaElement;
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
 </script>
 
 <template>
@@ -337,11 +349,12 @@ const emit = defineEmits<{
           <label class="sr-only" for="composerText">输入图片需求</label>
           <textarea
             id="composerText"
+            ref="textareaRef"
             :value="composerText"
-            class="max-h-[120px] min-h-[24px] flex-1 resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
+            class="max-h-[160px] flex-1 resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
             placeholder="描述你想生成的图片..."
-            rows="1"
-            @input="emit('update:composerText', ($event.target as HTMLTextAreaElement).value)"
+            rows="2"
+            @input="autoResize($event); emit('update:composerText', ($event.target as HTMLTextAreaElement).value)"
           />
           <button
             class="shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
