@@ -8,6 +8,11 @@ type GenerateImageInput = {
   params: GenerationParams;
 };
 
+type EditImageInput = GenerateImageInput & {
+  image: Blob;
+  imageName: string;
+};
+
 type ImageApiResponse = {
   data?: Array<{
     b64_json?: string;
@@ -30,6 +35,32 @@ export async function generateImage(input: GenerateImageInput) {
       size: apiSize(input.params),
       quality: input.params.quality,
     }),
+  });
+
+  const payload = await parseImageResponse(response);
+  const imageData = payload.data?.[0]?.b64_json;
+
+  if (!imageData) {
+    throw new Error("响应中没有 data[0].b64_json。");
+  }
+
+  return imageData;
+}
+
+export async function editImage(input: EditImageInput) {
+  const body = new FormData();
+  body.append("model", input.model);
+  body.append("prompt", input.prompt);
+  body.append("image", input.image, input.imageName);
+  body.append("size", apiSize(input.params));
+  body.append("quality", input.params.quality);
+
+  const response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl)}/edits`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+    },
+    body,
   });
 
   const payload = await parseImageResponse(response);

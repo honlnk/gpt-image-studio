@@ -38,6 +38,7 @@ export type ImageAsset = {
   conversationId?: string;
   messageId?: string;
   prompt: string;
+  referencedImageIds?: string[];
   createdAt: string;
   updatedAt?: string;
   createdAtMs?: number;

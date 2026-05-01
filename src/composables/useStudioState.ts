@@ -1,7 +1,7 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { listConversations, saveConversation, saveConversations } from "../services/conversations";
 import { loadImageBlob, listImageAssets, saveImageAsset, saveImageAssets, saveImageBlob } from "../services/imageAssets";
-import { base64ToBlob, generateImage } from "../services/imagesApi";
+import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
 import { listMessages, saveMessage, saveMessages } from "../services/messages";
 import { loadSettings, saveSettings } from "../services/settings";
 import type {
@@ -515,18 +515,16 @@ export function useStudioState() {
         throw new Error("请先在设置里填写 API Base URL。");
       }
 
-      if (references.length) {
-        throw new Error("引用图片编辑会在下一步接入，目前请先使用纯文字文生图。");
-      }
-
       const params = assistantMessage.generationParams ?? currentGenerationParams();
-      const imageData = await generateImage({
-        apiBaseUrl: apiBaseUrl.value,
-        apiKey: apiKey.value,
-        model: model.value,
-        prompt,
-        params,
-      });
+      const imageData = references.length
+        ? await requestImageEdit(prompt, references, params)
+        : await generateImage({
+            apiBaseUrl: apiBaseUrl.value,
+            apiKey: apiKey.value,
+            model: model.value,
+            prompt,
+            params,
+          });
       const now = Date.now();
       const mimeType = `image/${params.outputFormat}`;
       const blob = base64ToBlob(imageData, mimeType);
@@ -542,6 +540,7 @@ export function useStudioState() {
         conversationId: assistantMessage.conversationId,
         messageId: assistantMessage.id,
         prompt,
+        referencedImageIds: references,
         createdAt: "刚刚",
         updatedAt: "刚刚",
         createdAtMs: now,
@@ -549,7 +548,9 @@ export function useStudioState() {
       };
 
       assistantMessage.status = "success";
-      assistantMessage.content = "已生成一张图片。";
+      assistantMessage.content = references.length
+        ? "已基于引用图生成一张图片。"
+        : "已生成一张图片。";
       assistantMessage.resultImageIds = [imageId];
       assistantMessage.errorMessage = undefined;
       imageAssets.value = [imageAsset, ...imageAssets.value];
@@ -569,6 +570,36 @@ export function useStudioState() {
       replaceMessage(assistantMessage);
       await saveMessage(toPlainMessage(assistantMessage)).catch(reportStorageError);
     }
+  }
+
+  async function requestImageEdit(
+    prompt: string,
+    references: string[],
+    params: GenerationParams,
+  ) {
+    if (references.length > 1) {
+      throw new Error("目前一次只支持编辑一张引用图片。");
+    }
+
+    const reference = imageById(references[0]);
+    if (!reference?.blobKey) {
+      throw new Error("引用图片缺少本地文件数据，无法编辑。");
+    }
+
+    const image = await loadImageBlob(reference.blobKey);
+    if (!image) {
+      throw new Error("无法读取引用图片文件，请重新生成或导入图片。");
+    }
+
+    return editImage({
+      apiBaseUrl: apiBaseUrl.value,
+      apiKey: apiKey.value,
+      model: model.value,
+      prompt,
+      params,
+      image,
+      imageName: filenameFromAsset(reference),
+    });
   }
 
   function replaceMessage(message: Message) {
@@ -673,6 +704,16 @@ function titleFromPrompt(prompt: string) {
   return prompt.length > 16 ? `${prompt.slice(0, 16)}...` : prompt;
 }
 
+function filenameFromAsset(asset: ImageAsset) {
+  const extension = asset.mimeType === "image/jpeg"
+    ? "jpeg"
+    : asset.mimeType === "image/webp"
+      ? "webp"
+      : "png";
+
+  return `${asset.name || asset.id}.${extension}`;
+}
+
 function normalizeRestoredMessages(messages: Message[]) {
   return messages.map((message) => {
     if (message.status !== "pending") return message;
@@ -742,6 +783,9 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     conversationId: imageAsset.conversationId,
     messageId: imageAsset.messageId,
     prompt: imageAsset.prompt,
+    referencedImageIds: imageAsset.referencedImageIds
+      ? [...imageAsset.referencedImageIds]
+      : undefined,
     createdAt: imageAsset.createdAt,
     updatedAt: imageAsset.updatedAt,
     createdAtMs: imageAsset.createdAtMs,
