@@ -355,6 +355,18 @@ export function useStudioState() {
     attachedImages.value = attachedImages.value.filter((item) => item !== id);
   }
 
+  async function importImages(files: File[]) {
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+
+    const importedAssets = await Promise.all(
+      imageFiles.map((file) => importImageFile(file)),
+    );
+
+    imageAssets.value = [...importedAssets, ...imageAssets.value];
+    importedAssets.forEach((asset) => attachImage(asset.id));
+  }
+
   async function submitMessage() {
     if (!canSend.value) return;
 
@@ -602,6 +614,33 @@ export function useStudioState() {
     });
   }
 
+  async function importImageFile(file: File) {
+    const now = Date.now() + Math.floor(Math.random() * 1000);
+    const imageId = `img-${now}`;
+    const blobKey = `blob-${now}`;
+    const imageAsset: ImageAsset = {
+      id: imageId,
+      blobKey,
+      name: file.name || `导入图片-${now}`,
+      source: "imported",
+      mimeType: file.type || "image/png",
+      sizeBytes: file.size,
+      conversationId: activeConversationId.value,
+      prompt: "用户导入的参考图",
+      createdAt: "刚刚",
+      updatedAt: "刚刚",
+      createdAtMs: now,
+      previewUrl: URL.createObjectURL(file),
+    };
+
+    await Promise.all([
+      saveImageBlob(blobKey, file),
+      saveImageAsset(toPlainImageAsset(imageAsset)),
+    ]).catch(reportStorageError);
+
+    return imageAsset;
+  }
+
   function replaceMessage(message: Message) {
     messages.value = messages.value.map((item) =>
       item.id === message.id ? { ...message } : item,
@@ -658,6 +697,7 @@ export function useStudioState() {
     imageHeight,
     imageModeLabel,
     imageWidth,
+    importImages,
     isEditorExpanded,
     isHydrated,
     isLibraryOpen,
