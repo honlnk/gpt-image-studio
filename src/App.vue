@@ -46,9 +46,10 @@ const studio = useStudioState();
       @apply-size-preset="studio.applySizePreset"
       @attach-image="studio.attachImage"
       @close-all-editors="studio.closeAllEditors"
+      @open-settings="studio.openSettings"
       @remove-attachment="studio.removeAttachment"
       @retry-message="studio.retryMessage"
-      @submit-mock-message="studio.submitMockMessage"
+      @submit-message="studio.submitMessage"
       @toggle-editor="studio.toggleEditor"
     />
 

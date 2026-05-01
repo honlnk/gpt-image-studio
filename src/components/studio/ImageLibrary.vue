@@ -49,7 +49,13 @@ const emit = defineEmits<{
         <div
           class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400"
         >
-          img
+          <img
+            v-if="image.previewUrl"
+            class="h-full w-full rounded-lg object-cover"
+            :alt="image.name"
+            :src="image.previewUrl"
+          />
+          <span v-else>img</span>
         </div>
         <div class="min-w-0 flex-1">
           <div class="truncate text-sm font-medium text-gray-800">

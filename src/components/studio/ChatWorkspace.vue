@@ -40,7 +40,8 @@ const emit = defineEmits<{
   closeAllEditors: [];
   removeAttachment: [id: string];
   retryMessage: [message: Message];
-  submitMockMessage: [];
+  openSettings: [];
+  submitMessage: [];
   toggleEditor: [key: EditorKey];
   "update:background": [value: string];
   "update:composerText": [value: string];
@@ -56,6 +57,12 @@ function autoResize(event: Event) {
   el.style.height = "auto";
   el.style.height = el.scrollHeight + "px";
 }
+
+function imageExtension(image?: ImageAsset) {
+  if (image?.mimeType === "image/jpeg") return "jpeg";
+  if (image?.mimeType === "image/webp") return "webp";
+  return "png";
+}
 </script>
 
 <template>
@@ -67,6 +74,14 @@ function autoResize(event: Event) {
         {{ activeConversation?.title }}
       </h1>
       <div class="flex items-center gap-1">
+        <button
+          class="cursor-pointer rounded-lg p-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
+          aria-label="打开设置"
+          type="button"
+          @click="emit('openSettings')"
+        >
+          ⚙
+        </button>
         <button
           class="cursor-pointer rounded-lg px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
           type="button"
@@ -141,9 +156,15 @@ function autoResize(event: Event) {
               <div
                 class="flex h-48 items-center justify-center bg-gray-100 text-sm text-gray-400"
               >
-                {{ imageById(imageId)?.name }}
+                <img
+                  v-if="imageById(imageId)?.previewUrl"
+                  class="h-full w-full object-contain"
+                  :alt="imageById(imageId)?.name"
+                  :src="imageById(imageId)?.previewUrl"
+                />
+                <span v-else>{{ imageById(imageId)?.name }}</span>
               </div>
-              <figcaption class="flex items-center justify-between px-3 py-2">
+              <figcaption class="flex items-center justify-between gap-3 px-3 py-2">
                 <div class="min-w-0">
                   <div class="truncate text-sm font-medium">
                     {{ imageById(imageId)?.name }}
@@ -152,13 +173,23 @@ function autoResize(event: Event) {
                     {{ imageById(imageId)?.prompt }}
                   </div>
                 </div>
-                <button
-                  class="shrink-0 cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                  type="button"
-                  @click="emit('attachImage', imageId)"
-                >
-                  引用
-                </button>
+                <div class="flex shrink-0 items-center gap-1">
+                  <a
+                    v-if="imageById(imageId)?.previewUrl"
+                    class="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                    :download="`${imageById(imageId)?.name || 'image'}.${imageExtension(imageById(imageId))}`"
+                    :href="imageById(imageId)?.previewUrl"
+                  >
+                    下载
+                  </a>
+                  <button
+                    class="cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                    type="button"
+                    @click="emit('attachImage', imageId)"
+                  >
+                    引用
+                  </button>
+                </div>
               </figcaption>
             </figure>
           </div>
@@ -178,7 +209,7 @@ function autoResize(event: Event) {
 
     <!-- 输入区 -->
     <div class="border-t border-gray-200 bg-white px-4 py-3" @click="emit('closeAllEditors')">
-      <form class="mx-auto max-w-[768px]" @submit.prevent="emit('submitMockMessage')">
+      <form class="mx-auto max-w-[768px]" @submit.prevent="emit('submitMessage')">
         <!-- 编辑器区域 -->
         <div
           :class="[
