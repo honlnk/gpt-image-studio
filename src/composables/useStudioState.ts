@@ -589,19 +589,28 @@ export function useStudioState() {
     references: string[],
     params: GenerationParams,
   ) {
-    if (references.length > 1) {
-      throw new Error("目前一次只支持编辑一张引用图片。");
+    if (references.length > 16) {
+      throw new Error("一次最多支持编辑 16 张引用图片。");
     }
 
-    const reference = imageById(references[0]);
-    if (!reference?.blobKey) {
-      throw new Error("引用图片缺少本地文件数据，无法编辑。");
-    }
+    const images = await Promise.all(
+      references.map(async (id) => {
+        const reference = imageById(id);
+        if (!reference?.blobKey) {
+          throw new Error("引用图片缺少本地文件数据，无法编辑。");
+        }
 
-    const image = await loadImageBlob(reference.blobKey);
-    if (!image) {
-      throw new Error("无法读取引用图片文件，请重新生成或导入图片。");
-    }
+        const blob = await loadImageBlob(reference.blobKey);
+        if (!blob) {
+          throw new Error("无法读取引用图片文件，请重新生成或导入图片。");
+        }
+
+        return {
+          blob,
+          name: filenameFromAsset(reference),
+        };
+      }),
+    );
 
     return editImage({
       apiBaseUrl: apiBaseUrl.value,
@@ -609,8 +618,7 @@ export function useStudioState() {
       model: model.value,
       prompt,
       params,
-      image,
-      imageName: filenameFromAsset(reference),
+      images,
     });
   }
 
