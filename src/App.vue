@@ -56,8 +56,11 @@ const studio = useStudioState();
 
     <ImageLibrary
       v-model:is-open="studio.isLibraryOpen.value"
+      :active-conversation-id="studio.activeConversationId.value"
+      :attached-image-ids="studio.activeAttachments.value.map((image) => image.id)"
       :images="studio.imageAssets.value"
       @attach-image="studio.attachImage"
+      @delete-image="studio.deleteImage"
     />
 
     <SettingsModal
