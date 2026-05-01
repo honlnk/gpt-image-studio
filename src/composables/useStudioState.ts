@@ -1,8 +1,8 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { listConversations, saveConversation, saveConversations } from "../services/conversations";
-import { loadImageBlob, listImageAssets, saveImageAsset, saveImageAssets, saveImageBlob } from "../services/imageAssets";
+import { deleteConversation, listConversations, saveConversation } from "../services/conversations";
+import { deleteImageAsset, deleteImageBlob, loadImageBlob, listImageAssets, saveImageAsset, saveImageBlob } from "../services/imageAssets";
 import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
-import { listMessages, saveMessage, saveMessages } from "../services/messages";
+import { deleteMessage, listMessages, saveMessage } from "../services/messages";
 import { loadSettings, saveSettings } from "../services/settings";
 import type {
   AppSettings,
@@ -19,136 +19,9 @@ const STORAGE_KEYS = {
   apiBaseUrl: "gpt-image-studio:api-base-url",
 } as const;
 
-const SEEDED_CONVERSATIONS: Conversation[] = [
-  {
-    id: "c-1",
-    title: "咖啡馆海报探索",
-    summary: "复古橱窗、暖光、手写标题",
-    createdAt: "10:24",
-    updatedAt: "刚刚",
-    updatedAtMs: 3,
-  },
-  {
-    id: "c-2",
-    title: "产品图背景替换",
-    summary: "白底耳机改成工作台场景",
-    createdAt: "昨天",
-    updatedAt: "昨天",
-    updatedAtMs: 2,
-  },
-  {
-    id: "c-3",
-    title: "头像风格统一",
-    summary: "把多张头像调整成同一视觉",
-    createdAt: "周三",
-    updatedAt: "周三",
-    updatedAtMs: 1,
-  },
-];
-
-const SEEDED_MESSAGES: Message[] = [
-  {
-    id: "m-1",
-    conversationId: "c-1",
-    role: "user",
-    content: "生成一张复古咖啡馆开业海报，画面里有雨夜街道和温暖橱窗。",
-    referencedImageIds: [],
-    resultImageIds: [],
-    status: "success",
-    createdAt: "10:24",
-    createdAtMs: 1,
-  },
-  {
-    id: "m-2",
-    conversationId: "c-1",
-    role: "assistant",
-    content: "已生成一张候选海报。",
-    referencedImageIds: [],
-    resultImageIds: ["img-1"],
-    status: "success",
-    createdAt: "10:25",
-    createdAtMs: 2,
-  },
-  {
-    id: "m-3",
-    conversationId: "c-1",
-    role: "user",
-    content: "保留这个氛围，但把文字区域留得更干净一点。",
-    referencedImageIds: ["img-1"],
-    resultImageIds: [],
-    status: "success",
-    createdAt: "10:30",
-    createdAtMs: 3,
-  },
-  {
-    id: "m-4",
-    conversationId: "c-1",
-    role: "assistant",
-    content: "正在基于引用图调整版式。",
-    referencedImageIds: ["img-1"],
-    resultImageIds: [],
-    status: "pending",
-    createdAt: "10:31",
-    createdAtMs: 4,
-  },
-  {
-    id: "m-5",
-    conversationId: "c-2",
-    role: "user",
-    content: "把这张产品图放到简洁的木质桌面上，光线自然一点。",
-    referencedImageIds: ["img-2"],
-    resultImageIds: [],
-    status: "success",
-    createdAt: "昨天",
-    createdAtMs: 5,
-  },
-  {
-    id: "m-6",
-    conversationId: "c-2",
-    role: "assistant",
-    content: "编辑失败，后续会提供重试入口。",
-    referencedImageIds: ["img-2"],
-    resultImageIds: [],
-    status: "error",
-    createdAt: "昨天",
-    createdAtMs: 6,
-  },
-];
-
-const SEEDED_IMAGE_ASSETS: ImageAsset[] = [
-  {
-    id: "img-1",
-    name: "雨夜咖啡馆海报",
-    source: "generated",
-    prompt: "复古咖啡馆开业海报，雨夜街道，暖光橱窗",
-    createdAt: "10:25",
-    createdAtMs: 4,
-  },
-  {
-    id: "img-2",
-    name: "耳机产品原图",
-    source: "imported",
-    prompt: "用户导入的参考图",
-    createdAt: "昨天",
-    createdAtMs: 3,
-  },
-  {
-    id: "img-3",
-    name: "柔和头像草图",
-    source: "generated",
-    prompt: "柔和光线，干净背景，半身头像",
-    createdAt: "周三",
-    createdAtMs: 2,
-  },
-  {
-    id: "img-4",
-    name: "城市霓虹封面",
-    source: "generated",
-    prompt: "赛博城市，霓虹灯，电影感封面",
-    createdAt: "周一",
-    createdAtMs: 1,
-  },
-];
+const LEGACY_SEED_CONVERSATION_IDS = new Set(["c-1", "c-2", "c-3"]);
+const LEGACY_SEED_MESSAGE_IDS = new Set(["m-1", "m-2", "m-3", "m-4", "m-5", "m-6"]);
+const LEGACY_SEED_IMAGE_IDS = new Set(["img-1", "img-2", "img-3", "img-4"]);
 
 export function useStudioState() {
   const model = ref("gpt-image-2");
@@ -237,10 +110,10 @@ export function useStudioState() {
   const composerText = ref("");
   const attachedImages = ref<string[]>([]);
 
-  const conversations = ref<Conversation[]>([...SEEDED_CONVERSATIONS]);
-  const activeConversationId = ref("c-1");
-  const messages = ref<Message[]>([...SEEDED_MESSAGES]);
-  const imageAssets = ref<ImageAsset[]>([...SEEDED_IMAGE_ASSETS]);
+  const conversations = ref<Conversation[]>([]);
+  const activeConversationId = ref("");
+  const messages = ref<Message[]>([]);
+  const imageAssets = ref<ImageAsset[]>([]);
 
   const activeConversation = computed(() =>
     conversations.value.find((item) => item.id === activeConversationId.value),
@@ -290,26 +163,37 @@ export function useStudioState() {
         await saveSettings(currentSettings());
       }
 
-      if (savedConversations.length) {
-        conversations.value = savedConversations;
-        activeConversationId.value = savedConversations[0].id;
-      } else {
-        await saveConversations(SEEDED_CONVERSATIONS);
-      }
+      await removeLegacySeedRecords(
+        savedConversations,
+        savedMessages,
+        savedImageAssets,
+      );
 
-      if (savedMessages.length) {
-        const restoredMessages = normalizeRestoredMessages(savedMessages);
-        messages.value = restoredMessages;
-        await persistNormalizedMessages(savedMessages, restoredMessages);
-      } else {
-        await saveMessages(SEEDED_MESSAGES);
-      }
+      const restoredConversations = savedConversations.filter(
+        (conversation) => !LEGACY_SEED_CONVERSATION_IDS.has(conversation.id),
+      );
+      const restoredImages = savedImageAssets.filter(
+        (image) =>
+          !LEGACY_SEED_IMAGE_IDS.has(image.id) &&
+          !(
+            image.conversationId &&
+            LEGACY_SEED_CONVERSATION_IDS.has(image.conversationId)
+          ),
+      );
+      const restoredMessages = savedMessages.filter(
+        (message) =>
+          !LEGACY_SEED_MESSAGE_IDS.has(message.id) &&
+          !LEGACY_SEED_CONVERSATION_IDS.has(message.conversationId),
+      );
 
-      if (savedImageAssets.length) {
-        imageAssets.value = await hydrateImagePreviews(savedImageAssets);
-      } else {
-        await saveImageAssets(SEEDED_IMAGE_ASSETS);
-      }
+      conversations.value = restoredConversations;
+      activeConversationId.value = restoredConversations[0]?.id ?? "";
+
+      const normalizedMessages = normalizeRestoredMessages(restoredMessages);
+      messages.value = normalizedMessages;
+      await persistNormalizedMessages(restoredMessages, normalizedMessages);
+
+      imageAssets.value = await hydrateImagePreviews(restoredImages);
     } catch (error) {
       reportStorageError(error);
     } finally {
@@ -330,19 +214,33 @@ export function useStudioState() {
   }
 
   async function createConversation() {
-    const id = `c-${Date.now()}`;
-    const conversation = {
-      id,
+    const conversation = await createConversationRecord({
       title: "新的图片创作",
-      summary: "从一句 prompt 开始",
+      summary: "尚未开始",
+      updatedAtMs: Date.now(),
+    });
+    activeConversationId.value = conversation.id;
+  }
+
+  async function createConversationRecord(input: {
+    title: string;
+    summary: string;
+    updatedAtMs: number;
+  }) {
+    const id = `c-${input.updatedAtMs}`;
+    const conversation: Conversation = {
+      id,
+      title: input.title,
+      summary: input.summary,
       createdAt: "刚刚",
       updatedAt: "刚刚",
-      updatedAtMs: Date.now(),
+      updatedAtMs: input.updatedAtMs,
     };
 
     conversations.value.unshift(conversation);
     activeConversationId.value = id;
     await persistConversation(conversation);
+    return conversation;
   }
 
   function attachImage(id: string) {
@@ -371,8 +269,15 @@ export function useStudioState() {
     if (!canSend.value) return;
 
     const now = Date.now();
-    const conversationId = activeConversationId.value;
     const text = composerText.value.trim() || "基于引用图片继续编辑。";
+    const conversation =
+      activeConversation.value ??
+      await createConversationRecord({
+        title: titleFromPrompt(text),
+        summary: imageModeLabel.value,
+        updatedAtMs: now,
+      });
+    const conversationId = conversation.id;
     const references = [...attachedImages.value];
     const userMessage: Message = {
       id: `m-${now}`,
@@ -633,7 +538,7 @@ export function useStudioState() {
       source: "imported",
       mimeType: file.type || "image/png",
       sizeBytes: file.size,
-      conversationId: activeConversationId.value,
+      conversationId: activeConversationId.value || undefined,
       prompt: "用户导入的参考图",
       createdAt: "刚刚",
       updatedAt: "刚刚",
@@ -786,6 +691,45 @@ async function persistNormalizedMessages(
   if (!changedMessages.length) return;
 
   await Promise.all(changedMessages.map((message) => saveMessage(message)));
+}
+
+async function removeLegacySeedRecords(
+  conversations: Conversation[],
+  messages: Message[],
+  imageAssets: ImageAsset[],
+) {
+  const staleConversations = conversations.filter((conversation) =>
+    LEGACY_SEED_CONVERSATION_IDS.has(conversation.id),
+  );
+  const staleMessages = messages.filter(
+    (message) =>
+      LEGACY_SEED_MESSAGE_IDS.has(message.id) ||
+      LEGACY_SEED_CONVERSATION_IDS.has(message.conversationId),
+  );
+  const staleImages = imageAssets.filter(
+    (image) =>
+      LEGACY_SEED_IMAGE_IDS.has(image.id) ||
+      Boolean(
+        image.conversationId &&
+          LEGACY_SEED_CONVERSATION_IDS.has(image.conversationId),
+      ),
+  );
+
+  if (!staleConversations.length && !staleMessages.length && !staleImages.length) {
+    return;
+  }
+
+  await Promise.all([
+    ...staleConversations.map((conversation) =>
+      deleteConversation(conversation.id),
+    ),
+    ...staleMessages.map((message) => deleteMessage(message.id)),
+    ...staleImages.map((image) => deleteImageAsset(image.id)),
+    ...staleImages
+      .map((image) => image.blobKey)
+      .filter((blobKey): blobKey is string => Boolean(blobKey))
+      .map((blobKey) => deleteImageBlob(blobKey)),
+  ]);
 }
 
 function toPlainConversation(conversation: Conversation): Conversation {

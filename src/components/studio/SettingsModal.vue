@@ -35,7 +35,7 @@ const emit = defineEmits<{
               接口设置
             </h2>
             <p class="mt-0.5 text-sm text-gray-500">
-              当前仍使用浏览器本地配置，后续会迁移到 IndexedDB 设置表。
+              当前设置会保存到浏览器本地 IndexedDB。
             </p>
           </div>
           <button

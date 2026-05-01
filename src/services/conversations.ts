@@ -1,5 +1,5 @@
 import type { Conversation } from "../types/studio";
-import { getAllFromStore, putInStore, putManyInStore, STORE_NAMES } from "./db";
+import { deleteFromStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
 
 export async function listConversations() {
   const conversations = await getAllFromStore<Conversation>(
@@ -15,6 +15,6 @@ export function saveConversation(conversation: Conversation) {
   return putInStore(STORE_NAMES.conversations, conversation);
 }
 
-export function saveConversations(conversations: Conversation[]) {
-  return putManyInStore(STORE_NAMES.conversations, conversations);
+export function deleteConversation(id: string) {
+  return deleteFromStore(STORE_NAMES.conversations, id);
 }
