@@ -189,28 +189,28 @@ function formatError(error) {
   <main class="app-shell">
     <section class="workspace">
       <form class="panel controls" @submit.prevent="submit">
-        <div class="topline">
-          <span>GPT Image Studio</span>
-          <button class="settings-button" type="button" @click="openSettings">
-            设置
-          </button>
-        </div>
-
-        <div class="intro">
-          <h1>简约图片生成工具</h1>
-          <p>输入 prompt 和参数，直接调用兼容 OpenAI Images API 的接口。</p>
-        </div>
-
-        <div class="config-summary">
-          <div>
-            <span>当前模型</span>
-            <strong>{{ model || '未设置' }}</strong>
+        <header class="studio-header">
+          <div class="studio-title-row">
+            <div class="studio-title">
+              <span>GPT Image Studio</span>
+              <h1>简约图片生成工具</h1>
+            </div>
+            <button class="settings-button" type="button" @click="openSettings">
+              设置
+            </button>
           </div>
-          <div>
-            <span>接口配置</span>
-            <strong>{{ apiKey ? '已保存' : '未填写 API key' }}</strong>
+
+          <div class="config-summary">
+            <div>
+              <span>模型</span>
+              <strong>{{ model || '未设置' }}</strong>
+            </div>
+            <div>
+              <span>接口</span>
+              <strong>{{ apiKey ? '已保存' : '未填写 API key' }}</strong>
+            </div>
           </div>
-        </div>
+        </header>
 
         <fieldset class="mode-switch">
           <legend>模式</legend>
