@@ -73,6 +73,7 @@ textarea:focus-visible {
 
 .topline {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
@@ -81,6 +82,33 @@ textarea:focus-visible {
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.settings-button,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cec6b8;
+  border-radius: 8px;
+  color: #243247;
+  background: #fffefa;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-button {
+  width: auto;
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.settings-button:hover,
+.icon-button:hover {
+  border-color: #1a5f7a;
+  color: #103a4c;
+  background: #e7f3f7;
 }
 
 .intro {
@@ -118,6 +146,40 @@ textarea:focus-visible {
   border-radius: 8px;
   color: #6b552b;
   background: #fff7df;
+}
+
+.config-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.config-summary div {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #d8d1c2;
+  border-radius: 8px;
+  background: #fbf6ec;
+}
+
+.config-summary span,
+.config-summary strong {
+  display: block;
+}
+
+.config-summary span {
+  margin-bottom: 3px;
+  color: #667583;
+  font-size: 12px;
+}
+
+.config-summary strong {
+  overflow: hidden;
+  color: #172033;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field {
@@ -345,6 +407,69 @@ textarea {
   margin: 0;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(23, 32, 51, 0.42);
+}
+
+.settings-modal {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid #d8d1c2;
+  border-radius: 8px;
+  background: #fffefa;
+  box-shadow: 0 28px 90px rgba(19, 29, 43, 0.32);
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.modal-header h2 {
+  margin: 0 0 5px;
+  color: #172033;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.modal-header p {
+  margin: 0;
+  color: #667583;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.icon-button {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.modal-actions .primary-action {
+  width: 112px;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     padding: 16px;
@@ -369,7 +494,8 @@ textarea {
   }
 
   .mode-switch,
-  .settings-grid {
+  .settings-grid,
+  .config-summary {
     grid-template-columns: 1fr;
   }
 }

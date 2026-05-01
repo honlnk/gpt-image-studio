@@ -22,6 +22,7 @@ const imageSrc = ref('')
 const status = ref('')
 const statusType = ref('')
 const isBusy = ref(false)
+const isSettingsOpen = ref(false)
 
 const isEditMode = computed(() => mode.value === 'edit')
 const actionLabel = computed(() => (isEditMode.value ? '编辑图片' : '生成图片'))
@@ -51,6 +52,14 @@ function setImageFile(event) {
 
 function setMaskFile(event) {
   maskFile.value = event.target.files?.[0] ?? null
+}
+
+function openSettings() {
+  isSettingsOpen.value = true
+}
+
+function closeSettings() {
+  isSettingsOpen.value = false
 }
 
 function validate() {
@@ -182,44 +191,25 @@ function formatError(error) {
       <form class="panel controls" @submit.prevent="submit">
         <div class="topline">
           <span>GPT Image Studio</span>
-          <span>{{ isEditMode ? 'Edit' : 'Generate' }}</span>
+          <button class="settings-button" type="button" @click="openSettings">
+            设置
+          </button>
         </div>
 
         <div class="intro">
           <h1>简约图片生成工具</h1>
-          <p>输入 key、prompt 和参数，直接调用兼容 OpenAI Images API 的接口。</p>
+          <p>输入 prompt 和参数，直接调用兼容 OpenAI Images API 的接口。</p>
         </div>
 
-        <div class="notice">
-          API key 只在当前页面内存中使用，不会写入本地存储。生产环境建议走自己的后端代理。
-        </div>
-
-        <div class="field">
-          <label for="apiKey">OpenAI API key</label>
-          <input
-            id="apiKey"
-            v-model="apiKey"
-            autocomplete="off"
-            placeholder="sk-..."
-            type="password"
-          />
-        </div>
-
-        <div class="field">
-          <label for="apiBaseUrl">API Base URL</label>
-          <input id="apiBaseUrl" v-model="apiBaseUrl" type="url" />
-          <p class="hint">已默认使用兼容代理地址，刷新页面会保留当前配置。</p>
-        </div>
-
-        <div class="field">
-          <label for="model">模型</label>
-          <input id="model" v-model="model" list="models" />
-          <datalist id="models">
-            <option value="gpt-image-2" />
-            <option value="gpt-image-1.5" />
-            <option value="gpt-image-1" />
-            <option value="gpt-image-1-mini" />
-          </datalist>
+        <div class="config-summary">
+          <div>
+            <span>当前模型</span>
+            <strong>{{ model || '未设置' }}</strong>
+          </div>
+          <div>
+            <span>接口配置</span>
+            <strong>{{ apiKey ? '已保存' : '未填写 API key' }}</strong>
+          </div>
         </div>
 
         <fieldset class="mode-switch">
@@ -338,5 +328,67 @@ function formatError(error) {
         </div>
       </section>
     </section>
+
+    <div
+      v-if="isSettingsOpen"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="closeSettings"
+    >
+      <section
+        aria-labelledby="settingsTitle"
+        aria-modal="true"
+        class="settings-modal"
+        role="dialog"
+      >
+        <div class="modal-header">
+          <div>
+            <h2 id="settingsTitle">接口设置</h2>
+            <p>配置会保存在当前浏览器本地存储中。</p>
+          </div>
+          <button aria-label="关闭设置" class="icon-button" type="button" @click="closeSettings">
+            ×
+          </button>
+        </div>
+
+        <div class="notice">
+          API key 会保存在浏览器 localStorage。共享电脑或公共环境中请谨慎使用。
+        </div>
+
+        <div class="field">
+          <label for="apiKey">OpenAI API key</label>
+          <input
+            id="apiKey"
+            v-model="apiKey"
+            autocomplete="off"
+            placeholder="sk-..."
+            type="password"
+          />
+        </div>
+
+        <div class="field">
+          <label for="apiBaseUrl">API Base URL</label>
+          <input id="apiBaseUrl" v-model="apiBaseUrl" type="url" />
+          <p class="hint">默认使用兼容代理地址，刷新页面会保留当前配置。</p>
+        </div>
+
+        <div class="field">
+          <label for="model">模型</label>
+          <input id="model" v-model="model" list="models" />
+          <datalist id="models">
+            <option value="gpt-image-2" />
+            <option value="gpt-image-1.5" />
+            <option value="gpt-image-1" />
+            <option value="gpt-image-1-mini" />
+          </datalist>
+        </div>
+
+        <div class="modal-actions">
+          <button class="primary-action" type="button" @click="closeSettings">
+            完成
+          </button>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
