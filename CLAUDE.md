@@ -15,20 +15,20 @@ No linter, formatter, or test framework is configured.
 
 ## Architecture
 
-Single-component Vue 3 app. Everything lives in `src/App.vue` (~900 lines) — types, state, logic, template, and styles. No router, no state management library, no component splitting yet.
+Vue 3 app split into focused studio components under `src/components/studio`, with shared state in `src/composables/useStudioState.ts`. No router or state management library.
 
 **Layout**: Three-column ChatGPT-style UI — dark sidebar (conversations), center chat area with inline parameter editors, right panel (image library).
 
-**State**: Pure Composition API (`ref`/`computed`/`watch`). Data is mock/hardcoded. API key and base URL persist via `localStorage`.
+**State**: Pure Composition API (`ref`/`computed`/`watch`). Conversations, messages, image metadata/blobs, and settings persist through IndexedDB.
 
 **Styling**: Tailwind CSS v4 (no config file needed, integrated via `@tailwindcss/vite`). Scoped `<style>` only for the editor collapse animation (`grid-template-rows` transition).
 
 ## Roadmap
 
 See `docs/development-plan.md` for the full plan. Key upcoming phases:
-- Phase 2: IndexedDB persistence (conversations, messages, image blobs)
-- Phase 3: Wire up real image generation API
-- Phase 4: Image editing flow with reference images
+- Phase 2: IndexedDB persistence (conversations, messages, image blobs) — done
+- Phase 3: Wire up real image generation API — done
+- Phase 4: Image editing flow with reference images — in progress
 - Phase 5: Desktop packaging (Tauri/Electron)
 
 ## Conventions

@@ -46,6 +46,7 @@ const studio = useStudioState();
       @apply-size-preset="studio.applySizePreset"
       @attach-image="studio.attachImage"
       @close-all-editors="studio.closeAllEditors"
+      @import-images="studio.importImages"
       @open-settings="studio.openSettings"
       @remove-attachment="studio.removeAttachment"
       @retry-message="studio.retryMessage"

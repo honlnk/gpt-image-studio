@@ -9,8 +9,10 @@ type GenerateImageInput = {
 };
 
 type EditImageInput = GenerateImageInput & {
-  image: Blob;
-  imageName: string;
+  images: Array<{
+    blob: Blob;
+    name: string;
+  }>;
 };
 
 type ImageApiResponse = {
@@ -51,7 +53,9 @@ export async function editImage(input: EditImageInput) {
   const body = new FormData();
   body.append("model", input.model);
   body.append("prompt", input.prompt);
-  body.append("image", input.image, input.imageName);
+  input.images.forEach((image) => {
+    body.append("image", image.blob, image.name);
+  });
   body.append("size", apiSize(input.params));
   body.append("quality", input.params.quality);
 

@@ -87,14 +87,6 @@ export async function putInStore<T>(storeName: StoreName, value: T) {
   await transactionDone(transaction);
 }
 
-export async function putManyInStore<T>(storeName: StoreName, values: T[]) {
-  const db = await getStudioDb();
-  const transaction = db.transaction(storeName, "readwrite");
-  const store = transaction.objectStore(storeName);
-  values.forEach((value) => store.put(value));
-  await transactionDone(transaction);
-}
-
 export async function deleteFromStore(storeName: StoreName, key: IDBValidKey) {
   const db = await getStudioDb();
   const transaction = db.transaction(storeName, "readwrite");

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import type {
   Conversation,
   EditorKey,
@@ -7,7 +8,7 @@ import type {
   Message,
 } from "../../types/studio";
 
-defineProps<{
+const props = defineProps<{
   activeAttachments: ImageAsset[];
   activeConversation?: Conversation;
   activeEditor: EditorKey | null;
@@ -38,6 +39,7 @@ const emit = defineEmits<{
   applySizePreset: [preset: GenerationParams["size"]];
   attachImage: [id: string];
   closeAllEditors: [];
+  importImages: [files: File[]];
   removeAttachment: [id: string];
   retryMessage: [message: Message];
   openSettings: [];
@@ -52,10 +54,23 @@ const emit = defineEmits<{
   "update:quality": [value: string];
 }>();
 
+const isDragActive = ref(false);
+let dragDepth = 0;
+
 function autoResize(event: Event) {
   const el = event.target as HTMLTextAreaElement;
   el.style.height = "auto";
   el.style.height = el.scrollHeight + "px";
+}
+
+function handleComposerKeydown(event: KeyboardEvent) {
+  if (event.key !== "Enter" || event.isComposing) return;
+  if (event.shiftKey) return;
+
+  event.preventDefault();
+  if (props.canSend) {
+    emit("submitMessage");
+  }
 }
 
 function imageExtension(image?: ImageAsset) {
@@ -63,10 +78,99 @@ function imageExtension(image?: ImageAsset) {
   if (image?.mimeType === "image/webp") return "webp";
   return "png";
 }
+
+function importFromInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  emit("importImages", Array.from(input.files ?? []));
+  input.value = "";
+}
+
+function importFromPaste(event: ClipboardEvent) {
+  const files = imageFilesFromTransfer(
+    event.clipboardData?.files,
+    event.clipboardData?.items,
+  );
+
+  if (!files.length) return;
+  event.preventDefault();
+  emit("importImages", files);
+}
+
+function importFromDrop(event: DragEvent) {
+  resetDragState();
+  const files = imageFilesFromTransfer(
+    event.dataTransfer?.files,
+    event.dataTransfer?.items,
+  );
+
+  if (!files.length) return;
+  emit("importImages", files);
+}
+
+function handleDragEnter(event: DragEvent) {
+  if (!hasImageTransfer(event)) return;
+  dragDepth += 1;
+  isDragActive.value = true;
+}
+
+function handleDragLeave() {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) {
+    isDragActive.value = false;
+  }
+}
+
+function resetDragState() {
+  dragDepth = 0;
+  isDragActive.value = false;
+}
+
+function hasImageTransfer(event: DragEvent) {
+  const types = Array.from(event.dataTransfer?.types ?? []);
+  const items = Array.from(event.dataTransfer?.items ?? []);
+
+  return (
+    types.includes("Files") &&
+    (!items.length || items.some((item) => item.type.startsWith("image/")))
+  );
+}
+
+function imageFilesFromTransfer(
+  fileList?: FileList | null,
+  itemList?: DataTransferItemList | null,
+) {
+  const files = Array.from(fileList ?? []).filter((file) =>
+    file.type.startsWith("image/"),
+  );
+
+  if (files.length) return files;
+
+  return Array.from(itemList ?? [])
+    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+}
 </script>
 
 <template>
-  <section class="flex min-w-0 flex-1 flex-col" aria-label="聊天工作区">
+  <section
+    class="relative flex min-w-0 flex-1 flex-col"
+    aria-label="聊天工作区"
+    @dragenter.prevent="handleDragEnter"
+    @dragleave.prevent="handleDragLeave"
+    @dragover.prevent
+    @drop.prevent="importFromDrop"
+  >
+    <div
+      v-if="isDragActive"
+      class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-white/85 backdrop-blur-sm"
+    >
+      <div class="rounded-2xl border border-dashed border-gray-400 bg-white px-8 py-6 text-center shadow-xl">
+        <div class="text-base font-semibold text-gray-900">松开以上传图片</div>
+        <div class="mt-1 text-sm text-gray-500">图片会保存到图片库，并作为下一条消息的引用图</div>
+      </div>
+    </div>
+
     <header
       class="flex items-center justify-between border-b border-gray-200 px-4 py-3"
     >
@@ -208,8 +312,14 @@ function imageExtension(image?: ImageAsset) {
     </div>
 
     <!-- 输入区 -->
-    <div class="border-t border-gray-200 bg-white px-4 py-3" @click="emit('closeAllEditors')">
-      <form class="mx-auto max-w-[768px]" @submit.prevent="emit('submitMessage')">
+    <div
+      class="border-t border-gray-200 bg-white px-4 py-3"
+      @click="emit('closeAllEditors')"
+    >
+      <form
+        class="mx-auto max-w-[768px]"
+        @submit.prevent="emit('submitMessage')"
+      >
         <!-- 编辑器区域 -->
         <div
           :class="[
@@ -360,11 +470,17 @@ function imageExtension(image?: ImageAsset) {
           <div
             v-for="image in activeAttachments"
             :key="image.id"
-            class="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-sm"
+            class="flex max-w-[220px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
           >
+            <img
+              v-if="image.previewUrl"
+              class="h-7 w-7 shrink-0 rounded object-cover"
+              :alt="image.name"
+              :src="image.previewUrl"
+            />
             <span class="truncate text-gray-700">{{ image.name }}</span>
             <button
-              class="cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+              class="shrink-0 cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
               type="button"
               @click="emit('removeAttachment', image.id)"
             >
@@ -373,27 +489,48 @@ function imageExtension(image?: ImageAsset) {
           </div>
         </div>
 
-        <!-- 输入框 + 发送 -->
+        <!-- 输入框 + 操作按钮 -->
         <div
-          class="flex items-end gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-2 shadow-sm transition-shadow focus-within:border-gray-400 focus-within:shadow-md"
+          :class="[
+            'rounded-2xl border bg-white px-3 py-2 shadow-sm transition-all focus-within:border-gray-400 focus-within:shadow-md',
+            isDragActive ? 'border-gray-500 ring-2 ring-gray-200' : 'border-gray-300',
+          ]"
         >
           <label class="sr-only" for="composerText">输入图片需求</label>
           <textarea
             id="composerText"
             ref="textareaRef"
             :value="composerText"
-            class="max-h-[160px] flex-1 resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
+            class="max-h-[160px] w-full resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
             placeholder="描述你想生成的图片..."
             rows="2"
             @input="autoResize($event); emit('update:composerText', ($event.target as HTMLTextAreaElement).value)"
+            @keydown="handleComposerKeydown"
+            @paste="importFromPaste"
           />
-          <button
-            class="shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
-            :disabled="!canSend"
-            type="submit"
-          >
-            发送
-          </button>
+          <div class="flex items-center justify-between">
+            <label
+              class="inline-flex items-center justify-center cursor-pointer rounded-lg w-8 h-8 text-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+              aria-label="上传图片"
+              title="上传图片"
+            >
+              +
+              <input
+                class="sr-only"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                @change="importFromInput"
+              />
+            </label>
+            <button
+              class="shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
+              :disabled="!canSend"
+              type="submit"
+            >
+              发送
+            </button>
+          </div>
         </div>
       </form>
     </div>

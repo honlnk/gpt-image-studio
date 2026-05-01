@@ -1,5 +1,5 @@
 import type { ImageAsset } from "../types/studio";
-import { getAllFromStore, getFromStore, putInStore, putManyInStore, STORE_NAMES } from "./db";
+import { deleteFromStore, getAllFromStore, getFromStore, putInStore, STORE_NAMES } from "./db";
 
 type ImageBlobRecord = {
   key: string;
@@ -18,12 +18,16 @@ export function saveImageAsset(imageAsset: ImageAsset) {
   return putInStore(STORE_NAMES.imageAssets, imageAsset);
 }
 
-export function saveImageAssets(imageAssets: ImageAsset[]) {
-  return putManyInStore(STORE_NAMES.imageAssets, imageAssets);
+export function deleteImageAsset(id: string) {
+  return deleteFromStore(STORE_NAMES.imageAssets, id);
 }
 
 export function saveImageBlob(key: string, blob: Blob) {
   return putInStore<ImageBlobRecord>(STORE_NAMES.imageBlobs, { key, blob });
+}
+
+export function deleteImageBlob(key: string) {
+  return deleteFromStore(STORE_NAMES.imageBlobs, key);
 }
 
 export async function loadImageBlob(key: string) {
