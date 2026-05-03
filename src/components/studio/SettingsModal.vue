@@ -28,10 +28,7 @@ const emit = defineEmits<{
       >
         <div class="mb-5 flex items-start justify-between">
           <div>
-            <h2
-              id="settingsTitle"
-              class="text-lg font-semibold text-gray-900"
-            >
+            <h2 id="settingsTitle" class="text-lg font-semibold text-gray-900">
               接口设置
             </h2>
             <p class="mt-0.5 text-sm text-gray-500">
@@ -66,7 +63,9 @@ const emit = defineEmits<{
               autocomplete="off"
               placeholder="sk-..."
               type="password"
-              @input="emit('update:apiKey', ($event.target as HTMLInputElement).value)"
+              @input="
+                emit('update:apiKey', ($event.target as HTMLInputElement).value)
+              "
             />
           </div>
 
@@ -81,8 +80,20 @@ const emit = defineEmits<{
               :value="apiBaseUrl"
               class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-gray-500"
               type="url"
-              @input="emit('update:apiBaseUrl', ($event.target as HTMLInputElement).value)"
+              @input="
+                emit(
+                  'update:apiBaseUrl',
+                  ($event.target as HTMLInputElement).value,
+                )
+              "
             />
+            <a
+              href="https://code.mrzengchn.com/"
+              class="mt-1.5 inline-block cursor-pointer text-xs text-gray-400 transition-colors hover:text-gray-600"
+              target="_blank"
+              rel="noopener"
+              >没有API Key？</a
+            >
           </div>
         </div>
 
