@@ -17,6 +17,8 @@ const DEFAULT_API_BASE_URL = "https://code.mrzengchn.com/v1/images";
 const STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
   apiBaseUrl: "gpt-image-studio:api-base-url",
+  draftAttachments: "gpt-image-studio:draft-attachments",
+  draftComposerText: "gpt-image-studio:draft-composer-text",
 } as const;
 
 const LEGACY_SEED_CONVERSATION_IDS = new Set(["c-1", "c-2", "c-3"]);
@@ -107,8 +109,10 @@ export function useStudioState() {
       expandTimer = null;
     }, 200);
   }
-  const composerText = ref("");
-  const attachedImages = ref<string[]>([]);
+  const composerText = ref(readStorage(STORAGE_KEYS.draftComposerText, ""));
+  const attachedImages = ref<string[]>(
+    readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []),
+  );
 
   const conversations = ref<Conversation[]>([]);
   const activeConversationId = ref("");
@@ -123,12 +127,16 @@ export function useStudioState() {
       (message) => message.conversationId === activeConversationId.value,
     ),
   );
+  const isGenerating = computed(() =>
+    messages.value.some((message) => message.status === "pending"),
+  );
   const activeAttachments = computed(() =>
     attachedImages.value
       .map((id) => imageAssets.value.find((image) => image.id === id))
       .filter((image): image is ImageAsset => Boolean(image)),
   );
   const canSend = computed(() =>
+    !isGenerating.value &&
     Boolean(composerText.value.trim() || attachedImages.value.length),
   );
   const imageModeLabel = computed(() =>
@@ -145,6 +153,18 @@ export function useStudioState() {
       if (!isHydrated.value) return;
       void saveSettings(currentSettings()).catch(reportStorageError);
     },
+  );
+
+  watch(composerText, (value) => {
+    writeStorage(STORAGE_KEYS.draftComposerText, value);
+  });
+
+  watch(
+    attachedImages,
+    (value) => {
+      writeStorage(STORAGE_KEYS.draftAttachments, JSON.stringify(value));
+    },
+    { deep: true },
   );
 
   async function hydrateFromStorage() {
@@ -194,6 +214,9 @@ export function useStudioState() {
       await persistNormalizedMessages(restoredMessages, normalizedMessages);
 
       imageAssets.value = await hydrateImagePreviews(restoredImages);
+      attachedImages.value = attachedImages.value.filter((id) =>
+        restoredImages.some((image) => image.id === id),
+      );
     } catch (error) {
       reportStorageError(error);
     } finally {
@@ -317,7 +340,7 @@ export function useStudioState() {
   }
 
   async function submitMessage() {
-    if (!canSend.value) return;
+    if (!canSend.value || isGenerating.value) return;
 
     const now = Date.now();
     const text = composerText.value.trim() || "基于引用图片继续编辑。";
@@ -665,6 +688,7 @@ export function useStudioState() {
     imageWidth,
     importImages,
     isEditorExpanded,
+    isGenerating,
     isHydrated,
     isLibraryOpen,
     isSettingsOpen,
@@ -689,6 +713,23 @@ export function useStudioState() {
 function readStorage(key: string, fallback: string) {
   try {
     return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore local draft persistence failures.
+  }
+}
+
+function readJsonStorage<T>(key: string, fallback: T) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : fallback;
   } catch {
     return fallback;
   }

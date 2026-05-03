@@ -25,6 +25,7 @@ const props = defineProps<{
   imageHeight: number;
   imageWidth: number;
   isEditorExpanded: boolean;
+  isGenerating: boolean;
   isLibraryOpen: boolean;
   model: string;
   outputFormat: string;
@@ -599,10 +600,10 @@ function imageFilesFromTransfer(
             </label>
             <button
               class="shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
-              :disabled="!canSend"
+              :disabled="!canSend || isGenerating"
               type="submit"
             >
-              发送
+              {{ isGenerating ? "生成中" : "发送" }}
             </button>
           </div>
         </div>

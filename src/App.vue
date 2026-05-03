@@ -43,6 +43,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       :format-options="studio.formatOptions"
       :image-by-id="studio.imageById"
       :is-editor-expanded="studio.isEditorExpanded.value"
+      :is-generating="studio.isGenerating.value"
       :model="studio.model.value"
       :quality-label="studio.qualityLabel.value"
       :quality-options="studio.qualityOptions"
