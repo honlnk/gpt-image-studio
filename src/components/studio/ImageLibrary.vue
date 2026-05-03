@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { createZipArchive } from "../../services/zipArchive";
 import type { ImageAsset } from "../../types/studio";
 
 const props = defineProps<{
@@ -16,6 +17,8 @@ const emit = defineEmits<{
 }>();
 
 const activeFilter = ref<"current" | "all">("current");
+const isSelectionMode = ref(false);
+const selectedImageIds = ref<Set<string>>(new Set());
 const selectedImageId = ref("");
 
 const currentConversationImages = computed(() =>
@@ -30,6 +33,14 @@ const selectedImage = computed(
   () =>
     props.images.find((image) => image.id === selectedImageId.value) ??
     filteredImages.value[0],
+);
+const downloadableImages = computed(() =>
+  filteredImages.value.filter((image) => image.previewUrl),
+);
+const selectedImages = computed(() =>
+  props.images.filter(
+    (image) => image.previewUrl && selectedImageIds.value.has(image.id),
+  ),
 );
 
 watch(
@@ -47,7 +58,35 @@ watch(
 );
 
 function selectImage(id: string) {
+  if (isSelectionMode.value) {
+    toggleImageSelection(id);
+    return;
+  }
+
   selectedImageId.value = id;
+}
+
+function toggleSelectionMode() {
+  isSelectionMode.value = !isSelectionMode.value;
+  selectedImageIds.value = new Set();
+}
+
+function toggleImageSelection(id: string) {
+  const nextSelection = new Set(selectedImageIds.value);
+  if (nextSelection.has(id)) {
+    nextSelection.delete(id);
+  } else {
+    nextSelection.add(id);
+  }
+  selectedImageIds.value = nextSelection;
+}
+
+function selectAllVisibleImages() {
+  selectedImageIds.value = new Set(downloadableImages.value.map((image) => image.id));
+}
+
+function clearSelection() {
+  selectedImageIds.value = new Set();
 }
 
 function sourceLabel(image: ImageAsset) {
@@ -66,6 +105,38 @@ function imageExtension(image: ImageAsset) {
 
 function imageDownloadName(image: ImageAsset) {
   return `${image.name || "image"}.${imageExtension(image)}`;
+}
+
+async function downloadSelectedImages() {
+  if (!selectedImages.value.length) return;
+
+  const entries = await Promise.all(
+    selectedImages.value.map(async (image, index) => {
+      const response = await fetch(image.previewUrl as string);
+      const blob = await response.blob();
+
+      return {
+        name: uniqueZipEntryName(imageDownloadName(image), index),
+        blob,
+      };
+    }),
+  );
+  const zipBlob = await createZipArchive(entries);
+  const downloadUrl = URL.createObjectURL(zipBlob);
+  const anchor = document.createElement("a");
+  anchor.href = downloadUrl;
+  anchor.download = `gpt-image-studio-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+  anchor.click();
+  URL.revokeObjectURL(downloadUrl);
+}
+
+function uniqueZipEntryName(filename: string, index: number) {
+  if (index === 0) return filename;
+
+  const dotIndex = filename.lastIndexOf(".");
+  if (dotIndex === -1) return `${filename}-${index + 1}`;
+
+  return `${filename.slice(0, dotIndex)}-${index + 1}${filename.slice(dotIndex)}`;
 }
 
 function imageSize(image: ImageAsset) {
@@ -139,6 +210,40 @@ function isAttached(id: string) {
           全部图片
         </button>
       </div>
+
+      <div class="mt-3 flex items-center justify-between gap-2 text-xs">
+        <button
+          class="cursor-pointer rounded-lg px-2 py-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+          type="button"
+          @click="toggleSelectionMode"
+        >
+          {{ isSelectionMode ? "退出多选" : "多选" }}
+        </button>
+        <div v-if="isSelectionMode" class="flex items-center gap-1">
+          <button
+            class="cursor-pointer rounded-lg px-2 py-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+            type="button"
+            @click="selectAllVisibleImages"
+          >
+            全选
+          </button>
+          <button
+            class="cursor-pointer rounded-lg px-2 py-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+            type="button"
+            @click="clearSelection"
+          >
+            清空
+          </button>
+          <button
+            class="cursor-pointer rounded-lg bg-black px-2 py-1 font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
+            type="button"
+            :disabled="!selectedImages.length"
+            @click="downloadSelectedImages"
+          >
+            下载 ZIP ({{ selectedImages.length }})
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="flex min-h-0 flex-1 flex-col">
@@ -155,14 +260,19 @@ function isAttached(id: string) {
           :key="image.id"
           :class="[
             'mb-2 flex cursor-pointer items-center gap-3 rounded-xl border p-2 transition-colors',
-            selectedImage?.id === image.id
+            isSelectionMode && selectedImageIds.has(image.id)
+              ? 'border-gray-900 bg-gray-50 shadow-sm'
+              : selectedImage?.id === image.id
               ? 'border-gray-400 bg-gray-50'
               : 'border-gray-200 hover:bg-gray-50',
           ]"
           @click="selectImage(image.id)"
         >
           <div
-            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400"
+            :class="[
+              'relative flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400',
+              isSelectionMode && selectedImageIds.has(image.id) ? 'ring-2 ring-gray-900 ring-offset-1' : '',
+            ]"
           >
             <img
               v-if="image.previewUrl"
@@ -171,6 +281,13 @@ function isAttached(id: string) {
               :src="image.previewUrl"
             />
             <span v-else>img</span>
+            <span
+              v-if="isSelectionMode && selectedImageIds.has(image.id)"
+              class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-[11px] font-bold text-white shadow"
+              aria-hidden="true"
+            >
+              ✓
+            </span>
           </div>
           <div class="min-w-0 flex-1">
             <div class="truncate text-sm font-medium text-gray-800">
@@ -182,7 +299,7 @@ function isAttached(id: string) {
           </div>
           <div class="flex shrink-0 items-center gap-1">
             <a
-              v-if="image.previewUrl"
+              v-if="image.previewUrl && !isSelectionMode"
               class="rounded-lg px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
               :download="imageDownloadName(image)"
               :href="image.previewUrl"
@@ -191,6 +308,7 @@ function isAttached(id: string) {
               下载
             </a>
             <button
+              v-if="!isSelectionMode"
               :class="[
                 'cursor-pointer rounded-lg px-2 py-1 text-xs transition-colors',
                 isAttached(image.id)
