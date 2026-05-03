@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import ChatWorkspace from "./components/studio/ChatWorkspace.vue";
 import ConversationSidebar from "./components/studio/ConversationSidebar.vue";
 import ImageLibrary from "./components/studio/ImageLibrary.vue";
+import ImagePreviewModal from "./components/studio/ImagePreviewModal.vue";
 import SettingsModal from "./components/studio/SettingsModal.vue";
 import { useStudioState } from "./composables/useStudioState";
 
 const studio = useStudioState();
+const previewImageId = ref("");
+const previewImage = computed(() => studio.imageById(previewImageId.value));
 </script>
 
 <template>
@@ -48,6 +52,7 @@ const studio = useStudioState();
       @close-all-editors="studio.closeAllEditors"
       @import-images="studio.importImages"
       @open-settings="studio.openSettings"
+      @preview-image="previewImageId = $event"
       @remove-attachment="studio.removeAttachment"
       @retry-message="studio.retryMessage"
       @submit-message="studio.submitMessage"
@@ -61,6 +66,7 @@ const studio = useStudioState();
       :images="studio.imageAssets.value"
       @attach-image="studio.attachImage"
       @delete-image="studio.deleteImage"
+      @preview-image="previewImageId = $event"
     />
 
     <SettingsModal
@@ -68,6 +74,11 @@ const studio = useStudioState();
       v-model:api-key="studio.apiKey.value"
       :is-open="studio.isSettingsOpen.value"
       @close="studio.closeSettings"
+    />
+
+    <ImagePreviewModal
+      :image="previewImage"
+      @close="previewImageId = ''"
     />
   </main>
 </template>

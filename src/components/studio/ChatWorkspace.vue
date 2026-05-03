@@ -43,6 +43,7 @@ const emit = defineEmits<{
   removeAttachment: [id: string];
   retryMessage: [message: Message];
   openSettings: [];
+  previewImage: [id: string];
   submitMessage: [];
   toggleEditor: [key: EditorKey];
   "update:background": [value: string];
@@ -297,14 +298,25 @@ function imageFilesFromTransfer(
               class="overflow-hidden rounded-xl border border-gray-200"
             >
               <div
-                class="flex h-48 items-center justify-center bg-gray-100 text-sm text-gray-400"
+                class="group relative flex h-48 items-center justify-center bg-gray-100 text-sm text-gray-400"
               >
-                <img
+                <button
                   v-if="imageById(imageId)?.previewUrl"
-                  class="h-full w-full object-contain"
-                  :alt="imageById(imageId)?.name"
-                  :src="imageById(imageId)?.previewUrl"
-                />
+                  class="h-full w-full cursor-pointer"
+                  type="button"
+                  @click="emit('previewImage', imageId)"
+                >
+                  <img
+                    class="h-full w-full object-contain"
+                    :alt="imageById(imageId)?.name"
+                    :src="imageById(imageId)?.previewUrl"
+                  />
+                  <span
+                    class="absolute inset-0 flex items-center justify-center bg-black/45 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    点击查看
+                  </span>
+                </button>
                 <div
                   v-else
                   class="flex h-full w-full flex-col items-center justify-center gap-1 border border-dashed border-gray-300 bg-gray-50 px-4 text-center"

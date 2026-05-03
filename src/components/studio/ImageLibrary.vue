@@ -13,6 +13,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   attachImage: [id: string];
   deleteImage: [id: string];
+  previewImage: [id: string];
   "update:isOpen": [value: boolean];
 }>();
 
@@ -270,9 +271,10 @@ function isAttached(id: string) {
         >
           <div
             :class="[
-              'relative flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400',
+              'group relative flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400',
               isSelectionMode && selectedImageIds.has(image.id) ? 'ring-2 ring-gray-900 ring-offset-1' : '',
             ]"
+            @click.stop="image.previewUrl && emit('previewImage', image.id)"
           >
             <img
               v-if="image.previewUrl"
@@ -281,9 +283,17 @@ function isAttached(id: string) {
               :src="image.previewUrl"
             />
             <span v-else>img</span>
+            <button
+              v-if="image.previewUrl"
+              class="absolute inset-0 flex cursor-pointer items-center justify-center rounded-lg bg-black/45 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
+              type="button"
+              @click.stop="emit('previewImage', image.id)"
+            >
+              点击查看
+            </button>
             <span
               v-if="isSelectionMode && selectedImageIds.has(image.id)"
-              class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-[11px] font-bold text-white shadow"
+              class="pointer-events-none absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-[11px] font-bold text-white shadow"
               aria-hidden="true"
             >
               ✓
