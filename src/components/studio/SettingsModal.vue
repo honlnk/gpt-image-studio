@@ -79,6 +79,7 @@ const emit = defineEmits<{
               id="apiBaseUrl"
               :value="apiBaseUrl"
               class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-gray-500"
+              placeholder="https://api.openai.com/v1/images"
               type="url"
               @input="
                 emit(

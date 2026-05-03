@@ -13,7 +13,6 @@ import type {
   Message,
 } from "../types/studio";
 
-const DEFAULT_API_BASE_URL = "https://code.mrzengchn.com/v1/images";
 const STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
   apiBaseUrl: "gpt-image-studio:api-base-url",
@@ -29,7 +28,7 @@ export function useStudioState() {
   const model = ref("gpt-image-2");
   const apiKey = ref(readStorage(STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(
-    readStorage(STORAGE_KEYS.apiBaseUrl, DEFAULT_API_BASE_URL),
+    readStorage(STORAGE_KEYS.apiBaseUrl, ""),
   );
   const imageWidth = ref(1024);
   const imageHeight = ref(1024);
