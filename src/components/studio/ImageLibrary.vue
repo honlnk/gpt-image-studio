@@ -58,6 +58,16 @@ function imageFormat(image: ImageAsset) {
   return image.mimeType?.replace("image/", "").toUpperCase() ?? "未知";
 }
 
+function imageExtension(image: ImageAsset) {
+  if (image.mimeType === "image/jpeg") return "jpeg";
+  if (image.mimeType === "image/webp") return "webp";
+  return "png";
+}
+
+function imageDownloadName(image: ImageAsset) {
+  return `${image.name || "image"}.${imageExtension(image)}`;
+}
+
 function imageSize(image: ImageAsset) {
   if (image.width && image.height) return `${image.width} x ${image.height}`;
   return "未记录";
@@ -170,18 +180,29 @@ function isAttached(id: string) {
               {{ sourceLabel(image) }} · {{ image.createdAt }}
             </div>
           </div>
-          <button
-            :class="[
-              'shrink-0 cursor-pointer rounded-lg px-2 py-1 text-xs transition-colors',
-              isAttached(image.id)
-                ? 'bg-gray-100 text-gray-400'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700',
-            ]"
-            type="button"
-            @click.stop="emit('attachImage', image.id)"
-          >
-            {{ isAttached(image.id) ? "已引用" : "引用" }}
-          </button>
+          <div class="flex shrink-0 items-center gap-1">
+            <a
+              v-if="image.previewUrl"
+              class="rounded-lg px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              :download="imageDownloadName(image)"
+              :href="image.previewUrl"
+              @click.stop
+            >
+              下载
+            </a>
+            <button
+              :class="[
+                'cursor-pointer rounded-lg px-2 py-1 text-xs transition-colors',
+                isAttached(image.id)
+                  ? 'bg-gray-100 text-gray-400'
+                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700',
+              ]"
+              type="button"
+              @click.stop="emit('attachImage', image.id)"
+            >
+              {{ isAttached(image.id) ? "已引用" : "引用" }}
+            </button>
+          </div>
         </article>
       </div>
 
@@ -198,13 +219,23 @@ function isAttached(id: string) {
               {{ sourceLabel(selectedImage) }} · {{ selectedImage.createdAt }}
             </div>
           </div>
-          <button
-            class="shrink-0 cursor-pointer rounded-lg px-2 py-1 text-xs text-red-500 transition-colors hover:bg-red-50"
-            type="button"
-            @click="emit('deleteImage', selectedImage.id)"
-          >
-            删除
-          </button>
+          <div class="flex shrink-0 items-center gap-1">
+            <a
+              v-if="selectedImage.previewUrl"
+              class="rounded-lg px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-100"
+              :download="imageDownloadName(selectedImage)"
+              :href="selectedImage.previewUrl"
+            >
+              下载
+            </a>
+            <button
+              class="cursor-pointer rounded-lg px-2 py-1 text-xs text-red-500 transition-colors hover:bg-red-50"
+              type="button"
+              @click="emit('deleteImage', selectedImage.id)"
+            >
+              删除
+            </button>
+          </div>
         </div>
 
         <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">

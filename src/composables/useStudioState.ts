@@ -265,7 +265,7 @@ export function useStudioState() {
     const isAttached = attachedImages.value.includes(id);
 
     const confirmMessage = relatedMessages.length || isAttached
-      ? "这张图片正在被当前项目引用，删除后会同时从消息记录和引用列表中移除。确定删除吗？"
+      ? "这张图片正在被聊天记录或当前输入引用，删除后聊天记录中会保留无法显示的占位。确定删除吗？"
       : "确定从图片库中删除这张图片吗？";
     const confirmed = window.confirm(confirmMessage);
     if (!confirmed) return;
@@ -273,22 +273,9 @@ export function useStudioState() {
     attachedImages.value = attachedImages.value.filter((item) => item !== id);
     imageAssets.value = imageAssets.value.filter((item) => item.id !== id);
 
-    const updatedMessages = relatedMessages.map((message) => ({
-      ...message,
-      referencedImageIds: message.referencedImageIds.filter((item) => item !== id),
-      resultImageIds: message.resultImageIds.filter((item) => item !== id),
-    }));
-
-    if (updatedMessages.length) {
-      messages.value = messages.value.map((message) =>
-        updatedMessages.find((updated) => updated.id === message.id) ?? message,
-      );
-    }
-
     await Promise.all([
       deleteImageAsset(id),
       image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
-      ...updatedMessages.map((message) => saveMessage(toPlainMessage(message))),
     ]).catch(reportStorageError);
   }
 

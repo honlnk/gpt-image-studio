@@ -86,6 +86,10 @@ function imageExtension(image?: ImageAsset) {
   return "png";
 }
 
+function imageDownloadName(image?: ImageAsset) {
+  return `${image?.name || "image"}.${imageExtension(image)}`;
+}
+
 function isImageAttached(id: string) {
   return props.activeAttachments.some((image) => image.id === id);
 }
@@ -256,11 +260,17 @@ function imageFilesFromTransfer(
             <button
               v-for="imageId in message.referencedImageIds"
               :key="imageId"
-              class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+              :class="[
+                'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors',
+                imageById(imageId)
+                  ? 'cursor-pointer border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  : 'cursor-not-allowed border-dashed border-gray-300 bg-gray-50 text-gray-400',
+              ]"
               type="button"
-              @click="emit('attachImage', imageId)"
+              :disabled="!imageById(imageId)"
+              @click="imageById(imageId) && emit('attachImage', imageId)"
             >
-              {{ imageById(imageId)?.name }}
+              {{ imageById(imageId)?.name || "图片已删除，无法显示" }}
             </button>
           </div>
 
@@ -295,21 +305,29 @@ function imageFilesFromTransfer(
                   :alt="imageById(imageId)?.name"
                   :src="imageById(imageId)?.previewUrl"
                 />
-                <span v-else>{{ imageById(imageId)?.name }}</span>
+                <div
+                  v-else
+                  class="flex h-full w-full flex-col items-center justify-center gap-1 border border-dashed border-gray-300 bg-gray-50 px-4 text-center"
+                >
+                  <span class="text-sm font-medium text-gray-500">图片已删除</span>
+                  <span class="text-xs text-gray-400">这张图片已从图片库移除，无法显示预览</span>
+                </div>
               </div>
               <figcaption class="px-3 py-2">
                 <div class="min-w-0">
                   <div class="truncate text-sm font-medium">
-                    {{ imageById(imageId)?.name }}
+                    {{ imageById(imageId)?.name || "图片已删除" }}
                   </div>
                   <div class="truncate text-xs text-gray-500">
-                    {{ imageById(imageId)?.prompt }}
+                    {{ imageById(imageId)?.prompt || "原图片资产已从图片库中删除" }}
                   </div>
                 </div>
                 <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
                   <button
                     class="cursor-pointer rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-800"
                     type="button"
+                    :disabled="!imageById(imageId)"
+                    :class="!imageById(imageId) ? 'cursor-not-allowed opacity-30 hover:bg-black' : ''"
                     @click="continueEdit(imageId)"
                   >
                     继续编辑
@@ -323,14 +341,15 @@ function imageFilesFromTransfer(
                           : 'text-gray-600 hover:bg-gray-100',
                       ]"
                       type="button"
+                      :disabled="!imageById(imageId)"
                       @click="emit('attachImage', imageId)"
                     >
-                      {{ isImageAttached(imageId) ? "已引用" : "加入引用" }}
+                      {{ imageById(imageId) ? isImageAttached(imageId) ? "已引用" : "加入引用" : "不可引用" }}
                     </button>
                   <a
                     v-if="imageById(imageId)?.previewUrl"
                     class="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                    :download="`${imageById(imageId)?.name || 'image'}.${imageExtension(imageById(imageId))}`"
+                    :download="imageDownloadName(imageById(imageId))"
                     :href="imageById(imageId)?.previewUrl"
                   >
                     下载
