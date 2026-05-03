@@ -18,6 +18,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       :active-conversation-id="studio.activeConversationId.value"
       :conversations="studio.conversations.value"
       @create-conversation="studio.createConversation"
+      @delete-conversation="studio.deleteConversation"
       @open-settings="studio.openSettings"
       @select-conversation="studio.selectConversation"
     />

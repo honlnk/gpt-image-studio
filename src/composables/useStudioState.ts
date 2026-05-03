@@ -1,5 +1,5 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { deleteConversation, listConversations, saveConversation } from "../services/conversations";
+import { deleteConversation as deleteConversationRecord, listConversations, saveConversation } from "../services/conversations";
 import { deleteImageAsset, deleteImageBlob, loadImageBlob, listImageAssets, saveImageAsset, saveImageBlob } from "../services/imageAssets";
 import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
@@ -211,6 +211,31 @@ export function useStudioState() {
 
   function selectConversation(id: string) {
     activeConversationId.value = id;
+  }
+
+  async function deleteConversation(id: string) {
+    const conversation = conversations.value.find((item) => item.id === id);
+    if (!conversation) return;
+
+    const confirmed = window.confirm(`确定删除会话“${conversation.title}”吗？聊天记录会被移除，图片库中的图片会保留。`);
+    if (!confirmed) return;
+
+    const deletedMessages = messages.value.filter(
+      (message) => message.conversationId === id,
+    );
+    conversations.value = conversations.value.filter((item) => item.id !== id);
+    messages.value = messages.value.filter((message) => message.conversationId !== id);
+
+    if (activeConversationId.value === id) {
+      activeConversationId.value = conversations.value[0]?.id ?? "";
+      attachedImages.value = [];
+      composerText.value = "";
+    }
+
+    await Promise.all([
+      deleteConversationRecord(id),
+      ...deletedMessages.map((message) => deleteMessage(message.id)),
+    ]).catch(reportStorageError);
   }
 
   async function createConversation() {
@@ -629,6 +654,7 @@ export function useStudioState() {
     composerText,
     conversations,
     createConversation,
+    deleteConversation,
     deleteImage,
     formatLabel,
     formatOptions,
@@ -748,7 +774,7 @@ async function removeLegacySeedRecords(
 
   await Promise.all([
     ...staleConversations.map((conversation) =>
-      deleteConversation(conversation.id),
+      deleteConversationRecord(conversation.id),
     ),
     ...staleMessages.map((message) => deleteMessage(message.id)),
     ...staleImages.map((image) => deleteImageAsset(image.id)),
