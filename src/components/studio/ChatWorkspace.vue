@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import type {
   Conversation,
   EditorKey,
@@ -25,6 +25,7 @@ const props = defineProps<{
   imageHeight: number;
   imageWidth: number;
   isEditorExpanded: boolean;
+  isGenerating: boolean;
   isLibraryOpen: boolean;
   model: string;
   outputFormat: string;
@@ -43,6 +44,7 @@ const emit = defineEmits<{
   removeAttachment: [id: string];
   retryMessage: [message: Message];
   openSettings: [];
+  previewImage: [id: string];
   submitMessage: [];
   toggleEditor: [key: EditorKey];
   "update:background": [value: string];
@@ -55,7 +57,14 @@ const emit = defineEmits<{
 }>();
 
 const isDragActive = ref(false);
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
 let dragDepth = 0;
+
+const composerPlaceholder = computed(() =>
+  props.activeAttachments.length
+    ? "描述你想基于引用图修改什么..."
+    : "描述你想生成的图片...",
+);
 
 function autoResize(event: Event) {
   const el = event.target as HTMLTextAreaElement;
@@ -77,6 +86,23 @@ function imageExtension(image?: ImageAsset) {
   if (image?.mimeType === "image/jpeg") return "jpeg";
   if (image?.mimeType === "image/webp") return "webp";
   return "png";
+}
+
+function imageDownloadName(image?: ImageAsset) {
+  return `${image?.name || "image"}.${imageExtension(image)}`;
+}
+
+function isImageAttached(id: string) {
+  return props.activeAttachments.some((image) => image.id === id);
+}
+
+async function continueEdit(imageId: string) {
+  if (!isImageAttached(imageId)) {
+    emit("attachImage", imageId);
+  }
+
+  await nextTick();
+  textareaRef.value?.focus();
 }
 
 function importFromInput(event: Event) {
@@ -175,9 +201,18 @@ function imageFilesFromTransfer(
       class="flex items-center justify-between border-b border-gray-200 px-4 py-3"
     >
       <h1 class="truncate text-base font-semibold text-gray-800">
-        {{ activeConversation?.title }}
+        {{ activeConversation?.title || '新的对话' }}
       </h1>
       <div class="flex items-center gap-1">
+        <a
+          href="https://github.com/honlnk/gpt-image-studio"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="cursor-pointer rounded-lg p-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          aria-label="GitHub 仓库"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        </a>
         <button
           class="cursor-pointer rounded-lg p-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
           aria-label="打开设置"
@@ -227,11 +262,17 @@ function imageFilesFromTransfer(
             <button
               v-for="imageId in message.referencedImageIds"
               :key="imageId"
-              class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+              :class="[
+                'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors',
+                imageById(imageId)
+                  ? 'cursor-pointer border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  : 'cursor-not-allowed border-dashed border-gray-300 bg-gray-50 text-gray-400',
+              ]"
               type="button"
-              @click="emit('attachImage', imageId)"
+              :disabled="!imageById(imageId)"
+              @click="imageById(imageId) && emit('attachImage', imageId)"
             >
-              {{ imageById(imageId)?.name }}
+              {{ imageById(imageId)?.name || "图片已删除，无法显示" }}
             </button>
           </div>
 
@@ -258,41 +299,75 @@ function imageFilesFromTransfer(
               class="overflow-hidden rounded-xl border border-gray-200"
             >
               <div
-                class="flex h-48 items-center justify-center bg-gray-100 text-sm text-gray-400"
+                class="group relative flex h-48 items-center justify-center bg-gray-100 text-sm text-gray-400"
               >
-                <img
+                <button
                   v-if="imageById(imageId)?.previewUrl"
-                  class="h-full w-full object-contain"
-                  :alt="imageById(imageId)?.name"
-                  :src="imageById(imageId)?.previewUrl"
-                />
-                <span v-else>{{ imageById(imageId)?.name }}</span>
+                  class="h-full w-full cursor-pointer"
+                  type="button"
+                  @click="emit('previewImage', imageId)"
+                >
+                  <img
+                    class="h-full w-full object-contain"
+                    :alt="imageById(imageId)?.name"
+                    :src="imageById(imageId)?.previewUrl"
+                  />
+                  <span
+                    class="absolute inset-0 flex items-center justify-center bg-black/45 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    点击查看
+                  </span>
+                </button>
+                <div
+                  v-else
+                  class="flex h-full w-full flex-col items-center justify-center gap-1 border border-dashed border-gray-300 bg-gray-50 px-4 text-center"
+                >
+                  <span class="text-sm font-medium text-gray-500">图片已删除</span>
+                  <span class="text-xs text-gray-400">这张图片已从图片库移除，无法显示预览</span>
+                </div>
               </div>
-              <figcaption class="flex items-center justify-between gap-3 px-3 py-2">
+              <figcaption class="px-3 py-2">
                 <div class="min-w-0">
                   <div class="truncate text-sm font-medium">
-                    {{ imageById(imageId)?.name }}
+                    {{ imageById(imageId)?.name || "图片已删除" }}
                   </div>
                   <div class="truncate text-xs text-gray-500">
-                    {{ imageById(imageId)?.prompt }}
+                    {{ imageById(imageId)?.prompt || "原图片资产已从图片库中删除" }}
                   </div>
                 </div>
-                <div class="flex shrink-0 items-center gap-1">
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    class="cursor-pointer rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-800"
+                    type="button"
+                    :disabled="!imageById(imageId)"
+                    :class="!imageById(imageId) ? 'cursor-not-allowed opacity-30 hover:bg-black' : ''"
+                    @click="continueEdit(imageId)"
+                  >
+                    继续编辑
+                  </button>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <button
+                      :class="[
+                        'cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                        isImageAttached(imageId)
+                          ? 'bg-gray-100 text-gray-400'
+                          : 'text-gray-600 hover:bg-gray-100',
+                      ]"
+                      type="button"
+                      :disabled="!imageById(imageId)"
+                      @click="emit('attachImage', imageId)"
+                    >
+                      {{ imageById(imageId) ? isImageAttached(imageId) ? "已引用" : "加入引用" : "不可引用" }}
+                    </button>
                   <a
                     v-if="imageById(imageId)?.previewUrl"
                     class="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                    :download="`${imageById(imageId)?.name || 'image'}.${imageExtension(imageById(imageId))}`"
+                    :download="imageDownloadName(imageById(imageId))"
                     :href="imageById(imageId)?.previewUrl"
                   >
                     下载
                   </a>
-                  <button
-                    class="cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                    type="button"
-                    @click="emit('attachImage', imageId)"
-                  >
-                    引用
-                  </button>
+                  </div>
                 </div>
               </figcaption>
             </figure>
@@ -502,7 +577,7 @@ function imageFilesFromTransfer(
             ref="textareaRef"
             :value="composerText"
             class="max-h-[160px] w-full resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
-            placeholder="描述你想生成的图片..."
+            :placeholder="composerPlaceholder"
             rows="2"
             @input="autoResize($event); emit('update:composerText', ($event.target as HTMLTextAreaElement).value)"
             @keydown="handleComposerKeydown"
@@ -525,10 +600,10 @@ function imageFilesFromTransfer(
             </label>
             <button
               class="shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
-              :disabled="!canSend"
+              :disabled="!canSend || isGenerating"
               type="submit"
             >
-              发送
+              {{ isGenerating ? "生成中" : "发送" }}
             </button>
           </div>
         </div>

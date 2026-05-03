@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import ChatWorkspace from "./components/studio/ChatWorkspace.vue";
 import ConversationSidebar from "./components/studio/ConversationSidebar.vue";
 import ImageLibrary from "./components/studio/ImageLibrary.vue";
+import ImagePreviewModal from "./components/studio/ImagePreviewModal.vue";
 import SettingsModal from "./components/studio/SettingsModal.vue";
 import { useStudioState } from "./composables/useStudioState";
 
 const studio = useStudioState();
+const previewImageId = ref("");
+const previewImage = computed(() => studio.imageById(previewImageId.value));
 </script>
 
 <template>
@@ -14,6 +18,7 @@ const studio = useStudioState();
       :active-conversation-id="studio.activeConversationId.value"
       :conversations="studio.conversations.value"
       @create-conversation="studio.createConversation"
+      @delete-conversation="studio.deleteConversation"
       @open-settings="studio.openSettings"
       @select-conversation="studio.selectConversation"
     />
@@ -38,6 +43,7 @@ const studio = useStudioState();
       :format-options="studio.formatOptions"
       :image-by-id="studio.imageById"
       :is-editor-expanded="studio.isEditorExpanded.value"
+      :is-generating="studio.isGenerating.value"
       :model="studio.model.value"
       :quality-label="studio.qualityLabel.value"
       :quality-options="studio.qualityOptions"
@@ -48,6 +54,7 @@ const studio = useStudioState();
       @close-all-editors="studio.closeAllEditors"
       @import-images="studio.importImages"
       @open-settings="studio.openSettings"
+      @preview-image="previewImageId = $event"
       @remove-attachment="studio.removeAttachment"
       @retry-message="studio.retryMessage"
       @submit-message="studio.submitMessage"
@@ -56,8 +63,12 @@ const studio = useStudioState();
 
     <ImageLibrary
       v-model:is-open="studio.isLibraryOpen.value"
+      :active-conversation-id="studio.activeConversationId.value"
+      :attached-image-ids="studio.activeAttachments.value.map((image) => image.id)"
       :images="studio.imageAssets.value"
       @attach-image="studio.attachImage"
+      @delete-image="studio.deleteImage"
+      @preview-image="previewImageId = $event"
     />
 
     <SettingsModal
@@ -65,6 +76,11 @@ const studio = useStudioState();
       v-model:api-key="studio.apiKey.value"
       :is-open="studio.isSettingsOpen.value"
       @close="studio.closeSettings"
+    />
+
+    <ImagePreviewModal
+      :image="previewImage"
+      @close="previewImageId = ''"
     />
   </main>
 </template>

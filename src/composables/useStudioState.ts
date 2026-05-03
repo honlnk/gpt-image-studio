@@ -1,5 +1,5 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { deleteConversation, listConversations, saveConversation } from "../services/conversations";
+import { deleteConversation as deleteConversationRecord, listConversations, saveConversation } from "../services/conversations";
 import { deleteImageAsset, deleteImageBlob, loadImageBlob, listImageAssets, saveImageAsset, saveImageBlob } from "../services/imageAssets";
 import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
@@ -17,6 +17,8 @@ const DEFAULT_API_BASE_URL = "https://code.mrzengchn.com/v1/images";
 const STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
   apiBaseUrl: "gpt-image-studio:api-base-url",
+  draftAttachments: "gpt-image-studio:draft-attachments",
+  draftComposerText: "gpt-image-studio:draft-composer-text",
 } as const;
 
 const LEGACY_SEED_CONVERSATION_IDS = new Set(["c-1", "c-2", "c-3"]);
@@ -107,8 +109,10 @@ export function useStudioState() {
       expandTimer = null;
     }, 200);
   }
-  const composerText = ref("");
-  const attachedImages = ref<string[]>([]);
+  const composerText = ref(readStorage(STORAGE_KEYS.draftComposerText, ""));
+  const attachedImages = ref<string[]>(
+    readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []),
+  );
 
   const conversations = ref<Conversation[]>([]);
   const activeConversationId = ref("");
@@ -123,12 +127,16 @@ export function useStudioState() {
       (message) => message.conversationId === activeConversationId.value,
     ),
   );
+  const isGenerating = computed(() =>
+    messages.value.some((message) => message.status === "pending"),
+  );
   const activeAttachments = computed(() =>
     attachedImages.value
       .map((id) => imageAssets.value.find((image) => image.id === id))
       .filter((image): image is ImageAsset => Boolean(image)),
   );
   const canSend = computed(() =>
+    !isGenerating.value &&
     Boolean(composerText.value.trim() || attachedImages.value.length),
   );
   const imageModeLabel = computed(() =>
@@ -145,6 +153,18 @@ export function useStudioState() {
       if (!isHydrated.value) return;
       void saveSettings(currentSettings()).catch(reportStorageError);
     },
+  );
+
+  watch(composerText, (value) => {
+    writeStorage(STORAGE_KEYS.draftComposerText, value);
+  });
+
+  watch(
+    attachedImages,
+    (value) => {
+      writeStorage(STORAGE_KEYS.draftAttachments, JSON.stringify(value));
+    },
+    { deep: true },
   );
 
   async function hydrateFromStorage() {
@@ -194,6 +214,9 @@ export function useStudioState() {
       await persistNormalizedMessages(restoredMessages, normalizedMessages);
 
       imageAssets.value = await hydrateImagePreviews(restoredImages);
+      attachedImages.value = attachedImages.value.filter((id) =>
+        restoredImages.some((image) => image.id === id),
+      );
     } catch (error) {
       reportStorageError(error);
     } finally {
@@ -211,6 +234,31 @@ export function useStudioState() {
 
   function selectConversation(id: string) {
     activeConversationId.value = id;
+  }
+
+  async function deleteConversation(id: string) {
+    const conversation = conversations.value.find((item) => item.id === id);
+    if (!conversation) return;
+
+    const confirmed = window.confirm(`确定删除会话“${conversation.title}”吗？聊天记录会被移除，图片库中的图片会保留。`);
+    if (!confirmed) return;
+
+    const deletedMessages = messages.value.filter(
+      (message) => message.conversationId === id,
+    );
+    conversations.value = conversations.value.filter((item) => item.id !== id);
+    messages.value = messages.value.filter((message) => message.conversationId !== id);
+
+    if (activeConversationId.value === id) {
+      activeConversationId.value = conversations.value[0]?.id ?? "";
+      attachedImages.value = [];
+      composerText.value = "";
+    }
+
+    await Promise.all([
+      deleteConversationRecord(id),
+      ...deletedMessages.map((message) => deleteMessage(message.id)),
+    ]).catch(reportStorageError);
   }
 
   async function createConversation() {
@@ -253,6 +301,32 @@ export function useStudioState() {
     attachedImages.value = attachedImages.value.filter((item) => item !== id);
   }
 
+  async function deleteImage(id: string) {
+    const image = imageById(id);
+    if (!image) return;
+
+    const relatedMessages = messages.value.filter(
+      (message) =>
+        message.referencedImageIds.includes(id) ||
+        message.resultImageIds.includes(id),
+    );
+    const isAttached = attachedImages.value.includes(id);
+
+    const confirmMessage = relatedMessages.length || isAttached
+      ? "这张图片正在被聊天记录或当前输入引用，删除后聊天记录中会保留无法显示的占位。确定删除吗？"
+      : "确定从图片库中删除这张图片吗？";
+    const confirmed = window.confirm(confirmMessage);
+    if (!confirmed) return;
+
+    attachedImages.value = attachedImages.value.filter((item) => item !== id);
+    imageAssets.value = imageAssets.value.filter((item) => item.id !== id);
+
+    await Promise.all([
+      deleteImageAsset(id),
+      image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+    ]).catch(reportStorageError);
+  }
+
   async function importImages(files: File[]) {
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) return;
@@ -266,7 +340,7 @@ export function useStudioState() {
   }
 
   async function submitMessage() {
-    if (!canSend.value) return;
+    if (!canSend.value || isGenerating.value) return;
 
     const now = Date.now();
     const text = composerText.value.trim() || "基于引用图片继续编辑。";
@@ -603,6 +677,8 @@ export function useStudioState() {
     composerText,
     conversations,
     createConversation,
+    deleteConversation,
+    deleteImage,
     formatLabel,
     formatOptions,
     imageAssets,
@@ -612,6 +688,7 @@ export function useStudioState() {
     imageWidth,
     importImages,
     isEditorExpanded,
+    isGenerating,
     isHydrated,
     isLibraryOpen,
     isSettingsOpen,
@@ -636,6 +713,23 @@ export function useStudioState() {
 function readStorage(key: string, fallback: string) {
   try {
     return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore local draft persistence failures.
+  }
+}
+
+function readJsonStorage<T>(key: string, fallback: T) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : fallback;
   } catch {
     return fallback;
   }
@@ -721,7 +815,7 @@ async function removeLegacySeedRecords(
 
   await Promise.all([
     ...staleConversations.map((conversation) =>
-      deleteConversation(conversation.id),
+      deleteConversationRecord(conversation.id),
     ),
     ...staleMessages.map((message) => deleteMessage(message.id)),
     ...staleImages.map((image) => deleteImageAsset(image.id)),

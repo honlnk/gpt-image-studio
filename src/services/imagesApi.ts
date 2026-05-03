@@ -54,18 +54,32 @@ export async function editImage(input: EditImageInput) {
   body.append("model", input.model);
   body.append("prompt", input.prompt);
   input.images.forEach((image) => {
-    body.append("image", image.blob, image.name);
+    body.append("image[]", image.blob, image.name);
   });
   body.append("size", apiSize(input.params));
   body.append("quality", input.params.quality);
 
-  const response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl)}/edits`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${input.apiKey}`,
-    },
-    body,
-  });
+  logImageRequest("edit", input.model, input.images);
+
+  let response: Response;
+  try {
+    response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl)}/edits`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.apiKey}`,
+      },
+      body,
+    });
+  } catch (error) {
+    console.error("[imagesApi] edit request failed before response", JSON.stringify({
+      imageCount: input.images.length,
+      images: imageDebugInfo(input.images),
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    throw new Error(
+      "网络请求失败：浏览器没有收到接口响应，可能是 CORS、代理中断或上传图片过大。",
+    );
+  }
 
   const payload = await parseImageResponse(response);
   const imageData = payload.data?.[0]?.b64_json;
@@ -75,6 +89,27 @@ export async function editImage(input: EditImageInput) {
   }
 
   return imageData;
+}
+
+function logImageRequest(
+  action: "edit",
+  model: string,
+  images: Array<{ blob: Blob; name: string }>,
+) {
+  console.info("[imagesApi] image request", JSON.stringify({
+    action,
+    model,
+    imageCount: images.length,
+    images: imageDebugInfo(images),
+  }));
+}
+
+function imageDebugInfo(images: Array<{ blob: Blob; name: string }>) {
+  return images.map((image) => ({
+    name: image.name,
+    sizeBytes: image.blob.size,
+    type: image.blob.type || "unknown",
+  }));
 }
 
 export function base64ToBlob(base64: string, mimeType: string) {
