@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import type {
   Conversation,
   EditorKey,
@@ -55,7 +55,14 @@ const emit = defineEmits<{
 }>();
 
 const isDragActive = ref(false);
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
 let dragDepth = 0;
+
+const composerPlaceholder = computed(() =>
+  props.activeAttachments.length
+    ? "描述你想基于引用图修改什么..."
+    : "描述你想生成的图片...",
+);
 
 function autoResize(event: Event) {
   const el = event.target as HTMLTextAreaElement;
@@ -77,6 +84,19 @@ function imageExtension(image?: ImageAsset) {
   if (image?.mimeType === "image/jpeg") return "jpeg";
   if (image?.mimeType === "image/webp") return "webp";
   return "png";
+}
+
+function isImageAttached(id: string) {
+  return props.activeAttachments.some((image) => image.id === id);
+}
+
+async function continueEdit(imageId: string) {
+  if (!isImageAttached(imageId)) {
+    emit("attachImage", imageId);
+  }
+
+  await nextTick();
+  textareaRef.value?.focus();
 }
 
 function importFromInput(event: Event) {
@@ -277,7 +297,7 @@ function imageFilesFromTransfer(
                 />
                 <span v-else>{{ imageById(imageId)?.name }}</span>
               </div>
-              <figcaption class="flex items-center justify-between gap-3 px-3 py-2">
+              <figcaption class="px-3 py-2">
                 <div class="min-w-0">
                   <div class="truncate text-sm font-medium">
                     {{ imageById(imageId)?.name }}
@@ -286,7 +306,27 @@ function imageFilesFromTransfer(
                     {{ imageById(imageId)?.prompt }}
                   </div>
                 </div>
-                <div class="flex shrink-0 items-center gap-1">
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    class="cursor-pointer rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-800"
+                    type="button"
+                    @click="continueEdit(imageId)"
+                  >
+                    继续编辑
+                  </button>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <button
+                      :class="[
+                        'cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                        isImageAttached(imageId)
+                          ? 'bg-gray-100 text-gray-400'
+                          : 'text-gray-600 hover:bg-gray-100',
+                      ]"
+                      type="button"
+                      @click="emit('attachImage', imageId)"
+                    >
+                      {{ isImageAttached(imageId) ? "已引用" : "加入引用" }}
+                    </button>
                   <a
                     v-if="imageById(imageId)?.previewUrl"
                     class="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
@@ -295,13 +335,7 @@ function imageFilesFromTransfer(
                   >
                     下载
                   </a>
-                  <button
-                    class="cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                    type="button"
-                    @click="emit('attachImage', imageId)"
-                  >
-                    引用
-                  </button>
+                  </div>
                 </div>
               </figcaption>
             </figure>
@@ -511,7 +545,7 @@ function imageFilesFromTransfer(
             ref="textareaRef"
             :value="composerText"
             class="max-h-[160px] w-full resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
-            placeholder="描述你想生成的图片..."
+            :placeholder="composerPlaceholder"
             rows="2"
             @input="autoResize($event); emit('update:composerText', ($event.target as HTMLTextAreaElement).value)"
             @keydown="handleComposerKeydown"
