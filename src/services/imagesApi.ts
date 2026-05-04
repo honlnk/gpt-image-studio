@@ -25,6 +25,7 @@ type ImageApiResponse = {
 };
 
 export async function generateImage(input: GenerateImageInput) {
+  const params = imageApiParams(input.model, input.params);
   const response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl)}/generations`, {
     method: "POST",
     headers: {
@@ -34,8 +35,7 @@ export async function generateImage(input: GenerateImageInput) {
     body: JSON.stringify({
       model: input.model,
       prompt: input.prompt,
-      size: apiSize(input.params),
-      quality: input.params.quality,
+      ...params,
     }),
   });
 
@@ -56,8 +56,10 @@ export async function editImage(input: EditImageInput) {
   input.images.forEach((image) => {
     body.append("image[]", image.blob, image.name);
   });
-  body.append("size", apiSize(input.params));
-  body.append("quality", input.params.quality);
+  const params = imageApiParams(input.model, input.params);
+  Object.entries(params).forEach(([key, value]) => {
+    body.append(key, value);
+  });
 
   logImageRequest("edit", input.model, input.images);
 
@@ -127,12 +129,78 @@ function normalizeApiBaseUrl(url: string) {
   return url.replace(/\/+$/, "");
 }
 
+function imageApiParams(model: string, params: GenerationParams) {
+  validateBackground(model, params.background);
+
+  return {
+    size: apiSize(params),
+    quality: params.quality,
+    background: params.background,
+    output_format: params.outputFormat,
+  };
+}
+
+function validateBackground(
+  model: string,
+  background: GenerationParams["background"],
+) {
+  if (model === "gpt-image-2" && background === "transparent") {
+    throw new Error("gpt-image-2 当前不支持透明背景，请选择自动或不透明背景。");
+  }
+}
+
 function apiSize(params: GenerationParams) {
   if (params.size === "custom") {
+    validateCustomSize(params.width, params.height);
     return `${params.width}x${params.height}`;
   }
 
   return params.size;
+}
+
+function validateCustomSize(width: number, height: number) {
+  const error = getCustomSizeError(width, height);
+  if (error) {
+    throw new Error(error);
+  }
+}
+
+export function getCustomSizeError(width: number, height: number) {
+  const normalizedWidth = Math.trunc(width);
+  const normalizedHeight = Math.trunc(height);
+
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    normalizedWidth !== width ||
+    normalizedHeight !== height
+  ) {
+    return "自定义尺寸的宽高必须是整数。";
+  }
+
+  if (
+    normalizedWidth < 16 ||
+    normalizedHeight < 16 ||
+    normalizedWidth > 3840 ||
+    normalizedHeight > 3840 ||
+    normalizedWidth % 16 !== 0 ||
+    normalizedHeight % 16 !== 0
+  ) {
+    return "自定义尺寸的宽高必须是 16 到 3840 之间的 16 的倍数。";
+  }
+
+  const pixels = normalizedWidth * normalizedHeight;
+  if (pixels < 655360 || pixels > 8294400) {
+    return "自定义尺寸的总像素必须在 655,360 到 8,294,400 之间。";
+  }
+
+  const longSide = Math.max(normalizedWidth, normalizedHeight);
+  const shortSide = Math.min(normalizedWidth, normalizedHeight);
+  if (longSide / shortSide > 3) {
+    return "自定义尺寸的长边与短边比例不能超过 3:1。";
+  }
+
+  return "";
 }
 
 async function parseImageResponse(response: Response) {

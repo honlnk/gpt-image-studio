@@ -19,6 +19,7 @@ const props = defineProps<{
   backgroundOptions: readonly { value: string; label: string }[];
   canSend: boolean;
   composerText: string;
+  customSizeError: string;
   formatLabel: string;
   formatOptions: readonly { value: string; label: string }[];
   imageById: (id: string) => ImageAsset | undefined;
@@ -443,6 +444,12 @@ function imageFilesFromTransfer(
                   @input="emit('update:imageHeight', Number(($event.target as HTMLInputElement).value))"
                 />
               </div>
+              <p
+                v-if="customSizeError"
+                class="basis-full pt-1 text-xs text-red-500"
+              >
+                {{ customSizeError }}
+              </p>
             </div>
 
             <!-- 质量编辑器 -->

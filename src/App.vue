@@ -39,6 +39,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       :background-label="studio.backgroundLabel.value"
       :background-options="studio.backgroundOptions"
       :can-send="studio.canSend.value"
+      :custom-size-error="studio.customSizeError.value"
       :format-label="studio.formatLabel.value"
       :format-options="studio.formatOptions"
       :image-by-id="studio.imageById"

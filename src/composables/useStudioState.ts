@@ -1,7 +1,8 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { deleteConversation as deleteConversationRecord, listConversations, saveConversation } from "../services/conversations";
 import { deleteImageAsset, deleteImageBlob, loadImageBlob, listImageAssets, saveImageAsset, saveImageBlob } from "../services/imageAssets";
-import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
+import { base64ToBlob, editImage, generateImage, getCustomSizeError } from "../services/imagesApi";
+import { readImageDimensions } from "../services/imageMetadata";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
 import { loadSettings, saveSettings } from "../services/settings";
 import type {
@@ -39,6 +40,11 @@ export function useStudioState() {
     if (activeSizePreset.value === "custom") return `${imageWidth.value} x ${imageHeight.value}`;
     return activeSizePreset.value;
   });
+  const customSizeError = computed(() => {
+    if (activeSizePreset.value !== "custom") return "";
+
+    return getCustomSizeError(imageWidth.value, imageHeight.value);
+  });
   const quality = ref<GenerationParams["quality"]>("auto");
   const background = ref<GenerationParams["background"]>("auto");
   const outputFormat = ref<GenerationParams["outputFormat"]>("png");
@@ -51,7 +57,6 @@ export function useStudioState() {
   const backgroundOptions = [
     { value: "auto", label: "自动" },
     { value: "opaque", label: "不透明" },
-    { value: "transparent", label: "透明" },
   ] as const;
   const formatOptions = [
     { value: "png", label: "PNG" },
@@ -136,6 +141,7 @@ export function useStudioState() {
   );
   const canSend = computed(() =>
     !isGenerating.value &&
+    !customSizeError.value &&
     Boolean(composerText.value.trim() || attachedImages.value.length),
   );
   const imageModeLabel = computed(() =>
@@ -466,7 +472,7 @@ export function useStudioState() {
     imageWidth.value = settings.defaults.width;
     imageHeight.value = settings.defaults.height;
     quality.value = settings.defaults.quality;
-    background.value = settings.defaults.background;
+    background.value = normalizeBackground(settings.defaults.background);
     outputFormat.value = settings.defaults.outputFormat;
   }
 
@@ -518,6 +524,7 @@ export function useStudioState() {
       const now = Date.now();
       const mimeType = `image/${params.outputFormat}`;
       const blob = base64ToBlob(imageData, mimeType);
+      const dimensions = await readImageDimensions(blob);
       const imageId = `img-${now}`;
       const blobKey = `blob-${now}`;
       const imageAsset: ImageAsset = {
@@ -526,6 +533,8 @@ export function useStudioState() {
         name: titleFromPrompt(prompt),
         source: "generated",
         mimeType,
+        width: dimensions?.width,
+        height: dimensions?.height,
         sizeBytes: blob.size,
         conversationId: assistantMessage.conversationId,
         messageId: assistantMessage.id,
@@ -602,6 +611,7 @@ export function useStudioState() {
 
   async function importImageFile(file: File) {
     const now = Date.now() + Math.floor(Math.random() * 1000);
+    const dimensions = await readImageDimensions(file);
     const imageId = `img-${now}`;
     const blobKey = `blob-${now}`;
     const imageAsset: ImageAsset = {
@@ -610,6 +620,8 @@ export function useStudioState() {
       name: file.name || `导入图片-${now}`,
       source: "imported",
       mimeType: file.type || "image/png",
+      width: dimensions?.width,
+      height: dimensions?.height,
       sizeBytes: file.size,
       conversationId: activeConversationId.value || undefined,
       prompt: "用户导入的参考图",
@@ -641,10 +653,25 @@ export function useStudioState() {
         const blob = await loadImageBlob(asset.blobKey);
         if (!blob) return asset;
 
-        return {
+        const restoredAsset = {
           ...asset,
           previewUrl: URL.createObjectURL(blob),
         };
+
+        if (restoredAsset.width && restoredAsset.height) {
+          return restoredAsset;
+        }
+
+        const dimensions = await readImageDimensions(blob);
+        if (!dimensions) return restoredAsset;
+
+        const updatedAsset = {
+          ...restoredAsset,
+          width: dimensions.width,
+          height: dimensions.height,
+        };
+        await saveImageAsset(toPlainImageAsset(updatedAsset)).catch(reportStorageError);
+        return updatedAsset;
       }),
     );
   }
@@ -676,6 +703,7 @@ export function useStudioState() {
     composerText,
     conversations,
     createConversation,
+    customSizeError,
     deleteConversation,
     deleteImage,
     formatLabel,
@@ -715,6 +743,12 @@ function readStorage(key: string, fallback: string) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeBackground(background: GenerationParams["background"]) {
+  if (background === "transparent") return "auto";
+
+  return background;
 }
 
 function writeStorage(key: string, value: string) {
