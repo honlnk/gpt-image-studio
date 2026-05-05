@@ -44,29 +44,20 @@ const filteredConversations = computed(() => {
     aria-label="历史会话"
   >
     <div class="flex items-center justify-between px-3 pt-3 pb-1">
-      <button
-        class="flex flex-1 cursor-pointer items-center gap-1.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
-        type="button"
-        @click="
-          emit('createConversation');
-          emit('update:isOpen', false);
-        "
-      >
-        <svg
-          class="h-4 w-4 shrink-0"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+      <div class="flex min-w-0 items-center gap-2 px-2 py-2">
+        <img
+          class="h-8 w-8 shrink-0"
+          src="/favicon.svg"
+          alt=""
           aria-hidden="true"
-        >
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-        </svg>
-        <span>新建会话</span>
-      </button>
+        />
+        <div class="min-w-0">
+          <div class="truncate text-sm font-semibold text-white">
+            GPT Image Studio
+          </div>
+          <div class="truncate text-xs text-gray-500">Honlnk</div>
+        </div>
+      </div>
       <button
         class="cursor-pointer rounded-lg p-2 text-sm transition-colors hover:bg-white/10"
         aria-label="打开设置"
@@ -88,6 +79,32 @@ const filteredConversations = computed(() => {
           />
           <circle cx="12" cy="12" r="3" />
         </svg>
+      </button>
+    </div>
+
+    <div class="px-3 pt-2 pb-1">
+      <button
+        class="flex w-full cursor-pointer items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/20"
+        type="button"
+        @click="
+          emit('createConversation');
+          emit('update:isOpen', false);
+        "
+      >
+        <svg
+          class="h-4 w-4 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+        <span>新建会话</span>
       </button>
     </div>
 
@@ -161,7 +178,8 @@ const filteredConversations = computed(() => {
       </div>
     </nav>
 
-    <div class="border-t border-white/10 p-3">
+    <div class="flex items-center gap-2 border-t border-white/10 p-3">
+      <img class="h-5 w-5 shrink-0" src="/favicon.svg" alt="" aria-hidden="true" />
       <div class="text-xs text-gray-500">GPT Image Studio - Honlnk</div>
     </div>
   </aside>
