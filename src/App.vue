@@ -10,7 +10,21 @@ import { useStudioState } from "./composables/useStudioState";
 const studio = useStudioState();
 const previewImageId = ref("");
 const isConversationSidebarOpen = ref(false);
+const settingsInitialTab = ref<"api" | "backup" | "batch">("api");
+const settingsInitialBatchPanel = ref<"images" | "conversations">("images");
 const previewImage = computed(() => studio.imageById(previewImageId.value));
+
+function openBatchImageOperations() {
+  settingsInitialTab.value = "batch";
+  settingsInitialBatchPanel.value = "images";
+  studio.openSettings();
+}
+
+function openSettingsDefault() {
+  settingsInitialTab.value = "api";
+  settingsInitialBatchPanel.value = "images";
+  studio.openSettings();
+}
 </script>
 
 <template>
@@ -21,7 +35,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       :conversations="studio.conversations.value"
       @create-conversation="studio.createConversation"
       @delete-conversation="studio.deleteConversation"
-      @open-settings="studio.openSettings"
+      @open-settings="openSettingsDefault"
       @select-conversation="studio.selectConversation"
     />
 
@@ -57,7 +71,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       @close-all-editors="studio.closeAllEditors"
       @import-images="studio.importImages"
       @open-conversations="isConversationSidebarOpen = true"
-      @open-settings="studio.openSettings"
+      @open-settings="openSettingsDefault"
       @preview-image="previewImageId = $event"
       @remove-attachment="studio.removeAttachment"
       @retry-message="studio.retryMessage"
@@ -72,6 +86,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       :images="studio.imageAssets.value"
       @attach-image="studio.attachImage"
       @delete-image="studio.deleteImage"
+      @open-batch-operations="openBatchImageOperations"
       @preview-image="previewImageId = $event"
       :storage-usage="studio.storageUsage.value"
     />
@@ -79,10 +94,17 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
     <SettingsModal
       v-model:api-base-url="studio.apiBaseUrl.value"
       v-model:api-key="studio.apiKey.value"
+      :conversations="studio.conversations.value"
+      :images="studio.imageAssets.value"
+      :initial-batch-panel="settingsInitialBatchPanel"
+      :initial-tab="settingsInitialTab"
       :is-open="studio.isSettingsOpen.value"
       @close="studio.closeSettings"
+      @delete-conversations="studio.deleteConversations"
+      @delete-images="studio.deleteImages"
       @export-backup="studio.exportBackup"
       @import-backup="studio.importBackup"
+      @preview-image="previewImageId = $event"
     />
 
     <ImagePreviewModal

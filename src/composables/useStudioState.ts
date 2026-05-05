@@ -245,11 +245,6 @@ export function useStudioState() {
   }
 
   async function importBackup(file: File) {
-    const confirmed = window.confirm(
-      "恢复备份会覆盖当前浏览器里的所有会话、消息和图片。API key 不会从备份中恢复。确定继续吗？",
-    );
-    if (!confirmed) return;
-
     await restoreStudioBackup(file);
     conversations.value = [];
     messages.value = [];
@@ -293,6 +288,33 @@ export function useStudioState() {
 
     await Promise.all([
       deleteConversationRecord(id),
+      ...deletedMessages.map((message) => deleteMessage(message.id)),
+    ]).catch(reportStorageError);
+    await refreshStorageUsage();
+  }
+
+  async function deleteConversations(ids: string[]) {
+    const idSet = new Set(ids);
+    if (!idSet.size) return;
+
+    const deletedMessages = messages.value.filter((message) =>
+      idSet.has(message.conversationId),
+    );
+    conversations.value = conversations.value.filter(
+      (conversation) => !idSet.has(conversation.id),
+    );
+    messages.value = messages.value.filter(
+      (message) => !idSet.has(message.conversationId),
+    );
+
+    if (idSet.has(activeConversationId.value)) {
+      activeConversationId.value = conversations.value[0]?.id ?? "";
+      attachedImages.value = [];
+      composerText.value = "";
+    }
+
+    await Promise.all([
+      ...ids.map((id) => deleteConversationRecord(id)),
       ...deletedMessages.map((message) => deleteMessage(message.id)),
     ]).catch(reportStorageError);
     await refreshStorageUsage();
@@ -362,6 +384,25 @@ export function useStudioState() {
       deleteImageAsset(id),
       image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
     ]).catch(reportStorageError);
+    await refreshStorageUsage();
+  }
+
+  async function deleteImages(ids: string[]) {
+    const idSet = new Set(ids);
+    if (!idSet.size) return;
+
+    const deletedImages = imageAssets.value.filter((image) =>
+      idSet.has(image.id),
+    );
+    attachedImages.value = attachedImages.value.filter((id) => !idSet.has(id));
+    imageAssets.value = imageAssets.value.filter((image) => !idSet.has(image.id));
+
+    await Promise.all(
+      deletedImages.flatMap((image) => [
+        deleteImageAsset(image.id),
+        image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+      ]),
+    ).catch(reportStorageError);
     await refreshStorageUsage();
   }
 
@@ -748,7 +789,9 @@ export function useStudioState() {
     createConversation,
     customSizeError,
     deleteConversation,
+    deleteConversations,
     deleteImage,
+    deleteImages,
     formatLabel,
     formatOptions,
     imageAssets,
