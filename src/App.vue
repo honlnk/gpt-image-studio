@@ -9,12 +9,14 @@ import { useStudioState } from "./composables/useStudioState";
 
 const studio = useStudioState();
 const previewImageId = ref("");
+const isConversationSidebarOpen = ref(false);
 const previewImage = computed(() => studio.imageById(previewImageId.value));
 </script>
 
 <template>
   <main class="flex h-screen bg-white text-gray-900 antialiased">
     <ConversationSidebar
+      v-model:is-open="isConversationSidebarOpen"
       :active-conversation-id="studio.activeConversationId.value"
       :conversations="studio.conversations.value"
       @create-conversation="studio.createConversation"
@@ -54,6 +56,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       @attach-image="studio.attachImage"
       @close-all-editors="studio.closeAllEditors"
       @import-images="studio.importImages"
+      @open-conversations="isConversationSidebarOpen = true"
       @open-settings="studio.openSettings"
       @preview-image="previewImageId = $event"
       @remove-attachment="studio.removeAttachment"

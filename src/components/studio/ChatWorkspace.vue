@@ -41,6 +41,7 @@ const emit = defineEmits<{
   applySizePreset: [preset: GenerationParams["size"]];
   attachImage: [id: string];
   closeAllEditors: [];
+  openConversations: [];
   importImages: [files: File[]];
   removeAttachment: [id: string];
   retryMessage: [message: Message];
@@ -201,9 +202,18 @@ function imageFilesFromTransfer(
     <header
       class="flex items-center justify-between border-b border-gray-200 px-4 py-3"
     >
-      <h1 class="truncate text-base font-semibold text-gray-800">
-        {{ activeConversation?.title || '新的对话' }}
-      </h1>
+      <div class="flex min-w-0 items-center gap-2">
+        <button
+          class="cursor-pointer rounded-lg px-2.5 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
+          type="button"
+          @click="emit('openConversations')"
+        >
+          会话
+        </button>
+        <h1 class="truncate text-base font-semibold text-gray-800">
+          {{ activeConversation?.title || '新的对话' }}
+        </h1>
+      </div>
       <div class="flex items-center gap-1">
         <a
           href="https://github.com/honlnk/gpt-image-studio"
