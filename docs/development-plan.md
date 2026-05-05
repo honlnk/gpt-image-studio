@@ -86,74 +86,74 @@ File System Access API 的“自动保存到用户指定本地目录”能力无
 
 ```ts
 type Conversation = {
-  id: string
-  title: string
-  createdAt: string
-  updatedAt: string
-  archivedAt?: string
-}
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+};
 ```
 
 ### Message 消息
 
 ```ts
 type Message = {
-  id: string
-  conversationId: string
-  role: 'user' | 'assistant' | 'system'
-  type: 'text' | 'image_result' | 'error'
-  content: string
-  status: 'pending' | 'success' | 'error'
-  referencedImageIds: string[]
-  resultImageIds: string[]
-  generationParams?: GenerationParams
-  errorMessage?: string
-  createdAt: string
-}
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant" | "system";
+  type: "text" | "image_result" | "error";
+  content: string;
+  status: "pending" | "success" | "error";
+  referencedImageIds: string[];
+  resultImageIds: string[];
+  generationParams?: GenerationParams;
+  errorMessage?: string;
+  createdAt: string;
+};
 ```
 
 ### ImageAsset 图片资源
 
 ```ts
 type ImageAsset = {
-  id: string
-  blobKey: string
-  name: string
-  mimeType: string
-  width?: number
-  height?: number
-  sizeBytes?: number
-  source: 'generated' | 'imported'
-  conversationId?: string
-  messageId?: string
-  prompt?: string
-  createdAt: string
-  updatedAt: string
-}
+  id: string;
+  blobKey: string;
+  name: string;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  sizeBytes?: number;
+  source: "generated" | "imported";
+  conversationId?: string;
+  messageId?: string;
+  prompt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 ```
 
 ### AppSettings 应用设置
 
 ```ts
 type AppSettings = {
-  apiKey: string
-  apiBaseUrl: string
-  model: string
-  defaults: GenerationParams
-  storageMode: 'indexeddb'
-  preferredDirectoryName?: string
-}
+  apiKey: string;
+  apiBaseUrl: string;
+  model: string;
+  defaults: GenerationParams;
+  storageMode: "indexeddb";
+  preferredDirectoryName?: string;
+};
 ```
 
 ### GenerationParams 生成参数
 
 ```ts
 type GenerationParams = {
-  size: 'auto' | '1024x1024' | '1536x1024' | '1024x1536'
-  quality: 'auto' | 'high' | 'medium' | 'low'
-  background: 'auto' | 'opaque' | 'transparent'
-  outputFormat: 'png' | 'webp' | 'jpeg'
-}
+  size: "auto" | "1024x1024" | "1536x1024" | "1024x1536";
+  quality: "auto" | "high" | "medium" | "low";
+  background: "auto" | "opaque" | "transparent";
+  outputFormat: "png" | "webp" | "jpeg";
+};
 ```
 
 ## IndexedDB 存储规划
@@ -219,7 +219,6 @@ type GenerationParams = {
 - 已完成：本地图片导入、单张下载、多选 ZIP 下载。
 - 待修复：补齐图片尺寸元数据。生成图和导入图都应读取宽高并写入 `ImageAsset.width` / `ImageAsset.height`；旧数据在读取 Blob 时可懒加载补齐并回写 IndexedDB。
 - 待实现：IndexedDB 存储空间面板。使用 `navigator.storage.estimate()` 展示已用空间、可用上限和剩余空间，并在图库中用进度条区分图片 Blob 占用与文本/元数据占用。
-- 待实现：一次请求生成多张图片。UI 增加生成数量，接口响应从单取 `data[0]` 改成遍历 `data[]`，保存多张图片并写入同一条 assistant 消息的 `resultImageIds`。
 - 待实现：完整项目数据导出、备份、恢复。导出会话、消息、图片元数据、设置和图片 Blob；恢复时校验版本、重建 Blob 关联，并处理重复 ID。
 - 后置：更细的图片库筛选，例如来源、格式、时间等。
 - 无限期后置：File System Access API 本地目录导出。
@@ -229,8 +228,7 @@ type GenerationParams = {
 
 1. 修复图片尺寸元数据。
 2. 增加 IndexedDB 存储空间显示。
-3. 支持一次请求生成多张图片。
-4. 增加完整项目导出、备份、恢复。
+3. 增加完整项目导出、备份、恢复。
 
 ## 待确认问题
 
