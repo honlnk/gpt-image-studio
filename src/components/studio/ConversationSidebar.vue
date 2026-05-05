@@ -36,7 +36,7 @@ const filteredConversations = computed(() => {
   ></div>
   <aside
     :class="[
-      'flex w-[260px] shrink-0 flex-col bg-[#171717] text-gray-100 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-30 max-md:transition-transform max-md:duration-200',
+      'flex w-65 shrink-0 flex-col bg-[#171717] text-gray-100 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-30 max-md:transition-transform max-md:duration-200',
       isOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
     ]"
     aria-label="历史会话"

@@ -244,7 +244,7 @@ function imageFilesFromTransfer(
 
     <!-- 消息流 -->
     <div class="flex-1 overflow-y-auto">
-      <div class="mx-auto max-w-[768px] px-4 py-6">
+      <div class="mx-auto max-w-3xl px-4 py-6">
         <article
           v-for="message in activeMessages"
           :key="message.id"
@@ -403,7 +403,7 @@ function imageFilesFromTransfer(
       @click="emit('closeAllEditors')"
     >
       <form
-        class="mx-auto max-w-[768px]"
+        class="mx-auto max-w-3xl"
         @submit.prevent="emit('submitMessage')"
       >
         <!-- 编辑器区域 -->
@@ -562,7 +562,7 @@ function imageFilesFromTransfer(
           <div
             v-for="image in activeAttachments"
             :key="image.id"
-            class="flex max-w-[220px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
+            class="flex max-w-55 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
           >
             <img
               v-if="image.previewUrl"
@@ -593,7 +593,7 @@ function imageFilesFromTransfer(
             id="composerText"
             ref="textareaRef"
             :value="composerText"
-            class="max-h-[160px] w-full resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
+            class="max-h-40 w-full resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
             :placeholder="composerPlaceholder"
             rows="2"
             @input="autoResize($event); emit('update:composerText', ($event.target as HTMLTextAreaElement).value)"

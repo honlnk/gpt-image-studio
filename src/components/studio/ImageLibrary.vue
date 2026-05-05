@@ -404,7 +404,7 @@ function isAttached(id: string) {
       <div class="flex-1 overflow-y-auto p-3">
         <div
           v-if="!filteredImages.length"
-          class="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-dashed border-gray-200 px-6 text-center text-sm text-gray-400"
+          class="flex h-full min-h-55 items-center justify-center rounded-xl border border-dashed border-gray-200 px-6 text-center text-sm text-gray-400"
         >
           {{
             activeFilter === "current" ? "当前会话还没有图片" : "图片库还是空的"
