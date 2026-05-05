@@ -23,6 +23,13 @@ type StudioNotice = {
   message: string;
 };
 
+type StudioConfirmDialog = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone?: "danger" | "default";
+};
+
 const STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
   apiBaseUrl: "gpt-image-studio:api-base-url",
@@ -133,7 +140,9 @@ export function useStudioState() {
   const imageAssets = ref<ImageAsset[]>([]);
   const storageUsage = ref<StorageUsage | null>(null);
   const notice = ref<StudioNotice | null>(null);
+  const confirmDialog = ref<StudioConfirmDialog | null>(null);
   let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+  let confirmDialogResolver: ((confirmed: boolean) => void) | null = null;
 
   const activeConversation = computed(() =>
     conversations.value.find((item) => item.id === activeConversationId.value),
@@ -292,7 +301,12 @@ export function useStudioState() {
     const conversation = conversations.value.find((item) => item.id === id);
     if (!conversation) return;
 
-    const confirmed = window.confirm(`确定删除会话“${conversation.title}”吗？聊天记录会被移除，图片库中的图片会保留。`);
+    const confirmed = await requestConfirmation({
+      title: "删除会话",
+      description: `确定删除会话“${conversation.title}”吗？聊天记录会被移除，图片库中的图片会保留。`,
+      confirmLabel: "删除会话",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     const deletedMessages = messages.value.filter(
@@ -307,11 +321,17 @@ export function useStudioState() {
       composerText.value = "";
     }
 
-    await Promise.all([
-      deleteConversationRecord(id),
-      ...deletedMessages.map((message) => deleteMessage(message.id)),
-    ]).catch(reportStorageError);
-    await refreshStorageUsage();
+    try {
+      await Promise.all([
+        deleteConversationRecord(id),
+        ...deletedMessages.map((message) => deleteMessage(message.id)),
+      ]);
+      await refreshStorageUsage();
+      notifySuccess("会话已删除。");
+    } catch (error) {
+      notifyError(`删除会话失败：${formatError(error)}`);
+      reportStorageError(error);
+    }
   }
 
   async function deleteConversations(ids: string[]) {
@@ -401,17 +421,28 @@ export function useStudioState() {
     const confirmMessage = relatedMessages.length || isAttached
       ? "这张图片正在被聊天记录或当前输入引用，删除后聊天记录中会保留无法显示的占位。确定删除吗？"
       : "确定从图片库中删除这张图片吗？";
-    const confirmed = window.confirm(confirmMessage);
+    const confirmed = await requestConfirmation({
+      title: "删除图片",
+      description: confirmMessage,
+      confirmLabel: "删除图片",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     attachedImages.value = attachedImages.value.filter((item) => item !== id);
     imageAssets.value = imageAssets.value.filter((item) => item.id !== id);
 
-    await Promise.all([
-      deleteImageAsset(id),
-      image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
-    ]).catch(reportStorageError);
-    await refreshStorageUsage();
+    try {
+      await Promise.all([
+        deleteImageAsset(id),
+        image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+      ]);
+      await refreshStorageUsage();
+      notifySuccess("图片已删除。");
+    } catch (error) {
+      notifyError(`删除图片失败：${formatError(error)}`);
+      reportStorageError(error);
+    }
   }
 
   async function deleteImages(ids: string[]) {
@@ -464,6 +495,31 @@ export function useStudioState() {
       noticeTimer = null;
     }
     notice.value = null;
+  }
+
+  function cancelConfirmDialog() {
+    resolveConfirmDialog(false);
+  }
+
+  function acceptConfirmDialog() {
+    resolveConfirmDialog(true);
+  }
+
+  function requestConfirmation(input: StudioConfirmDialog) {
+    if (confirmDialogResolver) {
+      confirmDialogResolver(false);
+    }
+
+    confirmDialog.value = input;
+    return new Promise<boolean>((resolve) => {
+      confirmDialogResolver = resolve;
+    });
+  }
+
+  function resolveConfirmDialog(confirmed: boolean) {
+    confirmDialog.value = null;
+    confirmDialogResolver?.(confirmed);
+    confirmDialogResolver = null;
   }
 
   function notifySuccess(message: string) {
@@ -852,9 +908,11 @@ export function useStudioState() {
     backgroundLabel,
     backgroundOptions,
     canSend,
+    cancelConfirmDialog,
     closeAllEditors,
     closeSettings,
     composerText,
+    confirmDialog,
     conversations,
     createConversation,
     customSizeError,
@@ -895,6 +953,7 @@ export function useStudioState() {
     toggleEditor,
     applySizePreset,
     attachImage,
+    acceptConfirmDialog,
   };
 }
 
