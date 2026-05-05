@@ -93,13 +93,33 @@ const filteredConversations = computed(() => {
 
     <div class="px-3 py-2">
       <label class="sr-only" for="conversationSearch">查找会话</label>
-      <input
-        id="conversationSearch"
-        v-model="searchText"
-        class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-100 outline-none transition-colors placeholder:text-gray-500 focus:border-white/20 focus:bg-white/10"
-        placeholder="查找会话..."
-        type="search"
-      />
+      <div class="relative">
+        <input
+          id="conversationSearch"
+          v-model="searchText"
+          class="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-3 pr-9 text-sm text-gray-100 outline-none transition-colors placeholder:text-gray-500 focus:border-white/20 focus:bg-white/10"
+          placeholder="查找会话..."
+          type="text"
+        />
+        <button
+          v-if="searchText"
+          class="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-gray-500 transition-colors hover:bg-white/10 hover:text-gray-200"
+          aria-label="清空搜索"
+          type="button"
+          @click="searchText = ''"
+        >
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22z"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <nav class="flex-1 overflow-y-auto px-2 py-1">
@@ -146,9 +166,3 @@ const filteredConversations = computed(() => {
     </div>
   </aside>
 </template>
-
-<style scoped>
-input[type="search"]::-webkit-search-cancel-button {
-  cursor: pointer;
-}
-</style>

@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { createZipArchive } from "../../services/zipArchive";
-import type { Conversation, ImageAsset } from "../../types/studio";
+import type { Conversation, ImageAsset, Message } from "../../types/studio";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
 
 type SettingsTab = "api" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 type ConfirmAction = "restoreBackup" | "deleteImages" | "deleteConversations";
+type SortDirection = "asc" | "desc";
+type ImageSortKey = "name" | "size" | "time";
+type ConversationSortKey = "name" | "time";
 
 const props = defineProps<{
   isOpen: boolean;
@@ -16,6 +19,7 @@ const props = defineProps<{
   apiBaseUrl: string;
   conversations: Conversation[];
   images: ImageAsset[];
+  messages: Message[];
 }>();
 
 const emit = defineEmits<{
@@ -34,6 +38,11 @@ const activeBatchPanel = ref<BatchPanel>("images");
 const backupInputRef = ref<HTMLInputElement | null>(null);
 const pendingBackupFile = ref<File | null>(null);
 const confirmAction = ref<ConfirmAction | null>(null);
+const searchText = ref("");
+const imageSortKey = ref<ImageSortKey>("time");
+const imageSortDirection = ref<SortDirection>("desc");
+const conversationSortKey = ref<ConversationSortKey>("time");
+const conversationSortDirection = ref<SortDirection>("desc");
 const selectedImageIds = ref<Set<string>>(new Set());
 const selectedConversationIds = ref<Set<string>>(new Set());
 
@@ -46,19 +55,69 @@ const batchPanels: { key: BatchPanel; label: string }[] = [
   { key: "images", label: "图片" },
   { key: "conversations", label: "对话" },
 ];
+const imageSortOptions: { key: ImageSortKey; label: string }[] = [
+  { key: "name", label: "名称" },
+  { key: "size", label: "文件" },
+  { key: "time", label: "时间" },
+];
+const conversationSortOptions: { key: ConversationSortKey; label: string }[] = [
+  { key: "name", label: "名称" },
+  { key: "time", label: "时间" },
+];
 
+const normalizedSearchText = computed(() => searchText.value.trim().toLowerCase());
+const filteredImages = computed(() => {
+  const images = normalizedSearchText.value
+    ? props.images.filter((image) =>
+        image.name.toLowerCase().includes(normalizedSearchText.value),
+      )
+    : props.images;
+
+  return [...images].sort(compareImages);
+});
 const selectedImages = computed(() =>
-  props.images.filter(
+  filteredImages.value.filter(
     (image) => image.previewUrl && selectedImageIds.value.has(image.id),
   ),
 );
 const downloadableImages = computed(() =>
-  props.images.filter((image) => image.previewUrl),
+  filteredImages.value.filter((image) => image.previewUrl),
 );
+const messagesByConversationId = computed(() => {
+  const grouped = new Map<string, Message[]>();
+  props.messages.forEach((message) => {
+    const messages = grouped.get(message.conversationId) ?? [];
+    messages.push(message);
+    grouped.set(message.conversationId, messages);
+  });
+  return grouped;
+});
+const filteredConversations = computed(() => {
+  const conversations = normalizedSearchText.value
+    ? props.conversations.filter((conversation) => {
+        const conversationText = [
+          conversation.title,
+          conversation.summary,
+          ...(messagesByConversationId.value.get(conversation.id) ?? []).map(
+            (message) => message.content,
+          ),
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return conversationText.includes(normalizedSearchText.value);
+      })
+    : props.conversations;
+
+  return [...conversations].sort(compareConversations);
+});
 const selectedConversations = computed(() =>
-  props.conversations.filter((conversation) =>
+  filteredConversations.value.filter((conversation) =>
     selectedConversationIds.value.has(conversation.id),
   ),
+);
+const searchPlaceholder = computed(() =>
+  activeBatchPanel.value === "images" ? "搜索图片名称..." : "搜索对话消息...",
 );
 const confirmState = computed(() => {
   if (confirmAction.value === "restoreBackup") {
@@ -101,9 +160,14 @@ watch(
     if (!isOpen) return;
     activeTab.value = props.initialTab ?? "api";
     activeBatchPanel.value = props.initialBatchPanel ?? "images";
+    searchText.value = "";
     clearSelections();
   },
 );
+
+watch(activeBatchPanel, () => {
+  searchText.value = "";
+});
 
 watch(
   () => props.images,
@@ -160,8 +224,65 @@ function selectAllImages() {
 
 function selectAllConversations() {
   selectedConversationIds.value = new Set(
-    props.conversations.map((conversation) => conversation.id),
+    filteredConversations.value.map((conversation) => conversation.id),
   );
+}
+
+function setImageSort(key: ImageSortKey) {
+  if (imageSortKey.value === key) {
+    imageSortDirection.value = toggleSortDirection(imageSortDirection.value);
+    return;
+  }
+
+  imageSortKey.value = key;
+  imageSortDirection.value = key === "name" ? "asc" : "desc";
+}
+
+function setConversationSort(key: ConversationSortKey) {
+  if (conversationSortKey.value === key) {
+    conversationSortDirection.value = toggleSortDirection(
+      conversationSortDirection.value,
+    );
+    return;
+  }
+
+  conversationSortKey.value = key;
+  conversationSortDirection.value = key === "name" ? "asc" : "desc";
+}
+
+function toggleSortDirection(direction: SortDirection): SortDirection {
+  return direction === "asc" ? "desc" : "asc";
+}
+
+function compareImages(a: ImageAsset, b: ImageAsset) {
+  const direction = imageSortDirection.value === "asc" ? 1 : -1;
+  let result = 0;
+
+  if (imageSortKey.value === "name") {
+    result = compareText(a.name, b.name);
+  } else if (imageSortKey.value === "size") {
+    result = (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0);
+  } else {
+    result = (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0);
+  }
+
+  return result * direction || compareText(a.name, b.name);
+}
+
+function compareConversations(a: Conversation, b: Conversation) {
+  const direction = conversationSortDirection.value === "asc" ? 1 : -1;
+  const result = conversationSortKey.value === "name"
+    ? compareText(a.title, b.title)
+    : (a.updatedAtMs ?? 0) - (b.updatedAtMs ?? 0);
+
+  return result * direction || compareText(a.title, b.title);
+}
+
+function compareText(a: string, b: string) {
+  return a.localeCompare(b, "zh-Hans", {
+    numeric: true,
+    sensitivity: "base",
+  });
 }
 
 function clearSelections() {
@@ -468,23 +589,65 @@ function uniqueZipEntryName(filename: string, index: number) {
                   批量操作
                 </h3>
 
-                <div
-                  class="mt-4 grid rounded-lg bg-gray-100 p-1 sm:w-80 sm:grid-cols-2"
-                >
-                  <button
-                    v-for="panel in batchPanels"
-                    :key="panel.key"
-                    class="cursor-pointer rounded-md px-2 py-1 text-sm font-medium transition-colors"
-                    :class="
-                      activeBatchPanel === panel.key
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-800'
-                    "
-                    type="button"
-                    @click="activeBatchPanel = panel.key"
+                <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <div
+                    class="grid rounded-lg bg-gray-100 p-1 sm:w-80 sm:grid-cols-2"
                   >
-                    {{ panel.label }}
-                  </button>
+                    <button
+                      v-for="panel in batchPanels"
+                      :key="panel.key"
+                      class="cursor-pointer rounded-md px-2 py-1 text-sm font-medium transition-colors"
+                      :class="
+                        activeBatchPanel === panel.key
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-800'
+                      "
+                      type="button"
+                      @click="activeBatchPanel = panel.key"
+                    >
+                      {{ panel.label }}
+                    </button>
+                  </div>
+
+                  <div class="relative min-w-0 flex-1">
+                    <svg
+                      class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                    <input
+                      v-model="searchText"
+                      class="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-400"
+                      :placeholder="searchPlaceholder"
+                      type="text"
+                    />
+                    <button
+                      v-if="searchText"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      aria-label="清空搜索"
+                      type="button"
+                      @click="searchText = ''"
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -504,9 +667,42 @@ function uniqueZipEntryName(filename: string, index: number) {
                       图片
                     </h4>
                     <p class="mt-0.5 text-xs text-gray-500">
-                      共 {{ images.length }} 张，已选
+                      找到 {{ filteredImages.length }} 张，共
+                      {{ images.length }} 张，已选
                       {{ selectedImages.length }} 张
                     </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-1 text-xs">
+                    <span class="text-gray-400">排序</span>
+                    <button
+                      v-for="option in imageSortOptions"
+                      :key="option.key"
+                      class="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 transition-colors"
+                      :class="
+                        imageSortKey === option.key
+                          ? 'bg-gray-100 font-medium text-gray-900'
+                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+                      "
+                      type="button"
+                      @click="setImageSort(option.key)"
+                    >
+                      {{ option.label }}
+                      <svg
+                        v-if="imageSortKey === option.key"
+                        class="h-3 w-3 transition-transform"
+                        :class="{ 'rotate-180': imageSortDirection === 'desc' }"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 19V5" />
+                        <path d="m5 12 7-7 7 7" />
+                      </svg>
+                    </button>
                   </div>
                   <div class="flex shrink-0 gap-1 text-xs">
                     <button
@@ -528,7 +724,7 @@ function uniqueZipEntryName(filename: string, index: number) {
 
                 <div class="min-h-0 flex-1 overflow-y-auto pr-1">
                   <article
-                    v-for="image in images"
+                    v-for="image in filteredImages"
                     :key="image.id"
                     :class="[
                       'mb-2 flex cursor-pointer items-center gap-3 rounded-xl border p-2 transition-colors',
@@ -596,14 +792,27 @@ function uniqueZipEntryName(filename: string, index: number) {
                     </div>
                   </article>
                   <div
-                    v-if="!images.length"
+                    v-if="!filteredImages.length"
                     class="rounded-xl border border-dashed border-gray-200 px-6 py-10 text-center"
                   >
-                    <p class="text-sm font-medium text-gray-600">
+                    <p
+                      v-if="searchText"
+                      class="text-sm font-medium text-gray-600"
+                    >
+                      没有找到匹配的图片
+                    </p>
+                    <p
+                      v-else
+                      class="text-sm font-medium text-gray-600"
+                    >
                       还没有可批量处理的图片
                     </p>
                     <p class="mt-1 text-xs leading-relaxed text-gray-400">
-                      生成图片或从输入框导入本地图片后，这里会显示可下载和可删除的图片列表。
+                      {{
+                        searchText
+                          ? "换一个图片名称关键词试试。"
+                          : "生成图片或从输入框导入本地图片后，这里会显示可下载和可删除的图片列表。"
+                      }}
                     </p>
                   </div>
                 </div>
@@ -644,9 +853,42 @@ function uniqueZipEntryName(filename: string, index: number) {
                       对话
                     </h4>
                     <p class="mt-0.5 text-xs text-gray-500">
-                      共 {{ conversations.length }} 个，已选
+                      找到 {{ filteredConversations.length }} 个，共
+                      {{ conversations.length }} 个，已选
                       {{ selectedConversations.length }} 个
                     </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-1 text-xs">
+                    <span class="text-gray-400">排序</span>
+                    <button
+                      v-for="option in conversationSortOptions"
+                      :key="option.key"
+                      class="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 transition-colors"
+                      :class="
+                        conversationSortKey === option.key
+                          ? 'bg-gray-100 font-medium text-gray-900'
+                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+                      "
+                      type="button"
+                      @click="setConversationSort(option.key)"
+                    >
+                      {{ option.label }}
+                      <svg
+                        v-if="conversationSortKey === option.key"
+                        class="h-3 w-3 transition-transform"
+                        :class="{ 'rotate-180': conversationSortDirection === 'desc' }"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 19V5" />
+                        <path d="m5 12 7-7 7 7" />
+                      </svg>
+                    </button>
                   </div>
                   <div class="flex shrink-0 gap-1 text-xs">
                     <button
@@ -668,7 +910,7 @@ function uniqueZipEntryName(filename: string, index: number) {
 
                 <div class="min-h-0 flex-1 overflow-y-auto pr-1">
                   <article
-                    v-for="conversation in conversations"
+                    v-for="conversation in filteredConversations"
                     :key="conversation.id"
                     :class="[
                       'mb-2 flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors',
@@ -717,14 +959,27 @@ function uniqueZipEntryName(filename: string, index: number) {
                     </div>
                   </article>
                   <div
-                    v-if="!conversations.length"
+                    v-if="!filteredConversations.length"
                     class="rounded-xl border border-dashed border-gray-200 px-6 py-10 text-center"
                   >
-                    <p class="text-sm font-medium text-gray-600">
+                    <p
+                      v-if="searchText"
+                      class="text-sm font-medium text-gray-600"
+                    >
+                      没有找到匹配的对话
+                    </p>
+                    <p
+                      v-else
+                      class="text-sm font-medium text-gray-600"
+                    >
                       还没有可批量处理的对话
                     </p>
                     <p class="mt-1 text-xs leading-relaxed text-gray-400">
-                      新建会话或发送第一条图片生成请求后，这里会显示可批量删除的对话列表。
+                      {{
+                        searchText
+                          ? "换一个消息关键词试试。"
+                          : "新建会话或发送第一条图片生成请求后，这里会显示可批量删除的对话列表。"
+                      }}
                     </p>
                   </div>
                 </div>

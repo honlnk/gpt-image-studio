@@ -936,6 +936,7 @@ export function useStudioState() {
     isHydrated,
     isLibraryOpen,
     isSettingsOpen,
+    messages,
     model,
     notice,
     openSettings,

@@ -103,6 +103,7 @@ function openSettingsDefault() {
       :initial-batch-panel="settingsInitialBatchPanel"
       :initial-tab="settingsInitialTab"
       :is-open="studio.isSettingsOpen.value"
+      :messages="studio.messages.value"
       @close="studio.closeSettings"
       @delete-conversations="studio.deleteConversations"
       @delete-images="studio.deleteImages"
