@@ -9,12 +9,14 @@ import { useStudioState } from "./composables/useStudioState";
 
 const studio = useStudioState();
 const previewImageId = ref("");
+const isConversationSidebarOpen = ref(false);
 const previewImage = computed(() => studio.imageById(previewImageId.value));
 </script>
 
 <template>
   <main class="flex h-screen bg-white text-gray-900 antialiased">
     <ConversationSidebar
+      v-model:is-open="isConversationSidebarOpen"
       :active-conversation-id="studio.activeConversationId.value"
       :conversations="studio.conversations.value"
       @create-conversation="studio.createConversation"
@@ -39,6 +41,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       :background-label="studio.backgroundLabel.value"
       :background-options="studio.backgroundOptions"
       :can-send="studio.canSend.value"
+      :custom-size-error="studio.customSizeError.value"
       :format-label="studio.formatLabel.value"
       :format-options="studio.formatOptions"
       :image-by-id="studio.imageById"
@@ -53,6 +56,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       @attach-image="studio.attachImage"
       @close-all-editors="studio.closeAllEditors"
       @import-images="studio.importImages"
+      @open-conversations="isConversationSidebarOpen = true"
       @open-settings="studio.openSettings"
       @preview-image="previewImageId = $event"
       @remove-attachment="studio.removeAttachment"
@@ -69,6 +73,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       @attach-image="studio.attachImage"
       @delete-image="studio.deleteImage"
       @preview-image="previewImageId = $event"
+      :storage-usage="studio.storageUsage.value"
     />
 
     <SettingsModal
@@ -76,6 +81,8 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       v-model:api-key="studio.apiKey.value"
       :is-open="studio.isSettingsOpen.value"
       @close="studio.closeSettings"
+      @export-backup="studio.exportBackup"
+      @import-backup="studio.importBackup"
     />
 
     <ImagePreviewModal

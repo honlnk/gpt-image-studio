@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref } from "vue";
+
 defineProps<{
   isOpen: boolean;
   apiKey: string;
@@ -7,9 +9,26 @@ defineProps<{
 
 const emit = defineEmits<{
   close: [];
+  exportBackup: [];
+  importBackup: [file: File];
   "update:apiKey": [value: string];
   "update:apiBaseUrl": [value: string];
 }>();
+
+const backupInputRef = ref<HTMLInputElement | null>(null);
+
+function chooseBackupFile() {
+  backupInputRef.value?.click();
+}
+
+function importBackupFromInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) {
+    emit("importBackup", file);
+  }
+  input.value = "";
+}
 </script>
 
 <template>
@@ -95,6 +114,38 @@ const emit = defineEmits<{
               rel="noopener"
               >没有API Key？</a
             >
+          </div>
+        </div>
+
+        <div class="mt-5 border-t border-gray-200 pt-5">
+          <div class="mb-3">
+            <h3 class="text-sm font-semibold text-gray-900">数据备份</h3>
+            <p class="mt-0.5 text-xs leading-relaxed text-gray-500">
+              导出会话、消息和图片；API key 不会写入备份。
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              class="cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              type="button"
+              @click="emit('exportBackup')"
+            >
+              导出备份
+            </button>
+            <button
+              class="cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              type="button"
+              @click="chooseBackupFile"
+            >
+              恢复备份
+            </button>
+            <input
+              ref="backupInputRef"
+              class="sr-only"
+              type="file"
+              accept=".zip,application/zip"
+              @change="importBackupFromInput"
+            />
           </div>
         </div>
 

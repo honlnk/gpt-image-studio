@@ -5,6 +5,7 @@ import type { Conversation } from "../../types/studio";
 const props = defineProps<{
   conversations: Conversation[];
   activeConversationId: string;
+  isOpen: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -12,6 +13,7 @@ const emit = defineEmits<{
   deleteConversation: [id: string];
   openSettings: [];
   selectConversation: [id: string];
+  "update:isOpen": [value: boolean];
 }>();
 
 const searchText = ref("");
@@ -26,15 +28,24 @@ const filteredConversations = computed(() => {
 </script>
 
 <template>
+  <div
+    v-if="isOpen"
+    class="fixed inset-0 z-20 bg-black/35 md:hidden"
+    role="presentation"
+    @click="emit('update:isOpen', false)"
+  ></div>
   <aside
-    class="flex w-[260px] shrink-0 flex-col bg-[#171717] text-gray-100 max-md:hidden"
+    :class="[
+      'flex w-[260px] shrink-0 flex-col bg-[#171717] text-gray-100 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-30 max-md:transition-transform max-md:duration-200',
+      isOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
+    ]"
     aria-label="历史会话"
   >
     <div class="flex items-center justify-between px-3 pt-3 pb-1">
       <button
         class="flex-1 cursor-pointer rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
         type="button"
-        @click="emit('createConversation')"
+        @click="emit('createConversation'); emit('update:isOpen', false)"
       >
         + 新建会话
       </button>
@@ -79,7 +90,7 @@ const filteredConversations = computed(() => {
         <button
           class="min-w-0 flex-1 cursor-pointer px-3 py-2 text-left text-sm"
           type="button"
-          @click="emit('selectConversation', conversation.id)"
+          @click="emit('selectConversation', conversation.id); emit('update:isOpen', false)"
         >
           <span class="block truncate">{{ conversation.title }}</span>
         </button>
