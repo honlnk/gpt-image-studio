@@ -1,4 +1,4 @@
-# GPT Image Studio 开发计划
+# GPT Image Studio 产品路线图
 
 ## 产品方向
 

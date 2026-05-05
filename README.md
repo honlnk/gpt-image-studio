@@ -50,9 +50,9 @@ pnpm dev
 pnpm build
 ```
 
-## 开发计划
+## 产品路线图
 
-完整计划见 [docs/development-plan.md](docs/development-plan.md)。
+完整路线图见 [docs/product-roadmap.md](docs/product-roadmap.md)。
 
 - 第二阶段：IndexedDB 本地持久化 — 已完成
 - 第三阶段：接入真实图片生成 API — 已完成
