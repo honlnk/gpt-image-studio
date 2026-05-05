@@ -70,6 +70,7 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       @attach-image="studio.attachImage"
       @delete-image="studio.deleteImage"
       @preview-image="previewImageId = $event"
+      :storage-usage="studio.storageUsage.value"
     />
 
     <SettingsModal

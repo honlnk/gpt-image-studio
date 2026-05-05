@@ -5,6 +5,7 @@ import { base64ToBlob, editImage, generateImage, getCustomSizeError } from "../s
 import { readImageDimensions } from "../services/imageMetadata";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
 import { loadSettings, saveSettings } from "../services/settings";
+import { estimateStorageUsage } from "../services/storageUsage";
 import type {
   AppSettings,
   Conversation,
@@ -13,6 +14,7 @@ import type {
   ImageAsset,
   Message,
 } from "../types/studio";
+import type { StorageUsage } from "../services/storageUsage";
 
 const STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
@@ -122,6 +124,7 @@ export function useStudioState() {
   const activeConversationId = ref("");
   const messages = ref<Message[]>([]);
   const imageAssets = ref<ImageAsset[]>([]);
+  const storageUsage = ref<StorageUsage | null>(null);
 
   const activeConversation = computed(() =>
     conversations.value.find((item) => item.id === activeConversationId.value),
@@ -222,6 +225,7 @@ export function useStudioState() {
       attachedImages.value = attachedImages.value.filter((id) =>
         restoredImages.some((image) => image.id === id),
       );
+      await refreshStorageUsage();
     } catch (error) {
       reportStorageError(error);
     } finally {
@@ -264,6 +268,7 @@ export function useStudioState() {
       deleteConversationRecord(id),
       ...deletedMessages.map((message) => deleteMessage(message.id)),
     ]).catch(reportStorageError);
+    await refreshStorageUsage();
   }
 
   async function createConversation() {
@@ -330,6 +335,7 @@ export function useStudioState() {
       deleteImageAsset(id),
       image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
     ]).catch(reportStorageError);
+    await refreshStorageUsage();
   }
 
   async function importImages(files: File[]) {
@@ -342,6 +348,7 @@ export function useStudioState() {
 
     imageAssets.value = [...importedAssets, ...imageAssets.value];
     importedAssets.forEach((asset) => attachImage(asset.id));
+    await refreshStorageUsage();
   }
 
   async function submitMessage() {
@@ -560,6 +567,7 @@ export function useStudioState() {
         saveImageAsset(toPlainImageAsset(imageAsset)),
         saveMessage(toPlainMessage(assistantMessage)),
       ]);
+      await refreshStorageUsage();
     } catch (error) {
       const message = formatError(error);
       assistantMessage.status = "error";
@@ -568,6 +576,7 @@ export function useStudioState() {
       assistantMessage.resultImageIds = [];
       replaceMessage(assistantMessage);
       await saveMessage(toPlainMessage(assistantMessage)).catch(reportStorageError);
+      await refreshStorageUsage();
     }
   }
 
@@ -685,6 +694,13 @@ export function useStudioState() {
     return conversationWriteQueue.catch(reportStorageError);
   }
 
+  async function refreshStorageUsage() {
+    storageUsage.value = await estimateStorageUsage().catch((error) => {
+      reportStorageError(error);
+      return storageUsage.value;
+    });
+  }
+
   return {
     activeAttachments,
     activeConversation,
@@ -730,6 +746,7 @@ export function useStudioState() {
     selectConversation,
     sizeLabel,
     sizePresets,
+    storageUsage,
     submitMessage,
     toggleEditor,
     applySizePreset,
