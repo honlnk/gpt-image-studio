@@ -230,7 +230,19 @@ function imageFilesFromTransfer(
           type="button"
           @click="emit('openSettings')"
         >
-          ⚙
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
         </button>
         <button
           class="cursor-pointer rounded-lg px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
@@ -244,7 +256,7 @@ function imageFilesFromTransfer(
 
     <!-- 消息流 -->
     <div class="flex-1 overflow-y-auto">
-      <div class="mx-auto max-w-[768px] px-4 py-6">
+      <div class="mx-auto max-w-3xl px-4 py-6">
         <article
           v-for="message in activeMessages"
           :key="message.id"
@@ -403,7 +415,7 @@ function imageFilesFromTransfer(
       @click="emit('closeAllEditors')"
     >
       <form
-        class="mx-auto max-w-[768px]"
+        class="mx-auto max-w-3xl"
         @submit.prevent="emit('submitMessage')"
       >
         <!-- 编辑器区域 -->
@@ -562,7 +574,7 @@ function imageFilesFromTransfer(
           <div
             v-for="image in activeAttachments"
             :key="image.id"
-            class="flex max-w-[220px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
+            class="flex max-w-55 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
           >
             <img
               v-if="image.previewUrl"
@@ -574,9 +586,19 @@ function imageFilesFromTransfer(
             <button
               class="shrink-0 cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
               type="button"
+              aria-label="移除引用图片"
               @click="emit('removeAttachment', image.id)"
             >
-              ×
+              <svg
+                class="h-3.5 w-3.5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22z"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -593,7 +615,7 @@ function imageFilesFromTransfer(
             id="composerText"
             ref="textareaRef"
             :value="composerText"
-            class="max-h-[160px] w-full resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
+            class="max-h-40 w-full resize-none bg-transparent py-1 text-[15px] leading-relaxed text-gray-800 outline-none placeholder:text-gray-400"
             :placeholder="composerPlaceholder"
             rows="2"
             @input="autoResize($event); emit('update:composerText', ($event.target as HTMLTextAreaElement).value)"
@@ -606,7 +628,19 @@ function imageFilesFromTransfer(
               aria-label="上传图片"
               title="上传图片"
             >
-              +
+              <svg
+                class="h-5 w-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
               <input
                 class="sr-only"
                 type="file"
