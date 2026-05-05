@@ -108,7 +108,7 @@ function importBackupFromInput(event: Event) {
               "
             />
             <a
-              href="https://code.mrzengchn.com/"
+              href="https://code.mrzengchn.com/register?aff=HMvx"
               class="mt-1.5 inline-block cursor-pointer text-xs text-gray-400 transition-colors hover:text-gray-600"
               target="_blank"
               rel="noopener"
