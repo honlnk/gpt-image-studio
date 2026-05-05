@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -8,58 +8,90 @@ const props = withDefaults(
   {},
 );
 
+const triggerRef = ref<HTMLElement | null>(null);
+const tooltipRef = ref<HTMLElement | null>(null);
+const isVisible = ref(false);
 const placement = ref({ x: "center", y: "bottom" });
+const position = ref({ left: 0, top: 0, arrowLeft: 0 });
+const tooltipStyle = computed(() => ({
+  left: `${position.value.left}px`,
+  top: `${position.value.top}px`,
+}));
 
-function updatePosition(el: HTMLElement) {
-  const rect = el.getBoundingClientRect();
+async function updatePosition() {
+  isVisible.value = true;
+  await nextTick();
+
+  if (!triggerRef.value || !tooltipRef.value) return;
+
+  const rect = triggerRef.value.getBoundingClientRect();
+  const tooltipRect = tooltipRef.value.getBoundingClientRect();
   const vpW = window.innerWidth;
   const vpH = window.innerHeight;
-  const estW = 280;
-  const estH = 40;
+  const margin = 8;
+  const gap = 8;
+  const width = tooltipRect.width;
+  const height = tooltipRect.height;
+  const triggerCenter = rect.left + rect.width / 2;
+  const unclampedLeft = triggerCenter - width / 2;
+  const left = Math.min(
+    Math.max(margin, unclampedLeft),
+    Math.max(margin, vpW - width - margin),
+  );
+  const y = rect.bottom + gap + height > vpH ? "top" : "bottom";
+  const top =
+    y === "bottom"
+      ? rect.bottom + gap
+      : Math.max(margin, rect.top - height - gap);
+  const arrowLeft = Math.min(Math.max(12, triggerCenter - left), width - 12);
 
-  const x =
-    rect.left + estW / 2 > vpW
-      ? "right"
-      : rect.right - estW / 2 < 0
+  placement.value = {
+    x:
+      left === margin
         ? "left"
-        : "center";
-  const y = rect.bottom + estH > vpH ? "top" : "bottom";
+        : left === Math.max(margin, vpW - width - margin)
+          ? "right"
+          : "center",
+    y,
+  };
+  position.value = { left, top, arrowLeft };
+}
 
-  placement.value = { x, y };
+function hideTooltip() {
+  isVisible.value = false;
 }
 </script>
 
 <template>
   <span
-    class="group relative inline-flex"
-    @mouseenter="(e) => updatePosition(e.currentTarget as HTMLElement)"
+    ref="triggerRef"
+    class="inline-flex"
+    @focusin="updatePosition"
+    @focusout="hideTooltip"
+    @mouseenter="updatePosition"
+    @mouseleave="hideTooltip"
   >
     <slot />
+  </span>
+  <Teleport to="body">
     <span
-      class="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-gray-800 px-3 py-1.5 text-[11px] leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
-      :class="[
-        placement.y === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2',
-        placement.x === 'center'
-          ? 'left-1/2 -translate-x-1/2'
-          : placement.x === 'right'
-            ? 'right-0'
-            : 'left-0',
-      ]"
+      v-if="isVisible"
+      ref="tooltipRef"
+      class="pointer-events-none fixed z-50 max-w-[calc(100vw-16px)] rounded-lg bg-gray-800 px-3 py-1.5 text-[11px] leading-snug text-white shadow-lg"
+      :class="{ 'whitespace-nowrap': placement.x === 'center' }"
+      :style="tooltipStyle"
     >
       <span
         class="absolute border-4 border-transparent"
+        :style="{ left: `${position.arrowLeft}px` }"
         :class="[
           placement.y === 'bottom'
             ? 'bottom-full border-b-gray-800'
             : 'top-full border-t-gray-800',
-          placement.x === 'center'
-            ? 'left-1/2 -translate-x-1/2'
-            : placement.x === 'right'
-              ? 'right-2'
-              : 'left-2',
+          '-translate-x-1/2',
         ]"
       ></span>
       {{ text }}
     </span>
-  </span>
+  </Teleport>
 </template>
