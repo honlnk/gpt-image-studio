@@ -243,10 +243,16 @@ function isAttached(id: string) {
 </script>
 
 <template>
+  <div
+    v-if="isOpen"
+    class="fixed inset-0 z-10 bg-black/25 lg:hidden"
+    role="presentation"
+    @click="emit('update:isOpen', false)"
+  ></div>
   <aside
     :class="[
-      'flex w-[320px] shrink-0 flex-col border-l border-gray-200 bg-white max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-10 max-lg:transition-transform max-lg:duration-200',
-      isOpen ? 'max-lg:translate-x-0' : 'max-lg:translate-x-full max-lg:hidden',
+      'flex w-[320px] shrink-0 flex-col border-l border-gray-200 bg-white max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:transition-transform max-lg:duration-200 max-lg:ease-out',
+      isOpen ? 'max-lg:translate-x-0' : 'max-lg:translate-x-full',
     ]"
     aria-label="图片库"
   >
