@@ -78,6 +78,8 @@ const previewImage = computed(() => studio.imageById(previewImageId.value));
       v-model:api-key="studio.apiKey.value"
       :is-open="studio.isSettingsOpen.value"
       @close="studio.closeSettings"
+      @export-backup="studio.exportBackup"
+      @import-backup="studio.importBackup"
     />
 
     <ImagePreviewModal

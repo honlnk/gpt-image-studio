@@ -1,4 +1,5 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { createStudioBackup, restoreStudioBackup } from "../services/backups";
 import { deleteConversation as deleteConversationRecord, listConversations, saveConversation } from "../services/conversations";
 import { deleteImageAsset, deleteImageBlob, loadImageBlob, listImageAssets, saveImageAsset, saveImageBlob } from "../services/imageAssets";
 import { base64ToBlob, editImage, generateImage, getCustomSizeError } from "../services/imagesApi";
@@ -231,6 +232,32 @@ export function useStudioState() {
     } finally {
       isHydrated.value = true;
     }
+  }
+
+  async function exportBackup() {
+    const backup = await createStudioBackup();
+    const url = URL.createObjectURL(backup);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `gpt-image-studio-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importBackup(file: File) {
+    const confirmed = window.confirm(
+      "恢复备份会覆盖当前浏览器里的所有会话、消息和图片。API key 不会从备份中恢复。确定继续吗？",
+    );
+    if (!confirmed) return;
+
+    await restoreStudioBackup(file);
+    conversations.value = [];
+    messages.value = [];
+    imageAssets.value = [];
+    attachedImages.value = [];
+    composerText.value = "";
+    activeConversationId.value = "";
+    await hydrateFromStorage();
   }
 
   function openSettings() {
@@ -729,6 +756,8 @@ export function useStudioState() {
     imageHeight,
     imageModeLabel,
     imageWidth,
+    exportBackup,
+    importBackup,
     importImages,
     isEditorExpanded,
     isGenerating,

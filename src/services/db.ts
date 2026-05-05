@@ -95,6 +95,14 @@ export async function deleteFromStore(storeName: StoreName, key: IDBValidKey) {
   await transactionDone(transaction);
 }
 
+export async function clearStore(storeName: StoreName) {
+  const db = await getStudioDb();
+  const transaction = db.transaction(storeName, "readwrite");
+  const store = transaction.objectStore(storeName);
+  store.clear();
+  await transactionDone(transaction);
+}
+
 function requestToPromise<T>(request: IDBRequest) {
   return new Promise<T>((resolve, reject) => {
     request.onsuccess = () => resolve(request.result as T);
