@@ -299,9 +299,6 @@ function uniqueZipEntryName(filename: string, index: number) {
             <h2 id="settingsTitle" class="text-lg font-semibold text-gray-900">
               设置
             </h2>
-            <p class="mt-0.5 text-sm text-gray-500">
-              管理接口配置、本地备份和批量数据操作。
-            </p>
           </div>
           <button
             class="cursor-pointer rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
@@ -550,7 +547,9 @@ function uniqueZipEntryName(filename: string, index: number) {
                           ? 'ring-2 ring-gray-900 ring-offset-1'
                           : '',
                       ]"
-                      @click.stop="image.previewUrl && emit('previewImage', image.id)"
+                      @click.stop="
+                        image.previewUrl && emit('previewImage', image.id)
+                      "
                     >
                       <img
                         v-if="image.previewUrl"
@@ -596,12 +595,17 @@ function uniqueZipEntryName(filename: string, index: number) {
                       </p>
                     </div>
                   </article>
-                  <p
+                  <div
                     v-if="!images.length"
-                    class="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400"
+                    class="rounded-xl border border-dashed border-gray-200 px-6 py-10 text-center"
                   >
-                    暂无图片
-                  </p>
+                    <p class="text-sm font-medium text-gray-600">
+                      还没有可批量处理的图片
+                    </p>
+                    <p class="mt-1 text-xs leading-relaxed text-gray-400">
+                      生成图片或从输入框导入本地图片后，这里会显示可下载和可删除的图片列表。
+                    </p>
+                  </div>
                 </div>
 
                 <div class="mt-3 flex shrink-0 gap-2">
@@ -712,12 +716,17 @@ function uniqueZipEntryName(filename: string, index: number) {
                       </p>
                     </div>
                   </article>
-                  <p
+                  <div
                     v-if="!conversations.length"
-                    class="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400"
+                    class="rounded-xl border border-dashed border-gray-200 px-6 py-10 text-center"
                   >
-                    暂无对话
-                  </p>
+                    <p class="text-sm font-medium text-gray-600">
+                      还没有可批量处理的对话
+                    </p>
+                    <p class="mt-1 text-xs leading-relaxed text-gray-400">
+                      新建会话或发送第一条图片生成请求后，这里会显示可批量删除的对话列表。
+                    </p>
+                  </div>
                 </div>
 
                 <div class="mt-3 shrink-0">

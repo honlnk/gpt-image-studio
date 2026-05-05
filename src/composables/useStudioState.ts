@@ -17,6 +17,12 @@ import type {
 } from "../types/studio";
 import type { StorageUsage } from "../services/storageUsage";
 
+type StudioNotice = {
+  id: number;
+  type: "success" | "error";
+  message: string;
+};
+
 const STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
   apiBaseUrl: "gpt-image-studio:api-base-url",
@@ -126,6 +132,8 @@ export function useStudioState() {
   const messages = ref<Message[]>([]);
   const imageAssets = ref<ImageAsset[]>([]);
   const storageUsage = ref<StorageUsage | null>(null);
+  const notice = ref<StudioNotice | null>(null);
+  let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   const activeConversation = computed(() =>
     conversations.value.find((item) => item.id === activeConversationId.value),
@@ -228,6 +236,7 @@ export function useStudioState() {
       );
       await refreshStorageUsage();
     } catch (error) {
+      notifyError(`读取本地数据失败：${formatError(error)}`);
       reportStorageError(error);
     } finally {
       isHydrated.value = true;
@@ -235,24 +244,36 @@ export function useStudioState() {
   }
 
   async function exportBackup() {
-    const backup = await createStudioBackup();
-    const url = URL.createObjectURL(backup);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `gpt-image-studio-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    try {
+      const backup = await createStudioBackup();
+      const url = URL.createObjectURL(backup);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `gpt-image-studio-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      notifySuccess("备份已开始下载。");
+    } catch (error) {
+      notifyError(`导出备份失败：${formatError(error)}`);
+      reportStorageError(error);
+    }
   }
 
   async function importBackup(file: File) {
-    await restoreStudioBackup(file);
-    conversations.value = [];
-    messages.value = [];
-    imageAssets.value = [];
-    attachedImages.value = [];
-    composerText.value = "";
-    activeConversationId.value = "";
-    await hydrateFromStorage();
+    try {
+      await restoreStudioBackup(file);
+      conversations.value = [];
+      messages.value = [];
+      imageAssets.value = [];
+      attachedImages.value = [];
+      composerText.value = "";
+      activeConversationId.value = "";
+      await hydrateFromStorage();
+      notifySuccess("备份已恢复，本地数据已刷新。");
+    } catch (error) {
+      notifyError(`恢复备份失败：${formatError(error)}`);
+      reportStorageError(error);
+    }
   }
 
   function openSettings() {
@@ -313,11 +334,17 @@ export function useStudioState() {
       composerText.value = "";
     }
 
-    await Promise.all([
-      ...ids.map((id) => deleteConversationRecord(id)),
-      ...deletedMessages.map((message) => deleteMessage(message.id)),
-    ]).catch(reportStorageError);
-    await refreshStorageUsage();
+    try {
+      await Promise.all([
+        ...ids.map((id) => deleteConversationRecord(id)),
+        ...deletedMessages.map((message) => deleteMessage(message.id)),
+      ]);
+      await refreshStorageUsage();
+      notifySuccess(`已删除 ${ids.length} 个对话。`);
+    } catch (error) {
+      notifyError(`删除对话失败：${formatError(error)}`);
+      reportStorageError(error);
+    }
   }
 
   async function createConversation() {
@@ -397,26 +424,69 @@ export function useStudioState() {
     attachedImages.value = attachedImages.value.filter((id) => !idSet.has(id));
     imageAssets.value = imageAssets.value.filter((image) => !idSet.has(image.id));
 
-    await Promise.all(
-      deletedImages.flatMap((image) => [
-        deleteImageAsset(image.id),
-        image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
-      ]),
-    ).catch(reportStorageError);
-    await refreshStorageUsage();
+    try {
+      await Promise.all(
+        deletedImages.flatMap((image) => [
+          deleteImageAsset(image.id),
+          image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+        ]),
+      );
+      await refreshStorageUsage();
+      notifySuccess(`已删除 ${deletedImages.length} 张图片。`);
+    } catch (error) {
+      notifyError(`删除图片失败：${formatError(error)}`);
+      reportStorageError(error);
+    }
   }
 
   async function importImages(files: File[]) {
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) return;
 
-    const importedAssets = await Promise.all(
-      imageFiles.map((file) => importImageFile(file)),
-    );
+    try {
+      const importedAssets = await Promise.all(
+        imageFiles.map((file) => importImageFile(file)),
+      );
 
-    imageAssets.value = [...importedAssets, ...imageAssets.value];
-    importedAssets.forEach((asset) => attachImage(asset.id));
-    await refreshStorageUsage();
+      imageAssets.value = [...importedAssets, ...imageAssets.value];
+      importedAssets.forEach((asset) => attachImage(asset.id));
+      await refreshStorageUsage();
+      notifySuccess(`已导入 ${importedAssets.length} 张图片并加入引用。`);
+    } catch (error) {
+      notifyError(`导入图片失败：${formatError(error)}`);
+      reportStorageError(error);
+    }
+  }
+
+  function dismissNotice() {
+    if (noticeTimer) {
+      clearTimeout(noticeTimer);
+      noticeTimer = null;
+    }
+    notice.value = null;
+  }
+
+  function notifySuccess(message: string) {
+    setNotice("success", message);
+  }
+
+  function notifyError(message: string) {
+    setNotice("error", message);
+  }
+
+  function setNotice(type: StudioNotice["type"], message: string) {
+    if (noticeTimer) {
+      clearTimeout(noticeTimer);
+    }
+    notice.value = {
+      id: Date.now(),
+      type,
+      message,
+    };
+    noticeTimer = setTimeout(() => {
+      notice.value = null;
+      noticeTimer = null;
+    }, type === "error" ? 7000 : 3500);
   }
 
   async function submitMessage() {
@@ -792,6 +862,7 @@ export function useStudioState() {
     deleteConversations,
     deleteImage,
     deleteImages,
+    dismissNotice,
     formatLabel,
     formatOptions,
     imageAssets,
@@ -808,6 +879,7 @@ export function useStudioState() {
     isLibraryOpen,
     isSettingsOpen,
     model,
+    notice,
     openSettings,
     outputFormat,
     quality,

@@ -84,7 +84,8 @@ OpenAI-compatible Images API. Generation: `POST {apiBaseUrl}/generations` (JSON)
 See `docs/product-roadmap.md` for the full roadmap. Current status:
 - Phases 1-4: Done (chat UI, IndexedDB persistence, text-to-image, image editing with references)
 - Phase 5: Experience enhancements — core items done
-- Upcoming: Settings refactor with batch operations (`docs/settings-batch-operations-plan.md`), desktop packaging evaluation
+- Done: Settings refactor with batch operations (`docs/settings-batch-operations-plan.md`)
+- Upcoming: Continue feedback/error polish, desktop packaging evaluation
 
 ## Conventions
 
