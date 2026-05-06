@@ -1,28 +1,17 @@
 import { onMounted, ref, watch } from "vue";
 import { createStudioBackup, restoreStudioBackup } from "../services/backups";
-import { deleteConversation as deleteConversationRecord, listConversations } from "../services/conversations";
-import { deleteImageAsset, deleteImageBlob, listImageAssets } from "../services/imageAssets";
-import { deleteMessage, listMessages, saveMessage } from "../services/messages";
-import { loadSettings } from "../services/settings";
 import { useStudioConversations } from "./useStudioConversations";
 import { useStudioFeedback } from "./useStudioFeedback";
 import { useStudioGeneration } from "./useStudioGeneration";
 import { useStudioImages } from "./useStudioImages";
+import { useStudioRestore } from "./useStudioRestore";
 import { useStudioSettings } from "./useStudioSettings";
 import { useStudioUiState } from "./useStudioUiState";
-import type {
-  Conversation,
-  ImageAsset,
-  Message,
-} from "../types/studio";
+import type { Message } from "../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
 } as const;
-
-const LEGACY_SEED_CONVERSATION_IDS = new Set(["c-1", "c-2", "c-3"]);
-const LEGACY_SEED_MESSAGE_IDS = new Set(["m-1", "m-2", "m-3", "m-4", "m-5", "m-6"]);
-const LEGACY_SEED_IMAGE_IDS = new Set(["img-1", "img-2", "img-3", "img-4"]);
 
 export function useStudioState() {
   const isHydrated = ref(false);
@@ -152,73 +141,28 @@ export function useStudioState() {
     refreshStorageUsage,
     updateConversationSummary,
   });
+  const { restoreFromStorage } = useStudioRestore({
+    activeConversationId,
+    applySettings,
+    attachedImages,
+    conversations,
+    hydrateImagePreviews,
+    imageAssets,
+    isHydrated,
+    messages,
+    notifyError,
+    onStorageError: reportStorageError,
+    refreshStorageUsage,
+    saveCurrentSettings,
+  });
 
   onMounted(() => {
-    void hydrateFromStorage();
+    void restoreFromStorage();
   });
 
   watch(composerText, (value) => {
     writeStorage(STORAGE_KEYS.draftComposerText, value);
   });
-
-  async function hydrateFromStorage() {
-    try {
-      const [savedSettings, savedConversations, savedMessages, savedImageAssets] =
-        await Promise.all([
-          loadSettings(),
-          listConversations(),
-          listMessages(),
-          listImageAssets(),
-        ]);
-
-      if (savedSettings) {
-        applySettings(savedSettings);
-      } else {
-        await saveCurrentSettings();
-      }
-
-      await removeLegacySeedRecords(
-        savedConversations,
-        savedMessages,
-        savedImageAssets,
-      );
-
-      const restoredConversations = savedConversations.filter(
-        (conversation) => !LEGACY_SEED_CONVERSATION_IDS.has(conversation.id),
-      );
-      const restoredImages = savedImageAssets.filter(
-        (image) =>
-          !LEGACY_SEED_IMAGE_IDS.has(image.id) &&
-          !(
-            image.conversationId &&
-            LEGACY_SEED_CONVERSATION_IDS.has(image.conversationId)
-          ),
-      );
-      const restoredMessages = savedMessages.filter(
-        (message) =>
-          !LEGACY_SEED_MESSAGE_IDS.has(message.id) &&
-          !LEGACY_SEED_CONVERSATION_IDS.has(message.conversationId),
-      );
-
-      conversations.value = restoredConversations;
-      activeConversationId.value = restoredConversations[0]?.id ?? "";
-
-      const normalizedMessages = normalizeRestoredMessages(restoredMessages);
-      messages.value = normalizedMessages;
-      await persistNormalizedMessages(restoredMessages, normalizedMessages);
-
-      imageAssets.value = await hydrateImagePreviews(restoredImages);
-      attachedImages.value = attachedImages.value.filter((id) =>
-        restoredImages.some((image) => image.id === id),
-      );
-      await refreshStorageUsage();
-    } catch (error) {
-      notifyError(`读取本地数据失败：${formatError(error)}`);
-      reportStorageError(error);
-    } finally {
-      isHydrated.value = true;
-    }
-  }
 
   async function exportBackup() {
     try {
@@ -245,7 +189,7 @@ export function useStudioState() {
       attachedImages.value = [];
       composerText.value = "";
       activeConversationId.value = "";
-      await hydrateFromStorage();
+      await restoreFromStorage();
       notifySuccess("备份已恢复，本地数据已刷新。");
     } catch (error) {
       notifyError(`恢复备份失败：${formatError(error)}`);
@@ -342,69 +286,4 @@ function formatError(error: unknown) {
   }
 
   return error instanceof Error ? error.message : String(error);
-}
-
-function normalizeRestoredMessages(messages: Message[]) {
-  return messages.map((message) => {
-    if (message.status !== "pending") return message;
-
-    return {
-      ...message,
-      status: "error",
-      content: "生成中断，请重试。",
-      errorMessage: "页面刷新或会话中断后，未完成的生成任务不会继续运行。",
-    } satisfies Message;
-  });
-}
-
-async function persistNormalizedMessages(
-  originalMessages: Message[],
-  restoredMessages: Message[],
-) {
-  const changedMessages = restoredMessages.filter(
-    (message, index) => message.status !== originalMessages[index]?.status,
-  );
-
-  if (!changedMessages.length) return;
-
-  await Promise.all(changedMessages.map((message) => saveMessage(message)));
-}
-
-async function removeLegacySeedRecords(
-  conversations: Conversation[],
-  messages: Message[],
-  imageAssets: ImageAsset[],
-) {
-  const staleConversations = conversations.filter((conversation) =>
-    LEGACY_SEED_CONVERSATION_IDS.has(conversation.id),
-  );
-  const staleMessages = messages.filter(
-    (message) =>
-      LEGACY_SEED_MESSAGE_IDS.has(message.id) ||
-      LEGACY_SEED_CONVERSATION_IDS.has(message.conversationId),
-  );
-  const staleImages = imageAssets.filter(
-    (image) =>
-      LEGACY_SEED_IMAGE_IDS.has(image.id) ||
-      Boolean(
-        image.conversationId &&
-          LEGACY_SEED_CONVERSATION_IDS.has(image.conversationId),
-      ),
-  );
-
-  if (!staleConversations.length && !staleMessages.length && !staleImages.length) {
-    return;
-  }
-
-  await Promise.all([
-    ...staleConversations.map((conversation) =>
-      deleteConversationRecord(conversation.id),
-    ),
-    ...staleMessages.map((message) => deleteMessage(message.id)),
-    ...staleImages.map((image) => deleteImageAsset(image.id)),
-    ...staleImages
-      .map((image) => image.blobKey)
-      .filter((blobKey): blobKey is string => Boolean(blobKey))
-      .map((blobKey) => deleteImageBlob(blobKey)),
-  ]);
 }
