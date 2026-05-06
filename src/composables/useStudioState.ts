@@ -2,14 +2,14 @@ import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { createStudioBackup, restoreStudioBackup } from "../services/backups";
 import { deleteConversation as deleteConversationRecord, listConversations, saveConversation } from "../services/conversations";
 import { deleteImageAsset, deleteImageBlob, loadImageBlob, listImageAssets, saveImageAsset, saveImageBlob } from "../services/imageAssets";
-import { base64ToBlob, editImage, generateImage, getCustomSizeError } from "../services/imagesApi";
+import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
 import { readImageDimensions } from "../services/imageMetadata";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
-import { loadSettings, saveSettings } from "../services/settings";
+import { loadSettings } from "../services/settings";
 import { estimateStorageUsage } from "../services/storageUsage";
 import { useStudioFeedback } from "./useStudioFeedback";
+import { useStudioSettings } from "./useStudioSettings";
 import type {
-  AppSettings,
   Conversation,
   EditorKey,
   GenerationParams,
@@ -19,8 +19,6 @@ import type {
 import type { StorageUsage } from "../services/storageUsage";
 
 const STORAGE_KEYS = {
-  apiKey: "gpt-image-studio:api-key",
-  apiBaseUrl: "gpt-image-studio:api-base-url",
   draftAttachments: "gpt-image-studio:draft-attachments",
   draftComposerText: "gpt-image-studio:draft-composer-text",
 } as const;
@@ -30,53 +28,34 @@ const LEGACY_SEED_MESSAGE_IDS = new Set(["m-1", "m-2", "m-3", "m-4", "m-5", "m-6
 const LEGACY_SEED_IMAGE_IDS = new Set(["img-1", "img-2", "img-3", "img-4"]);
 
 export function useStudioState() {
-  const model = ref("gpt-image-2");
-  const apiKey = ref(readStorage(STORAGE_KEYS.apiKey, ""));
-  const apiBaseUrl = ref(
-    readStorage(STORAGE_KEYS.apiBaseUrl, ""),
-  );
-  const imageWidth = ref(1024);
-  const imageHeight = ref(1024);
-  const activeSizePreset = ref<GenerationParams["size"]>("auto");
-  const sizePresets = ["auto", "1024x1024", "1536x1024", "1024x1536", "custom"] as const;
-  const sizeLabel = computed(() => {
-    if (activeSizePreset.value === "auto") return "自动";
-    if (activeSizePreset.value === "custom") return `${imageWidth.value} x ${imageHeight.value}`;
-    return activeSizePreset.value;
-  });
-  const customSizeError = computed(() => {
-    if (activeSizePreset.value !== "custom") return "";
-
-    return getCustomSizeError(imageWidth.value, imageHeight.value);
-  });
-  const quality = ref<GenerationParams["quality"]>("auto");
-  const background = ref<GenerationParams["background"]>("auto");
-  const outputFormat = ref<GenerationParams["outputFormat"]>("png");
-  const qualityOptions = [
-    { value: "auto", label: "自动" },
-    { value: "high", label: "高" },
-    { value: "medium", label: "中" },
-    { value: "low", label: "低" },
-  ] as const;
-  const backgroundOptions = [
-    { value: "auto", label: "自动" },
-    { value: "opaque", label: "不透明" },
-  ] as const;
-  const formatOptions = [
-    { value: "png", label: "PNG" },
-    { value: "webp", label: "WebP" },
-    { value: "jpeg", label: "JPEG" },
-  ] as const;
-  const qualityLabel = computed(
-    () => qualityOptions.find((o) => o.value === quality.value)?.label ?? quality.value,
-  );
-  const backgroundLabel = computed(
-    () => backgroundOptions.find((o) => o.value === background.value)?.label ?? background.value,
-  );
-  const formatLabel = computed(
-    () => formatOptions.find((o) => o.value === outputFormat.value)?.label ?? outputFormat.value,
-  );
   const isHydrated = ref(false);
+  const {
+    activeSizePreset,
+    apiBaseUrl,
+    apiKey,
+    applySettings,
+    applySizePreset,
+    background,
+    backgroundLabel,
+    backgroundOptions,
+    currentGenerationParams,
+    customSizeError,
+    formatLabel,
+    formatOptions,
+    imageHeight,
+    imageWidth,
+    model,
+    outputFormat,
+    quality,
+    qualityLabel,
+    qualityOptions,
+    saveCurrentSettings,
+    sizeLabel,
+    sizePresets,
+  } = useStudioSettings({
+    isHydrated,
+    onStorageError: reportStorageError,
+  });
   const isSettingsOpen = ref(false);
   const isLibraryOpen = ref(false);
   const activeEditor = ref<EditorKey | null>(null);
@@ -167,14 +146,6 @@ export function useStudioState() {
     void hydrateFromStorage();
   });
 
-  watch(
-    [apiKey, apiBaseUrl, model, activeSizePreset, imageWidth, imageHeight, quality, background, outputFormat],
-    () => {
-      if (!isHydrated.value) return;
-      void saveSettings(currentSettings()).catch(reportStorageError);
-    },
-  );
-
   watch(composerText, (value) => {
     writeStorage(STORAGE_KEYS.draftComposerText, value);
   });
@@ -200,7 +171,7 @@ export function useStudioState() {
       if (savedSettings) {
         applySettings(savedSettings);
       } else {
-        await saveSettings(currentSettings());
+        await saveCurrentSettings();
       }
 
       await removeLegacySeedRecords(
@@ -590,52 +561,6 @@ export function useStudioState() {
     return imageAssets.value.find((image) => image.id === id);
   }
 
-  function applySizePreset(preset: GenerationParams["size"]) {
-    if (preset === "auto") {
-      activeSizePreset.value = "auto";
-    } else if (preset === "custom") {
-      activeSizePreset.value = "custom";
-    } else {
-      activeSizePreset.value = preset;
-      const [w, h] = preset.split("x").map(Number);
-      imageWidth.value = w;
-      imageHeight.value = h;
-    }
-  }
-
-  function applySettings(settings: AppSettings) {
-    apiKey.value = settings.apiKey;
-    apiBaseUrl.value = settings.apiBaseUrl;
-    model.value = settings.model;
-    activeSizePreset.value = settings.defaults.size;
-    imageWidth.value = settings.defaults.width;
-    imageHeight.value = settings.defaults.height;
-    quality.value = settings.defaults.quality;
-    background.value = normalizeBackground(settings.defaults.background);
-    outputFormat.value = settings.defaults.outputFormat;
-  }
-
-  function currentSettings(): AppSettings {
-    return {
-      apiKey: apiKey.value.trim(),
-      apiBaseUrl: apiBaseUrl.value.trim(),
-      model: model.value,
-      defaults: currentGenerationParams(),
-      storageMode: "indexeddb",
-    };
-  }
-
-  function currentGenerationParams(): GenerationParams {
-    return {
-      size: activeSizePreset.value,
-      width: imageWidth.value,
-      height: imageHeight.value,
-      quality: quality.value,
-      background: background.value,
-      outputFormat: outputFormat.value,
-    };
-  }
-
   async function runImageRequest(
     prompt: string,
     references: string[],
@@ -902,12 +827,6 @@ function readStorage(key: string, fallback: string) {
   } catch {
     return fallback;
   }
-}
-
-function normalizeBackground(background: GenerationParams["background"]) {
-  if (background === "transparent") return "auto";
-
-  return background;
 }
 
 function writeStorage(key: string, value: string) {
