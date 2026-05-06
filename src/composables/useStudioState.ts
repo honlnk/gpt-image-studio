@@ -1,11 +1,12 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { createStudioBackup, restoreStudioBackup } from "../services/backups";
-import { deleteConversation as deleteConversationRecord, listConversations, saveConversation } from "../services/conversations";
+import { deleteConversation as deleteConversationRecord, listConversations } from "../services/conversations";
 import { deleteImageAsset, deleteImageBlob, loadImageBlob, listImageAssets, saveImageAsset, saveImageBlob } from "../services/imageAssets";
 import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
 import { readImageDimensions } from "../services/imageMetadata";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
 import { loadSettings } from "../services/settings";
+import { useStudioConversations } from "./useStudioConversations";
 import { useStudioFeedback } from "./useStudioFeedback";
 import { useStudioImages } from "./useStudioImages";
 import { useStudioSettings } from "./useStudioSettings";
@@ -58,7 +59,6 @@ export function useStudioState() {
   const isLibraryOpen = ref(false);
   const activeEditor = ref<EditorKey | null>(null);
   const isEditorExpanded = ref(false);
-  let conversationWriteQueue = Promise.resolve();
   let expandTimer: ReturnType<typeof setTimeout> | null = null;
 
   function toggleEditor(key: EditorKey) {
@@ -96,8 +96,6 @@ export function useStudioState() {
   }
   const composerText = ref(readStorage(STORAGE_KEYS.draftComposerText, ""));
 
-  const conversations = ref<Conversation[]>([]);
-  const activeConversationId = ref("");
   const messages = ref<Message[]>([]);
   const {
     acceptConfirmDialog,
@@ -109,6 +107,27 @@ export function useStudioState() {
     notifySuccess,
     requestConfirmation,
   } = useStudioFeedback();
+  const {
+    activeConversation,
+    activeConversationId,
+    activeMessages,
+    conversations,
+    createConversation,
+    createConversationRecord,
+    deleteConversation,
+    deleteConversations,
+    persistConversation,
+    selectConversation,
+    updateConversationSummary,
+  } = useStudioConversations({
+    clearDraft: clearConversationDraft,
+    messages,
+    notifyError,
+    notifySuccess,
+    onStorageError: reportStorageError,
+    refreshStorageUsage: refreshImagesStorageUsage,
+    requestConfirmation,
+  });
   const {
     activeAttachments,
     attachImage,
@@ -131,14 +150,15 @@ export function useStudioState() {
     requestConfirmation,
   });
 
-  const activeConversation = computed(() =>
-    conversations.value.find((item) => item.id === activeConversationId.value),
-  );
-  const activeMessages = computed(() =>
-    messages.value.filter(
-      (message) => message.conversationId === activeConversationId.value,
-    ),
-  );
+  function clearConversationDraft() {
+    attachedImages.value = [];
+    composerText.value = "";
+  }
+
+  function refreshImagesStorageUsage() {
+    return refreshStorageUsage();
+  }
+
   const isGenerating = computed(() =>
     messages.value.some((message) => message.status === "pending"),
   );
@@ -259,110 +279,6 @@ export function useStudioState() {
     isSettingsOpen.value = false;
   }
 
-  function selectConversation(id: string) {
-    activeConversationId.value = id;
-  }
-
-  async function deleteConversation(id: string) {
-    const conversation = conversations.value.find((item) => item.id === id);
-    if (!conversation) return;
-
-    const confirmed = await requestConfirmation({
-      title: "删除会话",
-      description: `确定删除会话“${conversation.title}”吗？聊天记录会被移除，图片库中的图片会保留。`,
-      confirmLabel: "删除会话",
-      tone: "danger",
-    });
-    if (!confirmed) return;
-
-    const deletedMessages = messages.value.filter(
-      (message) => message.conversationId === id,
-    );
-    conversations.value = conversations.value.filter((item) => item.id !== id);
-    messages.value = messages.value.filter((message) => message.conversationId !== id);
-
-    if (activeConversationId.value === id) {
-      activeConversationId.value = conversations.value[0]?.id ?? "";
-      attachedImages.value = [];
-      composerText.value = "";
-    }
-
-    try {
-      await Promise.all([
-        deleteConversationRecord(id),
-        ...deletedMessages.map((message) => deleteMessage(message.id)),
-      ]);
-      await refreshStorageUsage();
-      notifySuccess("会话已删除。");
-    } catch (error) {
-      notifyError(`删除会话失败：${formatError(error)}`);
-      reportStorageError(error);
-    }
-  }
-
-  async function deleteConversations(ids: string[]) {
-    const idSet = new Set(ids);
-    if (!idSet.size) return;
-
-    const deletedMessages = messages.value.filter((message) =>
-      idSet.has(message.conversationId),
-    );
-    conversations.value = conversations.value.filter(
-      (conversation) => !idSet.has(conversation.id),
-    );
-    messages.value = messages.value.filter(
-      (message) => !idSet.has(message.conversationId),
-    );
-
-    if (idSet.has(activeConversationId.value)) {
-      activeConversationId.value = conversations.value[0]?.id ?? "";
-      attachedImages.value = [];
-      composerText.value = "";
-    }
-
-    try {
-      await Promise.all([
-        ...ids.map((id) => deleteConversationRecord(id)),
-        ...deletedMessages.map((message) => deleteMessage(message.id)),
-      ]);
-      await refreshStorageUsage();
-      notifySuccess(`已删除 ${ids.length} 个对话。`);
-    } catch (error) {
-      notifyError(`删除对话失败：${formatError(error)}`);
-      reportStorageError(error);
-    }
-  }
-
-  async function createConversation() {
-    const conversation = await createConversationRecord({
-      title: "新的图片创作",
-      summary: "尚未开始",
-      updatedAtMs: Date.now(),
-    });
-    activeConversationId.value = conversation.id;
-  }
-
-  async function createConversationRecord(input: {
-    title: string;
-    summary: string;
-    updatedAtMs: number;
-  }) {
-    const id = `c-${input.updatedAtMs}`;
-    const conversation: Conversation = {
-      id,
-      title: input.title,
-      summary: input.summary,
-      createdAt: "刚刚",
-      updatedAt: "刚刚",
-      updatedAtMs: input.updatedAtMs,
-    };
-
-    conversations.value.unshift(conversation);
-    activeConversationId.value = id;
-    await persistConversation(conversation);
-    return conversation;
-  }
-
   async function submitMessage() {
     if (!canSend.value || isGenerating.value) return;
 
@@ -405,7 +321,12 @@ export function useStudioState() {
     };
 
     messages.value.push(userMessage, assistantMessage);
-    const updatedConversation = updateConversationSummary(conversationId, text, now);
+    const updatedConversation = updateConversationSummary(
+      conversationId,
+      text,
+      imageModeLabel.value,
+      now,
+    );
     composerText.value = "";
     attachedImages.value = [];
 
@@ -418,25 +339,6 @@ export function useStudioState() {
     ]).catch(reportStorageError);
 
     await runImageRequest(text, references, assistantMessage);
-  }
-
-  function updateConversationSummary(conversationId: string, text: string, updatedAtMs = Date.now()) {
-    const conversation = conversations.value.find(
-      (item) => item.id === conversationId,
-    );
-    if (!conversation) return null;
-
-    conversation.title = text.length > 16 ? `${text.slice(0, 16)}...` : text;
-    conversation.summary = imageModeLabel.value;
-    conversation.updatedAt = "刚刚";
-    conversation.updatedAtMs = updatedAtMs;
-
-    conversations.value = [
-      conversation,
-      ...conversations.value.filter((item) => item.id !== conversationId),
-    ];
-
-    return conversation;
   }
 
   async function retryMessage(message: Message) {
@@ -584,15 +486,6 @@ export function useStudioState() {
     messages.value = messages.value.map((item) =>
       item.id === message.id ? { ...message } : item,
     );
-  }
-
-  function persistConversation(conversation: Conversation) {
-    const snapshot = toPlainConversation(conversation);
-    conversationWriteQueue = conversationWriteQueue
-      .catch(reportStorageError)
-      .then(() => saveConversation(snapshot));
-
-    return conversationWriteQueue.catch(reportStorageError);
   }
 
   return {
@@ -763,18 +656,6 @@ async function removeLegacySeedRecords(
       .filter((blobKey): blobKey is string => Boolean(blobKey))
       .map((blobKey) => deleteImageBlob(blobKey)),
   ]);
-}
-
-function toPlainConversation(conversation: Conversation): Conversation {
-  return {
-    id: conversation.id,
-    title: conversation.title,
-    summary: conversation.summary,
-    createdAt: conversation.createdAt,
-    updatedAt: conversation.updatedAt,
-    updatedAtMs: conversation.updatedAtMs,
-    archivedAt: conversation.archivedAt,
-  };
 }
 
 function toPlainMessage(message: Message): Message {
