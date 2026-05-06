@@ -6,8 +6,8 @@ import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
 import { readImageDimensions } from "../services/imageMetadata";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
 import { loadSettings } from "../services/settings";
-import { estimateStorageUsage } from "../services/storageUsage";
 import { useStudioFeedback } from "./useStudioFeedback";
+import { useStudioImages } from "./useStudioImages";
 import { useStudioSettings } from "./useStudioSettings";
 import type {
   Conversation,
@@ -16,10 +16,8 @@ import type {
   ImageAsset,
   Message,
 } from "../types/studio";
-import type { StorageUsage } from "../services/storageUsage";
 
 const STORAGE_KEYS = {
-  draftAttachments: "gpt-image-studio:draft-attachments",
   draftComposerText: "gpt-image-studio:draft-composer-text",
 } as const;
 
@@ -97,15 +95,10 @@ export function useStudioState() {
     }, 200);
   }
   const composerText = ref(readStorage(STORAGE_KEYS.draftComposerText, ""));
-  const attachedImages = ref<string[]>(
-    readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []),
-  );
 
   const conversations = ref<Conversation[]>([]);
   const activeConversationId = ref("");
   const messages = ref<Message[]>([]);
-  const imageAssets = ref<ImageAsset[]>([]);
-  const storageUsage = ref<StorageUsage | null>(null);
   const {
     acceptConfirmDialog,
     cancelConfirmDialog,
@@ -116,6 +109,27 @@ export function useStudioState() {
     notifySuccess,
     requestConfirmation,
   } = useStudioFeedback();
+  const {
+    activeAttachments,
+    attachImage,
+    attachedImages,
+    deleteImage,
+    deleteImages,
+    hydrateImagePreviews,
+    imageAssets,
+    imageById,
+    importImages,
+    refreshStorageUsage,
+    removeAttachment,
+    storageUsage,
+  } = useStudioImages({
+    activeConversationId,
+    messages,
+    notifyError,
+    notifySuccess,
+    onStorageError: reportStorageError,
+    requestConfirmation,
+  });
 
   const activeConversation = computed(() =>
     conversations.value.find((item) => item.id === activeConversationId.value),
@@ -127,11 +141,6 @@ export function useStudioState() {
   );
   const isGenerating = computed(() =>
     messages.value.some((message) => message.status === "pending"),
-  );
-  const activeAttachments = computed(() =>
-    attachedImages.value
-      .map((id) => imageAssets.value.find((image) => image.id === id))
-      .filter((image): image is ImageAsset => Boolean(image)),
   );
   const canSend = computed(() =>
     !isGenerating.value &&
@@ -149,14 +158,6 @@ export function useStudioState() {
   watch(composerText, (value) => {
     writeStorage(STORAGE_KEYS.draftComposerText, value);
   });
-
-  watch(
-    attachedImages,
-    (value) => {
-      writeStorage(STORAGE_KEYS.draftAttachments, JSON.stringify(value));
-    },
-    { deep: true },
-  );
 
   async function hydrateFromStorage() {
     try {
@@ -362,98 +363,6 @@ export function useStudioState() {
     return conversation;
   }
 
-  function attachImage(id: string) {
-    if (!attachedImages.value.includes(id)) {
-      attachedImages.value.push(id);
-    }
-  }
-
-  function removeAttachment(id: string) {
-    attachedImages.value = attachedImages.value.filter((item) => item !== id);
-  }
-
-  async function deleteImage(id: string) {
-    const image = imageById(id);
-    if (!image) return;
-
-    const relatedMessages = messages.value.filter(
-      (message) =>
-        message.referencedImageIds.includes(id) ||
-        message.resultImageIds.includes(id),
-    );
-    const isAttached = attachedImages.value.includes(id);
-
-    const confirmMessage = relatedMessages.length || isAttached
-      ? "这张图片正在被聊天记录或当前输入引用，删除后聊天记录中会保留无法显示的占位。确定删除吗？"
-      : "确定从图片库中删除这张图片吗？";
-    const confirmed = await requestConfirmation({
-      title: "删除图片",
-      description: confirmMessage,
-      confirmLabel: "删除图片",
-      tone: "danger",
-    });
-    if (!confirmed) return;
-
-    attachedImages.value = attachedImages.value.filter((item) => item !== id);
-    imageAssets.value = imageAssets.value.filter((item) => item.id !== id);
-
-    try {
-      await Promise.all([
-        deleteImageAsset(id),
-        image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
-      ]);
-      await refreshStorageUsage();
-      notifySuccess("图片已删除。");
-    } catch (error) {
-      notifyError(`删除图片失败：${formatError(error)}`);
-      reportStorageError(error);
-    }
-  }
-
-  async function deleteImages(ids: string[]) {
-    const idSet = new Set(ids);
-    if (!idSet.size) return;
-
-    const deletedImages = imageAssets.value.filter((image) =>
-      idSet.has(image.id),
-    );
-    attachedImages.value = attachedImages.value.filter((id) => !idSet.has(id));
-    imageAssets.value = imageAssets.value.filter((image) => !idSet.has(image.id));
-
-    try {
-      await Promise.all(
-        deletedImages.flatMap((image) => [
-          deleteImageAsset(image.id),
-          image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
-        ]),
-      );
-      await refreshStorageUsage();
-      notifySuccess(`已删除 ${deletedImages.length} 张图片。`);
-    } catch (error) {
-      notifyError(`删除图片失败：${formatError(error)}`);
-      reportStorageError(error);
-    }
-  }
-
-  async function importImages(files: File[]) {
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (!imageFiles.length) return;
-
-    try {
-      const importedAssets = await Promise.all(
-        imageFiles.map((file) => importImageFile(file)),
-      );
-
-      imageAssets.value = [...importedAssets, ...imageAssets.value];
-      importedAssets.forEach((asset) => attachImage(asset.id));
-      await refreshStorageUsage();
-      notifySuccess(`已导入 ${importedAssets.length} 张图片并加入引用。`);
-    } catch (error) {
-      notifyError(`导入图片失败：${formatError(error)}`);
-      reportStorageError(error);
-    }
-  }
-
   async function submitMessage() {
     if (!canSend.value || isGenerating.value) return;
 
@@ -555,10 +464,6 @@ export function useStudioState() {
         message,
       );
     }
-  }
-
-  function imageById(id: string) {
-    return imageAssets.value.find((image) => image.id === id);
   }
 
   async function runImageRequest(
@@ -675,70 +580,9 @@ export function useStudioState() {
     });
   }
 
-  async function importImageFile(file: File) {
-    const now = Date.now() + Math.floor(Math.random() * 1000);
-    const dimensions = await readImageDimensions(file);
-    const imageId = `img-${now}`;
-    const blobKey = `blob-${now}`;
-    const imageAsset: ImageAsset = {
-      id: imageId,
-      blobKey,
-      name: file.name || `导入图片-${now}`,
-      source: "imported",
-      mimeType: file.type || "image/png",
-      width: dimensions?.width,
-      height: dimensions?.height,
-      sizeBytes: file.size,
-      conversationId: activeConversationId.value || undefined,
-      prompt: "用户导入的参考图",
-      createdAt: "刚刚",
-      updatedAt: "刚刚",
-      createdAtMs: now,
-      previewUrl: URL.createObjectURL(file),
-    };
-
-    await Promise.all([
-      saveImageBlob(blobKey, file),
-      saveImageAsset(toPlainImageAsset(imageAsset)),
-    ]).catch(reportStorageError);
-
-    return imageAsset;
-  }
-
   function replaceMessage(message: Message) {
     messages.value = messages.value.map((item) =>
       item.id === message.id ? { ...message } : item,
-    );
-  }
-
-  async function hydrateImagePreviews(assets: ImageAsset[]) {
-    return Promise.all(
-      assets.map(async (asset) => {
-        if (!asset.blobKey) return asset;
-
-        const blob = await loadImageBlob(asset.blobKey);
-        if (!blob) return asset;
-
-        const restoredAsset = {
-          ...asset,
-          previewUrl: URL.createObjectURL(blob),
-        };
-
-        if (restoredAsset.width && restoredAsset.height) {
-          return restoredAsset;
-        }
-
-        const dimensions = await readImageDimensions(blob);
-        if (!dimensions) return restoredAsset;
-
-        const updatedAsset = {
-          ...restoredAsset,
-          width: dimensions.width,
-          height: dimensions.height,
-        };
-        await saveImageAsset(toPlainImageAsset(updatedAsset)).catch(reportStorageError);
-        return updatedAsset;
-      }),
     );
   }
 
@@ -749,13 +593,6 @@ export function useStudioState() {
       .then(() => saveConversation(snapshot));
 
     return conversationWriteQueue.catch(reportStorageError);
-  }
-
-  async function refreshStorageUsage() {
-    storageUsage.value = await estimateStorageUsage().catch((error) => {
-      reportStorageError(error);
-      return storageUsage.value;
-    });
   }
 
   return {
@@ -834,15 +671,6 @@ function writeStorage(key: string, value: string) {
     localStorage.setItem(key, value);
   } catch {
     // Ignore local draft persistence failures.
-  }
-}
-
-function readJsonStorage<T>(key: string, fallback: T) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? (JSON.parse(value) as T) : fallback;
-  } catch {
-    return fallback;
   }
 }
 
