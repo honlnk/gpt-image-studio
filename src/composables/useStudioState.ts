@@ -1,5 +1,5 @@
 import { onMounted, ref, watch } from "vue";
-import { createStudioBackup, restoreStudioBackup } from "../services/backups";
+import { useStudioBackup } from "./useStudioBackup";
 import { useStudioConversations } from "./useStudioConversations";
 import { useStudioFeedback } from "./useStudioFeedback";
 import { useStudioGeneration } from "./useStudioGeneration";
@@ -155,6 +155,18 @@ export function useStudioState() {
     refreshStorageUsage,
     saveCurrentSettings,
   });
+  const { exportBackup, importBackup } = useStudioBackup({
+    activeConversationId,
+    attachedImages,
+    composerText,
+    conversations,
+    imageAssets,
+    messages,
+    notifyError,
+    notifySuccess,
+    onStorageError: reportStorageError,
+    restoreFromStorage,
+  });
 
   onMounted(() => {
     void restoreFromStorage();
@@ -163,39 +175,6 @@ export function useStudioState() {
   watch(composerText, (value) => {
     writeStorage(STORAGE_KEYS.draftComposerText, value);
   });
-
-  async function exportBackup() {
-    try {
-      const backup = await createStudioBackup();
-      const url = URL.createObjectURL(backup);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `gpt-image-studio-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      notifySuccess("备份已开始下载。");
-    } catch (error) {
-      notifyError(`导出备份失败：${formatError(error)}`);
-      reportStorageError(error);
-    }
-  }
-
-  async function importBackup(file: File) {
-    try {
-      await restoreStudioBackup(file);
-      conversations.value = [];
-      messages.value = [];
-      imageAssets.value = [];
-      attachedImages.value = [];
-      composerText.value = "";
-      activeConversationId.value = "";
-      await restoreFromStorage();
-      notifySuccess("备份已恢复，本地数据已刷新。");
-    } catch (error) {
-      notifyError(`恢复备份失败：${formatError(error)}`);
-      reportStorageError(error);
-    }
-  }
 
   return {
     activeAttachments,
@@ -278,12 +257,4 @@ function writeStorage(key: string, value: string) {
 
 function reportStorageError(error: unknown) {
   console.error("Failed to access local studio storage.", error);
-}
-
-function formatError(error: unknown) {
-  if (error instanceof SyntaxError) {
-    return "图片接口返回了无法解析的响应。";
-  }
-
-  return error instanceof Error ? error.message : String(error);
 }
