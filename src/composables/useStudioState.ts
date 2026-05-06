@@ -7,6 +7,7 @@ import { readImageDimensions } from "../services/imageMetadata";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
 import { loadSettings, saveSettings } from "../services/settings";
 import { estimateStorageUsage } from "../services/storageUsage";
+import { useStudioFeedback } from "./useStudioFeedback";
 import type {
   AppSettings,
   Conversation,
@@ -16,19 +17,6 @@ import type {
   Message,
 } from "../types/studio";
 import type { StorageUsage } from "../services/storageUsage";
-
-type StudioNotice = {
-  id: number;
-  type: "success" | "error";
-  message: string;
-};
-
-type StudioConfirmDialog = {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  tone?: "danger" | "default";
-};
 
 const STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
@@ -139,10 +127,16 @@ export function useStudioState() {
   const messages = ref<Message[]>([]);
   const imageAssets = ref<ImageAsset[]>([]);
   const storageUsage = ref<StorageUsage | null>(null);
-  const notice = ref<StudioNotice | null>(null);
-  const confirmDialog = ref<StudioConfirmDialog | null>(null);
-  let noticeTimer: ReturnType<typeof setTimeout> | null = null;
-  let confirmDialogResolver: ((confirmed: boolean) => void) | null = null;
+  const {
+    acceptConfirmDialog,
+    cancelConfirmDialog,
+    confirmDialog,
+    dismissNotice,
+    notice,
+    notifyError,
+    notifySuccess,
+    requestConfirmation,
+  } = useStudioFeedback();
 
   const activeConversation = computed(() =>
     conversations.value.find((item) => item.id === activeConversationId.value),
@@ -487,62 +481,6 @@ export function useStudioState() {
       notifyError(`导入图片失败：${formatError(error)}`);
       reportStorageError(error);
     }
-  }
-
-  function dismissNotice() {
-    if (noticeTimer) {
-      clearTimeout(noticeTimer);
-      noticeTimer = null;
-    }
-    notice.value = null;
-  }
-
-  function cancelConfirmDialog() {
-    resolveConfirmDialog(false);
-  }
-
-  function acceptConfirmDialog() {
-    resolveConfirmDialog(true);
-  }
-
-  function requestConfirmation(input: StudioConfirmDialog) {
-    if (confirmDialogResolver) {
-      confirmDialogResolver(false);
-    }
-
-    confirmDialog.value = input;
-    return new Promise<boolean>((resolve) => {
-      confirmDialogResolver = resolve;
-    });
-  }
-
-  function resolveConfirmDialog(confirmed: boolean) {
-    confirmDialog.value = null;
-    confirmDialogResolver?.(confirmed);
-    confirmDialogResolver = null;
-  }
-
-  function notifySuccess(message: string) {
-    setNotice("success", message);
-  }
-
-  function notifyError(message: string) {
-    setNotice("error", message);
-  }
-
-  function setNotice(type: StudioNotice["type"], message: string) {
-    if (noticeTimer) {
-      clearTimeout(noticeTimer);
-    }
-    notice.value = {
-      id: Date.now(),
-      type,
-      message,
-    };
-    noticeTimer = setTimeout(() => {
-      notice.value = null;
-      noticeTimer = null;
-    }, type === "error" ? 7000 : 3500);
   }
 
   async function submitMessage() {
