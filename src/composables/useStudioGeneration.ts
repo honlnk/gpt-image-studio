@@ -3,6 +3,7 @@ import { saveImageAsset, saveImageBlob, loadImageBlob } from "../services/imageA
 import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
 import { readImageDimensions } from "../services/imageMetadata";
 import { saveMessage } from "../services/messages";
+import { createObjectUrl } from "../services/objectUrls";
 import type {
   Conversation,
   GenerationParams,
@@ -189,7 +190,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
         createdAt: "刚刚",
         updatedAt: "刚刚",
         createdAtMs: now,
-        previewUrl: URL.createObjectURL(blob),
+        previewUrl: createObjectUrl(blob),
       };
 
       assistantMessage.status = "success";

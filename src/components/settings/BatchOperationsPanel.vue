@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { createObjectUrl, revokeObjectUrl } from "../../services/objectUrls";
 import { createZipArchive } from "../../services/zipArchive";
 import type { Conversation, ImageAsset, Message } from "../../types/studio";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
@@ -293,12 +294,12 @@ async function downloadSelectedImages() {
     }),
   );
   const zipBlob = await createZipArchive(entries);
-  const downloadUrl = URL.createObjectURL(zipBlob);
+  const downloadUrl = createObjectUrl(zipBlob);
   const anchor = document.createElement("a");
   anchor.href = downloadUrl;
   anchor.download = `gpt-image-studio-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
   anchor.click();
-  URL.revokeObjectURL(downloadUrl);
+  revokeObjectUrl(downloadUrl);
 }
 
 function toggledSelection(selection: Set<string>, id: string) {

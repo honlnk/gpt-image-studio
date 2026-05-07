@@ -1,4 +1,5 @@
 import { createStudioBackup, restoreStudioBackup } from "../services/backups";
+import { createObjectUrl, revokeObjectUrl } from "../services/objectUrls";
 import type { Conversation, ImageAsset, Message } from "../types/studio";
 import type { Ref } from "vue";
 
@@ -19,12 +20,12 @@ export function useStudioBackup(input: UseStudioBackupInput) {
   async function exportBackup() {
     try {
       const backup = await createStudioBackup();
-      const url = URL.createObjectURL(backup);
+      const url = createObjectUrl(backup);
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = `gpt-image-studio-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
       anchor.click();
-      URL.revokeObjectURL(url);
+      revokeObjectUrl(url);
       input.notifySuccess("备份已开始下载。");
     } catch (error) {
       input.notifyError(`导出备份失败：${formatError(error)}`);

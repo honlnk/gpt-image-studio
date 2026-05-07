@@ -1,4 +1,4 @@
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import {
   deleteImageAsset,
   deleteImageBlob,
@@ -7,6 +7,7 @@ import {
   saveImageBlob,
 } from "../services/imageAssets";
 import { readImageDimensions } from "../services/imageMetadata";
+import { createObjectUrl, revokeObjectUrls } from "../services/objectUrls";
 import { estimateStorageUsage } from "../services/storageUsage";
 import type { ImageAsset, Message } from "../types/studio";
 import type { StorageUsage } from "../services/storageUsage";
@@ -46,6 +47,18 @@ export function useStudioImages(input: UseStudioImagesInput) {
     },
     { deep: true },
   );
+
+  watch(
+    imageAssets,
+    (nextImages, previousImages) => {
+      revokeRemovedPreviewUrls(previousImages, nextImages);
+    },
+    { flush: "post" },
+  );
+
+  onUnmounted(() => {
+    revokeObjectUrls(imageAssets.value.map((image) => image.previewUrl));
+  });
 
   function imageById(id: string) {
     return imageAssets.value.find((image) => image.id === id);
@@ -162,7 +175,7 @@ export function useStudioImages(input: UseStudioImagesInput) {
       createdAt: "刚刚",
       updatedAt: "刚刚",
       createdAtMs: now,
-      previewUrl: URL.createObjectURL(file),
+      previewUrl: createObjectUrl(file),
     };
 
     await Promise.all([
@@ -183,7 +196,7 @@ export function useStudioImages(input: UseStudioImagesInput) {
 
         const restoredAsset = {
           ...asset,
-          previewUrl: URL.createObjectURL(blob),
+          previewUrl: createObjectUrl(blob),
         };
 
         if (restoredAsset.width && restoredAsset.height) {
@@ -272,4 +285,22 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     updatedAt: imageAsset.updatedAt,
     createdAtMs: imageAsset.createdAtMs,
   };
+}
+
+function revokeRemovedPreviewUrls(
+  previousImages: ImageAsset[] | undefined,
+  nextImages: ImageAsset[],
+) {
+  if (!previousImages?.length) return;
+
+  const nextPreviewUrls = new Set(
+    nextImages
+      .map((image) => image.previewUrl)
+      .filter((url): url is string => Boolean(url)),
+  );
+  revokeObjectUrls(
+    previousImages
+      .map((image) => image.previewUrl)
+      .filter((url) => url && !nextPreviewUrls.has(url)),
+  );
 }

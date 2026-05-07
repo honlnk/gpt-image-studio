@@ -1,3 +1,5 @@
+import { createObjectUrl, revokeObjectUrl } from "./objectUrls";
+
 export type ImageDimensions = {
   width: number;
   height: number;
@@ -23,11 +25,11 @@ export async function readImageDimensions(blob: Blob): Promise<ImageDimensions |
 
 function readImageDimensionsFromElement(blob: Blob): Promise<ImageDimensions | null> {
   return new Promise((resolve) => {
-    const url = URL.createObjectURL(blob);
+    const url = createObjectUrl(blob);
     const image = new Image();
 
     image.onload = () => {
-      URL.revokeObjectURL(url);
+      revokeObjectUrl(url);
       resolve({
         width: image.naturalWidth,
         height: image.naturalHeight,
@@ -35,7 +37,7 @@ function readImageDimensionsFromElement(blob: Blob): Promise<ImageDimensions | n
     };
 
     image.onerror = () => {
-      URL.revokeObjectURL(url);
+      revokeObjectUrl(url);
       resolve(null);
     };
 
