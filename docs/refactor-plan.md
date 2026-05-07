@@ -1,5 +1,43 @@
 # GPT Image Studio 重构方案
 
+## 当前进度
+
+截至当前重构分支，第一轮主体重构已基本完成：
+
+- 已同步 `main` 上的 pnpm 工程基线，并建立 `pnpm test` / `pnpm typecheck` / `pnpm build` 验证链路。
+- 已引入 Vitest，并覆盖 `imagesApi`、`backups`、`zipArchive` 和 Object URL 工具的关键逻辑。
+- `useStudioState.ts` 已拆分为聚合入口，反馈、设置、会话、图片、生成、UI、备份和恢复逻辑已分离到独立 composable。
+- `SettingsModal.vue` 已拆分为弹窗外壳、API 设置、备份、批量操作、批量图片和批量对话面板。
+- `ChatWorkspace.vue` 已拆分出消息列表、单条消息和输入区。
+- `ImageLibrary.vue` 已拆分出图片网格、图片卡片、详情面板和存储用量面板。
+- Object URL 创建与释放已集中到 `src/services/objectUrls.ts`，图片 preview URL 会在图片列表替换、删除和组件卸载时统一释放。
+
+当前建议进入收尾阶段。除非后续功能继续扩张，否则不再为了行数继续拆组件。
+
+### 已完成的代表性提交
+
+- `a4d04c9 test: add image API validation tests`
+- `5e4ef31 refactor: extract studio backup flow`
+- `e5b1d0c refactor: extract studio restore flow`
+- `41e3551 refactor: extract studio UI state`
+- `ec5111b refactor: extract studio generation flow`
+- `f2973a5 refactor: extract settings API and backup panels`
+- `dd7cafd refactor: extract settings batch panels`
+- `619c8f9 refactor: extract chat message list`
+- `9134081 refactor: extract chat composer`
+- `f9e4100 refactor: extract image library grid`
+- `a160bef refactor: extract image details panel`
+- `dd84854 refactor: extract storage usage panel`
+- `5b2845d refactor: extract batch operations panel`
+- `c54ab32 test: add backup and zip archive coverage`
+- `18ca9dd refactor: centralize object URL lifecycle`
+
+### 剩余事项
+
+- 手动回归完整主流程：新建会话、文生图、引用图编辑、失败重试、删除图片、删除会话、批量删除、导出备份、恢复备份、刷新恢复。
+- 观察后续需求是否需要继续拆 `ChatComposer.vue` 或 `BatchOperationsPanel.vue`。当前两者职责集中，暂不建议为了行数继续拆。
+- 目录领域化仍为可选项。除非后续模块边界继续稳定并产生跨目录维护成本，否则暂不建议迁移到 `modules/`，避免制造路径变更噪音。
+
 ## 背景
 
 当前项目已经完成本地优先图片创作工作台的核心功能：聊天式生成、引用图编辑、IndexedDB 持久化、图片库、备份恢复和批量操作。
