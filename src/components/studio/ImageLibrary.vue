@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import type { StorageUsage } from "../../services/storageUsage";
 import type { ImageAsset } from "../../types/studio";
+import ImageDetailsPanel from "../image-library/ImageDetailsPanel.vue";
 import ImageGrid from "../image-library/ImageGrid.vue";
 import Tooltip from "../ui/Tooltip.vue";
 
@@ -114,38 +115,6 @@ function onPanelLeave(el: Element, done: () => void) {
 
 function selectImage(id: string) {
   selectedImageId.value = id;
-}
-
-function sourceLabel(image: ImageAsset) {
-  return image.source === "generated" ? "生成图" : "导入图";
-}
-
-function imageFormat(image: ImageAsset) {
-  return image.mimeType?.replace("image/", "").toUpperCase() ?? "未知";
-}
-
-function imageExtension(image: ImageAsset) {
-  if (image.mimeType === "image/jpeg") return "jpeg";
-  if (image.mimeType === "image/webp") return "webp";
-  return "png";
-}
-
-function imageDownloadName(image: ImageAsset) {
-  return `${image.name || "image"}.${imageExtension(image)}`;
-}
-
-function imageSize(image: ImageAsset) {
-  if (image.width && image.height) return `${image.width} x ${image.height}`;
-  return "未记录";
-}
-
-function fileSize(image: ImageAsset) {
-  if (!image.sizeBytes) return "未知大小";
-  if (image.sizeBytes < 1024 * 1024) {
-    return `${Math.max(1, Math.round(image.sizeBytes / 1024))} KB`;
-  }
-
-  return `${(image.sizeBytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatBytes(bytes?: number) {
@@ -343,76 +312,13 @@ function isAttached(id: string) {
         @enter="onPanelEnter"
         @leave="onPanelLeave"
       >
-        <div v-if="selectedImage" class="border-t border-gray-200 px-4 py-3">
-          <div class="mb-3 flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="truncate text-sm font-semibold text-gray-900">
-                {{ selectedImage.name }}
-              </div>
-              <div class="mt-0.5 text-xs text-gray-500">
-                {{ sourceLabel(selectedImage) }} · {{ selectedImage.createdAt }}
-              </div>
-            </div>
-            <div class="flex shrink-0 items-center gap-1">
-              <a
-                v-if="selectedImage.previewUrl"
-                class="rounded-lg px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-100"
-                :download="imageDownloadName(selectedImage)"
-                :href="selectedImage.previewUrl"
-              >
-                下载
-              </a>
-              <button
-                class="cursor-pointer rounded-lg px-2 py-1 text-xs text-red-500 transition-colors hover:bg-red-50"
-                type="button"
-                @click="emit('deleteImage', selectedImage.id)"
-              >
-                删除
-              </button>
-              <button
-                class="cursor-pointer rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                type="button"
-                @click="selectedImageId = ''"
-              >
-                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-            <div>
-              <dt class="text-gray-400">格式</dt>
-              <dd class="mt-0.5 text-gray-700">
-                {{ imageFormat(selectedImage) }}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-gray-400">尺寸</dt>
-              <dd class="mt-0.5 text-gray-700">{{ imageSize(selectedImage) }}</dd>
-            </div>
-            <div>
-              <dt class="text-gray-400">文件</dt>
-              <dd class="mt-0.5 text-gray-700">{{ fileSize(selectedImage) }}</dd>
-            </div>
-            <div>
-              <dt class="text-gray-400">状态</dt>
-              <dd class="mt-0.5 text-gray-700">
-                {{ isAttached(selectedImage.id) ? "已加入引用" : "未引用" }}
-              </dd>
-            </div>
-          </dl>
-
-          <div class="mt-3">
-            <div class="text-xs text-gray-400">Prompt</div>
-            <p class="mt-1 line-clamp-3 text-xs leading-relaxed text-gray-600">
-              {{ selectedImage.prompt }}
-            </p>
-          </div>
-        </div>
+        <ImageDetailsPanel
+          v-if="selectedImage"
+          :image="selectedImage"
+          :is-attached="isAttached(selectedImage.id)"
+          @clear-selection="selectedImageId = ''"
+          @delete-image="emit('deleteImage', $event)"
+        />
       </Transition>
     </div>
   </aside>

@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { ImageAsset } from "../../types/studio";
+import {
+  imageDownloadName,
+  sourceLabel,
+} from "./imageLibraryFormatters";
 
 defineProps<{
   image: ImageAsset;
@@ -13,19 +17,6 @@ const emit = defineEmits<{
   selectImage: [id: string];
 }>();
 
-function sourceLabel(image: ImageAsset) {
-  return image.source === "generated" ? "生成图" : "导入图";
-}
-
-function imageExtension(image: ImageAsset) {
-  if (image.mimeType === "image/jpeg") return "jpeg";
-  if (image.mimeType === "image/webp") return "webp";
-  return "png";
-}
-
-function imageDownloadName(image: ImageAsset) {
-  return `${image.name || "image"}.${imageExtension(image)}`;
-}
 </script>
 
 <template>
