@@ -1,4 +1,4 @@
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, proxyRefs, ref, watch } from "vue";
 import { useStudioBackup } from "./useStudioBackup";
 import { useStudioConversations } from "./useStudioConversations";
 import { useStudioFeedback } from "./useStudioFeedback";
@@ -13,160 +13,123 @@ const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
 } as const;
 
+type SettingsTab = "api" | "backup" | "batch";
+type BatchPanel = "images" | "conversations";
+
 export function useStudioState() {
   const isHydrated = ref(false);
-  const {
-    activeSizePreset,
-    apiBaseUrl,
-    apiKey,
-    applySettings,
-    applySizePreset,
-    background,
-    backgroundLabel,
-    backgroundOptions,
-    currentGenerationParams,
-    customSizeError,
-    formatLabel,
-    formatOptions,
-    imageHeight,
-    imageWidth,
-    model,
-    outputFormat,
-    quality,
-    qualityLabel,
-    qualityOptions,
-    saveCurrentSettings,
-    sizeLabel,
-    sizePresets,
-  } = useStudioSettings({
+  const settings = useStudioSettings({
     isHydrated,
     onStorageError: reportStorageError,
   });
-  const {
-    activeEditor,
-    closeAllEditors,
-    closeSettings,
-    isEditorExpanded,
-    isLibraryOpen,
-    isSettingsOpen,
-    openSettings,
-    toggleEditor,
-  } = useStudioUiState();
+  const ui = useStudioUiState();
   const composerText = ref(readStorage(STORAGE_KEYS.draftComposerText, ""));
 
   const messages = ref<Message[]>([]);
-  const {
-    acceptConfirmDialog,
-    cancelConfirmDialog,
-    confirmDialog,
-    dismissNotice,
-    notice,
-    notifyError,
-    notifySuccess,
-    requestConfirmation,
-  } = useStudioFeedback();
-  const {
-    activeConversation,
-    activeConversationId,
-    activeMessages,
-    conversations,
-    createConversation,
-    createConversationRecord,
-    deleteConversation,
-    deleteConversations,
-    persistConversation,
-    selectConversation,
-    updateConversationSummary,
-  } = useStudioConversations({
+  const isConversationSidebarOpen = ref(false);
+  const previewImageId = ref("");
+  const settingsInitialTab = ref<SettingsTab>("api");
+  const settingsInitialBatchPanel = ref<BatchPanel>("images");
+  const feedback = useStudioFeedback();
+  const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
     messages,
-    notifyError,
-    notifySuccess,
+    notifyError: feedback.notifyError,
+    notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
     refreshStorageUsage: refreshImagesStorageUsage,
-    requestConfirmation,
+    requestConfirmation: feedback.requestConfirmation,
   });
-  const {
-    activeAttachments,
-    attachImage,
-    attachedImages,
-    deleteImage,
-    deleteImages,
-    hydrateImagePreviews,
-    imageAssets,
-    imageById,
-    importImages,
-    refreshStorageUsage,
-    removeAttachment,
-    storageUsage,
-  } = useStudioImages({
-    activeConversationId,
+  const images = useStudioImages({
+    activeConversationId: conversations.activeConversationId,
     messages,
-    notifyError,
-    notifySuccess,
+    notifyError: feedback.notifyError,
+    notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
-    requestConfirmation,
+    requestConfirmation: feedback.requestConfirmation,
   });
 
   function clearConversationDraft() {
-    attachedImages.value = [];
+    images.attachedImages.value = [];
     composerText.value = "";
   }
 
   function refreshImagesStorageUsage() {
-    return refreshStorageUsage();
+    return images.refreshStorageUsage();
   }
 
-  const {
-    canSend,
-    imageModeLabel,
-    isGenerating,
-    retryMessage,
-    submitMessage,
-  } = useStudioGeneration({
-    activeConversation,
-    apiBaseUrl,
-    apiKey,
-    attachedImages,
+  const generation = useStudioGeneration({
+    activeConversation: conversations.activeConversation,
+    apiBaseUrl: settings.apiBaseUrl,
+    apiKey: settings.apiKey,
+    attachedImages: images.attachedImages,
     composerText,
-    createConversationRecord,
-    currentGenerationParams,
-    customSizeError,
-    imageAssets,
-    imageById,
+    createConversationRecord: conversations.createConversationRecord,
+    currentGenerationParams: settings.currentGenerationParams,
+    customSizeError: settings.customSizeError,
+    imageAssets: images.imageAssets,
+    imageById: images.imageById,
     messages,
-    model,
+    model: settings.model,
     onStorageError: reportStorageError,
-    persistConversation,
-    refreshStorageUsage,
-    updateConversationSummary,
+    persistConversation: conversations.persistConversation,
+    refreshStorageUsage: images.refreshStorageUsage,
+    updateConversationSummary: conversations.updateConversationSummary,
   });
   const { restoreFromStorage } = useStudioRestore({
-    activeConversationId,
-    applySettings,
-    attachedImages,
-    conversations,
-    hydrateImagePreviews,
-    imageAssets,
+    activeConversationId: conversations.activeConversationId,
+    applySettings: settings.applySettings,
+    attachedImages: images.attachedImages,
+    conversations: conversations.conversations,
+    hydrateImagePreviews: images.hydrateImagePreviews,
+    imageAssets: images.imageAssets,
     isHydrated,
     messages,
-    notifyError,
+    notifyError: feedback.notifyError,
     onStorageError: reportStorageError,
-    refreshStorageUsage,
-    saveCurrentSettings,
+    refreshStorageUsage: images.refreshStorageUsage,
+    saveCurrentSettings: settings.saveCurrentSettings,
   });
-  const { exportBackup, importBackup } = useStudioBackup({
-    activeConversationId,
-    attachedImages,
+  const backup = useStudioBackup({
+    activeConversationId: conversations.activeConversationId,
+    attachedImages: images.attachedImages,
     composerText,
-    conversations,
-    imageAssets,
+    conversations: conversations.conversations,
+    imageAssets: images.imageAssets,
     messages,
-    notifyError,
-    notifySuccess,
+    notifyError: feedback.notifyError,
+    notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
     restoreFromStorage,
   });
+  const previewImage = computed(() => images.imageById(previewImageId.value));
+  const attachedImageIds = computed(() =>
+    images.activeAttachments.value.map((image) => image.id),
+  );
+
+  function openConversations() {
+    isConversationSidebarOpen.value = true;
+  }
+
+  function previewImageById(id: string) {
+    previewImageId.value = id;
+  }
+
+  function closePreview() {
+    previewImageId.value = "";
+  }
+
+  function openBatchImageOperations() {
+    settingsInitialTab.value = "batch";
+    settingsInitialBatchPanel.value = "images";
+    ui.openSettings();
+  }
+
+  function openSettingsDefault() {
+    settingsInitialTab.value = "api";
+    settingsInitialBatchPanel.value = "images";
+    ui.openSettings();
+  }
 
   onMounted(() => {
     void restoreFromStorage();
@@ -176,66 +139,103 @@ export function useStudioState() {
     writeStorage(STORAGE_KEYS.draftComposerText, value);
   });
 
-  return {
-    activeAttachments,
-    activeConversation,
-    activeConversationId,
-    activeEditor,
-    activeMessages,
-    activeSizePreset,
-    apiBaseUrl,
-    apiKey,
-    background,
-    backgroundLabel,
-    backgroundOptions,
-    canSend,
-    cancelConfirmDialog,
-    closeAllEditors,
-    closeSettings,
+  const sidebar = proxyRefs({
+    activeConversationId: conversations.activeConversationId,
+    conversations: conversations.conversations,
+    createConversation: conversations.createConversation,
+    deleteConversation: conversations.deleteConversation,
+    isOpen: isConversationSidebarOpen,
+    openSettings: openSettingsDefault,
+    selectConversation: conversations.selectConversation,
+  });
+  const chat = proxyRefs({
+    activeAttachments: images.activeAttachments,
+    activeConversation: conversations.activeConversation,
+    activeEditor: ui.activeEditor,
+    activeMessages: conversations.activeMessages,
+    activeSizePreset: settings.activeSizePreset,
+    applySizePreset: settings.applySizePreset,
+    attachImage: images.attachImage,
+    background: settings.background,
+    backgroundLabel: settings.backgroundLabel,
+    backgroundOptions: settings.backgroundOptions,
+    canSend: generation.canSend,
+    closeAllEditors: ui.closeAllEditors,
     composerText,
-    confirmDialog,
-    conversations,
-    createConversation,
-    customSizeError,
-    deleteConversation,
-    deleteConversations,
-    deleteImage,
-    deleteImages,
-    dismissNotice,
-    formatLabel,
-    formatOptions,
-    imageAssets,
-    imageById,
-    imageHeight,
-    imageModeLabel,
-    imageWidth,
-    exportBackup,
-    importBackup,
-    importImages,
-    isEditorExpanded,
-    isGenerating,
-    isHydrated,
-    isLibraryOpen,
-    isSettingsOpen,
+    customSizeError: settings.customSizeError,
+    formatLabel: settings.formatLabel,
+    formatOptions: settings.formatOptions,
+    imageById: images.imageById,
+    imageHeight: settings.imageHeight,
+    imageWidth: settings.imageWidth,
+    importImages: images.importImages,
+    isEditorExpanded: ui.isEditorExpanded,
+    isGenerating: generation.isGenerating,
+    isLibraryOpen: ui.isLibraryOpen,
+    model: settings.model,
+    openConversations,
+    openSettings: openSettingsDefault,
+    outputFormat: settings.outputFormat,
+    previewImage: previewImageById,
+    quality: settings.quality,
+    qualityLabel: settings.qualityLabel,
+    qualityOptions: settings.qualityOptions,
+    removeAttachment: images.removeAttachment,
+    retryMessage: generation.retryMessage,
+    sizeLabel: settings.sizeLabel,
+    sizePresets: settings.sizePresets,
+    submitMessage: generation.submitMessage,
+    toggleEditor: ui.toggleEditor,
+  });
+  const library = proxyRefs({
+    activeConversationId: conversations.activeConversationId,
+    attachImage: images.attachImage,
+    attachedImageIds,
+    deleteImage: images.deleteImage,
+    images: images.imageAssets,
+    isOpen: ui.isLibraryOpen,
+    openBatchOperations: openBatchImageOperations,
+    previewImage: previewImageById,
+    storageUsage: images.storageUsage,
+  });
+  const settingsModal = proxyRefs({
+    apiBaseUrl: settings.apiBaseUrl,
+    apiKey: settings.apiKey,
+    close: ui.closeSettings,
+    conversations: conversations.conversations,
+    deleteConversations: conversations.deleteConversations,
+    deleteImages: images.deleteImages,
+    exportBackup: backup.exportBackup,
+    images: images.imageAssets,
+    importBackup: backup.importBackup,
+    initialBatchPanel: settingsInitialBatchPanel,
+    initialTab: settingsInitialTab,
+    isOpen: ui.isSettingsOpen,
     messages,
-    model,
-    notice,
-    openSettings,
-    outputFormat,
-    quality,
-    qualityLabel,
-    qualityOptions,
-    removeAttachment,
-    retryMessage,
-    selectConversation,
-    sizeLabel,
-    sizePresets,
-    storageUsage,
-    submitMessage,
-    toggleEditor,
-    applySizePreset,
-    attachImage,
-    acceptConfirmDialog,
+    previewImage: previewImageById,
+  });
+  const preview = proxyRefs({
+    close: closePreview,
+    image: previewImage,
+  });
+  const noticeToast = proxyRefs({
+    close: feedback.dismissNotice,
+    notice: feedback.notice,
+  });
+  const confirmDialog = proxyRefs({
+    cancel: feedback.cancelConfirmDialog,
+    confirm: feedback.acceptConfirmDialog,
+    dialog: feedback.confirmDialog,
+  });
+
+  return {
+    chat,
+    confirmDialog,
+    library,
+    noticeToast,
+    preview,
+    settingsModal,
+    sidebar,
   };
 }
 
