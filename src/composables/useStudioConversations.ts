@@ -3,6 +3,7 @@ import {
   deleteConversation as deleteConversationRecord,
   saveConversation,
 } from "../services/conversations";
+import { isoTimestamp } from "../services/dateTime";
 import { deleteMessage } from "../services/messages";
 import type { Conversation, Message } from "../types/studio";
 import type { StudioConfirmDialog } from "./useStudioFeedback";
@@ -11,7 +12,7 @@ import type { Ref } from "vue";
 type CreateConversationInput = {
   title: string;
   summary: string;
-  updatedAtMs: number;
+  updatedAt: string;
 };
 
 type UseStudioConversationsInput = {
@@ -116,20 +117,19 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
     const conversation = await createConversationRecord({
       title: "新的图片创作",
       summary: "尚未开始",
-      updatedAtMs: Date.now(),
+      updatedAt: isoTimestamp(),
     });
     activeConversationId.value = conversation.id;
   }
 
   async function createConversationRecord(inputValue: CreateConversationInput) {
-    const id = `c-${inputValue.updatedAtMs}`;
+    const id = `c-${Date.now()}`;
     const conversation: Conversation = {
       id,
       title: inputValue.title,
       summary: inputValue.summary,
-      createdAt: "刚刚",
-      updatedAt: "刚刚",
-      updatedAtMs: inputValue.updatedAtMs,
+      createdAt: inputValue.updatedAt,
+      updatedAt: inputValue.updatedAt,
     };
 
     conversations.value.unshift(conversation);
@@ -142,7 +142,7 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
     conversationId: string,
     text: string,
     summary: string,
-    updatedAtMs = Date.now(),
+    updatedAt = isoTimestamp(),
   ) {
     const conversation = conversations.value.find(
       (item) => item.id === conversationId,
@@ -151,8 +151,7 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
 
     conversation.title = text.length > 16 ? `${text.slice(0, 16)}...` : text;
     conversation.summary = summary;
-    conversation.updatedAt = "刚刚";
-    conversation.updatedAtMs = updatedAtMs;
+    conversation.updatedAt = updatedAt;
 
     conversations.value = [
       conversation,
@@ -201,7 +200,6 @@ function toPlainConversation(conversation: Conversation): Conversation {
     summary: conversation.summary,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
-    updatedAtMs: conversation.updatedAtMs,
     archivedAt: conversation.archivedAt,
   };
 }

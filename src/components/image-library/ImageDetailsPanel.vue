@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useNow } from "../../composables/useNow";
+import { formatRelativeTime } from "../../services/dateTime";
 import type { ImageAsset } from "../../types/studio";
 import {
   fileSize,
@@ -8,7 +11,7 @@ import {
   sourceLabel,
 } from "./imageLibraryFormatters";
 
-defineProps<{
+const props = defineProps<{
   image: ImageAsset;
   isAttached: boolean;
 }>();
@@ -17,6 +20,11 @@ const emit = defineEmits<{
   clearSelection: [];
   deleteImage: [id: string];
 }>();
+
+const now = useNow();
+const createdAtLabel = computed(() =>
+  formatRelativeTime(props.image.createdAt, now.value),
+);
 </script>
 
 <template>
@@ -27,7 +35,7 @@ const emit = defineEmits<{
           {{ image.name }}
         </div>
         <div class="mt-0.5 text-xs text-gray-500">
-          {{ sourceLabel(image) }} · {{ image.createdAt }}
+          {{ sourceLabel(image) }} · {{ createdAtLabel }}
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-1">

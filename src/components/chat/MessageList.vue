@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useNow } from "../../composables/useNow";
 import type { ImageAsset, Message } from "../../types/studio";
 import MessageItem from "./MessageItem.vue";
 
@@ -14,6 +15,8 @@ const emit = defineEmits<{
   previewImage: [id: string];
   retryMessage: [message: Message];
 }>();
+
+const now = useNow();
 </script>
 
 <template>
@@ -25,6 +28,7 @@ const emit = defineEmits<{
         :attached-image-ids="attachedImageIds"
         :image-by-id="imageById"
         :message="message"
+        :now-ms="now"
         @attach-image="emit('attachImage', $event)"
         @continue-edit="emit('continueEdit', $event)"
         @preview-image="emit('previewImage', $event)"

@@ -2,6 +2,7 @@ import { deleteConversation as deleteConversationRecord, listConversations } fro
 import { deleteImageAsset, deleteImageBlob, listImageAssets } from "../services/imageAssets";
 import { deleteMessage, listMessages, saveMessage } from "../services/messages";
 import { loadSettings } from "../services/settings";
+import { migrateLegacyTimeFields } from "../services/timeFieldMigration";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
 import type { Ref } from "vue";
 
@@ -27,6 +28,8 @@ const LEGACY_SEED_IMAGE_IDS = new Set(["img-1", "img-2", "img-3", "img-4"]);
 export function useStudioRestore(input: UseStudioRestoreInput) {
   async function restoreFromStorage() {
     try {
+      await migrateLegacyTimeFields();
+
       const [savedSettings, savedConversations, savedMessages, savedImageAssets] =
         await Promise.all([
           loadSettings(),

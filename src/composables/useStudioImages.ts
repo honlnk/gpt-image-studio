@@ -6,6 +6,7 @@ import {
   saveImageAsset,
   saveImageBlob,
 } from "../services/imageAssets";
+import { isoTimestamp } from "../services/dateTime";
 import { readImageDimensions } from "../services/imageMetadata";
 import { createObjectUrl, revokeObjectUrls } from "../services/objectUrls";
 import { estimateStorageUsage } from "../services/storageUsage";
@@ -158,6 +159,7 @@ export function useStudioImages(input: UseStudioImagesInput) {
 
   async function importImageFile(file: File) {
     const now = Date.now() + Math.floor(Math.random() * 1000);
+    const createdAt = isoTimestamp(now);
     const dimensions = await readImageDimensions(file);
     const imageId = `img-${now}`;
     const blobKey = `blob-${now}`;
@@ -172,9 +174,8 @@ export function useStudioImages(input: UseStudioImagesInput) {
       sizeBytes: file.size,
       conversationId: input.activeConversationId.value || undefined,
       prompt: "用户导入的参考图",
-      createdAt: "刚刚",
-      updatedAt: "刚刚",
-      createdAtMs: now,
+      createdAt,
+      updatedAt: createdAt,
       previewUrl: createObjectUrl(file),
     };
 
@@ -283,7 +284,6 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
       : undefined,
     createdAt: imageAsset.createdAt,
     updatedAt: imageAsset.updatedAt,
-    createdAtMs: imageAsset.createdAtMs,
   };
 }
 

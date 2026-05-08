@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useNow } from "../../composables/useNow";
+import { formatRelativeTime } from "../../services/dateTime";
 import type { ImageAsset } from "../../types/studio";
 
 type SortDirection = "asc" | "desc";
 type ImageSortKey = "name" | "size" | "time";
 
-defineProps<{
+const props = defineProps<{
   imageSortDirection: SortDirection;
   imageSortKey: ImageSortKey;
   images: ImageAsset[];
@@ -41,6 +44,16 @@ function fileSize(image: ImageAsset) {
   }
   return `${(image.sizeBytes / 1024 / 1024).toFixed(1)} MB`;
 }
+
+const now = useNow();
+const createdAtLabels = computed(() =>
+  new Map(
+    props.filteredImages.map((image) => [
+      image.id,
+      formatRelativeTime(image.createdAt, now.value),
+    ]),
+  ),
+);
 </script>
 
 <template>
@@ -173,7 +186,7 @@ function fileSize(image: ImageAsset) {
             {{ image.name }}
           </p>
           <p class="truncate text-xs text-gray-500">
-            {{ sourceLabel(image) }} · {{ image.createdAt }} ·
+            {{ sourceLabel(image) }} · {{ createdAtLabels.get(image.id) }} ·
             {{ imageSize(image) }}
           </p>
         </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useNow } from "../../composables/useNow";
 import type { ImageAsset } from "../../types/studio";
 import ImageCard from "./ImageCard.vue";
 
@@ -14,6 +15,8 @@ const emit = defineEmits<{
   previewImage: [id: string];
   selectImage: [id: string];
 }>();
+
+const now = useNow();
 
 function isAttached(imageId: string, attachedImageIds: string[]) {
   return attachedImageIds.includes(imageId);
@@ -35,6 +38,7 @@ function isAttached(imageId: string, attachedImageIds: string[]) {
       :image="image"
       :is-attached="isAttached(image.id, attachedImageIds)"
       :is-selected="selectedImageId === image.id"
+      :now-ms="now"
       @attach-image="emit('attachImage', $event)"
       @preview-image="emit('previewImage', $event)"
       @select-image="emit('selectImage', $event)"

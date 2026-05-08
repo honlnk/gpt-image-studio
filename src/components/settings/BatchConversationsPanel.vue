@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useNow } from "../../composables/useNow";
+import { formatRelativeTime } from "../../services/dateTime";
 import type { Conversation } from "../../types/studio";
 
 type SortDirection = "asc" | "desc";
 type ConversationSortKey = "name" | "time";
 
-defineProps<{
+const props = defineProps<{
   conversationSortDirection: SortDirection;
   conversationSortKey: ConversationSortKey;
   conversationSortOptions: { key: ConversationSortKey; label: string }[];
@@ -22,6 +25,16 @@ const emit = defineEmits<{
   setSort: [key: ConversationSortKey];
   toggleSelection: [id: string];
 }>();
+
+const now = useNow();
+const updatedAtLabels = computed(() =>
+  new Map(
+    props.filteredConversations.map((conversation) => [
+      conversation.id,
+      formatRelativeTime(conversation.updatedAt, now.value),
+    ]),
+  ),
+);
 </script>
 
 <template>
@@ -138,7 +151,7 @@ const emit = defineEmits<{
             {{ conversation.title }}
           </p>
           <p class="truncate text-xs text-gray-500">
-            {{ conversation.summary }} · {{ conversation.updatedAt }}
+            {{ conversation.summary }} · {{ updatedAtLabels.get(conversation.id) }}
           </p>
         </div>
       </article>

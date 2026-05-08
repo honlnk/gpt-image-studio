@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { formatRelativeTime } from "../../services/dateTime";
 import type { ImageAsset, Message } from "../../types/studio";
 
 const props = defineProps<{
   attachedImageIds: string[];
   imageById: (id: string) => ImageAsset | undefined;
   message: Message;
+  nowMs: number;
 }>();
 
 const emit = defineEmits<{
@@ -16,6 +18,9 @@ const emit = defineEmits<{
 }>();
 
 const attachedImageIds = computed(() => new Set(props.attachedImageIds));
+const createdAtLabel = computed(() =>
+  formatRelativeTime(props.message.createdAt, props.nowMs),
+);
 
 function imageExtension(image?: ImageAsset) {
   if (image?.mimeType === "image/jpeg") return "jpeg";
@@ -44,7 +49,7 @@ function isImageAttached(id: string) {
       <span class="font-semibold text-gray-700">
         {{ message.role === "user" ? "你" : "Image Studio" }}
       </span>
-      <span>{{ message.createdAt }}</span>
+      <span>{{ createdAtLabel }}</span>
     </div>
 
     <p class="text-[15px] leading-relaxed text-gray-800">

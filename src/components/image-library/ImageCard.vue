@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { formatRelativeTime } from "../../services/dateTime";
 import type { ImageAsset } from "../../types/studio";
 import {
   imageDownloadName,
   sourceLabel,
 } from "./imageLibraryFormatters";
 
-defineProps<{
+const props = defineProps<{
   image: ImageAsset;
   isAttached: boolean;
   isSelected: boolean;
+  nowMs: number;
 }>();
 
 const emit = defineEmits<{
@@ -17,6 +20,9 @@ const emit = defineEmits<{
   selectImage: [id: string];
 }>();
 
+const createdAtLabel = computed(() =>
+  formatRelativeTime(props.image.createdAt, props.nowMs),
+);
 </script>
 
 <template>
@@ -54,7 +60,7 @@ const emit = defineEmits<{
         {{ image.name }}
       </div>
       <div class="truncate text-xs text-gray-500">
-        {{ sourceLabel(image) }} · {{ image.createdAt }}
+        {{ sourceLabel(image) }} · {{ createdAtLabel }}
       </div>
     </div>
     <div class="flex shrink-0 items-center gap-1">

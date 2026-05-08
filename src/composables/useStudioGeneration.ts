@@ -1,4 +1,5 @@
 import { computed } from "vue";
+import { isoTimestamp, timestampFromCreatedAt } from "../services/dateTime";
 import { saveImageAsset, saveImageBlob, loadImageBlob } from "../services/imageAssets";
 import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
 import { readImageDimensions } from "../services/imageMetadata";
@@ -15,7 +16,7 @@ import type { ComputedRef, Ref } from "vue";
 type CreateConversationRecordInput = {
   title: string;
   summary: string;
-  updatedAtMs: number;
+  updatedAt: string;
 };
 
 type UseStudioGenerationInput = {
@@ -38,7 +39,7 @@ type UseStudioGenerationInput = {
     conversationId: string,
     text: string,
     summary: string,
-    updatedAtMs?: number,
+    updatedAt?: string,
   ) => Conversation | null;
 };
 
@@ -59,13 +60,14 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     if (!canSend.value || isGenerating.value) return;
 
     const now = Date.now();
+    const createdAt = isoTimestamp(now);
     const text = input.composerText.value.trim() || "基于引用图片继续编辑。";
     const conversation =
       input.activeConversation.value ??
       await input.createConversationRecord({
         title: titleFromPrompt(text),
         summary: imageModeLabel.value,
-        updatedAtMs: now,
+        updatedAt: createdAt,
       });
     const conversationId = conversation.id;
     const references = [...input.attachedImages.value];
@@ -77,8 +79,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       referencedImageIds: references,
       resultImageIds: [],
       status: "success",
-      createdAt: "刚刚",
-      createdAtMs: now,
+      createdAt,
       generationParams: input.currentGenerationParams(),
     };
     const assistantMessage: Message = {
@@ -91,8 +92,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       referencedImageIds: references,
       resultImageIds: [],
       status: "pending",
-      createdAt: "刚刚",
-      createdAtMs: now + 1,
+      createdAt: isoTimestamp(now + 1),
       generationParams: input.currentGenerationParams(),
     };
 
@@ -101,7 +101,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       conversationId,
       text,
       imageModeLabel.value,
-      now,
+      createdAt,
     );
     input.composerText.value = "";
     input.attachedImages.value = [];
@@ -132,7 +132,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
         (item) =>
           item.conversationId === message.conversationId &&
           item.role === "user" &&
-          (item.createdAtMs ?? 0) <= (message.createdAtMs ?? 0),
+          timestampFromCreatedAt(item) <= timestampFromCreatedAt(message),
       );
 
     if (userMessage) {
@@ -169,6 +169,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
             params,
           });
       const now = Date.now();
+      const createdAt = isoTimestamp(now);
       const mimeType = `image/${params.outputFormat}`;
       const blob = base64ToBlob(imageData, mimeType);
       const dimensions = await readImageDimensions(blob);
@@ -187,9 +188,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
         messageId: assistantMessage.id,
         prompt,
         referencedImageIds: references,
-        createdAt: "刚刚",
-        updatedAt: "刚刚",
-        createdAtMs: now,
+        createdAt,
+        updatedAt: createdAt,
         previewUrl: createObjectUrl(blob),
       };
 
@@ -305,7 +305,6 @@ function toPlainMessage(message: Message): Message {
     resultImageIds: [...message.resultImageIds],
     status: message.status,
     createdAt: message.createdAt,
-    createdAtMs: message.createdAtMs,
     generationParams: message.generationParams
       ? { ...message.generationParams }
       : undefined,
@@ -331,6 +330,5 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
       : undefined,
     createdAt: imageAsset.createdAt,
     updatedAt: imageAsset.updatedAt,
-    createdAtMs: imageAsset.createdAtMs,
   };
 }

@@ -1,5 +1,5 @@
 const DB_NAME = "gpt-image-studio";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORE_NAMES = {
   conversations: "conversations",
@@ -18,14 +18,15 @@ export function getStudioDb() {
     dbPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-      request.onupgradeneeded = () => {
+      request.onupgradeneeded = (event) => {
         const db = request.result;
+        const transaction = request.transaction;
 
         if (!db.objectStoreNames.contains(STORE_NAMES.conversations)) {
           const store = db.createObjectStore(STORE_NAMES.conversations, {
             keyPath: "id",
           });
-          store.createIndex("updatedAtMs", "updatedAtMs");
+          store.createIndex("updatedAt", "updatedAt");
         }
 
         if (!db.objectStoreNames.contains(STORE_NAMES.messages)) {
@@ -33,14 +34,14 @@ export function getStudioDb() {
             keyPath: "id",
           });
           store.createIndex("conversationId", "conversationId");
-          store.createIndex("createdAtMs", "createdAtMs");
+          store.createIndex("createdAt", "createdAt");
         }
 
         if (!db.objectStoreNames.contains(STORE_NAMES.imageAssets)) {
           const store = db.createObjectStore(STORE_NAMES.imageAssets, {
             keyPath: "id",
           });
-          store.createIndex("createdAtMs", "createdAtMs");
+          store.createIndex("createdAt", "createdAt");
           store.createIndex("conversationId", "conversationId");
         }
 
@@ -55,6 +56,30 @@ export function getStudioDb() {
             keyPath: "key",
           });
         }
+
+        if (event.oldVersion < 2) {
+          replaceIndex(
+            transaction,
+            db,
+            STORE_NAMES.conversations,
+            "updatedAtMs",
+            "updatedAt",
+          );
+          replaceIndex(
+            transaction,
+            db,
+            STORE_NAMES.messages,
+            "createdAtMs",
+            "createdAt",
+          );
+          replaceIndex(
+            transaction,
+            db,
+            STORE_NAMES.imageAssets,
+            "createdAtMs",
+            "createdAt",
+          );
+        }
       };
 
       request.onsuccess = () => resolve(request.result);
@@ -63,6 +88,24 @@ export function getStudioDb() {
   }
 
   return dbPromise;
+}
+
+function replaceIndex(
+  transaction: IDBTransaction | null,
+  db: IDBDatabase,
+  storeName: StoreName,
+  oldIndexName: string,
+  newIndexName: string,
+) {
+  if (!transaction || !db.objectStoreNames.contains(storeName)) return;
+
+  const store = transaction.objectStore(storeName);
+  if (store.indexNames.contains(oldIndexName)) {
+    store.deleteIndex(oldIndexName);
+  }
+  if (!store.indexNames.contains(newIndexName)) {
+    store.createIndex(newIndexName, newIndexName);
+  }
 }
 
 export async function getAllFromStore<T>(storeName: StoreName) {

@@ -1,10 +1,13 @@
 import type { Message } from "../types/studio";
+import { timestampFromCreatedAt } from "./dateTime";
 import { deleteFromStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
 
 export async function listMessages() {
   const messages = await getAllFromStore<Message>(STORE_NAMES.messages);
 
-  return messages.sort((a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0));
+  return messages.sort(
+    (a, b) => timestampFromCreatedAt(a) - timestampFromCreatedAt(b),
+  );
 }
 
 export function saveMessage(message: Message) {

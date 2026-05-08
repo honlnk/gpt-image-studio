@@ -31,8 +31,7 @@ const conversation: Conversation = {
   id: "conversation-1",
   title: "测试对话",
   summary: "摘要",
-  updatedAt: "2026-05-07",
-  updatedAtMs: 100,
+  updatedAt: "2026-05-07T00:00:00.000Z",
 };
 
 const message: Message = {
@@ -43,8 +42,7 @@ const message: Message = {
   referencedImageIds: [],
   resultImageIds: ["image-1"],
   status: "success",
-  createdAt: "2026-05-07",
-  createdAtMs: 101,
+  createdAt: "2026-05-07T00:01:00.000Z",
 };
 
 const imageAsset: ImageAsset = {
@@ -57,8 +55,7 @@ const imageAsset: ImageAsset = {
   conversationId: conversation.id,
   messageId: message.id,
   prompt: "画一张图",
-  createdAt: "2026-05-07",
-  createdAtMs: 102,
+  createdAt: "2026-05-07T00:02:00.000Z",
   previewUrl: "blob:http://localhost/preview",
 };
 

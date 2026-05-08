@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { timestampFromCreatedAt, timestampFromUpdatedAt } from "../../services/dateTime";
 import { createObjectUrl, revokeObjectUrl } from "../../services/objectUrls";
 import { createZipArchive } from "../../services/zipArchive";
 import type { Conversation, ImageAsset, Message } from "../../types/studio";
@@ -217,7 +218,7 @@ function compareImages(a: ImageAsset, b: ImageAsset) {
   } else if (imageSortKey.value === "size") {
     result = (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0);
   } else {
-    result = (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0);
+    result = timestampFromCreatedAt(a) - timestampFromCreatedAt(b);
   }
 
   return result * direction || compareText(a.name, b.name);
@@ -228,7 +229,7 @@ function compareConversations(a: Conversation, b: Conversation) {
   const result =
     conversationSortKey.value === "name"
       ? compareText(a.title, b.title)
-      : (a.updatedAtMs ?? 0) - (b.updatedAtMs ?? 0);
+      : timestampFromUpdatedAt(a) - timestampFromUpdatedAt(b);
 
   return result * direction || compareText(a.title, b.title);
 }
