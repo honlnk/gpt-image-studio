@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
 import ChatWorkspace from "./components/studio/ChatWorkspace.vue";
 import ConversationSidebar from "./components/studio/ConversationSidebar.vue";
 import ImageLibrary from "./components/studio/ImageLibrary.vue";
@@ -10,119 +9,103 @@ import NoticeToast from "./components/ui/NoticeToast.vue";
 import { useStudioState } from "./composables/useStudioState";
 
 const studio = useStudioState();
-const previewImageId = ref("");
-const isConversationSidebarOpen = ref(false);
-const settingsInitialTab = ref<"api" | "backup" | "batch">("api");
-const settingsInitialBatchPanel = ref<"images" | "conversations">("images");
-const previewImage = computed(() => studio.imageById(previewImageId.value));
-
-function openBatchImageOperations() {
-  settingsInitialTab.value = "batch";
-  settingsInitialBatchPanel.value = "images";
-  studio.openSettings();
-}
-
-function openSettingsDefault() {
-  settingsInitialTab.value = "api";
-  settingsInitialBatchPanel.value = "images";
-  studio.openSettings();
-}
 </script>
 
 <template>
   <main class="flex h-screen bg-white text-gray-900 antialiased">
     <ConversationSidebar
-      v-model:is-open="isConversationSidebarOpen"
-      :active-conversation-id="studio.activeConversationId.value"
-      :conversations="studio.conversations.value"
-      @create-conversation="studio.createConversation"
-      @delete-conversation="studio.deleteConversation"
-      @open-settings="openSettingsDefault"
-      @select-conversation="studio.selectConversation"
+      v-model:is-open="studio.sidebar.isOpen"
+      :active-conversation-id="studio.sidebar.activeConversationId"
+      :conversations="studio.sidebar.conversations"
+      @create-conversation="studio.sidebar.createConversation"
+      @delete-conversation="studio.sidebar.deleteConversation"
+      @open-settings="studio.sidebar.openSettings"
+      @select-conversation="studio.sidebar.selectConversation"
     />
 
     <ChatWorkspace
-      v-model:background="studio.background.value"
-      v-model:composer-text="studio.composerText.value"
-      v-model:image-height="studio.imageHeight.value"
-      v-model:image-width="studio.imageWidth.value"
-      v-model:is-library-open="studio.isLibraryOpen.value"
-      v-model:output-format="studio.outputFormat.value"
-      v-model:quality="studio.quality.value"
-      :active-attachments="studio.activeAttachments.value"
-      :active-conversation="studio.activeConversation.value"
-      :active-editor="studio.activeEditor.value"
-      :active-messages="studio.activeMessages.value"
-      :active-size-preset="studio.activeSizePreset.value"
-      :background-label="studio.backgroundLabel.value"
-      :background-options="studio.backgroundOptions"
-      :can-send="studio.canSend.value"
-      :custom-size-error="studio.customSizeError.value"
-      :format-label="studio.formatLabel.value"
-      :format-options="studio.formatOptions"
-      :image-by-id="studio.imageById"
-      :is-editor-expanded="studio.isEditorExpanded.value"
-      :is-generating="studio.isGenerating.value"
-      :model="studio.model.value"
-      :quality-label="studio.qualityLabel.value"
-      :quality-options="studio.qualityOptions"
-      :size-label="studio.sizeLabel.value"
-      :size-presets="studio.sizePresets"
-      @apply-size-preset="studio.applySizePreset"
-      @attach-image="studio.attachImage"
-      @close-all-editors="studio.closeAllEditors"
-      @import-images="studio.importImages"
-      @open-conversations="isConversationSidebarOpen = true"
-      @open-settings="openSettingsDefault"
-      @preview-image="previewImageId = $event"
-      @remove-attachment="studio.removeAttachment"
-      @retry-message="studio.retryMessage"
-      @submit-message="studio.submitMessage"
-      @toggle-editor="studio.toggleEditor"
+      v-model:background="studio.chat.background"
+      v-model:composer-text="studio.chat.composerText"
+      v-model:image-height="studio.chat.imageHeight"
+      v-model:image-width="studio.chat.imageWidth"
+      v-model:is-library-open="studio.chat.isLibraryOpen"
+      v-model:output-format="studio.chat.outputFormat"
+      v-model:quality="studio.chat.quality"
+      :active-attachments="studio.chat.activeAttachments"
+      :active-conversation="studio.chat.activeConversation"
+      :active-editor="studio.chat.activeEditor"
+      :active-messages="studio.chat.activeMessages"
+      :active-size-preset="studio.chat.activeSizePreset"
+      :background-label="studio.chat.backgroundLabel"
+      :background-options="studio.chat.backgroundOptions"
+      :can-send="studio.chat.canSend"
+      :custom-size-error="studio.chat.customSizeError"
+      :format-label="studio.chat.formatLabel"
+      :format-options="studio.chat.formatOptions"
+      :image-by-id="studio.chat.imageById"
+      :is-editor-expanded="studio.chat.isEditorExpanded"
+      :is-generating="studio.chat.isGenerating"
+      :model="studio.chat.model"
+      :quality-label="studio.chat.qualityLabel"
+      :quality-options="studio.chat.qualityOptions"
+      :size-label="studio.chat.sizeLabel"
+      :size-presets="studio.chat.sizePresets"
+      @apply-size-preset="studio.chat.applySizePreset"
+      @attach-image="studio.chat.attachImage"
+      @close-all-editors="studio.chat.closeAllEditors"
+      @import-images="studio.chat.importImages"
+      @open-conversations="studio.chat.openConversations"
+      @open-settings="studio.chat.openSettings"
+      @preview-image="studio.chat.previewImage"
+      @remove-attachment="studio.chat.removeAttachment"
+      @retry-message="studio.chat.retryMessage"
+      @submit-message="studio.chat.submitMessage"
+      @toggle-editor="studio.chat.toggleEditor"
     />
 
     <ImageLibrary
-      v-model:is-open="studio.isLibraryOpen.value"
-      :active-conversation-id="studio.activeConversationId.value"
-      :attached-image-ids="
-        studio.activeAttachments.value.map((image) => image.id)
-      "
-      :images="studio.imageAssets.value"
-      @attach-image="studio.attachImage"
-      @delete-image="studio.deleteImage"
-      @open-batch-operations="openBatchImageOperations"
-      @preview-image="previewImageId = $event"
-      :storage-usage="studio.storageUsage.value"
+      v-model:is-open="studio.library.isOpen"
+      :active-conversation-id="studio.library.activeConversationId"
+      :attached-image-ids="studio.library.attachedImageIds"
+      :images="studio.library.images"
+      @attach-image="studio.library.attachImage"
+      @delete-image="studio.library.deleteImage"
+      @open-batch-operations="studio.library.openBatchOperations"
+      @preview-image="studio.library.previewImage"
+      :storage-usage="studio.library.storageUsage"
     />
 
     <SettingsModal
-      v-model:api-base-url="studio.apiBaseUrl.value"
-      v-model:api-key="studio.apiKey.value"
-      :conversations="studio.conversations.value"
-      :images="studio.imageAssets.value"
-      :initial-batch-panel="settingsInitialBatchPanel"
-      :initial-tab="settingsInitialTab"
-      :is-open="studio.isSettingsOpen.value"
-      :messages="studio.messages.value"
-      @close="studio.closeSettings"
-      @delete-conversations="studio.deleteConversations"
-      @delete-images="studio.deleteImages"
-      @export-backup="studio.exportBackup"
-      @import-backup="studio.importBackup"
-      @preview-image="previewImageId = $event"
+      v-model:api-base-url="studio.settingsModal.apiBaseUrl"
+      v-model:api-key="studio.settingsModal.apiKey"
+      :conversations="studio.settingsModal.conversations"
+      :images="studio.settingsModal.images"
+      :initial-batch-panel="studio.settingsModal.initialBatchPanel"
+      :initial-tab="studio.settingsModal.initialTab"
+      :is-open="studio.settingsModal.isOpen"
+      :messages="studio.settingsModal.messages"
+      @close="studio.settingsModal.close"
+      @delete-conversations="studio.settingsModal.deleteConversations"
+      @delete-images="studio.settingsModal.deleteImages"
+      @export-backup="studio.settingsModal.exportBackup"
+      @import-backup="studio.settingsModal.importBackup"
+      @preview-image="studio.settingsModal.previewImage"
     />
 
-    <ImagePreviewModal :image="previewImage" @close="previewImageId = ''" />
+    <ImagePreviewModal
+      :image="studio.preview.image"
+      @close="studio.preview.close"
+    />
 
     <NoticeToast
-      :notice="studio.notice.value"
-      @close="studio.dismissNotice"
+      :notice="studio.noticeToast.notice"
+      @close="studio.noticeToast.close"
     />
 
     <ConfirmDialog
-      :dialog="studio.confirmDialog.value"
-      @cancel="studio.cancelConfirmDialog"
-      @confirm="studio.acceptConfirmDialog"
+      :dialog="studio.confirmDialog.dialog"
+      @cancel="studio.confirmDialog.cancel"
+      @confirm="studio.confirmDialog.confirm"
     />
   </main>
 </template>

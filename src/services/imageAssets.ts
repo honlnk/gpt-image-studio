@@ -1,4 +1,5 @@
 import type { ImageAsset } from "../types/studio";
+import { timestampFromCreatedAt } from "./dateTime";
 import { deleteFromStore, getAllFromStore, getFromStore, putInStore, STORE_NAMES } from "./db";
 
 type ImageBlobRecord = {
@@ -10,7 +11,7 @@ export async function listImageAssets() {
   const imageAssets = await getAllFromStore<ImageAsset>(STORE_NAMES.imageAssets);
 
   return imageAssets.sort(
-    (a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0),
+    (a, b) => timestampFromCreatedAt(b) - timestampFromCreatedAt(a),
   );
 }
 

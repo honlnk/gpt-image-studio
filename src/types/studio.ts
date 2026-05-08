@@ -8,7 +8,6 @@ export type Conversation = {
   summary: string;
   createdAt?: string;
   updatedAt: string;
-  updatedAtMs?: number;
   archivedAt?: string;
 };
 
@@ -21,7 +20,6 @@ export type Message = {
   resultImageIds: string[];
   status: MessageStatus;
   createdAt: string;
-  createdAtMs?: number;
   generationParams?: GenerationParams;
   errorMessage?: string;
 };
@@ -41,7 +39,6 @@ export type ImageAsset = {
   referencedImageIds?: string[];
   createdAt: string;
   updatedAt?: string;
-  createdAtMs?: number;
   previewUrl?: string;
 };
 

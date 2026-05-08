@@ -1,4 +1,5 @@
 import type { Conversation } from "../types/studio";
+import { timestampFromUpdatedAt } from "./dateTime";
 import { deleteFromStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
 
 export async function listConversations() {
@@ -7,7 +8,7 @@ export async function listConversations() {
   );
 
   return conversations.sort(
-    (a, b) => (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0),
+    (a, b) => timestampFromUpdatedAt(b) - timestampFromUpdatedAt(a),
   );
 }
 
