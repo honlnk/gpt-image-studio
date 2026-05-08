@@ -32,12 +32,6 @@
 - `c54ab32 test: add backup and zip archive coverage`
 - `18ca9dd refactor: centralize object URL lifecycle`
 
-### 剩余事项
-
-- 手动回归完整主流程：新建会话、文生图、引用图编辑、失败重试、删除图片、删除会话、批量删除、导出备份、恢复备份、刷新恢复。
-- 观察后续需求是否需要继续拆 `ChatComposer.vue` 或 `BatchOperationsPanel.vue`。当前两者职责集中，暂不建议为了行数继续拆。
-- 目录领域化仍为可选项。除非后续模块边界继续稳定并产生跨目录维护成本，否则暂不建议迁移到 `modules/`，避免制造路径变更噪音。
-
 ## 背景
 
 当前项目已经完成本地优先图片创作工作台的核心功能：聊天式生成、引用图编辑、IndexedDB 持久化、图片库、备份恢复和批量操作。
@@ -143,7 +137,7 @@ src/
 - name: Setup Node.js
   uses: actions/setup-node@v4
   with:
-    node-version: '20'
+    node-version: "20"
 
 - name: Setup pnpm
   uses: pnpm/action-setup@v4
