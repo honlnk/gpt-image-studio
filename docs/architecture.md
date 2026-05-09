@@ -26,7 +26,7 @@ src/
 - `services/` 承载 IndexedDB 访问、Images API 调用、ZIP 备份逻辑和浏览器工具。
 - `types/studio.ts` 保存主要业务类型。
 
-目前主要压力点是 `composables/` 已经变成泛业务层。尤其是 `useStudioState`，它更像应用级 composition root 和 view model 工厂，而不是普通的 state composable。
+目前主要压力点是 `composables/` 已经变成泛业务层。应用级入口已经移动到 `src/app/studio/useStudioViewModel.ts`，后续业务 composable 还需要继续按 feature module 迁移。
 
 ## 目标结构
 
@@ -93,7 +93,7 @@ App 层负责页面级装配：
 - 向页面暴露面向 UI 的 `chat`、`sidebar`、`library`、`settings`、`preview`、`toast`、`dialog` 等 view model。
 - 保存页面级 UI 状态，例如当前面板、弹窗和预览图。
 
-`useStudioState` 后续应该改名为 `useStudioViewModel`，并移动到 `src/app/studio/`。
+应用级入口是 `src/app/studio/useStudioViewModel.ts`，并通过 `src/app/studio/index.ts` 对外暴露。
 
 ## Feature 层
 

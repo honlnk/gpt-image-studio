@@ -6,9 +6,9 @@ import ImagePreviewModal from "./components/studio/ImagePreviewModal.vue";
 import SettingsModal from "./components/studio/SettingsModal.vue";
 import ConfirmDialog from "./components/ui/ConfirmDialog.vue";
 import NoticeToast from "./components/ui/NoticeToast.vue";
-import { useStudioState } from "./composables/useStudioState";
+import { useStudioViewModel } from "./app/studio";
 
-const studio = useStudioState();
+const studio = useStudioViewModel();
 </script>
 
 <template>

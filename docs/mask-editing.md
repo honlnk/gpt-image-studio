@@ -14,7 +14,7 @@
 项目目前已经支持基于参考图的图片编辑：
 
 - `src/services/imagesApi.ts` 使用 `FormData` 构造 `/images/edits` 请求。
-- `src/composables/useStudioState.ts` 负责读取参考图 blob，并调用 `editImage`。
+- `src/app/studio/useStudioViewModel.ts` 负责装配生成流程；当前生成逻辑会读取参考图 blob，并调用 `editImage`。
 - `src/components/studio/ImagePreviewModal.vue` 是查看单张图片的自然入口，适合承载遮罩绘制。
 - `src/components/studio/ChatWorkspace.vue` 负责输入框和当前引用图片展示。
 
@@ -99,7 +99,7 @@ if (input.mask) {
 }
 ```
 
-然后在 `src/composables/useStudioState.ts` 中，把可选 mask 从提交消息流程一路传到 `requestImageEdit` 和 `editImage`。
+然后在生成流程中，把可选 mask 从提交消息流程一路传到 `requestImageEdit` 和 `editImage`。
 
 ## 状态调整
 

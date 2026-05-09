@@ -1,13 +1,13 @@
 import { computed, onMounted, proxyRefs, ref, watch } from "vue";
-import { useStudioBackup } from "./useStudioBackup";
-import { useStudioConversations } from "./useStudioConversations";
-import { useStudioFeedback } from "./useStudioFeedback";
-import { useStudioGeneration } from "./useStudioGeneration";
-import { useStudioImages } from "./useStudioImages";
-import { useStudioRestore } from "./useStudioRestore";
-import { useStudioSettings } from "./useStudioSettings";
+import { useStudioBackup } from "../../composables/useStudioBackup";
+import { useStudioConversations } from "../../composables/useStudioConversations";
+import { useStudioFeedback } from "../../composables/useStudioFeedback";
+import { useStudioGeneration } from "../../composables/useStudioGeneration";
+import { useStudioImages } from "../../composables/useStudioImages";
+import { useStudioRestore } from "../../composables/useStudioRestore";
+import { useStudioSettings } from "../../composables/useStudioSettings";
 import { useStudioUiState } from "./useStudioUiState";
-import type { Message } from "../types/studio";
+import type { Message } from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
@@ -16,7 +16,7 @@ const STORAGE_KEYS = {
 type SettingsTab = "api" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 
-export function useStudioState() {
+export function useStudioViewModel() {
   const isHydrated = ref(false);
   const settings = useStudioSettings({
     isHydrated,

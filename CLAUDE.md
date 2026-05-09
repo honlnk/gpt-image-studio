@@ -22,16 +22,16 @@ See `docs/README.md` for the maintained documentation map and `docs/architecture
 
 ### State Management
 
-The app currently uses Composition API stores/composables. `src/composables/useStudioState.ts` is the app-level composition root/view model factory: `App.vue` calls it once and distributes state/methods to children via props and events. No Pinia/Vuex.
+The app currently uses Composition API stores/composables. `src/app/studio/useStudioViewModel.ts` is the app-level composition root/view model factory: `App.vue` calls it once and distributes state/methods to children via props and events. No Pinia/Vuex.
 
-**Hydration**: On mount, `useStudioState` loads all data from IndexedDB into memory refs. All subsequent mutations happen in memory first, then async-persist to IndexedDB via the `services/` layer.
+**Hydration**: On mount, `useStudioViewModel` loads all data from IndexedDB into memory refs. All subsequent mutations happen in memory first, then async-persist to IndexedDB via the `services/` layer.
 
 **Dual storage**: Lightweight drafts (`composerText`, `attachedImages`, API config) go to localStorage. Everything else (conversations, messages, image assets, image blobs, settings) goes to IndexedDB.
 
 ### Data Flow
 
 ```
-User action → Component emit → App.vue handler → useStudioState method
+User action → Component emit → App.vue handler → useStudioViewModel method
   → mutate ref (reactive UI update) → async persist to services/ → IndexedDB
 ```
 

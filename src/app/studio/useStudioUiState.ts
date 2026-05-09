@@ -1,5 +1,5 @@
 import { nextTick, ref } from "vue";
-import type { EditorKey } from "../types/studio";
+import type { EditorKey } from "../../types/studio";
 
 export function useStudioUiState() {
   const isSettingsOpen = ref(false);
