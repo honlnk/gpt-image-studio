@@ -1,5 +1,6 @@
 import { computed, ref, watch } from "vue";
 import { getCustomSizeError } from "../../services/imagesApi";
+import { readStorage } from "../../shared/localStorage";
 import { saveSettings } from "../../services/settings";
 import type { AppSettings, GenerationParams } from "../../types/studio";
 import type { Ref } from "vue";
@@ -149,12 +150,4 @@ function normalizeBackground(background: GenerationParams["background"]) {
   if (background === "transparent") return "auto";
 
   return background;
-}
-
-function readStorage(key: string, fallback: string) {
-  try {
-    return localStorage.getItem(key) || fallback;
-  } catch {
-    return fallback;
-  }
 }

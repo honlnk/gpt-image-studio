@@ -1,5 +1,5 @@
 import type { Conversation, ImageAsset, Message } from "../types/studio";
-import { isoTimestamp } from "./dateTime";
+import { isoTimestamp } from "../shared/dateTime";
 import { getAllFromStore, putInStore, STORE_NAMES } from "./db";
 
 type LegacyConversation = Conversation & {

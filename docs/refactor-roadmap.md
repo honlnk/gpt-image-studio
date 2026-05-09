@@ -15,10 +15,18 @@
 
 当前 Web App 已经完成本地优先图片工作台的核心能力：聊天式生成、引用图编辑、IndexedDB 持久化、图片库、备份恢复和批量操作。
 
-现有结构适合快速推进 MVP：
+当前重构进展（2026-05-10）：
+
+- 阶段一已完成：CI 已统一执行 `typecheck`、`test`、`build`。
+- 阶段二已完成：应用入口已迁移为 `src/app/studio/useStudioViewModel.ts`。
+- 阶段三已完成：核心业务 composables 已迁移到 `src/features/*`，并补充 feature `index.ts` 入口。
+
+现有结构适合继续按阶段推进：
 
 ```text
 src/
+  app/
+  features/
   components/
   composables/
   services/
@@ -258,6 +266,10 @@ src/composables/useNow.ts
 ## 阶段四：整理 shared 工具
 
 目标：把真正通用的浏览器工具从 `services/` 或 feature 里分离出来。
+
+当前进展（2026-05-10）：
+
+- 已完成第一批迁移：`dateTime`、`objectUrls` 已移动到 `src/shared/`，并完成代码与测试引用更新。
 
 建议移动：
 

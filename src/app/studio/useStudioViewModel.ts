@@ -5,6 +5,7 @@ import { useStudioFeedback } from "../../features/feedback";
 import { useStudioGeneration } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
+import { readStorage, writeStorage } from "../../shared/localStorage";
 import { useStudioUiState } from "./useStudioUiState";
 import type { Message } from "../../types/studio";
 
@@ -236,22 +237,6 @@ export function useStudioViewModel() {
     settingsModal,
     sidebar,
   };
-}
-
-function readStorage(key: string, fallback: string) {
-  try {
-    return localStorage.getItem(key) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignore local draft persistence failures.
-  }
 }
 
 function reportStorageError(error: unknown) {

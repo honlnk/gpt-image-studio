@@ -1,5 +1,5 @@
 import type { Conversation } from "../types/studio";
-import { timestampFromUpdatedAt } from "./dateTime";
+import { timestampFromUpdatedAt } from "../shared/dateTime";
 import { deleteFromStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
 
 export async function listConversations() {

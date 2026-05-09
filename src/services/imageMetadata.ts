@@ -1,4 +1,4 @@
-import { createObjectUrl, revokeObjectUrl } from "./objectUrls";
+import { createObjectUrl, revokeObjectUrl } from "../shared/objectUrls";
 
 export type ImageDimensions = {
   width: number;

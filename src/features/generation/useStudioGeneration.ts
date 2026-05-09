@@ -1,10 +1,12 @@
 import { computed } from "vue";
-import { isoTimestamp, timestampFromCreatedAt } from "../../services/dateTime";
+import { isoTimestamp, timestampFromCreatedAt } from "../../shared/dateTime";
+import { formatError } from "../../shared/errors";
+import { createId } from "../../shared/id";
 import { saveImageAsset, saveImageBlob, loadImageBlob } from "../../services/imageAssets";
 import { base64ToBlob, editImage, generateImage } from "../../services/imagesApi";
 import { readImageDimensions } from "../../services/imageMetadata";
 import { saveMessage } from "../../services/messages";
-import { createObjectUrl } from "../../services/objectUrls";
+import { createObjectUrl } from "../../shared/objectUrls";
 import type {
   Conversation,
   GenerationParams,
@@ -72,7 +74,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     const conversationId = conversation.id;
     const references = [...input.attachedImages.value];
     const userMessage: Message = {
-      id: `m-${now}`,
+      id: createId("m"),
       conversationId,
       role: "user",
       content: text,
@@ -83,7 +85,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       generationParams: input.currentGenerationParams(),
     };
     const assistantMessage: Message = {
-      id: `m-${now + 1}`,
+      id: createId("m"),
       conversationId,
       role: "assistant",
       content: references.length
@@ -173,8 +175,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       const mimeType = `image/${params.outputFormat}`;
       const blob = base64ToBlob(imageData, mimeType);
       const dimensions = await readImageDimensions(blob);
-      const imageId = `img-${now}`;
-      const blobKey = `blob-${now}`;
+      const imageId = createId("img");
+      const blobKey = createId("blob");
       const imageAsset: ImageAsset = {
         id: imageId,
         blobKey,
@@ -271,14 +273,6 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     retryMessage,
     submitMessage,
   };
-}
-
-function formatError(error: unknown) {
-  if (error instanceof SyntaxError) {
-    return "图片接口返回了无法解析的响应。";
-  }
-
-  return error instanceof Error ? error.message : String(error);
 }
 
 function titleFromPrompt(prompt: string) {

@@ -1,5 +1,5 @@
 import type { Message } from "../types/studio";
-import { timestampFromCreatedAt } from "./dateTime";
+import { timestampFromCreatedAt } from "../shared/dateTime";
 import { deleteFromStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
 
 export async function listMessages() {
