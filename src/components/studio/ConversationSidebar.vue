@@ -5,6 +5,7 @@ import type { Conversation } from "../../types/studio";
 const props = defineProps<{
   conversations: Conversation[];
   activeConversationId: string;
+  pendingJobCountByConversation: Record<string, number>;
   isOpen: boolean;
 }>();
 
@@ -164,7 +165,15 @@ const filteredConversations = computed(() => {
             emit('update:isOpen', false);
           "
         >
-          <span class="block truncate">{{ conversation.title }}</span>
+          <span class="flex items-center gap-2">
+            <span class="block min-w-0 flex-1 truncate">{{ conversation.title }}</span>
+            <span
+              v-if="(pendingJobCountByConversation[conversation.id] ?? 0) > 0"
+              class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[11px] font-semibold text-amber-200"
+            >
+              {{ pendingJobCountByConversation[conversation.id] }}
+            </span>
+          </span>
         </button>
         <button
           class="shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 opacity-0 transition-colors hover:bg-white/10 hover:text-red-300 group-hover:opacity-100 focus:opacity-100"

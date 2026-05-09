@@ -173,6 +173,7 @@ export function useStudioViewModel() {
     deleteConversation: conversations.deleteConversation,
     isOpen: isConversationSidebarOpen,
     openSettings: openSettingsDefault,
+    pendingJobCountByConversation: generation.pendingJobCountByConversation,
     selectConversation: conversations.selectConversation,
   });
   const chat = proxyRefs({
@@ -203,6 +204,7 @@ export function useStudioViewModel() {
     openConversations,
     openSettings: openSettingsDefault,
     outputFormat: settings.outputFormat,
+    pendingJobCount: generation.pendingJobCount,
     previewImage: previewImageById,
     quality: settings.quality,
     qualityLabel: settings.qualityLabel,

@@ -16,6 +16,14 @@ export function useGenerationJobs(activeConversationId: { value: string }) {
         job.conversationId === activeConversationId.value,
     ),
   );
+  const pendingJobCountByConversation = computed(() => {
+    const counts: Record<string, number> = {};
+    jobs.value.forEach((job) => {
+      if (job.status !== "pending") return;
+      counts[job.conversationId] = (counts[job.conversationId] ?? 0) + 1;
+    });
+    return counts;
+  });
 
   function createJob(
     input: Omit<GenerationJob, "id" | "status" | "startedAtMs">,
@@ -53,6 +61,7 @@ export function useGenerationJobs(activeConversationId: { value: string }) {
     jobs,
     markJobError,
     markJobSuccess,
+    pendingJobCountByConversation,
     pendingJobCount,
   };
 }
