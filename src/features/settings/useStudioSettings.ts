@@ -1,7 +1,8 @@
 import { computed, ref, watch } from "vue";
-import { getCustomSizeError } from "../services/imagesApi";
-import { saveSettings } from "../services/settings";
-import type { AppSettings, GenerationParams } from "../types/studio";
+import { getCustomSizeError } from "../../services/imagesApi";
+import { readStorage } from "../../shared/localStorage";
+import { saveSettings } from "../../services/settings";
+import type { AppSettings, ConnectionMode, GenerationParams } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioSettingsInput = {
@@ -15,6 +16,7 @@ const SETTINGS_STORAGE_KEYS = {
 } as const;
 
 export function useStudioSettings(input: UseStudioSettingsInput) {
+  const connectionMode = ref<ConnectionMode>("direct");
   const model = ref("gpt-image-2");
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
@@ -61,7 +63,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
   );
 
   watch(
-    [apiKey, apiBaseUrl, model, activeSizePreset, imageWidth, imageHeight, quality, background, outputFormat],
+    [connectionMode, apiKey, apiBaseUrl, model, activeSizePreset, imageWidth, imageHeight, quality, background, outputFormat],
     () => {
       if (!input.isHydrated.value) return;
       void saveCurrentSettings().catch(input.onStorageError);
@@ -82,6 +84,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
   }
 
   function applySettings(settings: AppSettings) {
+    connectionMode.value = settings.connectionMode;
     apiKey.value = settings.apiKey;
     apiBaseUrl.value = settings.apiBaseUrl;
     model.value = settings.model;
@@ -95,6 +98,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
 
   function currentSettings(): AppSettings {
     return {
+      connectionMode: connectionMode.value,
       apiKey: apiKey.value.trim(),
       apiBaseUrl: apiBaseUrl.value.trim(),
       model: model.value,
@@ -122,6 +126,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
     activeSizePreset,
     apiBaseUrl,
     apiKey,
+    connectionMode,
     applySettings,
     applySizePreset,
     background,
@@ -149,12 +154,4 @@ function normalizeBackground(background: GenerationParams["background"]) {
   if (background === "transparent") return "auto";
 
   return background;
-}
-
-function readStorage(key: string, fallback: string) {
-  try {
-    return localStorage.getItem(key) || fallback;
-  } catch {
-    return fallback;
-  }
 }

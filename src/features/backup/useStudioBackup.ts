@@ -1,6 +1,7 @@
-import { createStudioBackup, restoreStudioBackup } from "../services/backups";
-import { createObjectUrl, revokeObjectUrl } from "../services/objectUrls";
-import type { Conversation, ImageAsset, Message } from "../types/studio";
+import { createStudioBackup, restoreStudioBackup } from "../../services/backups";
+import { formatError } from "../../shared/errors";
+import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
+import type { Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioBackupInput = {
@@ -54,12 +55,4 @@ export function useStudioBackup(input: UseStudioBackupInput) {
     exportBackup,
     importBackup,
   };
-}
-
-function formatError(error: unknown) {
-  if (error instanceof SyntaxError) {
-    return "图片接口返回了无法解析的响应。";
-  }
-
-  return error instanceof Error ? error.message : String(error);
 }

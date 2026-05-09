@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { timestampFromCreatedAt, timestampFromUpdatedAt } from "../../services/dateTime";
-import { createObjectUrl, revokeObjectUrl } from "../../services/objectUrls";
+import { timestampFromCreatedAt, timestampFromUpdatedAt } from "../../shared/dateTime";
+import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
 import { createZipArchive } from "../../services/zipArchive";
 import type { Conversation, ImageAsset, Message } from "../../types/studio";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";

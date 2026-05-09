@@ -1,11 +1,11 @@
-import type { AppSettings } from "../types/studio";
+import type { AppSettings, ConnectionMode, GenerationParams } from "../types/studio";
 import { getFromStore, putInStore, STORE_NAMES } from "./db";
 
 const SETTINGS_KEY = "app";
 
 type SettingsRecord = {
   key: typeof SETTINGS_KEY;
-  value: AppSettings;
+  value: StoredAppSettings;
 };
 
 export async function loadSettings() {
@@ -14,7 +14,9 @@ export async function loadSettings() {
     SETTINGS_KEY,
   );
 
-  return record?.value;
+  if (!record?.value) return undefined;
+
+  return normalizeSettings(record.value);
 }
 
 export function saveSettings(settings: AppSettings) {
@@ -22,4 +24,16 @@ export function saveSettings(settings: AppSettings) {
     key: SETTINGS_KEY,
     value: settings,
   });
+}
+
+type StoredAppSettings = Omit<AppSettings, "connectionMode"> & {
+  connectionMode?: ConnectionMode;
+  defaults: GenerationParams;
+};
+
+function normalizeSettings(settings: StoredAppSettings): AppSettings {
+  return {
+    ...settings,
+    connectionMode: settings.connectionMode ?? "direct",
+  };
 }

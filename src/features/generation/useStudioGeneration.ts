@@ -1,16 +1,21 @@
 import { computed } from "vue";
-import { isoTimestamp, timestampFromCreatedAt } from "../services/dateTime";
-import { saveImageAsset, saveImageBlob, loadImageBlob } from "../services/imageAssets";
-import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
-import { readImageDimensions } from "../services/imageMetadata";
-import { saveMessage } from "../services/messages";
-import { createObjectUrl } from "../services/objectUrls";
+import { isoTimestamp, timestampFromCreatedAt } from "../../shared/dateTime";
+import { formatError } from "../../shared/errors";
+import { createId } from "../../shared/id";
+import { saveImageAsset, saveImageBlob, loadImageBlob } from "../../services/imageAssets";
+import { base64ToBlob } from "../../services/imagesApi";
+import { readImageDimensions } from "../../services/imageMetadata";
+import { saveMessage } from "../../services/messages";
+import { createObjectUrl } from "../../shared/objectUrls";
+import type { ImageClient } from "./imageClients/imageClient";
+import { useGenerationJobs } from "./useGenerationJobs";
+import type { GenerationJob } from "./generationJobTypes";
 import type {
   Conversation,
   GenerationParams,
   ImageAsset,
   Message,
-} from "../types/studio";
+} from "../../types/studio";
 import type { ComputedRef, Ref } from "vue";
 
 type CreateConversationRecordInput = {
@@ -20,9 +25,8 @@ type CreateConversationRecordInput = {
 };
 
 type UseStudioGenerationInput = {
+  activeConversationId: Ref<string>;
   activeConversation: ComputedRef<Conversation | undefined>;
-  apiBaseUrl: Ref<string>;
-  apiKey: Ref<string>;
   attachedImages: Ref<string[]>;
   composerText: Ref<string>;
   createConversationRecord: (input: CreateConversationRecordInput) => Promise<Conversation>;
@@ -30,9 +34,10 @@ type UseStudioGenerationInput = {
   customSizeError: ComputedRef<string>;
   imageAssets: Ref<ImageAsset[]>;
   imageById: (id: string) => ImageAsset | undefined;
+  imageClient: ImageClient;
   messages: Ref<Message[]>;
-  model: Ref<string>;
   onStorageError: (error: unknown) => void;
+  conversationExists: (id: string) => boolean;
   persistConversation: (conversation: Conversation) => Promise<void>;
   refreshStorageUsage: () => Promise<void>;
   updateConversationSummary: (
@@ -44,20 +49,18 @@ type UseStudioGenerationInput = {
 };
 
 export function useStudioGeneration(input: UseStudioGenerationInput) {
-  const isGenerating = computed(() =>
-    input.messages.value.some((message) => message.status === "pending"),
-  );
+  const jobs = useGenerationJobs(input.activeConversationId);
+  const isGenerating = jobs.isGenerating;
   const imageModeLabel = computed(() =>
     input.attachedImages.value.length ? "引用图片编辑" : "文字生成图片",
   );
   const canSend = computed(() =>
-    !isGenerating.value &&
     !input.customSizeError.value &&
     Boolean(input.composerText.value.trim() || input.attachedImages.value.length),
   );
 
   async function submitMessage() {
-    if (!canSend.value || isGenerating.value) return;
+    if (!canSend.value) return;
 
     const now = Date.now();
     const createdAt = isoTimestamp(now);
@@ -72,7 +75,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     const conversationId = conversation.id;
     const references = [...input.attachedImages.value];
     const userMessage: Message = {
-      id: `m-${now}`,
+      id: createId("m"),
       conversationId,
       role: "user",
       content: text,
@@ -83,7 +86,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       generationParams: input.currentGenerationParams(),
     };
     const assistantMessage: Message = {
-      id: `m-${now + 1}`,
+      id: createId("m"),
       conversationId,
       role: "assistant",
       content: references.length
@@ -113,8 +116,15 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
         ? input.persistConversation(updatedConversation)
         : Promise.resolve(),
     ]).catch(input.onStorageError);
-
-    await runImageRequest(text, references, assistantMessage);
+    const job = jobs.createJob({
+      assistantMessageId: assistantMessage.id,
+      conversationId,
+      generationParams: assistantMessage.generationParams ?? input.currentGenerationParams(),
+      prompt: text,
+      referencedImageIds: references,
+      userMessageId: userMessage.id,
+    });
+    void runImageRequest(job);
   }
 
   async function retryMessage(message: Message) {
@@ -137,86 +147,88 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
 
     if (userMessage) {
       await runImageRequest(
-        userMessage.content,
-        message.referencedImageIds,
-        message,
+        jobs.createJob({
+          assistantMessageId: message.id,
+          conversationId: message.conversationId,
+          generationParams: message.generationParams ?? input.currentGenerationParams(),
+          prompt: userMessage.content,
+          referencedImageIds: message.referencedImageIds,
+          userMessageId: userMessage.id,
+        }),
       );
     }
   }
 
-  async function runImageRequest(
-    prompt: string,
-    references: string[],
-    assistantMessage: Message,
-  ) {
+  async function runImageRequest(job: GenerationJob) {
     try {
-      if (!input.apiKey.value.trim()) {
-        throw new Error("请先在设置里填写 OpenAI API key。");
-      }
-
-      if (!input.apiBaseUrl.value.trim()) {
-        throw new Error("请先在设置里填写 API Base URL。");
-      }
-
-      const params = assistantMessage.generationParams ?? input.currentGenerationParams();
-      const imageData = references.length
-        ? await requestImageEdit(prompt, references, params)
-        : await generateImage({
-            apiBaseUrl: input.apiBaseUrl.value,
-            apiKey: input.apiKey.value,
-            model: input.model.value,
-            prompt,
-            params,
-          });
+      const params = job.generationParams;
+      const imageData = job.referencedImageIds.length
+        ? await requestImageEdit(job.prompt, job.referencedImageIds, params)
+        : await input.imageClient.generate({ prompt: job.prompt, params });
       const now = Date.now();
       const createdAt = isoTimestamp(now);
       const mimeType = `image/${params.outputFormat}`;
       const blob = base64ToBlob(imageData, mimeType);
       const dimensions = await readImageDimensions(blob);
-      const imageId = `img-${now}`;
-      const blobKey = `blob-${now}`;
+      const imageId = createId("img");
+      const blobKey = createId("blob");
       const imageAsset: ImageAsset = {
         id: imageId,
         blobKey,
-        name: titleFromPrompt(prompt),
+        name: titleFromPrompt(job.prompt),
         source: "generated",
         mimeType,
         width: dimensions?.width,
         height: dimensions?.height,
         sizeBytes: blob.size,
-        conversationId: assistantMessage.conversationId,
-        messageId: assistantMessage.id,
-        prompt,
-        referencedImageIds: references,
+        conversationId: input.conversationExists(job.conversationId)
+          ? job.conversationId
+          : undefined,
+        messageId: hasMessage(job.assistantMessageId)
+          ? job.assistantMessageId
+          : undefined,
+        prompt: job.prompt,
+        referencedImageIds: job.referencedImageIds,
         createdAt,
         updatedAt: createdAt,
         previewUrl: createObjectUrl(blob),
       };
 
-      assistantMessage.status = "success";
-      assistantMessage.content = references.length
-        ? "已基于引用图生成一张图片。"
-        : "已生成一张图片。";
-      assistantMessage.resultImageIds = [imageId];
-      assistantMessage.errorMessage = undefined;
+      const assistantMessage = findMessage(job.assistantMessageId);
+      if (assistantMessage) {
+        assistantMessage.status = "success";
+        assistantMessage.content = job.referencedImageIds.length
+          ? "已基于引用图生成一张图片。"
+          : "已生成一张图片。";
+        assistantMessage.resultImageIds = [imageId];
+        assistantMessage.errorMessage = undefined;
+        replaceMessage(assistantMessage);
+      }
       input.imageAssets.value = [imageAsset, ...input.imageAssets.value];
-      replaceMessage(assistantMessage);
 
-      await Promise.all([
+      const saveTasks: Promise<unknown>[] = [
         saveImageBlob(blobKey, blob),
         saveImageAsset(toPlainImageAsset(imageAsset)),
-        saveMessage(toPlainMessage(assistantMessage)),
-      ]);
+      ];
+      if (assistantMessage) {
+        saveTasks.push(saveMessage(toPlainMessage(assistantMessage)));
+      }
+      await Promise.all(saveTasks);
       await input.refreshStorageUsage();
+      jobs.markJobSuccess(job.id);
     } catch (error) {
       const message = formatError(error);
-      assistantMessage.status = "error";
-      assistantMessage.content = `生成失败：${message}`;
-      assistantMessage.errorMessage = message;
-      assistantMessage.resultImageIds = [];
-      replaceMessage(assistantMessage);
-      await saveMessage(toPlainMessage(assistantMessage)).catch(input.onStorageError);
+      const assistantMessage = findMessage(job.assistantMessageId);
+      if (assistantMessage) {
+        assistantMessage.status = "error";
+        assistantMessage.content = `生成失败：${message}`;
+        assistantMessage.errorMessage = message;
+        assistantMessage.resultImageIds = [];
+        replaceMessage(assistantMessage);
+        await saveMessage(toPlainMessage(assistantMessage)).catch(input.onStorageError);
+      }
       await input.refreshStorageUsage();
+      jobs.markJobError(job.id, message);
     }
   }
 
@@ -248,10 +260,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       }),
     );
 
-    return editImage({
-      apiBaseUrl: input.apiBaseUrl.value,
-      apiKey: input.apiKey.value,
-      model: input.model.value,
+    return input.imageClient.edit({
       prompt,
       params,
       images,
@@ -264,21 +273,23 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     );
   }
 
+  function findMessage(messageId: string) {
+    return input.messages.value.find((item) => item.id === messageId);
+  }
+
+  function hasMessage(messageId: string) {
+    return Boolean(findMessage(messageId));
+  }
+
   return {
+    activeConversationPendingJobs: jobs.activeConversationPendingJobs,
     canSend,
     imageModeLabel,
     isGenerating,
+    pendingJobCount: jobs.pendingJobCount,
     retryMessage,
     submitMessage,
   };
-}
-
-function formatError(error: unknown) {
-  if (error instanceof SyntaxError) {
-    return "图片接口返回了无法解析的响应。";
-  }
-
-  return error instanceof Error ? error.message : String(error);
 }
 
 function titleFromPrompt(prompt: string) {

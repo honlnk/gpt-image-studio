@@ -1,13 +1,18 @@
 import { computed, onMounted, proxyRefs, ref, watch } from "vue";
-import { useStudioBackup } from "./useStudioBackup";
-import { useStudioConversations } from "./useStudioConversations";
-import { useStudioFeedback } from "./useStudioFeedback";
-import { useStudioGeneration } from "./useStudioGeneration";
-import { useStudioImages } from "./useStudioImages";
-import { useStudioRestore } from "./useStudioRestore";
-import { useStudioSettings } from "./useStudioSettings";
+import { useStudioBackup, useStudioRestore } from "../../features/backup";
+import { useStudioConversations } from "../../features/conversations";
+import { useStudioFeedback } from "../../features/feedback";
+import {
+  createDirectImagesClient,
+  createLocalCompanionImagesClient,
+  type ImageClient,
+  useStudioGeneration,
+} from "../../features/generation";
+import { useStudioImages } from "../../features/images";
+import { useStudioSettings } from "../../features/settings";
+import { readStorage, writeStorage } from "../../shared/localStorage";
 import { useStudioUiState } from "./useStudioUiState";
-import type { Message } from "../types/studio";
+import type { Message } from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
@@ -16,7 +21,7 @@ const STORAGE_KEYS = {
 type SettingsTab = "api" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 
-export function useStudioState() {
+export function useStudioViewModel() {
   const isHydrated = ref(false);
   const settings = useStudioSettings({
     isHydrated,
@@ -58,10 +63,30 @@ export function useStudioState() {
     return images.refreshStorageUsage();
   }
 
+  const directImagesClient = createDirectImagesClient({
+    getApiBaseUrl: () => settings.apiBaseUrl.value,
+    getApiKey: () => settings.apiKey.value,
+    getModel: () => settings.model.value,
+  });
+  const localCompanionImagesClient = createLocalCompanionImagesClient();
+  const imageClient: ImageClient = {
+    generate(input) {
+      if (settings.connectionMode.value === "localCompanion") {
+        return localCompanionImagesClient.generate(input);
+      }
+      return directImagesClient.generate(input);
+    },
+    edit(input) {
+      if (settings.connectionMode.value === "localCompanion") {
+        return localCompanionImagesClient.edit(input);
+      }
+      return directImagesClient.edit(input);
+    },
+  };
+
   const generation = useStudioGeneration({
+    activeConversationId: conversations.activeConversationId,
     activeConversation: conversations.activeConversation,
-    apiBaseUrl: settings.apiBaseUrl,
-    apiKey: settings.apiKey,
     attachedImages: images.attachedImages,
     composerText,
     createConversationRecord: conversations.createConversationRecord,
@@ -69,9 +94,11 @@ export function useStudioState() {
     customSizeError: settings.customSizeError,
     imageAssets: images.imageAssets,
     imageById: images.imageById,
+    imageClient,
     messages,
-    model: settings.model,
     onStorageError: reportStorageError,
+    conversationExists: (id: string) =>
+      conversations.conversations.value.some((item) => item.id === id),
     persistConversation: conversations.persistConversation,
     refreshStorageUsage: images.refreshStorageUsage,
     updateConversationSummary: conversations.updateConversationSummary,
@@ -201,6 +228,7 @@ export function useStudioState() {
   const settingsModal = proxyRefs({
     apiBaseUrl: settings.apiBaseUrl,
     apiKey: settings.apiKey,
+    connectionMode: settings.connectionMode,
     close: ui.closeSettings,
     conversations: conversations.conversations,
     deleteConversations: conversations.deleteConversations,
@@ -237,22 +265,6 @@ export function useStudioState() {
     settingsModal,
     sidebar,
   };
-}
-
-function readStorage(key: string, fallback: string) {
-  try {
-    return localStorage.getItem(key) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignore local draft persistence failures.
-  }
 }
 
 function reportStorageError(error: unknown) {

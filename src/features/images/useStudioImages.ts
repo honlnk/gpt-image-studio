@@ -5,14 +5,17 @@ import {
   loadImageBlob,
   saveImageAsset,
   saveImageBlob,
-} from "../services/imageAssets";
-import { isoTimestamp } from "../services/dateTime";
-import { readImageDimensions } from "../services/imageMetadata";
-import { createObjectUrl, revokeObjectUrls } from "../services/objectUrls";
-import { estimateStorageUsage } from "../services/storageUsage";
-import type { ImageAsset, Message } from "../types/studio";
-import type { StorageUsage } from "../services/storageUsage";
-import type { StudioConfirmDialog } from "./useStudioFeedback";
+} from "../../services/imageAssets";
+import { isoTimestamp } from "../../shared/dateTime";
+import { formatError } from "../../shared/errors";
+import { createId } from "../../shared/id";
+import { readJsonStorage, writeStorage } from "../../shared/localStorage";
+import { readImageDimensions } from "../../services/imageMetadata";
+import { createObjectUrl, revokeObjectUrls } from "../../shared/objectUrls";
+import { estimateStorageUsage } from "../../services/storageUsage";
+import type { ImageAsset, Message } from "../../types/studio";
+import type { StorageUsage } from "../../services/storageUsage";
+import type { StudioConfirmDialog } from "../feedback";
 import type { Ref } from "vue";
 
 type UseStudioImagesInput = {
@@ -161,8 +164,8 @@ export function useStudioImages(input: UseStudioImagesInput) {
     const now = Date.now() + Math.floor(Math.random() * 1000);
     const createdAt = isoTimestamp(now);
     const dimensions = await readImageDimensions(file);
-    const imageId = `img-${now}`;
-    const blobKey = `blob-${now}`;
+    const imageId = createId("img");
+    const blobKey = createId("blob");
     const imageAsset: ImageAsset = {
       id: imageId,
       blobKey,
@@ -239,31 +242,6 @@ export function useStudioImages(input: UseStudioImagesInput) {
     removeAttachment,
     storageUsage,
   };
-}
-
-function readJsonStorage<T>(key: string, fallback: T) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? (JSON.parse(value) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignore local draft persistence failures.
-  }
-}
-
-function formatError(error: unknown) {
-  if (error instanceof SyntaxError) {
-    return "图片接口返回了无法解析的响应。";
-  }
-
-  return error instanceof Error ? error.message : String(error);
 }
 
 function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {

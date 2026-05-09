@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import type { ConnectionMode } from "../../types/studio";
+
 defineProps<{
+  connectionMode: ConnectionMode;
   apiBaseUrl: string;
   apiKey: string;
 }>();
 
 const emit = defineEmits<{
+  "update:connectionMode": [value: ConnectionMode];
   "update:apiBaseUrl": [value: string];
   "update:apiKey": [value: string];
 }>();
@@ -27,6 +31,44 @@ const emit = defineEmits<{
     </div>
 
     <div class="mt-5 space-y-4">
+      <div>
+        <p class="mb-2 block text-sm font-medium text-gray-700">
+          连接模式
+        </p>
+        <div class="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
+          <button
+            class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors"
+            :class="
+              connectionMode === 'direct'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-800'
+            "
+            type="button"
+            @click="emit('update:connectionMode', 'direct')"
+          >
+            浏览器直连
+          </button>
+          <button
+            class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors"
+            :class="
+              connectionMode === 'localCompanion'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-800'
+            "
+            type="button"
+            @click="emit('update:connectionMode', 'localCompanion')"
+          >
+            本地 Companion
+          </button>
+        </div>
+        <p
+          v-if="connectionMode === 'localCompanion'"
+          class="mt-2 text-xs text-amber-700"
+        >
+          本地 Companion 模式仍在预留阶段，暂未启用真实请求通路。
+        </p>
+      </div>
+
       <div>
         <label
           class="mb-1 block text-sm font-medium text-gray-700"

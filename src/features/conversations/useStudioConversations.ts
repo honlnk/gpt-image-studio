@@ -2,11 +2,13 @@ import { computed, ref } from "vue";
 import {
   deleteConversation as deleteConversationRecord,
   saveConversation,
-} from "../services/conversations";
-import { isoTimestamp } from "../services/dateTime";
-import { deleteMessage } from "../services/messages";
-import type { Conversation, Message } from "../types/studio";
-import type { StudioConfirmDialog } from "./useStudioFeedback";
+} from "../../services/conversations";
+import { isoTimestamp } from "../../shared/dateTime";
+import { formatError } from "../../shared/errors";
+import { createId } from "../../shared/id";
+import { deleteMessage } from "../../services/messages";
+import type { Conversation, Message } from "../../types/studio";
+import type { StudioConfirmDialog } from "../feedback";
 import type { Ref } from "vue";
 
 type CreateConversationInput = {
@@ -123,7 +125,7 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
   }
 
   async function createConversationRecord(inputValue: CreateConversationInput) {
-    const id = `c-${Date.now()}`;
+    const id = createId("c");
     const conversation: Conversation = {
       id,
       title: inputValue.title,
@@ -183,14 +185,6 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
     selectConversation,
     updateConversationSummary,
   };
-}
-
-function formatError(error: unknown) {
-  if (error instanceof SyntaxError) {
-    return "图片接口返回了无法解析的响应。";
-  }
-
-  return error instanceof Error ? error.message : String(error);
 }
 
 function toPlainConversation(conversation: Conversation): Conversation {

@@ -1,9 +1,10 @@
-import { deleteConversation as deleteConversationRecord, listConversations } from "../services/conversations";
-import { deleteImageAsset, deleteImageBlob, listImageAssets } from "../services/imageAssets";
-import { deleteMessage, listMessages, saveMessage } from "../services/messages";
-import { loadSettings } from "../services/settings";
-import { migrateLegacyTimeFields } from "../services/timeFieldMigration";
-import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
+import { deleteConversation as deleteConversationRecord, listConversations } from "../../services/conversations";
+import { deleteImageAsset, deleteImageBlob, listImageAssets } from "../../services/imageAssets";
+import { deleteMessage, listMessages, saveMessage } from "../../services/messages";
+import { loadSettings } from "../../services/settings";
+import { migrateLegacyTimeFields } from "../../services/timeFieldMigration";
+import { formatError } from "../../shared/errors";
+import type { AppSettings, Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioRestoreInput = {
@@ -90,14 +91,6 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
   return {
     restoreFromStorage,
   };
-}
-
-function formatError(error: unknown) {
-  if (error instanceof SyntaxError) {
-    return "图片接口返回了无法解析的响应。";
-  }
-
-  return error instanceof Error ? error.message : String(error);
 }
 
 function normalizeRestoredMessages(messages: Message[]) {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import type { Conversation, ImageAsset, Message } from "../../types/studio";
+import type { ConnectionMode, Conversation, ImageAsset, Message } from "../../types/studio";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
@@ -13,6 +13,7 @@ const props = defineProps<{
   isOpen: boolean;
   initialBatchPanel?: BatchPanel;
   initialTab?: SettingsTab;
+  connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
   conversations: Conversation[];
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   exportBackup: [];
   importBackup: [file: File];
   previewImage: [id: string];
+  "update:connectionMode": [value: ConnectionMode];
   "update:apiKey": [value: string];
   "update:apiBaseUrl": [value: string];
 }>();
@@ -134,8 +136,10 @@ function confirmPendingAction() {
           <div class="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
             <ApiSettingsPanel
               v-if="activeTab === 'api'"
+              :connection-mode="connectionMode"
               :api-base-url="apiBaseUrl"
               :api-key="apiKey"
+              @update:connection-mode="emit('update:connectionMode', $event)"
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
               @update:api-key="emit('update:apiKey', $event)"
             />

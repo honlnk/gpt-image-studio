@@ -1,5 +1,5 @@
 import type { ImageAsset } from "../types/studio";
-import { timestampFromCreatedAt } from "./dateTime";
+import { timestampFromCreatedAt } from "../shared/dateTime";
 import { deleteFromStore, getAllFromStore, getFromStore, putInStore, STORE_NAMES } from "./db";
 
 type ImageBlobRecord = {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useNow } from "../../composables/useNow";
-import { formatRelativeTime } from "../../services/dateTime";
+import { formatRelativeTime } from "../../shared/dateTime";
 import type { Conversation } from "../../types/studio";
 
 type SortDirection = "asc" | "desc";
