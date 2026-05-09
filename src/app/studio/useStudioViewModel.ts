@@ -85,6 +85,7 @@ export function useStudioViewModel() {
   };
 
   const generation = useStudioGeneration({
+    activeConversationId: conversations.activeConversationId,
     activeConversation: conversations.activeConversation,
     attachedImages: images.attachedImages,
     composerText,
@@ -96,6 +97,8 @@ export function useStudioViewModel() {
     imageClient,
     messages,
     onStorageError: reportStorageError,
+    conversationExists: (id: string) =>
+      conversations.conversations.value.some((item) => item.id === id),
     persistConversation: conversations.persistConversation,
     refreshStorageUsage: images.refreshStorageUsage,
     updateConversationSummary: conversations.updateConversationSummary,

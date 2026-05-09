@@ -372,10 +372,10 @@ defineExpose({ focusComposer });
           </label>
           <button
             class="shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
-            :disabled="!canSend || isGenerating"
+            :disabled="!canSend"
             type="submit"
           >
-            {{ isGenerating ? "生成中" : "发送" }}
+            {{ isGenerating ? "继续发送" : "发送" }}
           </button>
         </div>
       </div>
