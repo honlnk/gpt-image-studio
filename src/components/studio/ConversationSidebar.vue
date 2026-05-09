@@ -165,18 +165,16 @@ const filteredConversations = computed(() => {
             emit('update:isOpen', false);
           "
         >
-          <span class="flex items-center gap-2">
-            <span class="block min-w-0 flex-1 truncate">{{ conversation.title }}</span>
-            <span
-              v-if="(pendingJobCountByConversation[conversation.id] ?? 0) > 0"
-              class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[11px] font-semibold text-amber-200"
-            >
-              {{ pendingJobCountByConversation[conversation.id] }}
-            </span>
-          </span>
+          {{ conversation.title }}
         </button>
+        <span
+          v-if="(pendingJobCountByConversation[conversation.id] ?? 0) > 0"
+          class="inline-flex h-5 min-w-5 shrink-0 items-center mr-2 justify-center rounded-full bg-amber-500/20 px-1 text-[11px] font-semibold text-amber-200 group-hover:hidden"
+        >
+          {{ pendingJobCountByConversation[conversation.id] }}
+        </span>
         <button
-          class="shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 opacity-0 transition-colors hover:bg-white/10 hover:text-red-300 group-hover:opacity-100 focus:opacity-100"
+          class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-red-300 group-hover:block focus:block"
           type="button"
           aria-label="删除会话"
           title="删除会话"
@@ -188,7 +186,12 @@ const filteredConversations = computed(() => {
     </nav>
 
     <div class="flex items-center gap-2 border-t border-white/10 p-3">
-      <img class="h-5 w-5 shrink-0" src="/favicon.svg" alt="" aria-hidden="true" />
+      <img
+        class="h-5 w-5 shrink-0"
+        src="/favicon.svg"
+        alt=""
+        aria-hidden="true"
+      />
       <div class="text-xs text-gray-500">GPT Image Studio - Honlnk</div>
     </div>
   </aside>
