@@ -54,7 +54,7 @@ pnpm build
 
 ## 产品路线图
 
-完整路线图见 [docs/product-roadmap.md](docs/product-roadmap.md)。
+完整路线图见 [docs/roadmap.md](docs/roadmap.md)，文档入口见 [docs/README.md](docs/README.md)。
 
 - 第二阶段：IndexedDB 本地持久化 — 已完成
 - 第三阶段：接入真实图片生成 API — 已完成
@@ -73,3 +73,13 @@ pnpm build
 ## 注意事项
 
 API Base URL 在设置弹窗中配置。当前设置（包括 API key）会保存到当前浏览器的 IndexedDB，输入框草稿会保存到 localStorage。浏览器直接调用可能被 CORS 拦截，生产环境建议通过自己的服务器转发请求，避免在浏览器中暴露 API key。
+
+### 接口连接问题
+
+如果生成或编辑图片时出现“网络请求失败：浏览器没有收到接口响应”，并且浏览器 DevTools 中显示 `net::ERR_EMPTY_RESPONSE`、`Failed to fetch`，或 Timing 长时间停在 `Initial connection`，通常表示浏览器没有拿到任何 HTTP 响应。这类问题多发生在 API 中转站、反向代理、CDN、本地代理/VPN 或网络链路层，不是模型拒绝生成，也通常不是前端业务逻辑主动取消。
+
+排查时建议先看 Network 面板：
+
+- 如果有 HTTP 状态码和 JSON 错误，优先按接口返回信息处理。
+- 如果没有状态码、没有 Response Headers，且卡在 `Initial connection`，优先检查中转站、代理节点、TLS/HTTP2 连接和本地网络。
+- 如果文生图 `/generations` 稳定成功，但图片编辑 `/edits` 偶发失败，重点检查中转站对 `multipart/form-data`、上传体积和长耗时请求的支持。
