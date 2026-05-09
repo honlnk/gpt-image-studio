@@ -78,6 +78,7 @@ const studio = useStudioViewModel();
     <SettingsModal
       v-model:api-base-url="studio.settingsModal.apiBaseUrl"
       v-model:api-key="studio.settingsModal.apiKey"
+      v-model:connection-mode="studio.settingsModal.connectionMode"
       :conversations="studio.settingsModal.conversations"
       :images="studio.settingsModal.images"
       :initial-batch-panel="studio.settingsModal.initialBatchPanel"

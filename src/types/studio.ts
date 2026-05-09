@@ -51,7 +51,10 @@ export type GenerationParams = {
   outputFormat: "png" | "webp" | "jpeg";
 };
 
+export type ConnectionMode = "direct" | "localCompanion";
+
 export type AppSettings = {
+  connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
   model: string;

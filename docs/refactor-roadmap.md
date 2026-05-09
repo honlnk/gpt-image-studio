@@ -344,6 +344,11 @@ export type ImageClient = {
 
 目标：把 direct 和 local companion 作为正式概念引入，但默认仍保持 direct。
 
+当前进展（2026-05-10）：
+
+- 已在设置模型中引入 `connectionMode`，并在读取旧设置时默认迁移为 `"direct"`。
+- 已创建 `packages/protocol/src` 的首批纯类型文件（`connection.ts`、`companion.ts`、`images.ts`、`index.ts`）。
+
 任务：
 
 - 在设置类型中增加：

@@ -60,6 +60,7 @@ const imageAsset: ImageAsset = {
 };
 
 const settings: AppSettings = {
+  connectionMode: "direct",
   apiKey: "sk-secret",
   apiBaseUrl: "https://api.example.test/v1/images",
   model: "gpt-image-1",
@@ -105,6 +106,7 @@ describe("studio backups", () => {
       excludes: ["apiKey"],
     });
     expect(data.settings).toEqual({
+      connectionMode: settings.connectionMode,
       apiBaseUrl: settings.apiBaseUrl,
       model: settings.model,
       defaults: settings.defaults,
@@ -158,6 +160,7 @@ describe("studio backups", () => {
         messages: [message],
         imageAssets: [{ ...imageAsset, previewUrl: undefined }],
         settings: {
+          connectionMode: settings.connectionMode,
           apiBaseUrl: settings.apiBaseUrl,
           model: settings.model,
           defaults: settings.defaults,

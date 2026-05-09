@@ -2,7 +2,12 @@ import { computed, onMounted, proxyRefs, ref, watch } from "vue";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
 import { useStudioConversations } from "../../features/conversations";
 import { useStudioFeedback } from "../../features/feedback";
-import { createDirectImagesClient, useStudioGeneration } from "../../features/generation";
+import {
+  createDirectImagesClient,
+  createLocalCompanionImagesClient,
+  type ImageClient,
+  useStudioGeneration,
+} from "../../features/generation";
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
 import { readStorage, writeStorage } from "../../shared/localStorage";
@@ -58,11 +63,26 @@ export function useStudioViewModel() {
     return images.refreshStorageUsage();
   }
 
-  const imageClient = createDirectImagesClient({
+  const directImagesClient = createDirectImagesClient({
     getApiBaseUrl: () => settings.apiBaseUrl.value,
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
   });
+  const localCompanionImagesClient = createLocalCompanionImagesClient();
+  const imageClient: ImageClient = {
+    generate(input) {
+      if (settings.connectionMode.value === "localCompanion") {
+        return localCompanionImagesClient.generate(input);
+      }
+      return directImagesClient.generate(input);
+    },
+    edit(input) {
+      if (settings.connectionMode.value === "localCompanion") {
+        return localCompanionImagesClient.edit(input);
+      }
+      return directImagesClient.edit(input);
+    },
+  };
 
   const generation = useStudioGeneration({
     activeConversation: conversations.activeConversation,
@@ -205,6 +225,7 @@ export function useStudioViewModel() {
   const settingsModal = proxyRefs({
     apiBaseUrl: settings.apiBaseUrl,
     apiKey: settings.apiKey,
+    connectionMode: settings.connectionMode,
     close: ui.closeSettings,
     conversations: conversations.conversations,
     deleteConversations: conversations.deleteConversations,
