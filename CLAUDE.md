@@ -9,17 +9,20 @@ pnpm dev          # Start Vite dev server
 pnpm build        # Production build to dist/
 pnpm preview      # Preview production build
 pnpm typecheck    # Type-check with vue-tsc --noEmit
+pnpm test         # Run Vitest tests
 ```
 
-No linter, formatter, or test framework is configured.
+No linter or formatter is configured. Vitest is configured for service-level tests.
 
 ## Architecture
 
 Local-first AI image creation workbench. Vue 3 + Composition API (`<script setup>`), no router or state management library. Zero runtime dependencies beyond Vue — ZIP creation/reading, base64 conversion, image dimension reading, and storage usage estimation are all hand-written.
 
+See `docs/README.md` for the maintained documentation map and `docs/architecture.md` for the current architecture direction.
+
 ### State Management
 
-Single composable `src/composables/useStudioState.ts` (~960 lines) holds all app state and business logic. `App.vue` calls it once and distributes state/methods to children via props and events (Props Down, Events Up). No Pinia/Vuex.
+The app currently uses Composition API stores/composables. `src/composables/useStudioState.ts` is the app-level composition root/view model factory: `App.vue` calls it once and distributes state/methods to children via props and events. No Pinia/Vuex.
 
 **Hydration**: On mount, `useStudioState` loads all data from IndexedDB into memory refs. All subsequent mutations happen in memory first, then async-persist to IndexedDB via the `services/` layer.
 
@@ -81,11 +84,11 @@ OpenAI-compatible Images API. Generation: `POST {apiBaseUrl}/generations` (JSON)
 
 ## Roadmap
 
-See `docs/product-roadmap.md` for the full roadmap. Current status:
+See `docs/roadmap.md` for the full roadmap. Current status:
 - Phases 1-4: Done (chat UI, IndexedDB persistence, text-to-image, image editing with references)
 - Phase 5: Experience enhancements — core items done
-- Done: Settings refactor with batch operations (`docs/settings-batch-operations-plan.md`)
-- Upcoming: Continue feedback/error polish, desktop packaging evaluation
+- Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
+- Upcoming: generation jobs, per-conversation drafts, mask editing, and optional local companion (`docs/generation-jobs.md`, `docs/companion.md`)
 
 ## Conventions
 

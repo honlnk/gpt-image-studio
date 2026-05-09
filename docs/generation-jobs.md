@@ -255,7 +255,7 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 
 ### 目标
 
-实现 `docs/mask-editing-plan.md` 中描述的 MVP，并把它接入新的对话级草稿模型。
+实现 `docs/mask-editing.md` 中描述的 MVP，并把它接入新的对话级草稿模型。
 
 ### 接入要点
 

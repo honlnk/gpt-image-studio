@@ -54,7 +54,7 @@ pnpm build
 
 ## 产品路线图
 
-完整路线图见 [docs/product-roadmap.md](docs/product-roadmap.md)。
+完整路线图见 [docs/roadmap.md](docs/roadmap.md)，文档入口见 [docs/README.md](docs/README.md)。
 
 - 第二阶段：IndexedDB 本地持久化 — 已完成
 - 第三阶段：接入真实图片生成 API — 已完成
