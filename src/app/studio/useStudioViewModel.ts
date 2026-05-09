@@ -2,7 +2,7 @@ import { computed, onMounted, proxyRefs, ref, watch } from "vue";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
 import { useStudioConversations } from "../../features/conversations";
 import { useStudioFeedback } from "../../features/feedback";
-import { useStudioGeneration } from "../../features/generation";
+import { createDirectImagesClient, useStudioGeneration } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
 import { readStorage, writeStorage } from "../../shared/localStorage";
@@ -58,10 +58,14 @@ export function useStudioViewModel() {
     return images.refreshStorageUsage();
   }
 
+  const imageClient = createDirectImagesClient({
+    getApiBaseUrl: () => settings.apiBaseUrl.value,
+    getApiKey: () => settings.apiKey.value,
+    getModel: () => settings.model.value,
+  });
+
   const generation = useStudioGeneration({
     activeConversation: conversations.activeConversation,
-    apiBaseUrl: settings.apiBaseUrl,
-    apiKey: settings.apiKey,
     attachedImages: images.attachedImages,
     composerText,
     createConversationRecord: conversations.createConversationRecord,
@@ -69,8 +73,8 @@ export function useStudioViewModel() {
     customSizeError: settings.customSizeError,
     imageAssets: images.imageAssets,
     imageById: images.imageById,
+    imageClient,
     messages,
-    model: settings.model,
     onStorageError: reportStorageError,
     persistConversation: conversations.persistConversation,
     refreshStorageUsage: images.refreshStorageUsage,

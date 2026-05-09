@@ -3,10 +3,11 @@ import { isoTimestamp, timestampFromCreatedAt } from "../../shared/dateTime";
 import { formatError } from "../../shared/errors";
 import { createId } from "../../shared/id";
 import { saveImageAsset, saveImageBlob, loadImageBlob } from "../../services/imageAssets";
-import { base64ToBlob, editImage, generateImage } from "../../services/imagesApi";
+import { base64ToBlob } from "../../services/imagesApi";
 import { readImageDimensions } from "../../services/imageMetadata";
 import { saveMessage } from "../../services/messages";
 import { createObjectUrl } from "../../shared/objectUrls";
+import type { ImageClient } from "./imageClients/imageClient";
 import type {
   Conversation,
   GenerationParams,
@@ -23,8 +24,6 @@ type CreateConversationRecordInput = {
 
 type UseStudioGenerationInput = {
   activeConversation: ComputedRef<Conversation | undefined>;
-  apiBaseUrl: Ref<string>;
-  apiKey: Ref<string>;
   attachedImages: Ref<string[]>;
   composerText: Ref<string>;
   createConversationRecord: (input: CreateConversationRecordInput) => Promise<Conversation>;
@@ -32,8 +31,8 @@ type UseStudioGenerationInput = {
   customSizeError: ComputedRef<string>;
   imageAssets: Ref<ImageAsset[]>;
   imageById: (id: string) => ImageAsset | undefined;
+  imageClient: ImageClient;
   messages: Ref<Message[]>;
-  model: Ref<string>;
   onStorageError: (error: unknown) => void;
   persistConversation: (conversation: Conversation) => Promise<void>;
   refreshStorageUsage: () => Promise<void>;
@@ -152,24 +151,10 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     assistantMessage: Message,
   ) {
     try {
-      if (!input.apiKey.value.trim()) {
-        throw new Error("请先在设置里填写 OpenAI API key。");
-      }
-
-      if (!input.apiBaseUrl.value.trim()) {
-        throw new Error("请先在设置里填写 API Base URL。");
-      }
-
       const params = assistantMessage.generationParams ?? input.currentGenerationParams();
       const imageData = references.length
         ? await requestImageEdit(prompt, references, params)
-        : await generateImage({
-            apiBaseUrl: input.apiBaseUrl.value,
-            apiKey: input.apiKey.value,
-            model: input.model.value,
-            prompt,
-            params,
-          });
+        : await input.imageClient.generate({ prompt, params });
       const now = Date.now();
       const createdAt = isoTimestamp(now);
       const mimeType = `image/${params.outputFormat}`;
@@ -250,10 +235,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       }),
     );
 
-    return editImage({
-      apiBaseUrl: input.apiBaseUrl.value,
-      apiKey: input.apiKey.value,
-      model: input.model.value,
+    return input.imageClient.edit({
       prompt,
       params,
       images,
