@@ -32,6 +32,7 @@ const props = defineProps<{
   isLibraryOpen: boolean;
   model: string;
   outputFormat: string;
+  pendingJobCount: number;
   quality: string;
   qualityLabel: string;
   qualityOptions: readonly { value: string; label: string }[];
@@ -172,6 +173,12 @@ function imageFilesFromTransfer(
         </h1>
       </div>
       <div class="flex items-center gap-1">
+        <span
+          v-if="pendingJobCount > 0"
+          class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
+        >
+          正在生成 {{ pendingJobCount }} 张
+        </span>
         <a
           href="https://github.com/honlnk/gpt-image-studio"
           target="_blank"

@@ -1,4 +1,4 @@
-import { computed } from "vue";
+import { computed, onUnmounted, watch } from "vue";
 import { isoTimestamp, timestampFromCreatedAt } from "../../shared/dateTime";
 import { formatError } from "../../shared/errors";
 import { createId } from "../../shared/id";
@@ -51,6 +51,7 @@ type UseStudioGenerationInput = {
 export function useStudioGeneration(input: UseStudioGenerationInput) {
   const jobs = useGenerationJobs(input.activeConversationId);
   const isGenerating = jobs.isGenerating;
+  const pendingJobCount = jobs.pendingJobCount;
   const imageModeLabel = computed(() =>
     input.attachedImages.value.length ? "引用图片编辑" : "文字生成图片",
   );
@@ -58,6 +59,30 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     !input.customSizeError.value &&
     Boolean(input.composerText.value.trim() || input.attachedImages.value.length),
   );
+  let hasBeforeUnloadListener = false;
+
+  watch(
+    pendingJobCount,
+    (count) => {
+      if (typeof window === "undefined") return;
+
+      if (count > 0 && !hasBeforeUnloadListener) {
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        hasBeforeUnloadListener = true;
+      } else if (count === 0 && hasBeforeUnloadListener) {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+        hasBeforeUnloadListener = false;
+      }
+    },
+    { immediate: true },
+  );
+
+  onUnmounted(() => {
+    if (typeof window === "undefined") return;
+    if (!hasBeforeUnloadListener) return;
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+    hasBeforeUnloadListener = false;
+  });
 
   async function submitMessage() {
     if (!canSend.value) return;
@@ -286,10 +311,16 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     canSend,
     imageModeLabel,
     isGenerating,
-    pendingJobCount: jobs.pendingJobCount,
+    pendingJobCountByConversation: jobs.pendingJobCountByConversation,
+    pendingJobCount,
     retryMessage,
     submitMessage,
   };
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  event.preventDefault();
+  event.returnValue = "";
 }
 
 function titleFromPrompt(prompt: string) {
