@@ -1,6 +1,6 @@
-import { createStudioBackup, restoreStudioBackup } from "../services/backups";
-import { createObjectUrl, revokeObjectUrl } from "../services/objectUrls";
-import type { Conversation, ImageAsset, Message } from "../types/studio";
+import { createStudioBackup, restoreStudioBackup } from "../../services/backups";
+import { createObjectUrl, revokeObjectUrl } from "../../services/objectUrls";
+import type { Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioBackupInput = {

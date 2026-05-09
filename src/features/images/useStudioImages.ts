@@ -5,14 +5,14 @@ import {
   loadImageBlob,
   saveImageAsset,
   saveImageBlob,
-} from "../services/imageAssets";
-import { isoTimestamp } from "../services/dateTime";
-import { readImageDimensions } from "../services/imageMetadata";
-import { createObjectUrl, revokeObjectUrls } from "../services/objectUrls";
-import { estimateStorageUsage } from "../services/storageUsage";
-import type { ImageAsset, Message } from "../types/studio";
-import type { StorageUsage } from "../services/storageUsage";
-import type { StudioConfirmDialog } from "./useStudioFeedback";
+} from "../../services/imageAssets";
+import { isoTimestamp } from "../../services/dateTime";
+import { readImageDimensions } from "../../services/imageMetadata";
+import { createObjectUrl, revokeObjectUrls } from "../../services/objectUrls";
+import { estimateStorageUsage } from "../../services/storageUsage";
+import type { ImageAsset, Message } from "../../types/studio";
+import type { StorageUsage } from "../../services/storageUsage";
+import type { StudioConfirmDialog } from "../feedback";
 import type { Ref } from "vue";
 
 type UseStudioImagesInput = {

@@ -1,9 +1,9 @@
-import { deleteConversation as deleteConversationRecord, listConversations } from "../services/conversations";
-import { deleteImageAsset, deleteImageBlob, listImageAssets } from "../services/imageAssets";
-import { deleteMessage, listMessages, saveMessage } from "../services/messages";
-import { loadSettings } from "../services/settings";
-import { migrateLegacyTimeFields } from "../services/timeFieldMigration";
-import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
+import { deleteConversation as deleteConversationRecord, listConversations } from "../../services/conversations";
+import { deleteImageAsset, deleteImageBlob, listImageAssets } from "../../services/imageAssets";
+import { deleteMessage, listMessages, saveMessage } from "../../services/messages";
+import { loadSettings } from "../../services/settings";
+import { migrateLegacyTimeFields } from "../../services/timeFieldMigration";
+import type { AppSettings, Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioRestoreInput = {

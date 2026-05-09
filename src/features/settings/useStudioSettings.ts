@@ -1,7 +1,7 @@
 import { computed, ref, watch } from "vue";
-import { getCustomSizeError } from "../services/imagesApi";
-import { saveSettings } from "../services/settings";
-import type { AppSettings, GenerationParams } from "../types/studio";
+import { getCustomSizeError } from "../../services/imagesApi";
+import { saveSettings } from "../../services/settings";
+import type { AppSettings, GenerationParams } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioSettingsInput = {

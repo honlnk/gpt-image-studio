@@ -2,11 +2,11 @@ import { computed, ref } from "vue";
 import {
   deleteConversation as deleteConversationRecord,
   saveConversation,
-} from "../services/conversations";
-import { isoTimestamp } from "../services/dateTime";
-import { deleteMessage } from "../services/messages";
-import type { Conversation, Message } from "../types/studio";
-import type { StudioConfirmDialog } from "./useStudioFeedback";
+} from "../../services/conversations";
+import { isoTimestamp } from "../../services/dateTime";
+import { deleteMessage } from "../../services/messages";
+import type { Conversation, Message } from "../../types/studio";
+import type { StudioConfirmDialog } from "../feedback";
 import type { Ref } from "vue";
 
 type CreateConversationInput = {

@@ -1,16 +1,16 @@
 import { computed } from "vue";
-import { isoTimestamp, timestampFromCreatedAt } from "../services/dateTime";
-import { saveImageAsset, saveImageBlob, loadImageBlob } from "../services/imageAssets";
-import { base64ToBlob, editImage, generateImage } from "../services/imagesApi";
-import { readImageDimensions } from "../services/imageMetadata";
-import { saveMessage } from "../services/messages";
-import { createObjectUrl } from "../services/objectUrls";
+import { isoTimestamp, timestampFromCreatedAt } from "../../services/dateTime";
+import { saveImageAsset, saveImageBlob, loadImageBlob } from "../../services/imageAssets";
+import { base64ToBlob, editImage, generateImage } from "../../services/imagesApi";
+import { readImageDimensions } from "../../services/imageMetadata";
+import { saveMessage } from "../../services/messages";
+import { createObjectUrl } from "../../services/objectUrls";
 import type {
   Conversation,
   GenerationParams,
   ImageAsset,
   Message,
-} from "../types/studio";
+} from "../../types/studio";
 import type { ComputedRef, Ref } from "vue";
 
 type CreateConversationRecordInput = {

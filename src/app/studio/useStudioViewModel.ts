@@ -1,11 +1,10 @@
 import { computed, onMounted, proxyRefs, ref, watch } from "vue";
-import { useStudioBackup } from "../../composables/useStudioBackup";
-import { useStudioConversations } from "../../composables/useStudioConversations";
-import { useStudioFeedback } from "../../composables/useStudioFeedback";
-import { useStudioGeneration } from "../../composables/useStudioGeneration";
-import { useStudioImages } from "../../composables/useStudioImages";
-import { useStudioRestore } from "../../composables/useStudioRestore";
-import { useStudioSettings } from "../../composables/useStudioSettings";
+import { useStudioBackup, useStudioRestore } from "../../features/backup";
+import { useStudioConversations } from "../../features/conversations";
+import { useStudioFeedback } from "../../features/feedback";
+import { useStudioGeneration } from "../../features/generation";
+import { useStudioImages } from "../../features/images";
+import { useStudioSettings } from "../../features/settings";
 import { useStudioUiState } from "./useStudioUiState";
 import type { Message } from "../../types/studio";
 
