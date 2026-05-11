@@ -532,10 +532,6 @@ type DraftMask = {
 - 发送图片编辑请求时携带 `mask`。
 - 校验失败时明确提示，不静默降级为普通编辑。
 
-未完成（后置）：
-
-- 多图编辑时“明确指定 mask 主图”的专用 UI（待后续重设计）。
-
 ## 阶段十：本地 companion MVP
 
 目标：在 Web App 结构稳定后，再实现可选 CLI companion。
