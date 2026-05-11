@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import type { EditorKey, GenerationParams, ImageAsset } from "../../types/studio";
+import type {
+  EditorKey,
+  GenerationParams,
+  ImageAsset,
+} from "../../types/studio";
 
 const props = defineProps<{
   activeAttachments: ImageAsset[];
@@ -48,6 +52,38 @@ const emit = defineEmits<{
 }>();
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+
+const attachmentRows = computed(() => {
+  const sourceId = props.activeEditSourceImageId;
+  const maskId = props.activeEditMaskImageId;
+  const source = props.activeAttachments.find((image) => image.id === sourceId);
+  const mask = props.activeAttachments.find((image) => image.id === maskId);
+  const editingPair =
+    source && mask
+      ? {
+          kind: "editingPair" as const,
+          id: source.id,
+          source,
+          mask,
+        }
+      : null;
+
+  const hiddenIds = new Set<string>();
+  if (editingPair) {
+    hiddenIds.add(editingPair.source.id);
+    hiddenIds.add(editingPair.mask.id);
+  }
+
+  const singles = props.activeAttachments
+    .filter((image) => !hiddenIds.has(image.id))
+    .map((image) => ({
+      kind: "single" as const,
+      id: image.id,
+      image,
+    }));
+
+  return editingPair ? [editingPair, ...singles] : singles;
+});
 
 const composerPlaceholder = computed(() =>
   props.activeAttachments.length
@@ -185,7 +221,10 @@ defineExpose({ focusComposer });
                 "
               />
             </div>
-            <p v-if="customSizeError" class="basis-full pt-1 text-xs text-red-500">
+            <p
+              v-if="customSizeError"
+              class="basis-full pt-1 text-xs text-red-500"
+            >
               {{ customSizeError }}
             </p>
           </div>
@@ -302,28 +341,51 @@ defineExpose({ focusComposer });
 
       <div v-if="activeAttachments.length" class="mb-2 flex flex-wrap gap-2">
         <div
-          v-for="image in activeAttachments"
-          :key="image.id"
+          v-for="item in attachmentRows"
+          :key="item.id"
           class="relative flex max-w-55 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
         >
-          <span
-            v-if="image.id === activeEditSourceImageId || image.id === activeEditMaskImageId"
-            class="absolute -left-1 -top-1 rounded bg-black px-1 py-0.5 text-[10px] text-white"
-          >
-            {{ image.id === activeEditMaskImageId ? "区域" : "编辑" }}
-          </span>
-          <img
-            v-if="image.previewUrl"
-            class="h-7 w-7 shrink-0 rounded object-cover"
-            :alt="image.name"
-            :src="image.previewUrl"
-          />
-          <span class="truncate text-gray-700">{{ image.name }}</span>
+          <template v-if="item.kind === 'editingPair'">
+            <span
+              class="absolute -left-1 -top-1 rounded bg-black px-1 py-0.5 text-[10px] text-white"
+            >
+              编辑
+            </span>
+            <div class="flex shrink-0 items-center gap-1">
+              <img
+                v-if="item.source.previewUrl"
+                class="h-7 w-7 rounded object-cover"
+                :alt="item.source.name"
+                :src="item.source.previewUrl"
+              />
+              <span class="text-[18px] text-gray-400">+</span>
+              <span
+                v-if="item.mask.previewUrl"
+                class="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded border border-black bg-black"
+              >
+                <img
+                  class="h-full w-full object-cover"
+                  :alt="item.mask.name"
+                  :src="item.mask.previewUrl"
+                />
+              </span>
+            </div>
+            <span class="truncate text-gray-700">{{ item.source.name }}</span>
+          </template>
+          <template v-else>
+            <img
+              v-if="item.image.previewUrl"
+              class="h-7 w-7 shrink-0 rounded object-cover"
+              :alt="item.image.name"
+              :src="item.image.previewUrl"
+            />
+            <span class="truncate text-gray-700">{{ item.image.name }}</span>
+          </template>
           <button
             class="shrink-0 cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
             type="button"
             aria-label="移除引用图片"
-            @click="emit('removeAttachment', image.id)"
+            @click="emit('removeAttachment', item.id)"
           >
             <svg
               class="h-3.5 w-3.5"

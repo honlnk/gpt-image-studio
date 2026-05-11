@@ -395,14 +395,24 @@ export function useStudioViewModel() {
     qualityLabel: settings.qualityLabel,
     qualityOptions: settings.qualityOptions,
     removeAttachment: (id: string) => {
-      images.removeAttachment(id);
       if (
         id === activeEditSourceImageId.value ||
         id === activeEditMaskImageId.value
       ) {
+        const sourceId = activeEditSourceImageId.value;
+        const maskId = activeEditMaskImageId.value;
+        if (sourceId) {
+          images.removeAttachment(sourceId);
+        }
+        if (maskId && maskId !== sourceId) {
+          images.removeAttachment(maskId);
+        }
         activeEditSourceImageId.value = "";
         activeEditMaskImageId.value = "";
+        return;
       }
+
+      images.removeAttachment(id);
     },
     setEditModeEnabled: (value: boolean) => {
       editModeEnabled.value = value;
