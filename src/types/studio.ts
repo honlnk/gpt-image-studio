@@ -39,6 +39,8 @@ export type ImageAsset = {
   referencedImageIds?: string[];
   editSourceImageId?: string;
   isEditMask?: boolean;
+  isTransientMask?: boolean;
+  transientBlob?: Blob;
   createdAt: string;
   updatedAt?: string;
   previewUrl?: string;

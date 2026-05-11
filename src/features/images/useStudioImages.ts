@@ -179,10 +179,9 @@ export function useStudioImages(input: UseStudioImagesInput) {
     const now = Date.now();
     const createdAt = isoTimestamp(now);
     const imageId = createId("img");
-    const blobKey = createId("blob");
     const maskAsset: ImageAsset = {
       id: imageId,
-      blobKey,
+      blobKey: undefined,
       name: `${sourceImage.name}-编辑区域`,
       source: "generated",
       mimeType: "image/png",
@@ -193,18 +192,22 @@ export function useStudioImages(input: UseStudioImagesInput) {
       prompt: "局部编辑遮罩",
       editSourceImageId: sourceImage.id,
       isEditMask: true,
+      isTransientMask: true,
+      transientBlob: maskBlob,
       createdAt,
       updatedAt: createdAt,
       previewUrl: createObjectUrl(maskBlob),
     };
 
-    await Promise.all([
-      saveImageBlob(blobKey, maskBlob),
-      saveImageAsset(toPlainImageAsset(maskAsset)),
-    ]).catch(input.onStorageError);
-
     imageAssets.value = [maskAsset, ...imageAssets.value];
     return maskAsset;
+  }
+
+  function clearTransientMask(id: string) {
+    const image = imageById(id);
+    if (!image?.isTransientMask) return;
+    attachedImages.value = attachedImages.value.filter((item) => item !== id);
+    imageAssets.value = imageAssets.value.filter((item) => item.id !== id);
   }
 
   async function hydrateImagePreviews(assets: ImageAsset[]) {
@@ -254,6 +257,7 @@ export function useStudioImages(input: UseStudioImagesInput) {
     hydrateImagePreviews,
     imageAssets,
     imageById,
+    clearTransientMask,
     createMaskAsset,
     importImages,
     refreshStorageUsage,

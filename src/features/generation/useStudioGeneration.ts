@@ -292,11 +292,10 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     const imageSources = await Promise.all(
       references.map(async (id) => {
         const reference = input.imageById(id);
-        if (!reference?.blobKey) {
-          throw new Error("引用图片缺少本地文件数据，无法编辑。");
+        if (!reference) {
+          throw new Error("引用图片不存在，请重新添加引用。");
         }
-
-        const blob = await loadImageBlob(reference.blobKey);
+        const blob = await resolveImageBlob(reference);
         if (!blob) {
           throw new Error("无法读取引用图片文件，请重新生成或导入图片。");
         }
@@ -312,8 +311,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     const sourceImage = editSourceImageId ? input.imageById(editSourceImageId) : undefined;
     const maskImage = editMaskImageId ? input.imageById(editMaskImageId) : undefined;
     let maskBlob: Blob | undefined;
-    if (maskImage?.blobKey) {
-      maskBlob = await loadImageBlob(maskImage.blobKey);
+    if (maskImage) {
+      maskBlob = await resolveImageBlob(maskImage);
       if (!maskBlob) {
         throw new Error("无法读取编辑遮罩文件，请重新选择编辑区域。");
       }
@@ -334,8 +333,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     if (editMaskImageId && !editSourceImageId) {
       throw new Error("缺少编辑源图，无法使用局部编辑。");
     }
-    if (maskBlob && sourceImage?.blobKey) {
-      const sourceBlob = await loadImageBlob(sourceImage.blobKey);
+    if (maskBlob && sourceImage) {
+      const sourceBlob = await resolveImageBlob(sourceImage);
       if (!sourceBlob) {
         throw new Error("无法读取编辑源图，请重新引用图片。");
       }
@@ -390,6 +389,13 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
 
   function hasMessage(messageId: string) {
     return Boolean(findMessage(messageId));
+  }
+
+  async function resolveImageBlob(image?: ImageAsset) {
+    if (!image) return undefined;
+    if (image.transientBlob) return image.transientBlob;
+    if (!image.blobKey) return undefined;
+    return loadImageBlob(image.blobKey);
   }
 
   return {

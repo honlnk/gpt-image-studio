@@ -152,6 +152,9 @@ export function useStudioViewModel() {
   const attachedImageIds = computed(() =>
     images.activeAttachments.value.map((image) => image.id),
   );
+  const libraryImages = computed(() =>
+    images.imageAssets.value.filter((image) => !image.isTransientMask),
+  );
 
   function openConversations() {
     isConversationSidebarOpen.value = true;
@@ -406,6 +409,7 @@ export function useStudioViewModel() {
         }
         if (maskId && maskId !== sourceId) {
           images.removeAttachment(maskId);
+          images.clearTransientMask(maskId);
         }
         activeEditSourceImageId.value = "";
         activeEditMaskImageId.value = "";
@@ -417,11 +421,18 @@ export function useStudioViewModel() {
     setEditModeEnabled: (value: boolean) => {
       editModeEnabled.value = value;
       if (!value) {
+        if (activeEditMaskImageId.value) {
+          images.clearTransientMask(activeEditMaskImageId.value);
+        }
         activeEditSourceImageId.value = "";
         activeEditMaskImageId.value = "";
       }
     },
     applyEditSelection: (sourceImageId: string, maskImageId: string) => {
+      const previousMaskId = activeEditMaskImageId.value;
+      if (previousMaskId && previousMaskId !== maskImageId) {
+        images.clearTransientMask(previousMaskId);
+      }
       activeEditSourceImageId.value = sourceImageId;
       activeEditMaskImageId.value = maskImageId;
       images.attachedImages.value = [sourceImageId, maskImageId];
@@ -441,7 +452,7 @@ export function useStudioViewModel() {
     attachImage: images.attachImage,
     attachedImageIds,
     deleteImage: images.deleteImage,
-    images: images.imageAssets,
+    images: libraryImages,
     isOpen: ui.isLibraryOpen,
     openBatchOperations: openBatchImageOperations,
     previewImage: previewImageById,
