@@ -13,6 +13,10 @@ type EditImageInput = GenerateImageInput & {
     blob: Blob;
     name: string;
   }>;
+  mask?: {
+    blob: Blob;
+    name: string;
+  };
 };
 
 type ImageApiResponse = {
@@ -56,12 +60,22 @@ export async function editImage(input: EditImageInput) {
   input.images.forEach((image) => {
     body.append("image[]", image.blob, image.name);
   });
+  if (input.mask) {
+    body.append("mask", input.mask.blob, input.mask.name);
+  }
   const params = imageApiParams(input.model, input.params);
   Object.entries(params).forEach(([key, value]) => {
     body.append(key, value);
   });
 
   logImageRequest("edit", input.model, input.images);
+  if (input.mask) {
+    console.info("[imagesApi] mask payload", JSON.stringify({
+      name: input.mask.name,
+      sizeBytes: input.mask.blob.size,
+      type: input.mask.blob.type || "unknown",
+    }));
+  }
 
   let response: Response;
   try {

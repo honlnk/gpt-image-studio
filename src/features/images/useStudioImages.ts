@@ -9,7 +9,6 @@ import {
 import { isoTimestamp } from "../../shared/dateTime";
 import { formatError } from "../../shared/errors";
 import { createId } from "../../shared/id";
-import { readJsonStorage, writeStorage } from "../../shared/localStorage";
 import { readImageDimensions } from "../../services/imageMetadata";
 import { createObjectUrl, revokeObjectUrls } from "../../shared/objectUrls";
 import { estimateStorageUsage } from "../../services/storageUsage";
@@ -27,14 +26,8 @@ type UseStudioImagesInput = {
   requestConfirmation: (input: StudioConfirmDialog) => Promise<boolean>;
 };
 
-const IMAGE_STORAGE_KEYS = {
-  draftAttachments: "gpt-image-studio:draft-attachments",
-} as const;
-
 export function useStudioImages(input: UseStudioImagesInput) {
-  const attachedImages = ref<string[]>(
-    readJsonStorage<string[]>(IMAGE_STORAGE_KEYS.draftAttachments, []),
-  );
+  const attachedImages = ref<string[]>([]);
   const imageAssets = ref<ImageAsset[]>([]);
   const storageUsage = ref<StorageUsage | null>(null);
 
@@ -42,14 +35,6 @@ export function useStudioImages(input: UseStudioImagesInput) {
     attachedImages.value
       .map((id) => imageAssets.value.find((image) => image.id === id))
       .filter((image): image is ImageAsset => Boolean(image)),
-  );
-
-  watch(
-    attachedImages,
-    (value) => {
-      writeStorage(IMAGE_STORAGE_KEYS.draftAttachments, JSON.stringify(value));
-    },
-    { deep: true },
   );
 
   watch(
@@ -141,6 +126,23 @@ export function useStudioImages(input: UseStudioImagesInput) {
     }
   }
 
+  async function renameImage(id: string, nextName: string) {
+    const image = imageById(id);
+    if (!image) return false;
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName) return false;
+
+    image.name = trimmedName;
+    image.updatedAt = isoTimestamp();
+    imageAssets.value = [
+      image,
+      ...imageAssets.value.filter((item) => item.id !== id),
+    ];
+    await saveImageAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+    return true;
+  }
+
   async function importImages(files: File[]) {
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) return;
@@ -190,6 +192,41 @@ export function useStudioImages(input: UseStudioImagesInput) {
     return imageAsset;
   }
 
+  async function createMaskAsset(sourceImage: ImageAsset, maskBlob: Blob) {
+    const now = Date.now();
+    const createdAt = isoTimestamp(now);
+    const imageId = createId("img");
+    const maskAsset: ImageAsset = {
+      id: imageId,
+      blobKey: undefined,
+      name: `${sourceImage.name}-编辑区域`,
+      source: "generated",
+      mimeType: "image/png",
+      width: sourceImage.width,
+      height: sourceImage.height,
+      sizeBytes: maskBlob.size,
+      conversationId: input.activeConversationId.value || undefined,
+      prompt: "局部编辑遮罩",
+      editSourceImageId: sourceImage.id,
+      isEditMask: true,
+      isTransientMask: true,
+      transientBlob: maskBlob,
+      createdAt,
+      updatedAt: createdAt,
+      previewUrl: createObjectUrl(maskBlob),
+    };
+
+    imageAssets.value = [maskAsset, ...imageAssets.value];
+    return maskAsset;
+  }
+
+  function clearTransientMask(id: string) {
+    const image = imageById(id);
+    if (!image?.isTransientMask) return;
+    attachedImages.value = attachedImages.value.filter((item) => item !== id);
+    imageAssets.value = imageAssets.value.filter((item) => item.id !== id);
+  }
+
   async function hydrateImagePreviews(assets: ImageAsset[]) {
     return Promise.all(
       assets.map(async (asset) => {
@@ -237,6 +274,9 @@ export function useStudioImages(input: UseStudioImagesInput) {
     hydrateImagePreviews,
     imageAssets,
     imageById,
+    renameImage,
+    clearTransientMask,
+    createMaskAsset,
     importImages,
     refreshStorageUsage,
     removeAttachment,
@@ -260,6 +300,8 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     referencedImageIds: imageAsset.referencedImageIds
       ? [...imageAsset.referencedImageIds]
       : undefined,
+    editSourceImageId: imageAsset.editSourceImageId,
+    isEditMask: imageAsset.isEditMask,
     createdAt: imageAsset.createdAt,
     updatedAt: imageAsset.updatedAt,
   };

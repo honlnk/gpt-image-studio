@@ -6,6 +6,7 @@ import ImagePreviewModal from "./components/studio/ImagePreviewModal.vue";
 import SettingsModal from "./components/studio/SettingsModal.vue";
 import ConfirmDialog from "./components/ui/ConfirmDialog.vue";
 import NoticeToast from "./components/ui/NoticeToast.vue";
+import RenameDialog from "./components/ui/RenameDialog.vue";
 import { useStudioViewModel } from "./app/studio";
 
 const studio = useStudioViewModel();
@@ -20,6 +21,7 @@ const studio = useStudioViewModel();
       :pending-job-count-by-conversation="studio.sidebar.pendingJobCountByConversation"
       @create-conversation="studio.sidebar.createConversation"
       @delete-conversation="studio.sidebar.deleteConversation"
+      @rename-conversation="studio.sidebar.renameConversation"
       @open-settings="studio.sidebar.openSettings"
       @select-conversation="studio.sidebar.selectConversation"
     />
@@ -33,6 +35,8 @@ const studio = useStudioViewModel();
       v-model:output-format="studio.chat.outputFormat"
       v-model:quality="studio.chat.quality"
       :active-attachments="studio.chat.activeAttachments"
+      :active-edit-mask-image-id="studio.chat.activeEditMaskImageId"
+      :active-edit-source-image-id="studio.chat.activeEditSourceImageId"
       :active-conversation="studio.chat.activeConversation"
       :active-editor="studio.chat.activeEditor"
       :active-messages="studio.chat.activeMessages"
@@ -40,7 +44,9 @@ const studio = useStudioViewModel();
       :background-label="studio.chat.backgroundLabel"
       :background-options="studio.chat.backgroundOptions"
       :can-send="studio.chat.canSend"
+      :create-mask-asset="studio.chat.createMaskAsset"
       :custom-size-error="studio.chat.customSizeError"
+      :edit-mode-enabled="studio.chat.editModeEnabled"
       :format-label="studio.chat.formatLabel"
       :format-options="studio.chat.formatOptions"
       :image-by-id="studio.chat.imageById"
@@ -54,6 +60,7 @@ const studio = useStudioViewModel();
       :size-presets="studio.chat.sizePresets"
       @apply-size-preset="studio.chat.applySizePreset"
       @attach-image="studio.chat.attachImage"
+      @apply-edit-selection="studio.chat.applyEditSelection"
       @close-all-editors="studio.chat.closeAllEditors"
       @import-images="studio.chat.importImages"
       @open-conversations="studio.chat.openConversations"
@@ -63,6 +70,7 @@ const studio = useStudioViewModel();
       @retry-message="studio.chat.retryMessage"
       @submit-message="studio.chat.submitMessage"
       @toggle-editor="studio.chat.toggleEditor"
+      @update:edit-mode-enabled="studio.chat.setEditModeEnabled"
     />
 
     <ImageLibrary
@@ -74,6 +82,7 @@ const studio = useStudioViewModel();
       @delete-image="studio.library.deleteImage"
       @open-batch-operations="studio.library.openBatchOperations"
       @preview-image="studio.library.previewImage"
+      @rename-image="studio.library.renameImage"
       :storage-usage="studio.library.storageUsage"
     />
 
@@ -103,6 +112,25 @@ const studio = useStudioViewModel();
     <NoticeToast
       :notice="studio.noticeToast.notice"
       @close="studio.noticeToast.close"
+    />
+
+    <RenameDialog
+      :confirm-label="studio.renameModal.confirmLabel"
+      :description="studio.renameModal.description"
+      :initial-value="studio.renameModal.initialValue"
+      :is-open="studio.renameModal.isOpen"
+      :title="studio.renameModal.title"
+      @cancel="studio.renameModal.cancel"
+      @confirm="studio.renameModal.confirm"
+    />
+    <RenameDialog
+      :confirm-label="studio.renameImageModal.confirmLabel"
+      :description="studio.renameImageModal.description"
+      :initial-value="studio.renameImageModal.initialValue"
+      :is-open="studio.renameImageModal.isOpen"
+      :title="studio.renameImageModal.title"
+      @cancel="studio.renameImageModal.cancel"
+      @confirm="studio.renameImageModal.confirm"
     />
 
     <ConfirmDialog

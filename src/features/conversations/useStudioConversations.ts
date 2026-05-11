@@ -130,6 +130,7 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
       id,
       title: inputValue.title,
       summary: inputValue.summary,
+      isTitleManuallySet: false,
       createdAt: inputValue.updatedAt,
       updatedAt: inputValue.updatedAt,
     };
@@ -151,7 +152,9 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
     );
     if (!conversation) return null;
 
-    conversation.title = text.length > 16 ? `${text.slice(0, 16)}...` : text;
+    if (!conversation.isTitleManuallySet) {
+      conversation.title = text.length > 16 ? `${text.slice(0, 16)}...` : text;
+    }
     conversation.summary = summary;
     conversation.updatedAt = updatedAt;
 
@@ -161,6 +164,24 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
     ];
 
     return conversation;
+  }
+
+  async function renameConversation(id: string, nextTitle: string) {
+    const conversation = conversations.value.find((item) => item.id === id);
+    if (!conversation) return false;
+
+    const trimmedTitle = nextTitle.trim();
+    if (!trimmedTitle) return false;
+
+    conversation.title = trimmedTitle;
+    conversation.isTitleManuallySet = true;
+    conversation.updatedAt = isoTimestamp();
+    conversations.value = [
+      conversation,
+      ...conversations.value.filter((item) => item.id !== id),
+    ];
+    await persistConversation(conversation);
+    return true;
   }
 
   function persistConversation(conversation: Conversation) {
@@ -181,6 +202,7 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
     createConversationRecord,
     deleteConversation,
     deleteConversations,
+    renameConversation,
     persistConversation,
     selectConversation,
     updateConversationSummary,
@@ -192,6 +214,7 @@ function toPlainConversation(conversation: Conversation): Conversation {
     id: conversation.id,
     title: conversation.title,
     summary: conversation.summary,
+    isTitleManuallySet: conversation.isTitleManuallySet,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     archivedAt: conversation.archivedAt,

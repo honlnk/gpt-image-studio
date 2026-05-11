@@ -12,6 +12,7 @@ export type GenerateImageInput = {
 
 export type EditImageInput = GenerateImageInput & {
   images: ImageEditSource[];
+  mask?: ImageEditSource;
 };
 
 export type ImageClient = {

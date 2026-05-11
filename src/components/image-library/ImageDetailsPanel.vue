@@ -19,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   clearSelection: [];
   deleteImage: [id: string];
+  renameImage: [id: string];
 }>();
 
 const now = useNow();
@@ -47,6 +48,13 @@ const createdAtLabel = computed(() =>
         >
           下载
         </a>
+        <button
+          class="cursor-pointer rounded-lg px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-100"
+          type="button"
+          @click="emit('renameImage', image.id)"
+        >
+          重命名
+        </button>
         <button
           class="cursor-pointer rounded-lg px-2 py-1 text-xs text-red-500 transition-colors hover:bg-red-50"
           type="button"

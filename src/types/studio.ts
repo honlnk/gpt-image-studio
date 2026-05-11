@@ -6,6 +6,7 @@ export type Conversation = {
   id: string;
   title: string;
   summary: string;
+  isTitleManuallySet?: boolean;
   createdAt?: string;
   updatedAt: string;
   archivedAt?: string;
@@ -37,6 +38,10 @@ export type ImageAsset = {
   messageId?: string;
   prompt: string;
   referencedImageIds?: string[];
+  editSourceImageId?: string;
+  isEditMask?: boolean;
+  isTransientMask?: boolean;
+  transientBlob?: Blob;
   createdAt: string;
   updatedAt?: string;
   previewUrl?: string;
@@ -63,3 +68,14 @@ export type AppSettings = {
 };
 
 export type EditorKey = "size" | "quality" | "background" | "format";
+
+export type ConversationDraft = {
+  conversationId: string;
+  composerText: string;
+  attachedImageIds: string[];
+  editModeEnabled: boolean;
+  editSourceImageId?: string;
+  editMaskImageId?: string;
+  generationParams: GenerationParams;
+  updatedAtMs: number;
+};
