@@ -58,6 +58,11 @@ const renderedSelections = computed<RenderedSelection[]>(() =>
 const hasSelection = computed(() => allSelections.value.length > 0);
 const canApply = computed(() => hasSelection.value);
 
+function closeModal() {
+  resetSelection();
+  emit("close");
+}
+
 function startSelection(event: PointerEvent) {
   if (!imageRef.value) return;
   const point = pointerPosition(event);
@@ -159,6 +164,7 @@ async function applyMask() {
   ctx.restore();
 
   const blob = await canvasToBlob(canvas);
+  resetSelection();
   emit("apply", blob);
 }
 
@@ -258,7 +264,7 @@ function clamp(value: number, min: number, max: number) {
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6"
       role="dialog"
       aria-modal="true"
-      @click.self="emit('close')"
+      @click.self="closeModal"
     >
       <div class="w-full max-w-5xl rounded-xl bg-white p-4">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -323,7 +329,7 @@ function clamp(value: number, min: number, max: number) {
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
             type="button"
-            @click="emit('close')"
+            @click="closeModal"
           >
             取消
           </button>
