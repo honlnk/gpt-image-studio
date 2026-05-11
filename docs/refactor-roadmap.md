@@ -397,6 +397,12 @@ export type CompanionAuthStatus = {
 
 目标：把当前全局阻塞的生成流程改造成支持并发任务的模型。
 
+当前进展（2026-05-11）：
+
+- 并发生成任务已落地，`submitMessage` 已改为创建 job 后异步执行，不再全局阻塞发送。
+- 已增加 `pendingJobCount` 并接入聊天区与会话侧边栏运行状态提示。
+- 已增加 `beforeunload` 保护：存在 pending job 时触发浏览器离开确认。
+
 参考文档：[并发生成任务](generation-jobs.md)。
 
 建议新增：
@@ -445,6 +451,13 @@ type GenerationJob = {
 ## 阶段八：对话级草稿
 
 目标：每个对话拥有独立输入框文本、引用图片和生成参数。
+
+当前进展（2026-05-11）：
+
+- 已新增 IndexedDB `conversationDrafts` store 和 `conversationDrafts` service。
+- 已实现切换会话时保存/恢复草稿（文本、引用图片、尺寸/质量/背景/格式）。
+- 已实现单删/批删会话时清理对应草稿。
+- 原全局 localStorage 草稿已下线主逻辑，仅保留一次性兼容读取。
 
 参考文档：[并发生成任务](generation-jobs.md)。
 
