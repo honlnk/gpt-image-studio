@@ -2,20 +2,25 @@
 import { computed, ref } from "vue";
 import type { ImageAsset } from "../../types/studio";
 
-type EditMode = "brush" | "rect" | "ellipse";
+type EditTool = "brush" | "eraser" | "rect" | "ellipse" | "pan";
+type SelectionOperation = "add" | "erase";
 
 type Point = { x: number; y: number };
 
 type BrushSelection = {
   kind: "brush";
+  operation: SelectionOperation;
   points: Point[];
   radius: number;
+  feather: number;
 };
 
 type ShapeSelection = {
   kind: "rect" | "ellipse";
+  operation: SelectionOperation;
   start: Point;
   end: Point;
+  feather: number;
 };
 
 type Selection = BrushSelection | ShapeSelection;
@@ -24,6 +29,7 @@ type RenderedSelection =
     type: "brush";
     path: string;
     radius: number;
+    operation: SelectionOperation;
   }
   | {
     type: "rect" | "ellipse";
@@ -31,6 +37,7 @@ type RenderedSelection =
     top: number;
     width: number;
     height: number;
+    operation: SelectionOperation;
   };
 
 const props = defineProps<{
@@ -43,11 +50,19 @@ const emit = defineEmits<{
 }>();
 
 const imageRef = ref<HTMLImageElement | null>(null);
-const mode = ref<EditMode>("brush");
+const tool = ref<EditTool>("brush");
 const brushRadius = ref(24);
+const edgeSoftness = ref(0);
+const zoom = ref(1);
+const panX = ref(0);
+const panY = ref(0);
 const selections = ref<Selection[]>([]);
+const redoSelections = ref<Selection[]>([]);
 const draftSelection = ref<Selection | null>(null);
 const isPointerDown = ref(false);
+const isPanning = ref(false);
+const panStartPointer = ref<Point | null>(null);
+const panStartOffset = ref<Point>({ x: 0, y: 0 });
 
 const allSelections = computed(() =>
   draftSelection.value ? [...selections.value, draftSelection.value] : [...selections.value],
@@ -57,6 +72,11 @@ const renderedSelections = computed<RenderedSelection[]>(() =>
 );
 const hasSelection = computed(() => allSelections.value.length > 0);
 const canApply = computed(() => hasSelection.value);
+const canUndo = computed(() => selections.value.length > 0);
+const canRedo = computed(() => redoSelections.value.length > 0);
+const contentTransform = computed(() =>
+  `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
+);
 
 function closeModal() {
   resetSelection();
@@ -65,26 +85,41 @@ function closeModal() {
 
 function startSelection(event: PointerEvent) {
   if (!imageRef.value) return;
+  if (tool.value === "pan") {
+    isPanning.value = true;
+    panStartPointer.value = { x: event.clientX, y: event.clientY };
+    panStartOffset.value = { x: panX.value, y: panY.value };
+    return;
+  }
+
   const point = pointerPosition(event);
   isPointerDown.value = true;
-
-  if (mode.value === "brush") {
+  if (tool.value === "brush" || tool.value === "eraser") {
     draftSelection.value = {
       kind: "brush",
+      operation: tool.value === "eraser" ? "erase" : "add",
       points: [point],
       radius: brushRadius.value,
+      feather: edgeSoftness.value,
     };
     return;
   }
 
   draftSelection.value = {
-    kind: mode.value,
+    kind: tool.value,
+    operation: "add",
     start: point,
     end: point,
+    feather: edgeSoftness.value,
   };
 }
 
 function updateSelection(event: PointerEvent) {
+  if (isPanning.value && panStartPointer.value) {
+    panX.value = panStartOffset.value.x + (event.clientX - panStartPointer.value.x);
+    panY.value = panStartOffset.value.y + (event.clientY - panStartPointer.value.y);
+    return;
+  }
   if (!isPointerDown.value || !draftSelection.value) return;
   const point = pointerPosition(event);
 
@@ -97,6 +132,11 @@ function updateSelection(event: PointerEvent) {
 }
 
 function stopSelection() {
+  if (isPanning.value) {
+    isPanning.value = false;
+    panStartPointer.value = null;
+    return;
+  }
   if (!draftSelection.value) {
     isPointerDown.value = false;
     return;
@@ -104,6 +144,7 @@ function stopSelection() {
 
   if (isSelectionRenderable(draftSelection.value)) {
     selections.value.push(draftSelection.value);
+    redoSelections.value = [];
   }
   draftSelection.value = null;
   isPointerDown.value = false;
@@ -113,17 +154,54 @@ function resetSelection() {
   selections.value = [];
   draftSelection.value = null;
   isPointerDown.value = false;
+  isPanning.value = false;
+  panStartPointer.value = null;
+  redoSelections.value = [];
 }
 
-function removeLastSelection() {
+function undoSelection() {
+  const last = selections.value.at(-1);
+  if (!last) return;
   selections.value = selections.value.slice(0, -1);
+  redoSelections.value = [...redoSelections.value, last];
+}
+
+function redoSelection() {
+  const last = redoSelections.value.at(-1);
+  if (!last) return;
+  redoSelections.value = redoSelections.value.slice(0, -1);
+  selections.value = [...selections.value, last];
+}
+
+function zoomIn() {
+  zoom.value = clamp(Number((zoom.value + 0.1).toFixed(2)), 0.5, 3);
+}
+
+function zoomOut() {
+  zoom.value = clamp(Number((zoom.value - 0.1).toFixed(2)), 0.5, 3);
+}
+
+function resetViewport() {
+  zoom.value = 1;
+  panX.value = 0;
+  panY.value = 0;
 }
 
 function pointerPosition(event: PointerEvent) {
   const bounds = imageRef.value?.getBoundingClientRect();
+  const width = imageRef.value?.clientWidth ?? bounds?.width ?? 1;
+  const height = imageRef.value?.clientHeight ?? bounds?.height ?? 1;
   if (!bounds) return { x: 0, y: 0 };
-  const x = clamp(event.clientX - bounds.left, 0, bounds.width);
-  const y = clamp(event.clientY - bounds.top, 0, bounds.height);
+  const x = clamp(
+    ((event.clientX - bounds.left) / bounds.width) * width,
+    0,
+    width,
+  );
+  const y = clamp(
+    ((event.clientY - bounds.top) / bounds.height) * height,
+    0,
+    height,
+  );
   return { x, y };
 }
 
@@ -151,17 +229,9 @@ async function applyMask() {
   }
   ctx.putImageData(imageData, 0, 0);
 
-  ctx.save();
-  ctx.globalCompositeOperation = "destination-out";
-  ctx.fillStyle = "rgba(0, 0, 0, 1)";
-  ctx.strokeStyle = "rgba(0, 0, 0, 1)";
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
   allSelections.value.forEach((selection) => {
     drawSelection(ctx, selection, scaleX, scaleY);
   });
-  ctx.restore();
 
   const blob = await canvasToBlob(canvas);
   resetSelection();
@@ -175,6 +245,17 @@ function drawSelection(
   scaleY: number,
 ) {
   if (selection.kind === "brush") {
+    ctx.save();
+    applySelectionOperation(ctx, selection.operation);
+    ctx.filter = selection.feather > 0
+      ? `blur(${selection.feather * ((scaleX + scaleY) / 2)}px)`
+      : "none";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = selection.operation === "erase"
+      ? "rgba(255, 255, 255, 1)"
+      : "rgba(0, 0, 0, 1)";
+
     const points = selection.points.map((point) => ({
       x: point.x * scaleX,
       y: point.y * scaleY,
@@ -191,9 +272,18 @@ function drawSelection(
       ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
     }
     ctx.stroke();
+    ctx.restore();
     return;
   }
 
+  ctx.save();
+  applySelectionOperation(ctx, selection.operation);
+  ctx.filter = selection.feather > 0
+    ? `blur(${selection.feather * ((scaleX + scaleY) / 2)}px)`
+    : "none";
+  ctx.fillStyle = selection.operation === "erase"
+    ? "rgba(255, 255, 255, 1)"
+    : "rgba(0, 0, 0, 1)";
   const left = Math.min(selection.start.x, selection.end.x) * scaleX;
   const top = Math.min(selection.start.y, selection.end.y) * scaleY;
   const width = Math.abs(selection.end.x - selection.start.x) * scaleX;
@@ -202,12 +292,21 @@ function drawSelection(
 
   if (selection.kind === "rect") {
     ctx.fillRect(left, top, width, height);
+    ctx.restore();
     return;
   }
 
   ctx.beginPath();
   ctx.ellipse(left + width / 2, top + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+function applySelectionOperation(
+  ctx: CanvasRenderingContext2D,
+  operation: SelectionOperation,
+) {
+  ctx.globalCompositeOperation = operation === "erase" ? "source-over" : "destination-out";
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement) {
@@ -236,6 +335,7 @@ function shapeStyle(selection: Selection): RenderedSelection {
       type: "brush" as const,
       path,
       radius: selection.radius,
+      operation: selection.operation,
     };
   }
 
@@ -249,6 +349,7 @@ function shapeStyle(selection: Selection): RenderedSelection {
     top,
     width,
     height,
+    operation: selection.operation,
   };
 }
 
@@ -276,36 +377,67 @@ function clamp(value: number, min: number, max: number) {
             <button
               :class="[
                 'rounded-lg px-2.5 py-1.5 text-sm',
-                mode === 'brush' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
+                tool === 'brush' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
               ]"
               type="button"
-              @click="mode = 'brush'"
+              @click="tool = 'brush'"
             >
               画笔
             </button>
             <button
               :class="[
                 'rounded-lg px-2.5 py-1.5 text-sm',
-                mode === 'rect' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
+                tool === 'eraser' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
               ]"
               type="button"
-              @click="mode = 'rect'"
+              @click="tool = 'eraser'"
+            >
+              橡皮
+            </button>
+            <button
+              :class="[
+                'rounded-lg px-2.5 py-1.5 text-sm',
+                tool === 'rect' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
+              ]"
+              type="button"
+              @click="tool = 'rect'"
             >
               方框
             </button>
             <button
               :class="[
                 'rounded-lg px-2.5 py-1.5 text-sm',
-                mode === 'ellipse' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
+                tool === 'ellipse' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
               ]"
               type="button"
-              @click="mode = 'ellipse'"
+              @click="tool = 'ellipse'"
             >
               圆框
             </button>
-            <div v-if="mode === 'brush'" class="ml-2 flex items-center gap-2">
-              <span class="text-xs text-gray-500">画笔</span>
-              <input v-model.number="brushRadius" type="range" min="6" max="80" step="1" />
+            <button
+              :class="[
+                'rounded-lg px-2.5 py-1.5 text-sm',
+                tool === 'pan' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
+              ]"
+              type="button"
+              @click="tool = 'pan'"
+            >
+              移动
+            </button>
+            <div v-if="tool === 'brush' || tool === 'eraser'" class="ml-2 flex items-center gap-2 whitespace-nowrap">
+              <span class="text-xs text-gray-500">{{ tool === "eraser" ? "橡皮" : "画笔" }}</span>
+              <input
+                v-model.number="brushRadius"
+                class="w-40"
+                type="range"
+                min="6"
+                max="80"
+                step="1"
+              />
+            </div>
+            <div class="ml-2 flex items-center gap-2">
+              <span class="text-xs text-gray-500">软边</span>
+              <input v-model.number="edgeSoftness" type="range" min="0" max="24" step="1" />
             </div>
           </div>
         </div>
@@ -313,10 +445,18 @@ function clamp(value: number, min: number, max: number) {
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
             type="button"
-            :disabled="!selections.length"
-            @click="removeLastSelection"
+            :disabled="!canUndo"
+            @click="undoSelection"
           >
-            撤销一步
+            撤销
+          </button>
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            :disabled="!canRedo"
+            @click="redoSelection"
+          >
+            重做
           </button>
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
@@ -325,6 +465,28 @@ function clamp(value: number, min: number, max: number) {
             @click="resetSelection"
           >
             重置选区
+          </button>
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            type="button"
+            @click="zoomOut"
+          >
+            缩小
+          </button>
+          <span class="min-w-12 text-center text-xs text-gray-500">{{ Math.round(zoom * 100) }}%</span>
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            type="button"
+            @click="zoomIn"
+          >
+            放大
+          </button>
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            type="button"
+            @click="resetViewport"
+          >
+            复位视图
           </button>
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
@@ -343,7 +505,7 @@ function clamp(value: number, min: number, max: number) {
           </button>
         </div>
         <div class="relative mx-auto flex max-h-[70vh] items-center justify-center overflow-auto rounded-lg bg-gray-50 p-2">
-          <div class="relative shrink-0">
+          <div class="relative shrink-0" :style="{ transform: contentTransform, transformOrigin: 'center center' }">
             <img
               ref="imageRef"
               class="max-h-[66vh] max-w-full select-none rounded object-contain"
@@ -363,7 +525,7 @@ function clamp(value: number, min: number, max: number) {
                   v-if="selection.type === 'brush'"
                   :points="selection.path"
                   fill="none"
-                  stroke="rgba(0, 0, 0, 0.35)"
+                  :stroke="selection.operation === 'erase' ? 'rgba(34, 197, 94, 0.5)' : 'rgba(0, 0, 0, 0.35)'"
                   :stroke-width="selection.radius * 2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -374,8 +536,8 @@ function clamp(value: number, min: number, max: number) {
                   :y="selection.top"
                   :width="selection.width"
                   :height="selection.height"
-                  fill="rgba(0, 0, 0, 0.2)"
-                  stroke="rgba(0, 0, 0, 0.6)"
+                  :fill="selection.operation === 'erase' ? 'rgba(34, 197, 94, 0.18)' : 'rgba(0, 0, 0, 0.2)'"
+                  :stroke="selection.operation === 'erase' ? 'rgba(34, 197, 94, 0.7)' : 'rgba(0, 0, 0, 0.6)'"
                   stroke-width="2"
                 />
                 <ellipse
@@ -384,8 +546,8 @@ function clamp(value: number, min: number, max: number) {
                   :cy="selection.top + selection.height / 2"
                   :rx="selection.width / 2"
                   :ry="selection.height / 2"
-                  fill="rgba(0, 0, 0, 0.2)"
-                  stroke="rgba(0, 0, 0, 0.6)"
+                  :fill="selection.operation === 'erase' ? 'rgba(34, 197, 94, 0.18)' : 'rgba(0, 0, 0, 0.2)'"
+                  :stroke="selection.operation === 'erase' ? 'rgba(34, 197, 94, 0.7)' : 'rgba(0, 0, 0, 0.6)'"
                   stroke-width="2"
                 />
               </template>
@@ -393,7 +555,7 @@ function clamp(value: number, min: number, max: number) {
           </div>
         </div>
         <div class="mt-2 text-xs text-gray-500">
-          预览说明：覆盖区域会作为编辑区域写入 mask，可叠加多个选区。
+          预览说明：黑色区域=编辑区域，绿色区域=擦除已选区域；支持多选区、撤销重做、缩放平移。
         </div>
       </div>
     </div>
