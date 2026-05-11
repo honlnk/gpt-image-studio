@@ -36,6 +36,9 @@ export function useStudioViewModel() {
   });
   const ui = useStudioUiState();
   const composerText = ref("");
+  const editModeEnabled = ref(false);
+  const activeEditSourceImageId = ref("");
+  const activeEditMaskImageId = ref("");
   const legacyComposerText = readStorage(STORAGE_KEYS.draftComposerText, "");
   const legacyAttachedImageIds = readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []);
   let isApplyingDraft = false;
@@ -69,6 +72,8 @@ export function useStudioViewModel() {
   function clearConversationDraft() {
     images.attachedImages.value = [];
     composerText.value = "";
+    activeEditSourceImageId.value = "";
+    activeEditMaskImageId.value = "";
   }
 
   function refreshImagesStorageUsage() {
@@ -100,6 +105,8 @@ export function useStudioViewModel() {
     activeConversationId: conversations.activeConversationId,
     activeConversation: conversations.activeConversation,
     attachedImages: images.attachedImages,
+    activeEditMaskImageId,
+    activeEditSourceImageId,
     composerText,
     createConversationRecord: conversations.createConversationRecord,
     currentGenerationParams: settings.currentGenerationParams,
@@ -199,6 +206,9 @@ export function useStudioViewModel() {
       settings.quality,
       settings.background,
       settings.outputFormat,
+      editModeEnabled,
+      activeEditSourceImageId,
+      activeEditMaskImageId,
       conversations.activeConversationId,
     ],
     () => {
@@ -213,6 +223,7 @@ export function useStudioViewModel() {
       conversationId,
       composerText: "",
       attachedImageIds: [],
+      editModeEnabled: false,
       generationParams: settings.currentGenerationParams(),
       updatedAtMs: Date.now(),
     };
@@ -223,6 +234,7 @@ export function useStudioViewModel() {
       conversationId,
       composerText: legacyComposerText,
       attachedImageIds: legacyAttachedImageIds,
+      editModeEnabled: false,
       generationParams: settings.currentGenerationParams(),
       updatedAtMs: Date.now(),
     };
@@ -232,6 +244,9 @@ export function useStudioViewModel() {
     isApplyingDraft = true;
     composerText.value = draft.composerText;
     images.attachedImages.value = draft.attachedImageIds.filter((id) => Boolean(images.imageById(id)));
+    editModeEnabled.value = draft.editModeEnabled;
+    activeEditSourceImageId.value = draft.editSourceImageId ?? "";
+    activeEditMaskImageId.value = draft.editMaskImageId ?? "";
     applyGenerationParams(draft.generationParams);
     isApplyingDraft = false;
   }
@@ -250,6 +265,9 @@ export function useStudioViewModel() {
       conversationId,
       composerText: composerText.value,
       attachedImageIds: [...images.attachedImages.value],
+      editModeEnabled: editModeEnabled.value,
+      editSourceImageId: activeEditSourceImageId.value || undefined,
+      editMaskImageId: activeEditMaskImageId.value || undefined,
       generationParams: settings.currentGenerationParams(),
       updatedAtMs: Date.now(),
     };
@@ -351,6 +369,9 @@ export function useStudioViewModel() {
     backgroundLabel: settings.backgroundLabel,
     backgroundOptions: settings.backgroundOptions,
     canSend: generation.canSend,
+    editModeEnabled,
+    activeEditSourceImageId,
+    activeEditMaskImageId,
     closeAllEditors: ui.closeAllEditors,
     composerText,
     customSizeError: settings.customSizeError,
@@ -360,6 +381,7 @@ export function useStudioViewModel() {
     imageHeight: settings.imageHeight,
     imageWidth: settings.imageWidth,
     importImages: images.importImages,
+    createMaskAsset: images.createMaskAsset,
     isEditorExpanded: ui.isEditorExpanded,
     isGenerating: generation.isGenerating,
     isLibraryOpen: ui.isLibraryOpen,
@@ -372,7 +394,32 @@ export function useStudioViewModel() {
     quality: settings.quality,
     qualityLabel: settings.qualityLabel,
     qualityOptions: settings.qualityOptions,
-    removeAttachment: images.removeAttachment,
+    removeAttachment: (id: string) => {
+      images.removeAttachment(id);
+      if (
+        id === activeEditSourceImageId.value ||
+        id === activeEditMaskImageId.value
+      ) {
+        activeEditSourceImageId.value = "";
+        activeEditMaskImageId.value = "";
+      }
+    },
+    setEditModeEnabled: (value: boolean) => {
+      editModeEnabled.value = value;
+      if (!value) {
+        activeEditSourceImageId.value = "";
+        activeEditMaskImageId.value = "";
+      }
+    },
+    applyEditSelection: (sourceImageId: string, maskImageId: string) => {
+      activeEditSourceImageId.value = sourceImageId;
+      activeEditMaskImageId.value = maskImageId;
+      images.attachedImages.value = [sourceImageId, maskImageId];
+    },
+    clearEditSelection: () => {
+      activeEditSourceImageId.value = "";
+      activeEditMaskImageId.value = "";
+    },
     retryMessage: generation.retryMessage,
     sizeLabel: settings.sizeLabel,
     sizePresets: settings.sizePresets,

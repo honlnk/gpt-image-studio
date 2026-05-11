@@ -37,6 +37,8 @@ export type ImageAsset = {
   messageId?: string;
   prompt: string;
   referencedImageIds?: string[];
+  editSourceImageId?: string;
+  isEditMask?: boolean;
   createdAt: string;
   updatedAt?: string;
   previewUrl?: string;
@@ -68,6 +70,9 @@ export type ConversationDraft = {
   conversationId: string;
   composerText: string;
   attachedImageIds: string[];
+  editModeEnabled: boolean;
+  editSourceImageId?: string;
+  editMaskImageId?: string;
   generationParams: GenerationParams;
   updatedAtMs: number;
 };

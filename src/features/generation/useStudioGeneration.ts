@@ -28,6 +28,8 @@ type UseStudioGenerationInput = {
   activeConversationId: Ref<string>;
   activeConversation: ComputedRef<Conversation | undefined>;
   attachedImages: Ref<string[]>;
+  activeEditMaskImageId: Ref<string>;
+  activeEditSourceImageId: Ref<string>;
   composerText: Ref<string>;
   createConversationRecord: (input: CreateConversationRecordInput) => Promise<Conversation>;
   currentGenerationParams: () => GenerationParams;
@@ -53,7 +55,11 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
   const isGenerating = jobs.isGenerating;
   const pendingJobCount = jobs.pendingJobCount;
   const imageModeLabel = computed(() =>
-    input.attachedImages.value.length ? "引用图片编辑" : "文字生成图片",
+    input.activeEditMaskImageId.value && input.activeEditSourceImageId.value
+      ? "局部编辑"
+      : input.attachedImages.value.length
+        ? "引用图片编辑"
+        : "文字生成图片",
   );
   const canSend = computed(() =>
     !input.customSizeError.value &&
@@ -99,6 +105,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       });
     const conversationId = conversation.id;
     const references = [...input.attachedImages.value];
+    const editSourceImageId = input.activeEditSourceImageId.value || undefined;
+    const editMaskImageId = input.activeEditMaskImageId.value || undefined;
     const userMessage: Message = {
       id: createId("m"),
       conversationId,
@@ -133,6 +141,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     );
     input.composerText.value = "";
     input.attachedImages.value = [];
+    input.activeEditSourceImageId.value = "";
+    input.activeEditMaskImageId.value = "";
 
     await Promise.all([
       saveMessage(toPlainMessage(userMessage)),
@@ -147,6 +157,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       generationParams: assistantMessage.generationParams ?? input.currentGenerationParams(),
       prompt: text,
       referencedImageIds: references,
+      editSourceImageId,
+      editMaskImageId,
       userMessageId: userMessage.id,
     });
     void runImageRequest(job);
@@ -178,6 +190,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
           generationParams: message.generationParams ?? input.currentGenerationParams(),
           prompt: userMessage.content,
           referencedImageIds: message.referencedImageIds,
+          editSourceImageId: undefined,
+          editMaskImageId: undefined,
           userMessageId: userMessage.id,
         }),
       );
@@ -188,7 +202,13 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     try {
       const params = job.generationParams;
       const imageData = job.referencedImageIds.length
-        ? await requestImageEdit(job.prompt, job.referencedImageIds, params)
+        ? await requestImageEdit(
+          job.prompt,
+          job.referencedImageIds,
+          params,
+          job.editSourceImageId,
+          job.editMaskImageId,
+        )
         : await input.imageClient.generate({ prompt: job.prompt, params });
       const now = Date.now();
       const createdAt = isoTimestamp(now);
@@ -214,6 +234,7 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
           : undefined,
         prompt: job.prompt,
         referencedImageIds: job.referencedImageIds,
+        editSourceImageId: job.editSourceImageId,
         createdAt,
         updatedAt: createdAt,
         previewUrl: createObjectUrl(blob),
@@ -261,12 +282,14 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
     prompt: string,
     references: string[],
     params: GenerationParams,
+    editSourceImageId?: string,
+    editMaskImageId?: string,
   ) {
     if (references.length > 16) {
       throw new Error("一次最多支持编辑 16 张引用图片。");
     }
 
-    const images = await Promise.all(
+    const imageSources = await Promise.all(
       references.map(async (id) => {
         const reference = input.imageById(id);
         if (!reference?.blobKey) {
@@ -279,16 +302,69 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
         }
 
         return {
+          id,
           blob,
           name: filenameFromAsset(reference),
         };
       }),
     );
 
+    const sourceImage = editSourceImageId ? input.imageById(editSourceImageId) : undefined;
+    const maskImage = editMaskImageId ? input.imageById(editMaskImageId) : undefined;
+    let maskBlob: Blob | undefined;
+    if (maskImage?.blobKey) {
+      maskBlob = await loadImageBlob(maskImage.blobKey);
+      if (!maskBlob) {
+        throw new Error("无法读取编辑遮罩文件，请重新选择编辑区域。");
+      }
+      if (maskBlob.type !== "image/png") {
+        throw new Error("编辑遮罩必须是 PNG 文件，请重新选择编辑区域。");
+      }
+    }
+
+    const editImages = editSourceImageId
+      ? imageSources.filter((image) => image.id === editSourceImageId)
+      : imageSources;
+    if (editSourceImageId && !editImages.length) {
+      throw new Error("编辑源图不在当前引用列表中，请重新选择继续编辑。");
+    }
+    if (editMaskImageId && !maskImage) {
+      throw new Error("编辑遮罩不存在，请重新选择编辑区域。");
+    }
+    if (editMaskImageId && !editSourceImageId) {
+      throw new Error("缺少编辑源图，无法使用局部编辑。");
+    }
+    if (maskBlob && sourceImage?.blobKey) {
+      const sourceBlob = await loadImageBlob(sourceImage.blobKey);
+      if (!sourceBlob) {
+        throw new Error("无法读取编辑源图，请重新引用图片。");
+      }
+      const [sourceSize, maskSize] = await Promise.all([
+        readImageDimensions(sourceBlob),
+        readImageDimensions(maskBlob),
+      ]);
+      if (
+        sourceSize &&
+        maskSize &&
+        (sourceSize.width !== maskSize.width || sourceSize.height !== maskSize.height)
+      ) {
+        throw new Error("编辑遮罩尺寸与源图不一致，请重新选择编辑区域。");
+      }
+    }
+
     return input.imageClient.edit({
       prompt,
       params,
-      images,
+      images: (editImages.length ? editImages : imageSources).map((item) => ({
+        blob: item.blob,
+        name: item.name,
+      })),
+      mask: maskBlob
+        ? {
+          blob: maskBlob,
+          name: "mask.png",
+        }
+        : undefined,
     });
   }
 
@@ -370,6 +446,8 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     referencedImageIds: imageAsset.referencedImageIds
       ? [...imageAsset.referencedImageIds]
       : undefined,
+    editSourceImageId: imageAsset.editSourceImageId,
+    isEditMask: imageAsset.isEditMask,
     createdAt: imageAsset.createdAt,
     updatedAt: imageAsset.updatedAt,
   };

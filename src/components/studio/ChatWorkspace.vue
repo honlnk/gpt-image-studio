@@ -8,11 +8,14 @@ import type {
   Message,
 } from "../../types/studio";
 import ChatComposer from "../chat/ChatComposer.vue";
+import EditMaskModal from "../chat/EditMaskModal.vue";
 import MessageList from "../chat/MessageList.vue";
 
 const props = defineProps<{
   activeAttachments: ImageAsset[];
   activeConversation?: Conversation;
+  activeEditMaskImageId: string;
+  activeEditSourceImageId: string;
   activeEditor: EditorKey | null;
   activeMessages: Message[];
   activeSizePreset: string;
@@ -21,7 +24,9 @@ const props = defineProps<{
   backgroundOptions: readonly { value: string; label: string }[];
   canSend: boolean;
   composerText: string;
+  createMaskAsset: (sourceImage: ImageAsset, maskBlob: Blob) => Promise<ImageAsset>;
   customSizeError: string;
+  editModeEnabled: boolean;
   formatLabel: string;
   formatOptions: readonly { value: string; label: string }[];
   imageById: (id: string) => ImageAsset | undefined;
@@ -47,6 +52,7 @@ const emit = defineEmits<{
   openConversations: [];
   importImages: [files: File[]];
   removeAttachment: [id: string];
+  applyEditSelection: [sourceImageId: string, maskImageId: string];
   retryMessage: [message: Message];
   openSettings: [];
   previewImage: [id: string];
@@ -59,10 +65,12 @@ const emit = defineEmits<{
   "update:isLibraryOpen": [value: boolean];
   "update:outputFormat": [value: string];
   "update:quality": [value: string];
+  "update:editModeEnabled": [value: boolean];
 }>();
 
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
+const selectingImageId = ref("");
 let dragDepth = 0;
 
 const activeAttachmentIds = computed(() =>
@@ -74,12 +82,35 @@ function isImageAttached(id: string) {
 }
 
 async function continueEdit(imageId: string) {
-  if (!isImageAttached(imageId)) {
-    emit("attachImage", imageId);
+  if (!props.editModeEnabled) {
+    if (!isImageAttached(imageId)) {
+      emit("attachImage", imageId);
+    }
+
+    await nextTick();
+    composerRef.value?.focusComposer();
+    return;
   }
 
+  selectingImageId.value = imageId;
+}
+
+async function applyMask(maskBlob: Blob) {
+  const source = props.imageById(selectingImageId.value);
+  if (!source) {
+    selectingImageId.value = "";
+    return;
+  }
+
+  const maskAsset = await props.createMaskAsset(source, maskBlob);
+  emit("applyEditSelection", source.id, maskAsset.id);
+  selectingImageId.value = "";
   await nextTick();
   composerRef.value?.focusComposer();
+}
+
+function closeMaskModal() {
+  selectingImageId.value = "";
 }
 
 function importFromDrop(event: DragEvent) {
@@ -231,6 +262,8 @@ function imageFilesFromTransfer(
     <ChatComposer
       ref="composerRef"
       :active-attachments="activeAttachments"
+      :active-edit-mask-image-id="activeEditMaskImageId"
+      :active-edit-source-image-id="activeEditSourceImageId"
       :active-editor="activeEditor"
       :active-size-preset="activeSizePreset"
       :background="background"
@@ -239,6 +272,7 @@ function imageFilesFromTransfer(
       :can-send="canSend"
       :composer-text="composerText"
       :custom-size-error="customSizeError"
+      :edit-mode-enabled="editModeEnabled"
       :format-label="formatLabel"
       :format-options="formatOptions"
       :image-height="imageHeight"
@@ -265,6 +299,13 @@ function imageFilesFromTransfer(
       @update:image-width="emit('update:imageWidth', $event)"
       @update:output-format="emit('update:outputFormat', $event)"
       @update:quality="emit('update:quality', $event)"
+      @update:edit-mode-enabled="emit('update:editModeEnabled', $event)"
+    />
+
+    <EditMaskModal
+      :image="selectingImageId ? imageById(selectingImageId) : undefined"
+      @close="closeMaskModal"
+      @apply="applyMask"
     />
   </section>
 </template>

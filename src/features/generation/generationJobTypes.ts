@@ -9,6 +9,8 @@ export type GenerationJob = {
   assistantMessageId: string;
   prompt: string;
   referencedImageIds: string[];
+  editSourceImageId?: string;
+  editMaskImageId?: string;
   generationParams: GenerationParams;
   status: GenerationJobStatus;
   startedAtMs: number;

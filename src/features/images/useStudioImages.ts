@@ -175,6 +175,38 @@ export function useStudioImages(input: UseStudioImagesInput) {
     return imageAsset;
   }
 
+  async function createMaskAsset(sourceImage: ImageAsset, maskBlob: Blob) {
+    const now = Date.now();
+    const createdAt = isoTimestamp(now);
+    const imageId = createId("img");
+    const blobKey = createId("blob");
+    const maskAsset: ImageAsset = {
+      id: imageId,
+      blobKey,
+      name: `${sourceImage.name}-编辑区域`,
+      source: "generated",
+      mimeType: "image/png",
+      width: sourceImage.width,
+      height: sourceImage.height,
+      sizeBytes: maskBlob.size,
+      conversationId: input.activeConversationId.value || undefined,
+      prompt: "局部编辑遮罩",
+      editSourceImageId: sourceImage.id,
+      isEditMask: true,
+      createdAt,
+      updatedAt: createdAt,
+      previewUrl: createObjectUrl(maskBlob),
+    };
+
+    await Promise.all([
+      saveImageBlob(blobKey, maskBlob),
+      saveImageAsset(toPlainImageAsset(maskAsset)),
+    ]).catch(input.onStorageError);
+
+    imageAssets.value = [maskAsset, ...imageAssets.value];
+    return maskAsset;
+  }
+
   async function hydrateImagePreviews(assets: ImageAsset[]) {
     return Promise.all(
       assets.map(async (asset) => {
@@ -222,6 +254,7 @@ export function useStudioImages(input: UseStudioImagesInput) {
     hydrateImagePreviews,
     imageAssets,
     imageById,
+    createMaskAsset,
     importImages,
     refreshStorageUsage,
     removeAttachment,
@@ -245,6 +278,8 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     referencedImageIds: imageAsset.referencedImageIds
       ? [...imageAsset.referencedImageIds]
       : undefined,
+    editSourceImageId: imageAsset.editSourceImageId,
+    isEditMask: imageAsset.isEditMask,
     createdAt: imageAsset.createdAt,
     updatedAt: imageAsset.updatedAt,
   };

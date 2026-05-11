@@ -50,6 +50,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         prompt: input.prompt,
         params: input.params,
         images: input.images,
+        mask: input.mask,
       });
     },
   };

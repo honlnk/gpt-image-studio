@@ -98,6 +98,12 @@ function isImageAttached(id: string) {
         <div
           class="group relative flex h-48 items-center justify-center bg-gray-100 text-sm text-gray-400"
         >
+          <span
+            v-if="imageById(imageId)?.editSourceImageId"
+            class="absolute left-2 top-2 z-10 rounded bg-black px-1.5 py-0.5 text-[11px] font-medium text-white"
+          >
+            已编辑
+          </span>
           <button
             v-if="imageById(imageId)?.previewUrl"
             class="h-full w-full cursor-pointer"

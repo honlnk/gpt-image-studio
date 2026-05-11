@@ -4,6 +4,8 @@ import type { EditorKey, GenerationParams, ImageAsset } from "../../types/studio
 
 const props = defineProps<{
   activeAttachments: ImageAsset[];
+  activeEditMaskImageId: string;
+  activeEditSourceImageId: string;
   activeEditor: EditorKey | null;
   activeSizePreset: string;
   background: string;
@@ -20,6 +22,7 @@ const props = defineProps<{
   isEditorExpanded: boolean;
   isGenerating: boolean;
   model: string;
+  editModeEnabled: boolean;
   outputFormat: string;
   quality: string;
   qualityLabel: string;
@@ -41,6 +44,7 @@ const emit = defineEmits<{
   "update:imageWidth": [value: number];
   "update:outputFormat": [value: string];
   "update:quality": [value: string];
+  "update:editModeEnabled": [value: boolean];
 }>();
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
@@ -255,6 +259,18 @@ defineExpose({ focusComposer });
           模型: {{ model }}
         </span>
         <button
+          :class="[
+            'cursor-pointer rounded-full px-2.5 py-0.5 text-xs transition-colors',
+            editModeEnabled
+              ? 'bg-black text-white hover:bg-gray-800'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
+          ]"
+          type="button"
+          @click="emit('update:editModeEnabled', !editModeEnabled)"
+        >
+          区域编辑: {{ editModeEnabled ? "开" : "关" }}
+        </button>
+        <button
           class="cursor-pointer rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-500 transition-colors hover:bg-gray-200"
           type="button"
           @click="emit('toggleEditor', 'size')"
@@ -288,8 +304,14 @@ defineExpose({ focusComposer });
         <div
           v-for="image in activeAttachments"
           :key="image.id"
-          class="flex max-w-55 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
+          class="relative flex max-w-55 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
         >
+          <span
+            v-if="image.id === activeEditSourceImageId || image.id === activeEditMaskImageId"
+            class="absolute -left-1 -top-1 rounded bg-black px-1 py-0.5 text-[10px] text-white"
+          >
+            {{ image.id === activeEditMaskImageId ? "区域" : "编辑" }}
+          </span>
           <img
             v-if="image.previewUrl"
             class="h-7 w-7 shrink-0 rounded object-cover"

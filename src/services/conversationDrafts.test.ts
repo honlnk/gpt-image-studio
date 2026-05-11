@@ -31,6 +31,7 @@ const draft: ConversationDraft = {
   conversationId: "c-1",
   composerText: "一只猫",
   attachedImageIds: ["img-1"],
+  editModeEnabled: false,
   generationParams: {
     size: "1024x1024",
     width: 1024,
