@@ -2,6 +2,37 @@
 import { computed, ref } from "vue";
 import type { ImageAsset } from "../../types/studio";
 
+type EditMode = "brush" | "rect" | "ellipse";
+
+type Point = { x: number; y: number };
+
+type BrushSelection = {
+  kind: "brush";
+  points: Point[];
+  radius: number;
+};
+
+type ShapeSelection = {
+  kind: "rect" | "ellipse";
+  start: Point;
+  end: Point;
+};
+
+type Selection = BrushSelection | ShapeSelection;
+type RenderedSelection =
+  | {
+    type: "brush";
+    path: string;
+    radius: number;
+  }
+  | {
+    type: "rect" | "ellipse";
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+
 const props = defineProps<{
   image?: ImageAsset;
 }>();
@@ -12,50 +43,75 @@ const emit = defineEmits<{
 }>();
 
 const imageRef = ref<HTMLImageElement | null>(null);
-const startX = ref(0);
-const startY = ref(0);
-const endX = ref(0);
-const endY = ref(0);
-const isDragging = ref(false);
+const mode = ref<EditMode>("brush");
+const brushRadius = ref(24);
+const selections = ref<Selection[]>([]);
+const draftSelection = ref<Selection | null>(null);
+const isPointerDown = ref(false);
 
-const rect = computed(() => {
-  const left = Math.min(startX.value, endX.value);
-  const top = Math.min(startY.value, endY.value);
-  const width = Math.abs(endX.value - startX.value);
-  const height = Math.abs(endY.value - startY.value);
-  return { left, top, width, height };
-});
-
-const canApply = computed(() => rect.value.width > 2 && rect.value.height > 2);
-const hasSelection = computed(() => rect.value.width > 0 && rect.value.height > 0);
+const allSelections = computed(() =>
+  draftSelection.value ? [...selections.value, draftSelection.value] : [...selections.value],
+);
+const renderedSelections = computed<RenderedSelection[]>(() =>
+  allSelections.value.map((selection) => shapeStyle(selection)),
+);
+const hasSelection = computed(() => allSelections.value.length > 0);
+const canApply = computed(() => hasSelection.value);
 
 function startSelection(event: PointerEvent) {
   if (!imageRef.value) return;
-  const position = pointerPosition(event);
-  startX.value = position.x;
-  startY.value = position.y;
-  endX.value = position.x;
-  endY.value = position.y;
-  isDragging.value = true;
+  const point = pointerPosition(event);
+  isPointerDown.value = true;
+
+  if (mode.value === "brush") {
+    draftSelection.value = {
+      kind: "brush",
+      points: [point],
+      radius: brushRadius.value,
+    };
+    return;
+  }
+
+  draftSelection.value = {
+    kind: mode.value,
+    start: point,
+    end: point,
+  };
 }
 
 function updateSelection(event: PointerEvent) {
-  if (!isDragging.value) return;
-  const position = pointerPosition(event);
-  endX.value = position.x;
-  endY.value = position.y;
+  if (!isPointerDown.value || !draftSelection.value) return;
+  const point = pointerPosition(event);
+
+  if (draftSelection.value.kind === "brush") {
+    draftSelection.value.points.push(point);
+    return;
+  }
+
+  draftSelection.value.end = point;
 }
 
 function stopSelection() {
-  isDragging.value = false;
+  if (!draftSelection.value) {
+    isPointerDown.value = false;
+    return;
+  }
+
+  if (isSelectionRenderable(draftSelection.value)) {
+    selections.value.push(draftSelection.value);
+  }
+  draftSelection.value = null;
+  isPointerDown.value = false;
 }
 
 function resetSelection() {
-  startX.value = 0;
-  startY.value = 0;
-  endX.value = 0;
-  endY.value = 0;
-  isDragging.value = false;
+  selections.value = [];
+  draftSelection.value = null;
+  isPointerDown.value = false;
+}
+
+function removeLastSelection() {
+  selections.value = selections.value.slice(0, -1);
 }
 
 function pointerPosition(event: PointerEvent) {
@@ -74,18 +130,13 @@ async function applyMask() {
   const naturalHeight = imageRef.value.naturalHeight;
   const scaleX = naturalWidth / displayRect.width;
   const scaleY = naturalHeight / displayRect.height;
-  const sourceRect = {
-    left: Math.round(rect.value.left * scaleX),
-    top: Math.round(rect.value.top * scaleY),
-    width: Math.round(rect.value.width * scaleX),
-    height: Math.round(rect.value.height * scaleY),
-  };
 
   const canvas = document.createElement("canvas");
   canvas.width = naturalWidth;
   canvas.height = naturalHeight;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+
   const imageData = ctx.createImageData(naturalWidth, naturalHeight);
   for (let index = 0; index < imageData.data.length; index += 4) {
     imageData.data[index] = 255;
@@ -93,24 +144,64 @@ async function applyMask() {
     imageData.data[index + 2] = 255;
     imageData.data[index + 3] = 255;
   }
-
-  const startX = clamp(sourceRect.left, 0, naturalWidth);
-  const startY = clamp(sourceRect.top, 0, naturalHeight);
-  const endX = clamp(sourceRect.left + sourceRect.width, 0, naturalWidth);
-  const endY = clamp(sourceRect.top + sourceRect.height, 0, naturalHeight);
-  for (let y = startY; y < endY; y += 1) {
-    for (let x = startX; x < endX; x += 1) {
-      const offset = (y * naturalWidth + x) * 4;
-      imageData.data[offset] = 255;
-      imageData.data[offset + 1] = 255;
-      imageData.data[offset + 2] = 255;
-      imageData.data[offset + 3] = 0;
-    }
-  }
   ctx.putImageData(imageData, 0, 0);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillStyle = "rgba(0, 0, 0, 1)";
+  ctx.strokeStyle = "rgba(0, 0, 0, 1)";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  allSelections.value.forEach((selection) => {
+    drawSelection(ctx, selection, scaleX, scaleY);
+  });
+  ctx.restore();
 
   const blob = await canvasToBlob(canvas);
   emit("apply", blob);
+}
+
+function drawSelection(
+  ctx: CanvasRenderingContext2D,
+  selection: Selection,
+  scaleX: number,
+  scaleY: number,
+) {
+  if (selection.kind === "brush") {
+    const points = selection.points.map((point) => ({
+      x: point.x * scaleX,
+      y: point.y * scaleY,
+    }));
+    if (!points.length) return;
+
+    ctx.beginPath();
+    ctx.lineWidth = selection.radius * 2 * ((scaleX + scaleY) / 2);
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let index = 1; index < points.length; index += 1) {
+      ctx.lineTo(points[index].x, points[index].y);
+    }
+    if (points.length === 1) {
+      ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+    }
+    ctx.stroke();
+    return;
+  }
+
+  const left = Math.min(selection.start.x, selection.end.x) * scaleX;
+  const top = Math.min(selection.start.y, selection.end.y) * scaleY;
+  const width = Math.abs(selection.end.x - selection.start.x) * scaleX;
+  const height = Math.abs(selection.end.y - selection.start.y) * scaleY;
+  if (width < 1 || height < 1) return;
+
+  if (selection.kind === "rect") {
+    ctx.fillRect(left, top, width, height);
+    return;
+  }
+
+  ctx.beginPath();
+  ctx.ellipse(left + width / 2, top + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement) {
@@ -120,6 +211,39 @@ function canvasToBlob(canvas: HTMLCanvasElement) {
       else reject(new Error("无法生成遮罩图片。"));
     }, "image/png");
   });
+}
+
+function isSelectionRenderable(selection: Selection) {
+  if (selection.kind === "brush") {
+    return selection.points.length >= 1;
+  }
+
+  const width = Math.abs(selection.end.x - selection.start.x);
+  const height = Math.abs(selection.end.y - selection.start.y);
+  return width > 2 && height > 2;
+}
+
+function shapeStyle(selection: Selection): RenderedSelection {
+  if (selection.kind === "brush") {
+    const path = selection.points.map((point) => `${point.x},${point.y}`).join(" ");
+    return {
+      type: "brush" as const,
+      path,
+      radius: selection.radius,
+    };
+  }
+
+  const left = Math.min(selection.start.x, selection.end.x);
+  const top = Math.min(selection.start.y, selection.end.y);
+  const width = Math.abs(selection.end.x - selection.start.x);
+  const height = Math.abs(selection.end.y - selection.start.y);
+  return {
+    type: selection.kind,
+    left,
+    top,
+    width,
+    height,
+  };
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -137,36 +261,80 @@ function clamp(value: number, min: number, max: number) {
       @click.self="emit('close')"
     >
       <div class="w-full max-w-5xl rounded-xl bg-white p-4">
-        <div class="mb-3 flex items-center justify-between">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div class="text-sm font-semibold text-gray-900">选择要编辑的区域</div>
-            <div class="text-xs text-gray-500">拖拽一个矩形区域，透明部分会被模型编辑</div>
+            <div class="text-xs text-gray-500">支持画笔、矩形、圆形，多次叠加选区</div>
           </div>
           <div class="flex items-center gap-2">
             <button
-              class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+              :class="[
+                'rounded-lg px-2.5 py-1.5 text-sm',
+                mode === 'brush' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
+              ]"
               type="button"
-              :disabled="!hasSelection"
-              @click="resetSelection"
+              @click="mode = 'brush'"
             >
-              重置选区
+              画笔
             </button>
             <button
-              class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+              :class="[
+                'rounded-lg px-2.5 py-1.5 text-sm',
+                mode === 'rect' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
+              ]"
               type="button"
-              @click="emit('close')"
+              @click="mode = 'rect'"
             >
-              取消
+              方框
             </button>
             <button
-              class="rounded-lg bg-black px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
+              :class="[
+                'rounded-lg px-2.5 py-1.5 text-sm',
+                mode === 'ellipse' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100',
+              ]"
               type="button"
-              :disabled="!canApply"
-              @click="applyMask"
+              @click="mode = 'ellipse'"
             >
-              应用区域
+              圆框
             </button>
+            <div v-if="mode === 'brush'" class="ml-2 flex items-center gap-2">
+              <span class="text-xs text-gray-500">画笔</span>
+              <input v-model.number="brushRadius" type="range" min="6" max="80" step="1" />
+            </div>
           </div>
+        </div>
+        <div class="mb-3 flex items-center justify-end gap-2">
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            :disabled="!selections.length"
+            @click="removeLastSelection"
+          >
+            撤销一步
+          </button>
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            :disabled="!hasSelection"
+            @click="resetSelection"
+          >
+            重置选区
+          </button>
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            type="button"
+            @click="emit('close')"
+          >
+            取消
+          </button>
+          <button
+            class="rounded-lg bg-black px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            :disabled="!canApply"
+            @click="applyMask"
+          >
+            应用区域
+          </button>
         </div>
         <div class="relative mx-auto max-h-[70vh] overflow-auto rounded-lg bg-gray-50 p-2">
           <div class="relative inline-block">
@@ -180,20 +348,46 @@ function clamp(value: number, min: number, max: number) {
               @pointerup.prevent="stopSelection"
               @pointerleave.prevent="stopSelection"
             />
-            <div
-              v-if="canApply || isDragging"
-              class="pointer-events-none absolute border-2 border-black bg-black/20"
-              :style="{
-                left: `${rect.left}px`,
-                top: `${rect.top}px`,
-                width: `${rect.width}px`,
-                height: `${rect.height}px`,
-              }"
-            />
+            <svg
+              class="pointer-events-none absolute inset-0 h-full w-full"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <template v-for="(selection, index) in renderedSelections" :key="index">
+                <polyline
+                  v-if="selection.type === 'brush'"
+                  :points="selection.path"
+                  fill="none"
+                  stroke="rgba(0, 0, 0, 0.35)"
+                  :stroke-width="selection.radius * 2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <rect
+                  v-else-if="selection.type === 'rect'"
+                  :x="selection.left"
+                  :y="selection.top"
+                  :width="selection.width"
+                  :height="selection.height"
+                  fill="rgba(0, 0, 0, 0.2)"
+                  stroke="rgba(0, 0, 0, 0.6)"
+                  stroke-width="2"
+                />
+                <ellipse
+                  v-else
+                  :cx="selection.left + selection.width / 2"
+                  :cy="selection.top + selection.height / 2"
+                  :rx="selection.width / 2"
+                  :ry="selection.height / 2"
+                  fill="rgba(0, 0, 0, 0.2)"
+                  stroke="rgba(0, 0, 0, 0.6)"
+                  stroke-width="2"
+                />
+              </template>
+            </svg>
           </div>
         </div>
         <div class="mt-2 text-xs text-gray-500">
-          预览说明：半透明黑色框为将要编辑的区域，提交后该区域会在 mask 中变为透明。
+          预览说明：覆盖区域会作为编辑区域写入 mask，可叠加多个选区。
         </div>
       </div>
     </div>
