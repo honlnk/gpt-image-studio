@@ -336,8 +336,8 @@ function clamp(value: number, min: number, max: number) {
             应用区域
           </button>
         </div>
-        <div class="relative mx-auto max-h-[70vh] overflow-auto rounded-lg bg-gray-50 p-2">
-          <div class="relative inline-block">
+        <div class="relative mx-auto flex max-h-[70vh] items-center justify-center overflow-auto rounded-lg bg-gray-50 p-2">
+          <div class="relative shrink-0">
             <img
               ref="imageRef"
               class="max-h-[66vh] max-w-full select-none rounded object-contain"
