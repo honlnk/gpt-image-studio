@@ -6,6 +6,7 @@ export type Conversation = {
   id: string;
   title: string;
   summary: string;
+  isTitleManuallySet?: boolean;
   createdAt?: string;
   updatedAt: string;
   archivedAt?: string;

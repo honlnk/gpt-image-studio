@@ -126,6 +126,23 @@ export function useStudioImages(input: UseStudioImagesInput) {
     }
   }
 
+  async function renameImage(id: string, nextName: string) {
+    const image = imageById(id);
+    if (!image) return false;
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName) return false;
+
+    image.name = trimmedName;
+    image.updatedAt = isoTimestamp();
+    imageAssets.value = [
+      image,
+      ...imageAssets.value.filter((item) => item.id !== id),
+    ];
+    await saveImageAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+    return true;
+  }
+
   async function importImages(files: File[]) {
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) return;
@@ -257,6 +274,7 @@ export function useStudioImages(input: UseStudioImagesInput) {
     hydrateImagePreviews,
     imageAssets,
     imageById,
+    renameImage,
     clearTransientMask,
     createMaskAsset,
     importImages,

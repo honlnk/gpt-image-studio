@@ -27,6 +27,16 @@ const STORAGE_KEYS = {
 
 type SettingsTab = "api" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
+type RenameDialogState = {
+  isOpen: boolean;
+  conversationId: string;
+  initialTitle: string;
+};
+type RenameImageDialogState = {
+  isOpen: boolean;
+  imageId: string;
+  initialName: string;
+};
 
 export function useStudioViewModel() {
   const isHydrated = ref(false);
@@ -50,6 +60,16 @@ export function useStudioViewModel() {
   const previewImageId = ref("");
   const settingsInitialTab = ref<SettingsTab>("api");
   const settingsInitialBatchPanel = ref<BatchPanel>("images");
+  const renameDialog = ref<RenameDialogState>({
+    isOpen: false,
+    conversationId: "",
+    initialTitle: "",
+  });
+  const renameImageDialog = ref<RenameImageDialogState>({
+    isOpen: false,
+    imageId: "",
+    initialName: "",
+  });
   const feedback = useStudioFeedback();
   const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
@@ -318,6 +338,64 @@ export function useStudioViewModel() {
     await saveConversationDraft(currentConversationDraft(id)).catch(reportStorageError);
   }
 
+  async function renameConversation(id: string) {
+    const conversation = conversations.conversations.value.find((item) => item.id === id);
+    if (!conversation) return;
+    renameDialog.value = {
+      isOpen: true,
+      conversationId: id,
+      initialTitle: conversation.title,
+    };
+  }
+
+  function cancelRenameConversation() {
+    renameDialog.value = {
+      isOpen: false,
+      conversationId: "",
+      initialTitle: "",
+    };
+  }
+
+  async function confirmRenameConversation(nextTitle: string) {
+    const conversationId = renameDialog.value.conversationId;
+    const previousTitle = renameDialog.value.initialTitle;
+    if (!conversationId) return;
+
+    cancelRenameConversation();
+    if (nextTitle === previousTitle) return;
+    await conversations.renameConversation(conversationId, nextTitle);
+    feedback.notifySuccess("会话已重命名。");
+  }
+
+  function requestRenameImage(id: string) {
+    const image = images.imageById(id);
+    if (!image) return;
+    renameImageDialog.value = {
+      isOpen: true,
+      imageId: id,
+      initialName: image.name,
+    };
+  }
+
+  function cancelRenameImage() {
+    renameImageDialog.value = {
+      isOpen: false,
+      imageId: "",
+      initialName: "",
+    };
+  }
+
+  async function confirmRenameImage(nextName: string) {
+    const imageId = renameImageDialog.value.imageId;
+    const previousName = renameImageDialog.value.initialName;
+    if (!imageId) return;
+
+    cancelRenameImage();
+    if (nextName === previousName) return;
+    await images.renameImage(imageId, nextName);
+    feedback.notifySuccess("图片已重命名。");
+  }
+
   async function deleteConversationWithDraft(id: string) {
     await conversations.deleteConversation(id);
     await deleteConversationDraft(id).catch(reportStorageError);
@@ -358,6 +436,7 @@ export function useStudioViewModel() {
     isOpen: isConversationSidebarOpen,
     openSettings: openSettingsDefault,
     pendingJobCountByConversation: generation.pendingJobCountByConversation,
+    renameConversation,
     selectConversation: selectConversationWithDraft,
   });
   const chat = proxyRefs({
@@ -456,6 +535,7 @@ export function useStudioViewModel() {
     isOpen: ui.isLibraryOpen,
     openBatchOperations: openBatchImageOperations,
     previewImage: previewImageById,
+    renameImage: requestRenameImage,
     storageUsage: images.storageUsage,
   });
   const settingsModal = proxyRefs({
@@ -488,6 +568,24 @@ export function useStudioViewModel() {
     confirm: feedback.acceptConfirmDialog,
     dialog: feedback.confirmDialog,
   });
+  const renameModal = proxyRefs({
+    cancel: cancelRenameConversation,
+    confirm: confirmRenameConversation,
+    confirmLabel: "保存名称",
+    description: "重命名后，会话标题不会再被新消息自动覆盖。",
+    initialValue: computed(() => renameDialog.value.initialTitle),
+    isOpen: computed(() => renameDialog.value.isOpen),
+    title: "重命名会话",
+  });
+  const renameImageModal = proxyRefs({
+    cancel: cancelRenameImage,
+    confirm: confirmRenameImage,
+    confirmLabel: "保存名称",
+    description: "修改后会同步用于图片库展示和下载文件名。",
+    initialValue: computed(() => renameImageDialog.value.initialName),
+    isOpen: computed(() => renameImageDialog.value.isOpen),
+    title: "重命名图片",
+  });
 
   return {
     chat,
@@ -495,6 +593,8 @@ export function useStudioViewModel() {
     library,
     noticeToast,
     preview,
+    renameImageModal,
+    renameModal,
     settingsModal,
     sidebar,
   };

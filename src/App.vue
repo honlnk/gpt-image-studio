@@ -6,6 +6,7 @@ import ImagePreviewModal from "./components/studio/ImagePreviewModal.vue";
 import SettingsModal from "./components/studio/SettingsModal.vue";
 import ConfirmDialog from "./components/ui/ConfirmDialog.vue";
 import NoticeToast from "./components/ui/NoticeToast.vue";
+import RenameDialog from "./components/ui/RenameDialog.vue";
 import { useStudioViewModel } from "./app/studio";
 
 const studio = useStudioViewModel();
@@ -20,6 +21,7 @@ const studio = useStudioViewModel();
       :pending-job-count-by-conversation="studio.sidebar.pendingJobCountByConversation"
       @create-conversation="studio.sidebar.createConversation"
       @delete-conversation="studio.sidebar.deleteConversation"
+      @rename-conversation="studio.sidebar.renameConversation"
       @open-settings="studio.sidebar.openSettings"
       @select-conversation="studio.sidebar.selectConversation"
     />
@@ -80,6 +82,7 @@ const studio = useStudioViewModel();
       @delete-image="studio.library.deleteImage"
       @open-batch-operations="studio.library.openBatchOperations"
       @preview-image="studio.library.previewImage"
+      @rename-image="studio.library.renameImage"
       :storage-usage="studio.library.storageUsage"
     />
 
@@ -109,6 +112,25 @@ const studio = useStudioViewModel();
     <NoticeToast
       :notice="studio.noticeToast.notice"
       @close="studio.noticeToast.close"
+    />
+
+    <RenameDialog
+      :confirm-label="studio.renameModal.confirmLabel"
+      :description="studio.renameModal.description"
+      :initial-value="studio.renameModal.initialValue"
+      :is-open="studio.renameModal.isOpen"
+      :title="studio.renameModal.title"
+      @cancel="studio.renameModal.cancel"
+      @confirm="studio.renameModal.confirm"
+    />
+    <RenameDialog
+      :confirm-label="studio.renameImageModal.confirmLabel"
+      :description="studio.renameImageModal.description"
+      :initial-value="studio.renameImageModal.initialValue"
+      :is-open="studio.renameImageModal.isOpen"
+      :title="studio.renameImageModal.title"
+      @cancel="studio.renameImageModal.cancel"
+      @confirm="studio.renameImageModal.confirm"
     />
 
     <ConfirmDialog

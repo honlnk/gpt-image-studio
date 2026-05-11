@@ -12,6 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   createConversation: [];
   deleteConversation: [id: string];
+  renameConversation: [id: string];
   openSettings: [];
   selectConversation: [id: string];
   "update:isOpen": [value: boolean];
@@ -173,6 +174,15 @@ const filteredConversations = computed(() => {
         >
           {{ pendingJobCountByConversation[conversation.id] }}
         </span>
+        <button
+          class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-gray-200 group-hover:block focus:block"
+          type="button"
+          aria-label="重命名会话"
+          title="重命名会话"
+          @click.stop="emit('renameConversation', conversation.id)"
+        >
+          重命名
+        </button>
         <button
           class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-red-300 group-hover:block focus:block"
           type="button"

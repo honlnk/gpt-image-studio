@@ -19,6 +19,7 @@ const emit = defineEmits<{
   deleteImage: [id: string];
   openBatchOperations: [];
   previewImage: [id: string];
+  renameImage: [id: string];
   "update:isOpen": [value: boolean];
 }>();
 
@@ -206,6 +207,7 @@ function isAttached(id: string) {
           :is-attached="isAttached(selectedImage.id)"
           @clear-selection="selectedImageId = ''"
           @delete-image="emit('deleteImage', $event)"
+          @rename-image="emit('renameImage', $event)"
         />
       </Transition>
     </div>
