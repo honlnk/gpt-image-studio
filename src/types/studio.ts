@@ -63,3 +63,11 @@ export type AppSettings = {
 };
 
 export type EditorKey = "size" | "quality" | "background" | "format";
+
+export type ConversationDraft = {
+  conversationId: string;
+  composerText: string;
+  attachedImageIds: string[];
+  generationParams: GenerationParams;
+  updatedAtMs: number;
+};

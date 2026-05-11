@@ -10,12 +10,19 @@ import {
 } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
-import { readStorage, writeStorage } from "../../shared/localStorage";
+import {
+  deleteConversationDraft,
+  deleteConversationDrafts,
+  loadConversationDraft,
+  saveConversationDraft,
+} from "../../services/conversationDrafts";
+import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import { useStudioUiState } from "./useStudioUiState";
-import type { Message } from "../../types/studio";
+import type { ConversationDraft, GenerationParams, Message } from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
+  draftAttachments: "gpt-image-studio:draft-attachments",
 } as const;
 
 type SettingsTab = "api" | "backup" | "batch";
@@ -28,7 +35,12 @@ export function useStudioViewModel() {
     onStorageError: reportStorageError,
   });
   const ui = useStudioUiState();
-  const composerText = ref(readStorage(STORAGE_KEYS.draftComposerText, ""));
+  const composerText = ref("");
+  const legacyComposerText = readStorage(STORAGE_KEYS.draftComposerText, "");
+  const legacyAttachedImageIds = readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []);
+  let isApplyingDraft = false;
+  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let draftSwitchQueue = Promise.resolve();
 
   const messages = ref<Message[]>([]);
   const isConversationSidebarOpen = ref(false);
@@ -159,22 +171,173 @@ export function useStudioViewModel() {
   }
 
   onMounted(() => {
-    void restoreFromStorage();
+    void restoreFromStorage().then(async () => {
+      const activeConversationId = conversations.activeConversationId.value;
+      if (!activeConversationId) return;
+
+      const draft = await loadConversationDraft(activeConversationId).catch(reportStorageError);
+      if (draft) {
+        applyConversationDraft(draft);
+        return;
+      }
+
+      if (legacyComposerText || legacyAttachedImageIds.length) {
+        applyConversationDraft(createLegacyDraft(activeConversationId));
+      } else {
+        applyConversationDraft(createDefaultDraft(activeConversationId));
+      }
+    });
   });
 
-  watch(composerText, (value) => {
-    writeStorage(STORAGE_KEYS.draftComposerText, value);
-  });
+  watch(
+    [
+      composerText,
+      images.attachedImages,
+      settings.activeSizePreset,
+      settings.imageWidth,
+      settings.imageHeight,
+      settings.quality,
+      settings.background,
+      settings.outputFormat,
+      conversations.activeConversationId,
+    ],
+    () => {
+      if (!isHydrated.value || isApplyingDraft) return;
+      scheduleSaveActiveDraft();
+    },
+    { deep: true },
+  );
+
+  function createDefaultDraft(conversationId: string): ConversationDraft {
+    return {
+      conversationId,
+      composerText: "",
+      attachedImageIds: [],
+      generationParams: settings.currentGenerationParams(),
+      updatedAtMs: Date.now(),
+    };
+  }
+
+  function createLegacyDraft(conversationId: string): ConversationDraft {
+    return {
+      conversationId,
+      composerText: legacyComposerText,
+      attachedImageIds: legacyAttachedImageIds,
+      generationParams: settings.currentGenerationParams(),
+      updatedAtMs: Date.now(),
+    };
+  }
+
+  function applyConversationDraft(draft: ConversationDraft) {
+    isApplyingDraft = true;
+    composerText.value = draft.composerText;
+    images.attachedImages.value = draft.attachedImageIds.filter((id) => Boolean(images.imageById(id)));
+    applyGenerationParams(draft.generationParams);
+    isApplyingDraft = false;
+  }
+
+  function applyGenerationParams(params: GenerationParams) {
+    settings.applySizePreset(params.size);
+    settings.imageWidth.value = params.width;
+    settings.imageHeight.value = params.height;
+    settings.quality.value = params.quality;
+    settings.background.value = params.background;
+    settings.outputFormat.value = params.outputFormat;
+  }
+
+  function currentConversationDraft(conversationId: string): ConversationDraft {
+    return {
+      conversationId,
+      composerText: composerText.value,
+      attachedImageIds: [...images.attachedImages.value],
+      generationParams: settings.currentGenerationParams(),
+      updatedAtMs: Date.now(),
+    };
+  }
+
+  function scheduleSaveActiveDraft() {
+    if (draftSaveTimer) {
+      clearTimeout(draftSaveTimer);
+    }
+    draftSaveTimer = setTimeout(() => {
+      draftSaveTimer = null;
+      void saveActiveDraft();
+    }, 250);
+  }
+
+  async function saveActiveDraft() {
+    const conversationId = conversations.activeConversationId.value;
+    if (!conversationId) return;
+
+    const draft = currentConversationDraft(conversationId);
+    await saveConversationDraft(draft).catch(reportStorageError);
+  }
+
+  function selectConversationWithDraft(id: string) {
+    draftSwitchQueue = draftSwitchQueue
+      .catch(reportStorageError)
+      .then(async () => {
+        await saveActiveDraft();
+        conversations.selectConversation(id);
+        const nextDraft = await loadConversationDraft(id).catch(reportStorageError);
+        if (nextDraft) {
+          applyConversationDraft(nextDraft);
+        } else {
+          applyConversationDraft(createDefaultDraft(id));
+        }
+      });
+  }
+
+  async function createConversationWithDraft() {
+    await saveActiveDraft();
+    await conversations.createConversation();
+    const id = conversations.activeConversationId.value;
+    if (!id) return;
+    applyConversationDraft(createDefaultDraft(id));
+    await saveConversationDraft(currentConversationDraft(id)).catch(reportStorageError);
+  }
+
+  async function deleteConversationWithDraft(id: string) {
+    await conversations.deleteConversation(id);
+    await deleteConversationDraft(id).catch(reportStorageError);
+
+    const activeId = conversations.activeConversationId.value;
+    if (!activeId) return;
+    const draft = await loadConversationDraft(activeId).catch(reportStorageError);
+    if (draft) {
+      applyConversationDraft(draft);
+    } else {
+      applyConversationDraft(createDefaultDraft(activeId));
+    }
+  }
+
+  async function deleteConversationsWithDraft(ids: string[]) {
+    await conversations.deleteConversations(ids);
+    await deleteConversationDrafts(ids).catch(reportStorageError);
+
+    const activeId = conversations.activeConversationId.value;
+    if (!activeId) {
+      clearConversationDraft();
+      return;
+    }
+
+    const draft = await loadConversationDraft(activeId).catch(reportStorageError);
+    if (draft) {
+      applyConversationDraft(draft);
+    } else {
+      applyConversationDraft(createDefaultDraft(activeId));
+    }
+  }
 
   const sidebar = proxyRefs({
     activeConversationId: conversations.activeConversationId,
     conversations: conversations.conversations,
-    createConversation: conversations.createConversation,
-    deleteConversation: conversations.deleteConversation,
+    createConversation: createConversationWithDraft,
+    deleteConversation: deleteConversationWithDraft,
     isOpen: isConversationSidebarOpen,
     openSettings: openSettingsDefault,
     pendingJobCountByConversation: generation.pendingJobCountByConversation,
-    selectConversation: conversations.selectConversation,
+    selectConversation: selectConversationWithDraft,
   });
   const chat = proxyRefs({
     activeAttachments: images.activeAttachments,
@@ -233,7 +396,7 @@ export function useStudioViewModel() {
     connectionMode: settings.connectionMode,
     close: ui.closeSettings,
     conversations: conversations.conversations,
-    deleteConversations: conversations.deleteConversations,
+    deleteConversations: deleteConversationsWithDraft,
     deleteImages: images.deleteImages,
     exportBackup: backup.exportBackup,
     images: images.imageAssets,

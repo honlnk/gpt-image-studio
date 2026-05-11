@@ -9,7 +9,6 @@ import {
 import { isoTimestamp } from "../../shared/dateTime";
 import { formatError } from "../../shared/errors";
 import { createId } from "../../shared/id";
-import { readJsonStorage, writeStorage } from "../../shared/localStorage";
 import { readImageDimensions } from "../../services/imageMetadata";
 import { createObjectUrl, revokeObjectUrls } from "../../shared/objectUrls";
 import { estimateStorageUsage } from "../../services/storageUsage";
@@ -27,14 +26,8 @@ type UseStudioImagesInput = {
   requestConfirmation: (input: StudioConfirmDialog) => Promise<boolean>;
 };
 
-const IMAGE_STORAGE_KEYS = {
-  draftAttachments: "gpt-image-studio:draft-attachments",
-} as const;
-
 export function useStudioImages(input: UseStudioImagesInput) {
-  const attachedImages = ref<string[]>(
-    readJsonStorage<string[]>(IMAGE_STORAGE_KEYS.draftAttachments, []),
-  );
+  const attachedImages = ref<string[]>([]);
   const imageAssets = ref<ImageAsset[]>([]);
   const storageUsage = ref<StorageUsage | null>(null);
 
@@ -42,14 +35,6 @@ export function useStudioImages(input: UseStudioImagesInput) {
     attachedImages.value
       .map((id) => imageAssets.value.find((image) => image.id === id))
       .filter((image): image is ImageAsset => Boolean(image)),
-  );
-
-  watch(
-    attachedImages,
-    (value) => {
-      writeStorage(IMAGE_STORAGE_KEYS.draftAttachments, JSON.stringify(value));
-    },
-    { deep: true },
   );
 
   watch(

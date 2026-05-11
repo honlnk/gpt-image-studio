@@ -21,6 +21,7 @@ export async function estimateStorageUsage(): Promise<StorageUsage> {
     imageAssets,
     imageBlobs,
     settings,
+    conversationDrafts,
     browserEstimate,
   ] = await Promise.all([
     getAllFromStore<Conversation>(STORE_NAMES.conversations),
@@ -28,6 +29,7 @@ export async function estimateStorageUsage(): Promise<StorageUsage> {
     getAllFromStore<ImageAsset>(STORE_NAMES.imageAssets),
     getAllFromStore<ImageBlobRecord>(STORE_NAMES.imageBlobs),
     getAllFromStore<unknown>(STORE_NAMES.settings),
+    getAllFromStore<unknown>(STORE_NAMES.conversationDrafts),
     estimateBrowserStorage(),
   ]);
 
@@ -40,6 +42,7 @@ export async function estimateStorageUsage(): Promise<StorageUsage> {
     messages,
     imageAssets,
     settings,
+    conversationDrafts,
   });
   const browserUsageBytes = browserEstimate.usage;
   const metadataBytes = Math.max(
