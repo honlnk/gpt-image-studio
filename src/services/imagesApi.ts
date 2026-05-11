@@ -69,6 +69,13 @@ export async function editImage(input: EditImageInput) {
   });
 
   logImageRequest("edit", input.model, input.images);
+  if (input.mask) {
+    console.info("[imagesApi] mask payload", JSON.stringify({
+      name: input.mask.name,
+      sizeBytes: input.mask.blob.size,
+      type: input.mask.blob.type || "unknown",
+    }));
+  }
 
   let response: Response;
   try {

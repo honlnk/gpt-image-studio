@@ -86,10 +86,28 @@ async function applyMask() {
   canvas.height = naturalHeight;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  const imageData = ctx.createImageData(naturalWidth, naturalHeight);
+  for (let index = 0; index < imageData.data.length; index += 4) {
+    imageData.data[index] = 255;
+    imageData.data[index + 1] = 255;
+    imageData.data[index + 2] = 255;
+    imageData.data[index + 3] = 255;
+  }
 
-  ctx.fillStyle = "rgba(255, 255, 255, 1)";
-  ctx.fillRect(0, 0, naturalWidth, naturalHeight);
-  ctx.clearRect(sourceRect.left, sourceRect.top, sourceRect.width, sourceRect.height);
+  const startX = clamp(sourceRect.left, 0, naturalWidth);
+  const startY = clamp(sourceRect.top, 0, naturalHeight);
+  const endX = clamp(sourceRect.left + sourceRect.width, 0, naturalWidth);
+  const endY = clamp(sourceRect.top + sourceRect.height, 0, naturalHeight);
+  for (let y = startY; y < endY; y += 1) {
+    for (let x = startX; x < endX; x += 1) {
+      const offset = (y * naturalWidth + x) * 4;
+      imageData.data[offset] = 255;
+      imageData.data[offset + 1] = 255;
+      imageData.data[offset + 2] = 255;
+      imageData.data[offset + 3] = 0;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
 
   const blob = await canvasToBlob(canvas);
   emit("apply", blob);

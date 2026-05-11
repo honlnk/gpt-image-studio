@@ -352,6 +352,16 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
       }
     }
 
+    if (maskBlob) {
+      console.info("[generation] edit with mask", JSON.stringify({
+        prompt: prompt.slice(0, 80),
+        sourceImageId: editSourceImageId,
+        maskImageId: editMaskImageId,
+        referenceCount: references.length,
+        sentImageCount: (editImages.length ? editImages : imageSources).length,
+      }));
+    }
+
     return input.imageClient.edit({
       prompt,
       params,
