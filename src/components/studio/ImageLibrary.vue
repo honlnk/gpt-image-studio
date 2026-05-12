@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import type { StorageUsage } from "../../services/storageUsage";
 import type { ImageAsset } from "../../types/studio";
+import { IMAGE_TAG_COLORS, imageTagDotColor } from "../image-library/imageTagColors";
 import ImageDetailsPanel from "../image-library/ImageDetailsPanel.vue";
 import ImageGrid from "../image-library/ImageGrid.vue";
 import StorageUsagePanel from "../image-library/StorageUsagePanel.vue";
@@ -20,10 +21,12 @@ const emit = defineEmits<{
   openBatchOperations: [];
   previewImage: [id: string];
   renameImage: [id: string];
+  setImageTagColor: [id: string, color: ImageAsset["tagColor"] | undefined];
   "update:isOpen": [value: boolean];
 }>();
 
 const activeFilter = ref<"current" | "all">("current");
+const activeColorFilter = ref<"all" | ImageAsset["tagColor"]>("all");
 const selectedImageId = ref("");
 
 const currentConversationImages = computed(() =>
@@ -31,11 +34,13 @@ const currentConversationImages = computed(() =>
     (image) => image.conversationId === props.activeConversationId,
   ),
 );
-const filteredImages = computed(() =>
-  activeFilter.value === "current"
-    ? currentConversationImages.value
-    : props.images,
+const scopeImages = computed(() =>
+  activeFilter.value === "current" ? currentConversationImages.value : props.images,
 );
+const filteredImages = computed(() => {
+  if (activeColorFilter.value === "all") return scopeImages.value;
+  return scopeImages.value.filter((image) => image.tagColor === activeColorFilter.value);
+});
 const selectedImage = computed(() => {
   if (!selectedImageId.value) return null;
   return (
@@ -101,6 +106,14 @@ function selectImage(id: string) {
 
 function isAttached(id: string) {
   return props.attachedImageIds.includes(id);
+}
+
+function toggleColorFilter(nextColor: ImageAsset["tagColor"] | "all") {
+  activeColorFilter.value = nextColor;
+}
+
+function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined) {
+  emit("setImageTagColor", id, color);
 }
 </script>
 
@@ -182,6 +195,34 @@ function isAttached(id: string) {
           全部图片
         </button>
       </div>
+      <div class="mt-2 flex items-center gap-2 rounded-lg bg-gray-50 px-2 py-2">
+        <button
+          aria-label="不过滤颜色"
+          :class="[
+            'h-3 w-3 cursor-pointer rounded-full border transition-transform hover:scale-105',
+            activeColorFilter === 'all'
+              ? 'border-gray-700 ring-2 ring-gray-400/60'
+              : 'border-gray-300',
+          ]"
+          style="background-color: #ffffff"
+          type="button"
+          @click="toggleColorFilter('all')"
+        />
+        <button
+          v-for="color in IMAGE_TAG_COLORS"
+          :key="color"
+          :aria-label="`筛选${color}`"
+          :class="[
+            'h-3 w-3 cursor-pointer rounded-full border transition-transform hover:scale-105',
+            activeColorFilter === color
+              ? 'border-gray-700 ring-2 ring-gray-400/60'
+              : 'border-gray-300',
+          ]"
+          :style="{ backgroundColor: imageTagDotColor(color) }"
+          type="button"
+          @click="toggleColorFilter(color)"
+        />
+      </div>
 
     </div>
 
@@ -208,6 +249,7 @@ function isAttached(id: string) {
           @clear-selection="selectedImageId = ''"
           @delete-image="emit('deleteImage', $event)"
           @rename-image="emit('renameImage', $event)"
+          @set-tag-color="setImageTagColor"
         />
       </Transition>
     </div>

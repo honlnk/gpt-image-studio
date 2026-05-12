@@ -10,6 +10,7 @@ import {
   imageSize,
   sourceLabel,
 } from "./imageLibraryFormatters";
+import { IMAGE_TAG_COLORS, imageTagDotColor } from "./imageTagColors";
 
 const props = defineProps<{
   image: ImageAsset;
@@ -20,12 +21,21 @@ const emit = defineEmits<{
   clearSelection: [];
   deleteImage: [id: string];
   renameImage: [id: string];
+  setTagColor: [id: string, color: ImageAsset["tagColor"] | undefined];
 }>();
 
 const now = useNow();
 const createdAtLabel = computed(() =>
   formatRelativeTime(props.image.createdAt, now.value),
 );
+
+function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
+  if (props.image.tagColor === nextColor) {
+    emit("setTagColor", props.image.id, undefined);
+    return;
+  }
+  emit("setTagColor", props.image.id, nextColor);
+}
 </script>
 
 <template>
@@ -74,6 +84,24 @@ const createdAtLabel = computed(() =>
           </svg>
         </button>
       </div>
+    </div>
+
+    <div class="mb-3 flex items-center gap-2">
+      <span class="text-xs text-gray-400">分类颜色</span>
+      <button
+        v-for="color in IMAGE_TAG_COLORS"
+        :key="color"
+        :aria-label="`标记为${color}`"
+        :class="[
+          'h-3 w-3 cursor-pointer rounded-full border transition-transform hover:scale-105',
+          image.tagColor === color
+            ? 'border-gray-700 ring-2 ring-gray-400/60'
+            : 'border-gray-300',
+        ]"
+        :style="{ backgroundColor: imageTagDotColor(color) }"
+        type="button"
+        @click="toggleTagColor(color)"
+      />
     </div>
 
     <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">

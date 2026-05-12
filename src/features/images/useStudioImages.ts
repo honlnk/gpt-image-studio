@@ -143,6 +143,20 @@ export function useStudioImages(input: UseStudioImagesInput) {
     return true;
   }
 
+  async function setImageTagColor(id: string, nextColor?: ImageAsset["tagColor"]) {
+    const image = imageById(id);
+    if (!image) return false;
+
+    image.tagColor = nextColor;
+    image.updatedAt = isoTimestamp();
+    imageAssets.value = [
+      image,
+      ...imageAssets.value.filter((item) => item.id !== id),
+    ];
+    await saveImageAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+    return true;
+  }
+
   async function importImages(files: File[]) {
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) return;
@@ -275,6 +289,7 @@ export function useStudioImages(input: UseStudioImagesInput) {
     imageAssets,
     imageById,
     renameImage,
+    setImageTagColor,
     clearTransientMask,
     createMaskAsset,
     importImages,
@@ -290,6 +305,7 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     blobKey: imageAsset.blobKey,
     name: imageAsset.name,
     source: imageAsset.source,
+    tagColor: imageAsset.tagColor,
     mimeType: imageAsset.mimeType,
     width: imageAsset.width,
     height: imageAsset.height,

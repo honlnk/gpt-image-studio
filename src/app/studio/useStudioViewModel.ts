@@ -396,6 +396,10 @@ export function useStudioViewModel() {
     feedback.notifySuccess("图片已重命名。");
   }
 
+  async function setImageTagColor(id: string, color: (typeof images.imageAssets.value)[number]["tagColor"] | undefined) {
+    await images.setImageTagColor(id, color);
+  }
+
   async function deleteConversationWithDraft(id: string) {
     await conversations.deleteConversation(id);
     await deleteConversationDraft(id).catch(reportStorageError);
@@ -536,6 +540,7 @@ export function useStudioViewModel() {
     openBatchOperations: openBatchImageOperations,
     previewImage: previewImageById,
     renameImage: requestRenameImage,
+    setImageTagColor,
     storageUsage: images.storageUsage,
   });
   const settingsModal = proxyRefs({

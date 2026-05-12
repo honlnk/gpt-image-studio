@@ -452,6 +452,7 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     blobKey: imageAsset.blobKey,
     name: imageAsset.name,
     source: imageAsset.source,
+    tagColor: imageAsset.tagColor,
     mimeType: imageAsset.mimeType,
     width: imageAsset.width,
     height: imageAsset.height,

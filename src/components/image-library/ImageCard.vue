@@ -6,6 +6,7 @@ import {
   imageDownloadName,
   sourceLabel,
 } from "./imageLibraryFormatters";
+import { imageTagCardBackground, imageTagDotColor } from "./imageTagColors";
 
 const props = defineProps<{
   image: ImageAsset;
@@ -23,16 +24,38 @@ const emit = defineEmits<{
 const createdAtLabel = computed(() =>
   formatRelativeTime(props.image.createdAt, props.nowMs),
 );
+const cardStyle = computed(() => {
+  if (!props.image.tagColor) return undefined;
+  return {
+    backgroundColor: imageTagCardBackground(props.image.tagColor),
+  };
+});
+const selectedAccentColor = computed(() => {
+  if (!props.isSelected) return undefined;
+  if (!props.image.tagColor) return "#6b7280";
+  return imageTagDotColor(props.image.tagColor);
+});
+const selectedBorderStyle = computed(() => {
+  if (!selectedAccentColor.value) return undefined;
+  return {
+    borderColor: selectedAccentColor.value,
+  };
+});
+const titleStyle = computed(() => {
+  if (!selectedAccentColor.value) return undefined;
+  return {
+    color: selectedAccentColor.value,
+  };
+});
 </script>
 
 <template>
   <article
     :class="[
       'mb-2 flex cursor-pointer items-center gap-3 rounded-xl border p-2 transition-colors',
-      isSelected
-        ? 'border-gray-400 bg-gray-50'
-        : 'border-gray-200 hover:bg-gray-50',
+      isSelected ? '' : 'border-gray-200 hover:bg-gray-50',
     ]"
+    :style="[cardStyle, selectedBorderStyle]"
     @click="emit('selectImage', image.id)"
   >
     <div
@@ -56,7 +79,7 @@ const createdAtLabel = computed(() =>
       </button>
     </div>
     <div class="min-w-0 flex-1">
-      <div class="truncate text-sm font-medium text-gray-800">
+      <div class="truncate text-sm font-medium text-gray-800" :style="titleStyle">
         {{ image.name }}
       </div>
       <div class="truncate text-xs text-gray-500">
