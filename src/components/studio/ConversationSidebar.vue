@@ -159,7 +159,7 @@ const filteredConversations = computed(() => {
         ]"
       >
         <button
-          class="min-w-0 flex-1 cursor-pointer px-3 py-2 text-left text-sm"
+          class="min-w-0 flex-1 cursor-pointer truncate px-3 py-2 text-left text-sm"
           type="button"
           @click="
             emit('selectConversation', conversation.id);
