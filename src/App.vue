@@ -83,6 +83,7 @@ const studio = useStudioViewModel();
       @open-batch-operations="studio.library.openBatchOperations"
       @preview-image="studio.library.previewImage"
       @rename-image="studio.library.renameImage"
+      @set-image-tag-color="studio.library.setImageTagColor"
       :storage-usage="studio.library.storageUsage"
     />
 

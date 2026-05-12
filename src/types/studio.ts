@@ -1,6 +1,14 @@
 export type MessageRole = "user" | "assistant";
 export type MessageStatus = "pending" | "success" | "error";
 export type ImageSource = "generated" | "imported";
+export type ImageTagColor =
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "cyan"
+  | "blue"
+  | "purple";
 
 export type Conversation = {
   id: string;
@@ -30,6 +38,7 @@ export type ImageAsset = {
   blobKey?: string;
   name: string;
   source: ImageSource;
+  tagColor?: ImageTagColor;
   mimeType?: string;
   width?: number;
   height?: number;
