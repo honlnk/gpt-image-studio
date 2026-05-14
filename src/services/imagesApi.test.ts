@@ -1,5 +1,70 @@
-import { describe, expect, it } from "vitest";
-import { getCustomSizeError } from "./imagesApi";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { editImage, generateImage, getCustomSizeError } from "./imagesApi";
+import type { GenerationParams } from "../types/studio";
+
+const generationParams: GenerationParams = {
+  size: "1024x1024",
+  width: 1024,
+  height: 1024,
+  quality: "auto",
+  background: "auto",
+  outputFormat: "png",
+};
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("images API requests", () => {
+  it("requests base64 JSON for image generation", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "generated-image" }],
+      }),
+    );
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "画一张图",
+        params: generationParams,
+      }),
+    ).resolves.toBe("generated-image");
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(requestBody.response_format).toBe("b64_json");
+  });
+
+  it("requests base64 JSON for image edits", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "edited-image" }],
+      }),
+    );
+
+    await expect(
+      editImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "改一下图",
+        params: generationParams,
+        images: [
+          {
+            blob: new Blob(["image"], { type: "image/png" }),
+            name: "image.png",
+          },
+        ],
+      }),
+    ).resolves.toBe("edited-image");
+
+    const requestBody = fetchMock.mock.calls[0]?.[1]?.body;
+    expect(requestBody).toBeInstanceOf(FormData);
+    expect((requestBody as FormData).get("response_format")).toBe("b64_json");
+  });
+});
 
 describe("getCustomSizeError", () => {
   it("requires integer dimensions", () => {
@@ -38,3 +103,12 @@ describe("getCustomSizeError", () => {
     expect(getCustomSizeError(1920, 1088)).toBe("");
   });
 });
+
+function jsonResponse(payload: unknown) {
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
