@@ -1,69 +1,158 @@
 <script setup lang="ts">
-import type { EditorKey, GenerationParams } from "../../types/studio";
+import { computed } from "vue";
+import type {
+  EditorKey,
+  GenerationParams,
+  SizeRatio,
+  SizeResolution,
+} from "../../types/studio";
 
-defineProps<{
+type SizeRatioOption = {
+  value: SizeRatio;
+  label: string;
+  widthRatio: number;
+  heightRatio: number;
+};
+
+const props = defineProps<{
   activeEditor: EditorKey | null;
-  activeSizePreset: string;
+  activeSizePreset: GenerationParams["size"];
   background: string;
   backgroundOptions: readonly { value: string; label: string }[];
   customSizeError: string;
   imageHeight: number;
   imageWidth: number;
-  isEditorExpanded: boolean;
   outputFormat: string;
   formatOptions: readonly { value: string; label: string }[];
   quality: string;
   qualityOptions: readonly { value: string; label: string }[];
-  sizePresets: readonly GenerationParams["size"][];
+  sizeRatioOptions: readonly SizeRatioOption[];
+  sizeResolution: SizeResolution;
+  sizeResolutionOptions: readonly { value: SizeResolution; label: string }[];
 }>();
 
 const emit = defineEmits<{
   applySizePreset: [preset: GenerationParams["size"]];
+  applySizeResolution: [resolution: SizeResolution];
   "update:background": [value: string];
   "update:imageHeight": [value: number];
   "update:imageWidth": [value: number];
   "update:outputFormat": [value: string];
   "update:quality": [value: string];
 }>();
+
+const isRatioMode = computed(() =>
+  props.sizeRatioOptions.some((option) => option.value === props.activeSizePreset),
+);
+
+function selectSizePreset(preset: GenerationParams["size"]) {
+  emit("applySizePreset", preset);
+}
+
+function selectRatioMode() {
+  if (isRatioMode.value) return;
+  emit("applySizePreset", "1:1");
+}
+
+function selectSizeResolution(resolution: SizeResolution) {
+  emit("applySizeResolution", resolution);
+}
+
+function selectBackground(value: string) {
+  emit("update:background", value);
+}
+
+function selectOutputFormat(value: string) {
+  emit("update:outputFormat", value);
+}
+
+function selectQuality(value: string) {
+  emit("update:quality", value);
+}
 </script>
 
 <template>
   <div
-    :class="[
-      'editor-collapse mb-2',
-      isEditorExpanded ? 'editor-collapse--open' : '',
-    ]"
+    v-if="activeEditor"
+    class="absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-[calc(100vw-3rem)] -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-2 shadow-lg"
     @click.stop
   >
-    <div class="editor-collapse__inner">
-      <div
-        v-if="activeEditor === 'size'"
-        class="flex flex-wrap items-center gap-1.5"
-      >
-        <button
-          v-for="preset in sizePresets"
-          :key="preset"
-          :class="[
-            'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-            activeSizePreset === preset
-              ? 'border-gray-400 bg-gray-100 text-gray-900'
-              : 'border-gray-200 text-gray-400 hover:bg-gray-50',
-          ]"
-          type="button"
-          @click="emit('applySizePreset', preset)"
-        >
-          {{
-            preset === "custom"
-              ? "自定义"
-              : preset === "auto"
-                ? "自动"
-                : preset
-          }}
-        </button>
-        <div
-          v-if="activeSizePreset === 'custom'"
-          class="flex items-center gap-2"
-        >
+      <div v-if="activeEditor === 'size'" class="space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <button
+              :class="[
+                'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
+                activeSizePreset === 'auto'
+                  ? 'border-gray-400 bg-gray-100 text-gray-900'
+                  : 'border-gray-200 text-gray-400 hover:bg-gray-50',
+              ]"
+              type="button"
+              @click="selectSizePreset('auto')"
+            >
+              自动
+            </button>
+            <button
+              :class="[
+                'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
+                isRatioMode
+                  ? 'border-gray-400 bg-gray-100 text-gray-900'
+                  : 'border-gray-200 text-gray-400 hover:bg-gray-50',
+              ]"
+              type="button"
+              @click="selectRatioMode"
+            >
+              比例
+            </button>
+            <button
+              :class="[
+                'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
+                activeSizePreset === 'custom'
+                  ? 'border-gray-400 bg-gray-100 text-gray-900'
+                  : 'border-gray-200 text-gray-400 hover:bg-gray-50',
+              ]"
+              type="button"
+              @click="selectSizePreset('custom')"
+            >
+              自定义
+            </button>
+          </div>
+          <div v-if="isRatioMode" class="flex items-center gap-1">
+            <button
+              v-for="resolution in sizeResolutionOptions"
+              :key="resolution.value"
+              :class="[
+                'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
+                sizeResolution === resolution.value
+                  ? 'border-gray-400 bg-gray-100 text-gray-900'
+                  : 'border-gray-200 text-gray-400 hover:bg-gray-50',
+              ]"
+              type="button"
+              @click="selectSizeResolution(resolution.value)"
+            >
+              {{ resolution.label }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="isRatioMode" class="grid w-64 grid-cols-4 gap-1.5">
+          <button
+            v-for="ratio in sizeRatioOptions"
+            :key="ratio.value"
+            :class="[
+              'cursor-pointer rounded border px-1.5 py-1 text-xs transition-colors',
+              activeSizePreset === ratio.value
+                ? 'border-gray-400 bg-gray-100 text-gray-900'
+                : 'border-gray-200 text-gray-500 hover:bg-gray-50',
+            ]"
+            type="button"
+            @click="selectSizePreset(ratio.value)"
+          >
+            {{ ratio.label }}
+          </button>
+        </div>
+
+        <div v-if="activeSizePreset === 'custom'" class="flex items-center gap-2">
           <input
             :value="imageWidth"
             class="w-20 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 outline-none focus:border-gray-400"
@@ -96,10 +185,7 @@ const emit = defineEmits<{
             "
           />
         </div>
-        <p
-          v-if="customSizeError"
-          class="basis-full pt-1 text-xs text-red-500"
-        >
+        <p v-if="customSizeError" class="basis-full pt-1 text-xs text-red-500">
           {{ customSizeError }}
         </p>
       </div>
@@ -118,7 +204,7 @@ const emit = defineEmits<{
               : 'border-gray-200 text-gray-400 hover:bg-gray-50',
           ]"
           type="button"
-          @click="emit('update:quality', opt.value)"
+          @click="selectQuality(opt.value)"
         >
           {{ opt.label }}
         </button>
@@ -138,7 +224,7 @@ const emit = defineEmits<{
               : 'border-gray-200 text-gray-400 hover:bg-gray-50',
           ]"
           type="button"
-          @click="emit('update:background', opt.value)"
+          @click="selectBackground(opt.value)"
         >
           {{ opt.label }}
         </button>
@@ -158,27 +244,10 @@ const emit = defineEmits<{
               : 'border-gray-200 text-gray-400 hover:bg-gray-50',
           ]"
           type="button"
-          @click="emit('update:outputFormat', opt.value)"
+          @click="selectOutputFormat(opt.value)"
         >
           {{ opt.label }}
         </button>
       </div>
     </div>
-  </div>
 </template>
-
-<style scoped>
-.editor-collapse {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.2s ease-out;
-}
-
-.editor-collapse--open {
-  grid-template-rows: 1fr;
-}
-
-.editor-collapse__inner {
-  overflow: hidden;
-}
-</style>

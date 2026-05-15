@@ -56,8 +56,18 @@ export type ImageAsset = {
   previewUrl?: string;
 };
 
+export type SizeRatio = "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "3:4" | "2:3" | "9:16";
+export type SizeResolution = "1k" | "2k" | "4k";
+
 export type GenerationParams = {
-  size: "auto" | "1024x1024" | "1536x1024" | "1024x1536" | "custom";
+  size:
+    | "auto"
+    | "1024x1024"
+    | "1536x1024"
+    | "1024x1536"
+    | SizeRatio
+    | "custom";
+  resolution: SizeResolution;
   width: number;
   height: number;
   quality: "auto" | "high" | "medium" | "low";

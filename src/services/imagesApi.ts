@@ -165,7 +165,11 @@ function validateBackground(
 }
 
 function apiSize(params: GenerationParams) {
-  if (params.size === "custom") {
+  if (params.size === "auto") {
+    return "auto";
+  }
+
+  if (params.size.includes(":") || params.size === "custom") {
     validateCustomSize(params.width, params.height);
     return `${params.width}x${params.height}`;
   }

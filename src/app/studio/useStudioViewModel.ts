@@ -275,6 +275,7 @@ export function useStudioViewModel() {
   }
 
   function applyGenerationParams(params: GenerationParams) {
+    settings.applySizeResolution(params.resolution ?? "1k");
     settings.applySizePreset(params.size);
     settings.imageWidth.value = params.width;
     settings.imageHeight.value = params.height;
@@ -450,6 +451,7 @@ export function useStudioViewModel() {
     activeMessages: conversations.activeMessages,
     activeSizePreset: settings.activeSizePreset,
     applySizePreset: settings.applySizePreset,
+    applySizeResolution: settings.applySizeResolution,
     attachImage: images.attachImage,
     background: settings.background,
     backgroundLabel: settings.backgroundLabel,
@@ -468,7 +470,6 @@ export function useStudioViewModel() {
     imageWidth: settings.imageWidth,
     importImages: images.importImages,
     createMaskAsset: images.createMaskAsset,
-    isEditorExpanded: ui.isEditorExpanded,
     isGenerating: generation.isGenerating,
     isLibraryOpen: ui.isLibraryOpen,
     model: settings.model,
@@ -526,7 +527,9 @@ export function useStudioViewModel() {
     },
     retryMessage: generation.retryMessage,
     sizeLabel: settings.sizeLabel,
-    sizePresets: settings.sizePresets,
+    sizeRatioOptions: settings.sizeRatioOptions,
+    sizeResolution: settings.sizeResolution,
+    sizeResolutionOptions: settings.sizeResolutionOptions,
     submitMessage: generation.submitMessage,
     toggleEditor: ui.toggleEditor,
   });

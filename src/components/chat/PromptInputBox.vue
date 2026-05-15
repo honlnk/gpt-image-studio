@@ -106,35 +106,38 @@ defineExpose({ focusComposer });
       @keydown="handleComposerKeydown"
       @paste="importFromPaste"
     />
-    <div class="flex items-center justify-between">
-      <label
-        class="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
-        aria-label="上传图片"
-        title="上传图片"
-      >
-        <svg
-          class="h-5 w-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+    <div class="flex items-end justify-between">
+      <div class="flex min-w-0 flex-1 items-center gap-1.5">
+        <label
+          class="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+          aria-label="上传图片"
+          title="上传图片"
         >
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-        </svg>
-        <input
-          class="sr-only"
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          multiple
-          @change="importFromInput"
-        />
-      </label>
+          <svg
+            class="h-5 w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+          <input
+            class="sr-only"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            @change="importFromInput"
+          />
+        </label>
+        <slot />
+      </div>
       <button
-        class="shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
+        class="ml-1.5 shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
         :disabled="!canSend"
         type="submit"
       >

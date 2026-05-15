@@ -6,6 +6,8 @@ import type {
   GenerationParams,
   ImageAsset,
   Message,
+  SizeRatio,
+  SizeResolution,
 } from "../../types/studio";
 import ChatComposer from "../chat/ChatComposer.vue";
 import EditMaskModal from "../chat/EditMaskModal.vue";
@@ -18,7 +20,7 @@ const props = defineProps<{
   activeEditSourceImageId: string;
   activeEditor: EditorKey | null;
   activeMessages: Message[];
-  activeSizePreset: string;
+  activeSizePreset: GenerationParams["size"];
   background: string;
   backgroundLabel: string;
   backgroundOptions: readonly { value: string; label: string }[];
@@ -32,7 +34,6 @@ const props = defineProps<{
   imageById: (id: string) => ImageAsset | undefined;
   imageHeight: number;
   imageWidth: number;
-  isEditorExpanded: boolean;
   isGenerating: boolean;
   isLibraryOpen: boolean;
   model: string;
@@ -42,11 +43,19 @@ const props = defineProps<{
   qualityLabel: string;
   qualityOptions: readonly { value: string; label: string }[];
   sizeLabel: string;
-  sizePresets: readonly GenerationParams["size"][];
+  sizeRatioOptions: readonly {
+    value: SizeRatio;
+    label: string;
+    widthRatio: number;
+    heightRatio: number;
+  }[];
+  sizeResolution: SizeResolution;
+  sizeResolutionOptions: readonly { value: SizeResolution; label: string }[];
 }>();
 
 const emit = defineEmits<{
   applySizePreset: [preset: GenerationParams["size"]];
+  applySizeResolution: [resolution: SizeResolution];
   attachImage: [id: string];
   closeAllEditors: [];
   openConversations: [];
@@ -278,7 +287,6 @@ function imageFilesFromTransfer(
       :image-height="imageHeight"
       :image-width="imageWidth"
       :is-drag-active="isDragActive"
-      :is-editor-expanded="isEditorExpanded"
       :is-generating="isGenerating"
       :model="model"
       :output-format="outputFormat"
@@ -286,7 +294,10 @@ function imageFilesFromTransfer(
       :quality-label="qualityLabel"
       :quality-options="qualityOptions"
       :size-label="sizeLabel"
-      :size-presets="sizePresets"
+      :size-ratio-options="sizeRatioOptions"
+      :size-resolution="sizeResolution"
+      :size-resolution-options="sizeResolutionOptions"
+      @apply-size-resolution="emit('applySizeResolution', $event)"
       @apply-size-preset="emit('applySizePreset', $event)"
       @close-all-editors="emit('closeAllEditors')"
       @import-images="emit('importImages', $event)"
