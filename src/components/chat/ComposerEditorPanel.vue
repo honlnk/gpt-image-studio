@@ -1,73 +1,20 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type {
-  EditorKey,
-  GenerationParams,
-  SizeRatio,
-  SizeResolution,
-} from "../../types/studio";
+import type { EditorKey } from "../../types/studio";
+import { useSettingsStore } from "../../stores/settingsStore";
 
-type SizeRatioOption = {
-  value: SizeRatio;
-  label: string;
-  widthRatio: number;
-  heightRatio: number;
-};
-
-const props = defineProps<{
+defineProps<{
   activeEditor: EditorKey | null;
-  activeSizePreset: GenerationParams["size"];
-  background: string;
-  backgroundOptions: readonly { value: string; label: string }[];
-  customSizeError: string;
-  imageHeight: number;
-  imageWidth: number;
-  outputFormat: string;
-  formatOptions: readonly { value: string; label: string }[];
-  quality: string;
-  qualityOptions: readonly { value: string; label: string }[];
-  sizeRatioOptions: readonly SizeRatioOption[];
-  sizeResolution: SizeResolution;
-  sizeResolutionOptions: readonly { value: SizeResolution; label: string }[];
 }>();
 
-const emit = defineEmits<{
-  applySizePreset: [preset: GenerationParams["size"]];
-  applySizeResolution: [resolution: SizeResolution];
-  "update:background": [value: string];
-  "update:imageHeight": [value: number];
-  "update:imageWidth": [value: number];
-  "update:outputFormat": [value: string];
-  "update:quality": [value: string];
-}>();
-
+const settings = useSettingsStore();
 const isRatioMode = computed(() =>
-  props.sizeRatioOptions.some((option) => option.value === props.activeSizePreset),
+  settings.sizeRatioOptions.some((option) => option.value === settings.activeSizePreset),
 );
-
-function selectSizePreset(preset: GenerationParams["size"]) {
-  emit("applySizePreset", preset);
-}
 
 function selectRatioMode() {
   if (isRatioMode.value) return;
-  emit("applySizePreset", "1:1");
-}
-
-function selectSizeResolution(resolution: SizeResolution) {
-  emit("applySizeResolution", resolution);
-}
-
-function selectBackground(value: string) {
-  emit("update:background", value);
-}
-
-function selectOutputFormat(value: string) {
-  emit("update:outputFormat", value);
-}
-
-function selectQuality(value: string) {
-  emit("update:quality", value);
+  settings.applySizePreset("1:1");
 }
 </script>
 
@@ -83,12 +30,12 @@ function selectQuality(value: string) {
             <button
               :class="[
                 'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-                activeSizePreset === 'auto'
+                settings.activeSizePreset === 'auto'
                   ? 'border-gray-400 bg-gray-100 text-gray-900'
                   : 'border-gray-200 text-gray-400 hover:bg-gray-50',
               ]"
               type="button"
-              @click="selectSizePreset('auto')"
+              @click="settings.applySizePreset('auto')"
             >
               自动
             </button>
@@ -107,28 +54,28 @@ function selectQuality(value: string) {
             <button
               :class="[
                 'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-                activeSizePreset === 'custom'
+                settings.activeSizePreset === 'custom'
                   ? 'border-gray-400 bg-gray-100 text-gray-900'
                   : 'border-gray-200 text-gray-400 hover:bg-gray-50',
               ]"
               type="button"
-              @click="selectSizePreset('custom')"
+              @click="settings.applySizePreset('custom')"
             >
               自定义
             </button>
           </div>
           <div v-if="isRatioMode" class="flex items-center gap-1">
             <button
-              v-for="resolution in sizeResolutionOptions"
+              v-for="resolution in settings.sizeResolutionOptions"
               :key="resolution.value"
               :class="[
                 'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-                sizeResolution === resolution.value
+                settings.sizeResolution === resolution.value
                   ? 'border-gray-400 bg-gray-100 text-gray-900'
                   : 'border-gray-200 text-gray-400 hover:bg-gray-50',
               ]"
               type="button"
-              @click="selectSizeResolution(resolution.value)"
+              @click="settings.applySizeResolution(resolution.value)"
             >
               {{ resolution.label }}
             </button>
@@ -137,24 +84,24 @@ function selectQuality(value: string) {
 
         <div v-if="isRatioMode" class="grid w-64 grid-cols-4 gap-1.5">
           <button
-            v-for="ratio in sizeRatioOptions"
+            v-for="ratio in settings.sizeRatioOptions"
             :key="ratio.value"
             :class="[
               'cursor-pointer rounded border px-1.5 py-1 text-xs transition-colors',
-              activeSizePreset === ratio.value
+              settings.activeSizePreset === ratio.value
                 ? 'border-gray-400 bg-gray-100 text-gray-900'
                 : 'border-gray-200 text-gray-500 hover:bg-gray-50',
             ]"
             type="button"
-            @click="selectSizePreset(ratio.value)"
+            @click="settings.applySizePreset(ratio.value)"
           >
             {{ ratio.label }}
           </button>
         </div>
 
-        <div v-if="activeSizePreset === 'custom'" class="flex items-center gap-2">
+        <div v-if="settings.activeSizePreset === 'custom'" class="flex items-center gap-2">
           <input
-            :value="imageWidth"
+            :value="settings.imageWidth"
             class="w-20 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 outline-none focus:border-gray-400"
             type="number"
             min="16"
@@ -162,15 +109,13 @@ function selectQuality(value: string) {
             step="16"
             placeholder="宽"
             @input="
-              emit(
-                'update:imageWidth',
-                Number(($event.target as HTMLInputElement).value),
-              )
+              settings.imageWidth =
+                Number(($event.target as HTMLInputElement).value)
             "
           />
           <span class="text-xs text-gray-400">×</span>
           <input
-            :value="imageHeight"
+            :value="settings.imageHeight"
             class="w-20 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 outline-none focus:border-gray-400"
             type="number"
             min="16"
@@ -178,15 +123,13 @@ function selectQuality(value: string) {
             step="16"
             placeholder="高"
             @input="
-              emit(
-                'update:imageHeight',
-                Number(($event.target as HTMLInputElement).value),
-              )
+              settings.imageHeight =
+                Number(($event.target as HTMLInputElement).value)
             "
           />
         </div>
-        <p v-if="customSizeError" class="basis-full pt-1 text-xs text-red-500">
-          {{ customSizeError }}
+        <p v-if="settings.customSizeError" class="basis-full pt-1 text-xs text-red-500">
+          {{ settings.customSizeError }}
         </p>
       </div>
 
@@ -195,16 +138,16 @@ function selectQuality(value: string) {
         class="flex flex-wrap items-center gap-1.5"
       >
         <button
-          v-for="opt in qualityOptions"
+          v-for="opt in settings.qualityOptions"
           :key="opt.value"
           :class="[
             'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-            quality === opt.value
+            settings.quality === opt.value
               ? 'border-gray-400 bg-gray-100 text-gray-900'
               : 'border-gray-200 text-gray-400 hover:bg-gray-50',
           ]"
           type="button"
-          @click="selectQuality(opt.value)"
+          @click="settings.quality = opt.value"
         >
           {{ opt.label }}
         </button>
@@ -215,16 +158,16 @@ function selectQuality(value: string) {
         class="flex flex-wrap items-center gap-1.5"
       >
         <button
-          v-for="opt in backgroundOptions"
+          v-for="opt in settings.backgroundOptions"
           :key="opt.value"
           :class="[
             'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-            background === opt.value
+            settings.background === opt.value
               ? 'border-gray-400 bg-gray-100 text-gray-900'
               : 'border-gray-200 text-gray-400 hover:bg-gray-50',
           ]"
           type="button"
-          @click="selectBackground(opt.value)"
+          @click="settings.background = opt.value"
         >
           {{ opt.label }}
         </button>
@@ -235,16 +178,16 @@ function selectQuality(value: string) {
         class="flex flex-wrap items-center gap-1.5"
       >
         <button
-          v-for="opt in formatOptions"
+          v-for="opt in settings.formatOptions"
           :key="opt.value"
           :class="[
             'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-            outputFormat === opt.value
+            settings.outputFormat === opt.value
               ? 'border-gray-400 bg-gray-100 text-gray-900'
               : 'border-gray-200 text-gray-400 hover:bg-gray-50',
           ]"
           type="button"
-          @click="selectOutputFormat(opt.value)"
+          @click="settings.outputFormat = opt.value"
         >
           {{ opt.label }}
         </button>

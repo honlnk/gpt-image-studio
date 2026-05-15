@@ -1,13 +1,10 @@
 <script setup lang="ts">
 import { nextTick, ref } from "vue";
+import { useComposerStore } from "../../stores/composerStore";
 import type {
   Conversation,
-  EditorKey,
-  GenerationParams,
   ImageAsset,
   Message,
-  SizeRatio,
-  SizeResolution,
 } from "../../types/studio";
 import ChatComposer from "../chat/ChatComposer.vue";
 import EditMaskModal from "../chat/EditMaskModal.vue";
@@ -27,46 +24,16 @@ type ChatWorkspaceMessages = {
 
 type ChatWorkspaceComposer = {
   activeAttachments: ImageAsset[];
-  activeEditor: EditorKey | null;
-  activeSizePreset: GenerationParams["size"];
-  background: string;
-  backgroundLabel: string;
-  backgroundOptions: readonly { value: string; label: string }[];
   canSend: boolean;
-  composerText: string;
-  customSizeError: string;
-  editModeEnabled: boolean;
-  formatLabel: string;
-  formatOptions: readonly { value: string; label: string }[];
-  imageHeight: number;
-  imageWidth: number;
   isGenerating: boolean;
-  model: string;
-  outputFormat: string;
-  quality: string;
-  qualityLabel: string;
-  qualityOptions: readonly { value: string; label: string }[];
-  sizeLabel: string;
-  sizeRatioOptions: readonly {
-    value: SizeRatio;
-    label: string;
-    widthRatio: number;
-    heightRatio: number;
-  }[];
-  sizeResolution: SizeResolution;
-  sizeResolutionOptions: readonly { value: SizeResolution; label: string }[];
 };
 
 type ChatWorkspaceEditor = {
-  activeEditMaskImageId: string;
-  activeEditSourceImageId: string;
   createMaskAsset: (sourceImage: ImageAsset, maskBlob: Blob) => Promise<ImageAsset>;
 };
 
 type ChatWorkspaceActions = {
   applyEditSelection: (sourceImageId: string, maskImageId: string) => void;
-  applySizePreset: (preset: GenerationParams["size"]) => void;
-  applySizeResolution: (resolution: SizeResolution) => void;
   attachImage: (id: string) => void;
   closeAllEditors: () => void;
   importImages: (files: File[]) => void;
@@ -78,7 +45,6 @@ type ChatWorkspaceActions = {
   setEditModeEnabled: (value: boolean) => void;
   setLibraryOpen: (value: boolean) => void;
   submitMessage: () => void;
-  toggleEditor: (key: EditorKey) => void;
 };
 
 const { actions, composer, editor, header, messages } = defineProps<{
@@ -89,6 +55,7 @@ const { actions, composer, editor, header, messages } = defineProps<{
   messages: ChatWorkspaceMessages;
 }>();
 
+const composerState = useComposerStore();
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 const selectingImageId = ref("");
@@ -99,7 +66,7 @@ function isImageAttached(id: string) {
 }
 
 async function continueEdit(imageId: string) {
-  if (!composer.editModeEnabled) {
+  if (!composerState.editModeEnabled) {
     if (!isImageAttached(imageId)) {
       actions.attachImage(imageId);
     }
@@ -279,45 +246,13 @@ function imageFilesFromTransfer(
     <ChatComposer
       ref="composerRef"
       :active-attachments="composer.activeAttachments"
-      :active-edit-mask-image-id="editor.activeEditMaskImageId"
-      :active-edit-source-image-id="editor.activeEditSourceImageId"
-      :active-editor="composer.activeEditor"
-      :active-size-preset="composer.activeSizePreset"
-      :background="composer.background"
-      :background-label="composer.backgroundLabel"
-      :background-options="composer.backgroundOptions"
       :can-send="composer.canSend"
-      :composer-text="composer.composerText"
-      :custom-size-error="composer.customSizeError"
-      :edit-mode-enabled="composer.editModeEnabled"
-      :format-label="composer.formatLabel"
-      :format-options="composer.formatOptions"
-      :image-height="composer.imageHeight"
-      :image-width="composer.imageWidth"
       :is-drag-active="isDragActive"
       :is-generating="composer.isGenerating"
-      :model="composer.model"
-      :output-format="composer.outputFormat"
-      :quality="composer.quality"
-      :quality-label="composer.qualityLabel"
-      :quality-options="composer.qualityOptions"
-      :size-label="composer.sizeLabel"
-      :size-ratio-options="composer.sizeRatioOptions"
-      :size-resolution="composer.sizeResolution"
-      :size-resolution-options="composer.sizeResolutionOptions"
-      @apply-size-resolution="actions.applySizeResolution"
-      @apply-size-preset="actions.applySizePreset"
       @close-all-editors="actions.closeAllEditors"
       @import-images="actions.importImages"
       @remove-attachment="actions.removeAttachment"
       @submit-message="actions.submitMessage"
-      @toggle-editor="actions.toggleEditor"
-      @update:background="composer.background = $event"
-      @update:composer-text="composer.composerText = $event"
-      @update:image-height="composer.imageHeight = $event"
-      @update:image-width="composer.imageWidth = $event"
-      @update:output-format="composer.outputFormat = $event"
-      @update:quality="composer.quality = $event"
       @update:edit-mode-enabled="actions.setEditModeEnabled"
     />
 

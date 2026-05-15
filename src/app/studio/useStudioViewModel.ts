@@ -1,4 +1,5 @@
 import { computed, onMounted, proxyRefs, ref, watch } from "vue";
+import { storeToRefs } from "pinia";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
 import { useStudioConversations } from "../../features/conversations";
 import { useStudioFeedback } from "../../features/feedback";
@@ -17,7 +18,8 @@ import {
   saveConversationDraft,
 } from "../../services/conversationDrafts";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
-import type { ConversationDraft, EditorKey, GenerationParams, Message } from "../../types/studio";
+import { useComposerStore } from "../../stores/composerStore";
+import type { ConversationDraft, GenerationParams, Message } from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
@@ -43,13 +45,16 @@ export function useStudioViewModel() {
     isHydrated,
     onStorageError: reportStorageError,
   });
+  const composerState = useComposerStore();
+  const {
+    activeEditMaskImageId,
+    activeEditSourceImageId,
+    composerText,
+    editModeEnabled,
+    isConversationSidebarOpen,
+    isLibraryOpen,
+  } = storeToRefs(composerState);
   const isSettingsOpen = ref(false);
-  const isLibraryOpen = ref(false);
-  const activeEditor = ref<EditorKey | null>(null);
-  const composerText = ref("");
-  const editModeEnabled = ref(false);
-  const activeEditSourceImageId = ref("");
-  const activeEditMaskImageId = ref("");
   const legacyComposerText = readStorage(STORAGE_KEYS.draftComposerText, "");
   const legacyAttachedImageIds = readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []);
   let isApplyingDraft = false;
@@ -57,7 +62,6 @@ export function useStudioViewModel() {
   let draftSwitchQueue = Promise.resolve();
 
   const messages = ref<Message[]>([]);
-  const isConversationSidebarOpen = ref(false);
   const previewImageId = ref("");
   const settingsInitialTab = ref<SettingsTab>("api");
   const settingsInitialBatchPanel = ref<BatchPanel>("images");
@@ -93,8 +97,7 @@ export function useStudioViewModel() {
   function clearConversationDraft() {
     images.attachedImages.value = [];
     composerText.value = "";
-    activeEditSourceImageId.value = "";
-    activeEditMaskImageId.value = "";
+    composerState.clearEditSelection();
   }
 
   function refreshImagesStorageUsage() {
@@ -177,24 +180,12 @@ export function useStudioViewModel() {
     images.imageAssets.value.filter((image) => !image.isTransientMask),
   );
 
-  function openConversations() {
-    isConversationSidebarOpen.value = true;
-  }
-
   function previewImageById(id: string) {
     previewImageId.value = id;
   }
 
   function closePreview() {
     previewImageId.value = "";
-  }
-
-  function toggleEditor(key: EditorKey) {
-    activeEditor.value = activeEditor.value === key ? null : key;
-  }
-
-  function closeAllEditors() {
-    activeEditor.value = null;
   }
 
   function openSettings() {
@@ -473,42 +464,17 @@ export function useStudioViewModel() {
   });
   const chatComposer = proxyRefs({
     activeAttachments: images.activeAttachments,
-    activeEditor,
-    activeSizePreset: settings.activeSizePreset,
-    background: settings.background,
-    backgroundLabel: settings.backgroundLabel,
-    backgroundOptions: settings.backgroundOptions,
     canSend: generation.canSend,
-    composerText,
-    customSizeError: settings.customSizeError,
-    editModeEnabled,
-    formatLabel: settings.formatLabel,
-    formatOptions: settings.formatOptions,
-    imageHeight: settings.imageHeight,
-    imageWidth: settings.imageWidth,
     isGenerating: generation.isGenerating,
-    model: settings.model,
-    outputFormat: settings.outputFormat,
-    quality: settings.quality,
-    qualityLabel: settings.qualityLabel,
-    qualityOptions: settings.qualityOptions,
-    sizeLabel: settings.sizeLabel,
-    sizeRatioOptions: settings.sizeRatioOptions,
-    sizeResolution: settings.sizeResolution,
-    sizeResolutionOptions: settings.sizeResolutionOptions,
   });
   const chatEditor = proxyRefs({
-    activeEditMaskImageId,
-    activeEditSourceImageId,
     createMaskAsset: images.createMaskAsset,
   });
   const chatActions = {
-    applySizePreset: settings.applySizePreset,
-    applySizeResolution: settings.applySizeResolution,
     attachImage: images.attachImage,
-    closeAllEditors,
+    closeAllEditors: composerState.closeAllEditors,
     importImages: images.importImages,
-    openConversations,
+    openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,
     previewImage: previewImageById,
     removeAttachment: (id: string) => {
@@ -525,8 +491,7 @@ export function useStudioViewModel() {
           images.removeAttachment(maskId);
           images.clearTransientMask(maskId);
         }
-        activeEditSourceImageId.value = "";
-        activeEditMaskImageId.value = "";
+        composerState.clearEditSelection();
         return;
       }
 
@@ -534,33 +499,25 @@ export function useStudioViewModel() {
     },
     retryMessage: generation.retryMessage,
     setEditModeEnabled: (value: boolean) => {
-      editModeEnabled.value = value;
       if (!value) {
         if (activeEditMaskImageId.value) {
           images.clearTransientMask(activeEditMaskImageId.value);
         }
-        activeEditSourceImageId.value = "";
-        activeEditMaskImageId.value = "";
       }
+      composerState.setEditModeEnabled(value);
     },
-    setLibraryOpen: (value: boolean) => {
-      isLibraryOpen.value = value;
-    },
+    setLibraryOpen: composerState.setLibraryOpen,
     applyEditSelection: (sourceImageId: string, maskImageId: string) => {
       const previousMaskId = activeEditMaskImageId.value;
       if (previousMaskId && previousMaskId !== maskImageId) {
         images.clearTransientMask(previousMaskId);
       }
-      activeEditSourceImageId.value = sourceImageId;
-      activeEditMaskImageId.value = maskImageId;
+      composerState.applyEditSelection(sourceImageId, maskImageId);
       images.attachedImages.value = [sourceImageId, maskImageId];
     },
-    clearEditSelection: () => {
-      activeEditSourceImageId.value = "";
-      activeEditMaskImageId.value = "";
-    },
+    clearEditSelection: composerState.clearEditSelection,
     submitMessage: generation.submitMessage,
-    toggleEditor,
+    toggleEditor: composerState.toggleEditor,
   };
   const chat = {
     actions: chatActions,

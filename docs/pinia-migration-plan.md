@@ -159,17 +159,17 @@ src/
 
 任务：
 
-- [ ] 安装 `pinia`。
-- [ ] 在 `src/main.ts` 中注册 `createPinia()`。
-- [ ] 建立 `src/stores/` 目录。
-- [ ] 添加一个最小 store 或空目录占位，确认类型检查通过。
+- [x] 安装 `pinia`。
+- [x] 在 `src/main.ts` 中注册 `createPinia()`。
+- [x] 建立 `src/stores/` 目录。
+- [x] 添加一个最小 store 或空目录占位，确认类型检查通过。
 
 验收：
 
-- [ ] 应用启动行为不变。
-- [ ] `pnpm typecheck` 通过。
-- [ ] `pnpm test` 通过。
-- [ ] `pnpm build` 通过。
+- [x] 应用启动行为不变。
+- [x] `pnpm typecheck` 通过。
+- [x] `pnpm test` 通过。
+- [x] `pnpm build` 通过。
 
 风险：
 
@@ -187,48 +187,48 @@ src/stores/settingsStore.ts
 
 迁移状态：
 
-- [ ] `model`
-- [ ] `connectionMode`
-- [ ] `apiKey`
-- [ ] `apiBaseUrl`
-- [ ] `activeSizePreset`
-- [ ] `sizeResolution`
-- [ ] `imageWidth`
-- [ ] `imageHeight`
-- [ ] `quality`
-- [ ] `background`
-- [ ] `outputFormat`
+- [x] `model`
+- [x] `connectionMode`
+- [x] `apiKey`
+- [x] `apiBaseUrl`
+- [x] `activeSizePreset`
+- [x] `sizeResolution`
+- [x] `imageWidth`
+- [x] `imageHeight`
+- [x] `quality`
+- [x] `background`
+- [x] `outputFormat`
 
 迁移派生状态：
 
-- [ ] `sizeLabel`
-- [ ] `qualityLabel`
-- [ ] `backgroundLabel`
-- [ ] `formatLabel`
-- [ ] `customSizeError`
-- [ ] `currentGenerationParams`
+- [x] `sizeLabel`
+- [x] `qualityLabel`
+- [x] `backgroundLabel`
+- [x] `formatLabel`
+- [x] `customSizeError`
+- [x] `currentGenerationParams`
 
 迁移常量/选项：
 
-- [ ] `qualityOptions`
-- [ ] `backgroundOptions`
-- [ ] `formatOptions`
-- [ ] `sizeRatioOptions`
-- [ ] `sizeResolutionOptions`
+- [x] `qualityOptions`
+- [x] `backgroundOptions`
+- [x] `formatOptions`
+- [x] `sizeRatioOptions`
+- [x] `sizeResolutionOptions`
 
 迁移动作：
 
-- [ ] `applySizePreset`
-- [ ] `applySizeResolution`
-- [ ] `applySettings`
-- [ ] `saveCurrentSettings`
+- [x] `applySizePreset`
+- [x] `applySizeResolution`
+- [x] `applySettings`
+- [x] `saveCurrentSettings`
 
 组件调整：
 
-- [ ] `ChatComposer.vue` 不再从父组件接收生成参数、labels、options。
-- [ ] `ComposerEditorPanel.vue` 直接读取 `settingsStore`。
-- [ ] `ComposerParameterBar.vue` 直接读取 labels 和 `model`，或接收一个更小的展示对象。
-- [ ] `SettingsModal.vue` 可以暂时继续通过 `useStudioViewModel` 传 API 设置，等后续阶段再收口。
+- [x] `ChatComposer.vue` 不再从父组件接收生成参数、labels、options。
+- [x] `ComposerEditorPanel.vue` 直接读取 `settingsStore`。
+- [x] `ComposerParameterBar.vue` 直接读取 labels 和 `model`，或接收一个更小的展示对象。
+- [x] `SettingsModal.vue` 可以暂时继续通过 `useStudioViewModel` 传 API 设置，等后续阶段再收口。
 
 推荐落地方式：
 
@@ -238,13 +238,13 @@ src/stores/settingsStore.ts
 
 验收：
 
-- [ ] `ChatWorkspace -> ChatComposer` 的生成参数 props 数量显著减少。
-- [ ] `ComposerEditorPanel` 不再接收十几个生成参数 props。
-- [ ] API 设置保存和恢复行为不变。
-- [ ] 草稿中的生成参数保存和恢复行为不变。
-- [ ] `pnpm typecheck` 通过。
-- [ ] `pnpm test` 通过。
-- [ ] `pnpm build` 通过。
+- [x] `ChatWorkspace -> ChatComposer` 的生成参数 props 数量显著减少。
+- [x] `ComposerEditorPanel` 不再接收十几个生成参数 props。
+- [x] API 设置保存和恢复行为不变。
+- [x] 草稿中的生成参数保存和恢复行为不变。
+- [x] `pnpm typecheck` 通过。
+- [x] `pnpm test` 通过。
+- [x] `pnpm build` 通过。
 
 风险：
 
@@ -264,47 +264,47 @@ src/stores/composerStore.ts
 
 迁移状态：
 
-- [ ] `composerText`
-- [ ] `activeEditor`
-- [ ] `editModeEnabled`
-- [ ] `activeEditSourceImageId`
-- [ ] `activeEditMaskImageId`
-- [ ] `isLibraryOpen`
-- [ ] `isConversationSidebarOpen`
+- [x] `composerText`
+- [x] `activeEditor`
+- [x] `editModeEnabled`
+- [x] `activeEditSourceImageId`
+- [x] `activeEditMaskImageId`
+- [x] `isLibraryOpen`
+- [x] `isConversationSidebarOpen`
 
 迁移动作：
 
-- [ ] `toggleEditor`
-- [ ] `closeAllEditors`
-- [ ] `setEditModeEnabled`
-- [ ] `applyEditSelection`
-- [ ] `clearEditSelection`
-- [ ] `setLibraryOpen`
-- [ ] `openConversations`
+- [x] `toggleEditor`
+- [x] `closeAllEditors`
+- [x] `setEditModeEnabled`
+- [x] `applyEditSelection`
+- [x] `clearEditSelection`
+- [x] `setLibraryOpen`
+- [x] `openConversations`
 
 草稿相关：
 
-- [ ] 当前对话草稿读取。
-- [ ] 当前对话草稿保存。
-- [ ] 切换会话时应用草稿。
-- [ ] 删除会话时清理草稿。
+- [x] 当前对话草稿读取。
+- [x] 当前对话草稿保存。
+- [x] 切换会话时应用草稿。
+- [x] 删除会话时清理草稿。
 
 组件调整：
 
-- [ ] `ChatComposer.vue` 直接读取 composer store。
-- [ ] `PromptInputBox.vue` 可以继续保持受控组件，也可以在后续阶段接入 store。
-- [ ] `ComposerAttachmentList.vue` 只保留附件展示 props，或等 images store 阶段再收口。
-- [ ] `ChatWorkspace.vue` 保留拖拽状态和 mask modal 选择状态，因为它们是局部 UI 协调。
+- [x] `ChatComposer.vue` 直接读取 composer store。
+- [x] `PromptInputBox.vue` 可以继续保持受控组件，也可以在后续阶段接入 store。
+- [x] `ComposerAttachmentList.vue` 只保留附件展示 props，或等 images store 阶段再收口。
+- [x] `ChatWorkspace.vue` 保留拖拽状态和 mask modal 选择状态，因为它们是局部 UI 协调。
 
 验收：
 
-- [ ] 输入框内容输入、刷新恢复、切换会话恢复都正常。
-- [ ] 编辑模式开启/关闭、mask 清理行为正常。
-- [ ] 移动端图片库开关和会话侧边栏开关正常。
-- [ ] `ChatComposer` props 进一步减少。
-- [ ] `pnpm typecheck` 通过。
-- [ ] `pnpm test` 通过。
-- [ ] `pnpm build` 通过。
+- [x] 输入框内容输入、刷新恢复、切换会话恢复都正常。
+- [x] 编辑模式开启/关闭、mask 清理行为正常。
+- [x] 移动端图片库开关和会话侧边栏开关正常。
+- [x] `ChatComposer` props 进一步减少。
+- [x] `pnpm typecheck` 通过。
+- [x] `pnpm test` 通过。
+- [x] `pnpm build` 通过。
 
 风险：
 

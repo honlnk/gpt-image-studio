@@ -1,20 +1,14 @@
 <script setup lang="ts">
-import type { EditorKey } from "../../types/studio";
-
-defineProps<{
-  activeEditor: EditorKey | null;
-  backgroundLabel: string;
-  editModeEnabled: boolean;
-  formatLabel: string;
-  model: string;
-  qualityLabel: string;
-  sizeLabel: string;
-}>();
+import { useComposerStore } from "../../stores/composerStore";
+import { useSettingsStore } from "../../stores/settingsStore";
+import ComposerEditorPanel from "./ComposerEditorPanel.vue";
 
 const emit = defineEmits<{
-  toggleEditor: [key: EditorKey];
   "update:editModeEnabled": [value: boolean];
 }>();
+
+const composer = useComposerStore();
+const settings = useSettingsStore();
 </script>
 
 <template>
@@ -22,63 +16,75 @@ const emit = defineEmits<{
     <span
       class="cursor-not-allowed rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-400"
     >
-      模型: {{ model }}
+      模型: {{ settings.model }}
     </span>
     <button
       :class="[
         'cursor-pointer rounded-full px-2 py-0.5 text-[11px] transition-colors',
-        editModeEnabled
+        composer.editModeEnabled
           ? 'bg-black text-white hover:bg-gray-800'
           : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
       ]"
       type="button"
-      @click="emit('update:editModeEnabled', !editModeEnabled)"
+      @click="emit('update:editModeEnabled', !composer.editModeEnabled)"
     >
-      区域编辑: {{ editModeEnabled ? "开" : "关" }}
+      区域编辑: {{ composer.editModeEnabled ? "开" : "关" }}
     </button>
     <span class="relative inline-flex">
       <button
         class="cursor-pointer rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500 transition-colors hover:bg-gray-200"
-        :class="activeEditor === 'size' ? 'bg-gray-200 text-gray-800' : ''"
+        :class="composer.activeEditor === 'size' ? 'bg-gray-200 text-gray-800' : ''"
         type="button"
-        @click="emit('toggleEditor', 'size')"
+        @click="composer.toggleEditor('size')"
       >
-        尺寸: {{ sizeLabel }}
+        尺寸: {{ settings.sizeLabel }}
       </button>
-      <slot v-if="activeEditor === 'size'" name="size-editor" />
+      <ComposerEditorPanel
+        v-if="composer.activeEditor === 'size'"
+        :active-editor="composer.activeEditor"
+      />
     </span>
     <span class="relative inline-flex">
       <button
         class="cursor-pointer rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500 transition-colors hover:bg-gray-200"
-        :class="activeEditor === 'quality' ? 'bg-gray-200 text-gray-800' : ''"
+        :class="composer.activeEditor === 'quality' ? 'bg-gray-200 text-gray-800' : ''"
         type="button"
-        @click="emit('toggleEditor', 'quality')"
+        @click="composer.toggleEditor('quality')"
       >
-        质量: {{ qualityLabel }}
+        质量: {{ settings.qualityLabel }}
       </button>
-      <slot v-if="activeEditor === 'quality'" name="quality-editor" />
+      <ComposerEditorPanel
+        v-if="composer.activeEditor === 'quality'"
+        :active-editor="composer.activeEditor"
+      />
     </span>
     <span class="relative inline-flex">
       <button
         class="cursor-pointer rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500 transition-colors hover:bg-gray-200"
-        :class="activeEditor === 'background' ? 'bg-gray-200 text-gray-800' : ''"
+        :class="composer.activeEditor === 'background' ? 'bg-gray-200 text-gray-800' : ''"
         type="button"
-        @click="emit('toggleEditor', 'background')"
+        @click="composer.toggleEditor('background')"
       >
-        背景: {{ backgroundLabel }}
+        背景: {{ settings.backgroundLabel }}
       </button>
-      <slot v-if="activeEditor === 'background'" name="background-editor" />
+      <ComposerEditorPanel
+        v-if="composer.activeEditor === 'background'"
+        :active-editor="composer.activeEditor"
+      />
     </span>
     <span class="relative inline-flex">
       <button
         class="cursor-pointer rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500 transition-colors hover:bg-gray-200"
-        :class="activeEditor === 'format' ? 'bg-gray-200 text-gray-800' : ''"
+        :class="composer.activeEditor === 'format' ? 'bg-gray-200 text-gray-800' : ''"
         type="button"
-        @click="emit('toggleEditor', 'format')"
+        @click="composer.toggleEditor('format')"
       >
-        格式: {{ formatLabel }}
+        格式: {{ settings.formatLabel }}
       </button>
-      <slot v-if="activeEditor === 'format'" name="format-editor" />
+      <ComposerEditorPanel
+        v-if="composer.activeEditor === 'format'"
+        :active-editor="composer.activeEditor"
+      />
     </span>
   </div>
 </template>
