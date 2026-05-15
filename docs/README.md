@@ -6,6 +6,7 @@
 
 - [架构说明](architecture.md)：当前项目结构、目标结构和模块边界。
 - [重构路线图](refactor-roadmap.md)：下一轮工程结构重构的分阶段执行计划。
+- [Pinia 状态管理迁移计划](pinia-migration-plan.md)：从当前 ViewModel/composable 状态组织渐进迁移到 Pinia 的执行计划。
 - [产品路线图](roadmap.md)：产品方向和阶段性功能规划。
 - [本地 CLI Companion](companion.md)：本地伴侣的设计、协议、安全要求和分阶段计划。
 - [并发生成任务](generation-jobs.md)：后续多任务生成、对话级草稿和刷新保护方案。
