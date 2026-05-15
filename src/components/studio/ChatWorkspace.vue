@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { nextTick, ref } from "vue";
 import { useComposerStore } from "../../stores/composerStore";
+import { useImagesStore } from "../../stores/imagesStore";
 import type {
   Conversation,
-  ImageAsset,
   Message,
 } from "../../types/studio";
 import ChatComposer from "../chat/ChatComposer.vue";
@@ -19,24 +19,16 @@ type ChatWorkspaceHeader = {
 type ChatWorkspaceMessages = {
   activeAttachmentIds: string[];
   activeMessages: Message[];
-  imageById: (id: string) => ImageAsset | undefined;
 };
 
 type ChatWorkspaceComposer = {
-  activeAttachments: ImageAsset[];
   canSend: boolean;
   isGenerating: boolean;
 };
 
-type ChatWorkspaceEditor = {
-  createMaskAsset: (sourceImage: ImageAsset, maskBlob: Blob) => Promise<ImageAsset>;
-};
-
 type ChatWorkspaceActions = {
   applyEditSelection: (sourceImageId: string, maskImageId: string) => void;
-  attachImage: (id: string) => void;
   closeAllEditors: () => void;
-  importImages: (files: File[]) => void;
   openConversations: () => void;
   openSettings: () => void;
   previewImage: (id: string) => void;
@@ -47,28 +39,28 @@ type ChatWorkspaceActions = {
   submitMessage: () => void;
 };
 
-const { actions, composer, editor, header, messages } = defineProps<{
+const { actions, composer, header, messages } = defineProps<{
   actions: ChatWorkspaceActions;
   composer: ChatWorkspaceComposer;
-  editor: ChatWorkspaceEditor;
   header: ChatWorkspaceHeader;
   messages: ChatWorkspaceMessages;
 }>();
 
 const composerState = useComposerStore();
+const images = useImagesStore();
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 const selectingImageId = ref("");
 let dragDepth = 0;
 
 function isImageAttached(id: string) {
-  return composer.activeAttachments.some((image) => image.id === id);
+  return images.activeAttachments.some((image) => image.id === id);
 }
 
 async function continueEdit(imageId: string) {
   if (!composerState.editModeEnabled) {
     if (!isImageAttached(imageId)) {
-      actions.attachImage(imageId);
+      images.attachImage(imageId);
     }
 
     await nextTick();
@@ -80,13 +72,13 @@ async function continueEdit(imageId: string) {
 }
 
 async function applyMask(maskBlob: Blob) {
-  const source = messages.imageById(selectingImageId.value);
+  const source = images.imageById(selectingImageId.value);
   if (!source) {
     selectingImageId.value = "";
     return;
   }
 
-  const maskAsset = await editor.createMaskAsset(source, maskBlob);
+  const maskAsset = await images.createMaskAsset(source, maskBlob);
   actions.applyEditSelection(source.id, maskAsset.id);
   selectingImageId.value = "";
   await nextTick();
@@ -105,7 +97,7 @@ function importFromDrop(event: DragEvent) {
   );
 
   if (!files.length) return;
-  actions.importImages(files);
+  images.importImages(files);
 }
 
 function handleDragEnter(event: DragEvent) {
@@ -235,9 +227,9 @@ function imageFilesFromTransfer(
 
     <MessageList
       :attached-image-ids="messages.activeAttachmentIds"
-      :image-by-id="messages.imageById"
+      :image-by-id="images.imageById"
       :messages="messages.activeMessages"
-      @attach-image="actions.attachImage"
+      @attach-image="images.attachImage"
       @continue-edit="continueEdit"
       @preview-image="actions.previewImage"
       @retry-message="actions.retryMessage"
@@ -245,19 +237,17 @@ function imageFilesFromTransfer(
 
     <ChatComposer
       ref="composerRef"
-      :active-attachments="composer.activeAttachments"
       :can-send="composer.canSend"
       :is-drag-active="isDragActive"
       :is-generating="composer.isGenerating"
       @close-all-editors="actions.closeAllEditors"
-      @import-images="actions.importImages"
       @remove-attachment="actions.removeAttachment"
       @submit-message="actions.submitMessage"
       @update:edit-mode-enabled="actions.setEditModeEnabled"
     />
 
     <EditMaskModal
-      :image="selectingImageId ? messages.imageById(selectingImageId) : undefined"
+      :image="selectingImageId ? images.imageById(selectingImageId) : undefined"
       @close="closeMaskModal"
       @apply="applyMask"
     />

@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useComposerStore } from "../../stores/composerStore";
-import type { ImageAsset } from "../../types/studio";
+import { useImagesStore } from "../../stores/imagesStore";
 import ComposerAttachmentList from "./ComposerAttachmentList.vue";
 import ComposerParameterBar from "./ComposerParameterBar.vue";
 import PromptInputBox from "./PromptInputBox.vue";
 
 defineProps<{
-  activeAttachments: ImageAsset[];
   canSend: boolean;
   isDragActive: boolean;
   isGenerating: boolean;
@@ -15,13 +14,13 @@ defineProps<{
 
 const emit = defineEmits<{
   closeAllEditors: [];
-  importImages: [files: File[]];
   removeAttachment: [id: string];
   submitMessage: [];
   "update:editModeEnabled": [value: boolean];
 }>();
 
 const composer = useComposerStore();
+const images = useImagesStore();
 const promptInputRef = ref<InstanceType<typeof PromptInputBox> | null>(null);
 
 function focusComposer() {
@@ -38,7 +37,7 @@ defineExpose({ focusComposer });
   >
     <form class="mx-auto max-w-3xl" @submit.prevent="emit('submitMessage')">
       <ComposerAttachmentList
-        :active-attachments="activeAttachments"
+        :active-attachments="images.activeAttachments"
         :active-edit-mask-image-id="composer.activeEditMaskImageId"
         :active-edit-source-image-id="composer.activeEditSourceImageId"
         @remove-attachment="emit('removeAttachment', $event)"
@@ -46,12 +45,12 @@ defineExpose({ focusComposer });
 
       <PromptInputBox
         ref="promptInputRef"
-        :active-attachment-count="activeAttachments.length"
+        :active-attachment-count="images.activeAttachments.length"
         :can-send="canSend"
         :composer-text="composer.composerText"
         :is-drag-active="isDragActive"
         :is-generating="isGenerating"
-        @import-images="emit('importImages', $event)"
+        @import-images="images.importImages"
         @submit-message="emit('submitMessage')"
         @update:composer-text="composer.composerText = $event"
       >

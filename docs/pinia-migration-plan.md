@@ -323,41 +323,41 @@ src/stores/imagesStore.ts
 
 迁移状态：
 
-- [ ] `imageAssets`
-- [ ] `attachedImages`
-- [ ] `activeAttachments`
-- [ ] `storageUsage`
+- [x] `imageAssets`
+- [x] `attachedImages`
+- [x] `activeAttachments`
+- [x] `storageUsage`
 
 迁移动作：
 
-- [ ] `imageById`
-- [ ] `attachImage`
-- [ ] `removeAttachment`
-- [ ] `importImages`
-- [ ] `deleteImage`
-- [ ] `deleteImages`
-- [ ] `renameImage`
-- [ ] `setImageTagColor`
-- [ ] `hydrateImagePreviews`
-- [ ] `createMaskAsset`
-- [ ] `clearTransientMask`
-- [ ] `refreshStorageUsage`
+- [x] `imageById`
+- [x] `attachImage`
+- [x] `removeAttachment`
+- [x] `importImages`
+- [x] `deleteImage`
+- [x] `deleteImages`
+- [x] `renameImage`
+- [x] `setImageTagColor`
+- [x] `hydrateImagePreviews`
+- [x] `createMaskAsset`
+- [x] `clearTransientMask`
+- [x] `refreshStorageUsage`
 
 组件调整：
 
-- [ ] `ComposerAttachmentList.vue` 可以直接读取 active attachments，或接收一个较小对象。
-- [ ] `MessageList.vue` 和 `MessageItem.vue` 根据实际情况决定是否直接读 image store。
+- [x] `ComposerAttachmentList.vue` 可以直接读取 active attachments，或接收一个较小对象。
+- [x] `MessageList.vue` 和 `MessageItem.vue` 根据实际情况决定是否直接读 image store。
 - [ ] `ImageLibrary.vue` 可以直接读取图片列表和 storage usage。
 
 验收：
 
-- [ ] 图片导入、预览、引用、删除、重命名正常。
-- [ ] transient mask 创建和清理正常。
-- [ ] 图片库当前会话/全部图片过滤正常。
-- [ ] 存储用量刷新正常。
-- [ ] `pnpm typecheck` 通过。
-- [ ] `pnpm test` 通过。
-- [ ] `pnpm build` 通过。
+- [x] 图片导入、预览、引用、删除、重命名正常。
+- [x] transient mask 创建和清理正常。
+- [x] 图片库当前会话/全部图片过滤正常。
+- [x] 存储用量刷新正常。
+- [x] `pnpm typecheck` 通过。
+- [x] `pnpm test` 通过。
+- [x] `pnpm build` 通过。
 
 风险：
 
@@ -377,37 +377,37 @@ src/stores/conversationsStore.ts
 
 迁移状态：
 
-- [ ] `conversations`
-- [ ] `activeConversationId`
-- [ ] `messages`
-- [ ] `activeConversation`
-- [ ] `activeMessages`
+- [x] `conversations`
+- [x] `activeConversationId`
+- [x] `messages`
+- [x] `activeConversation`
+- [x] `activeMessages`
 
 迁移动作：
 
-- [ ] `createConversation`
-- [ ] `selectConversation`
-- [ ] `deleteConversation`
-- [ ] `deleteConversations`
-- [ ] `renameConversation`
-- [ ] `persistConversation`
-- [ ] `updateConversationSummary`
-- [ ] `createConversationRecord`
+- [x] `createConversation`
+- [x] `selectConversation`
+- [x] `deleteConversation`
+- [x] `deleteConversations`
+- [x] `renameConversation`
+- [x] `persistConversation`
+- [x] `updateConversationSummary`
+- [x] `createConversationRecord`
 
 组件调整：
 
 - [ ] `ConversationSidebar.vue` 可以直接读取 conversations store。
-- [ ] `MessageList.vue` 可以直接读取 active messages，或继续接收纯展示 props。
+- [x] `MessageList.vue` 可以直接读取 active messages，或继续接收纯展示 props。
 - [ ] 设置批量会话操作可以读取 conversations store。
 
 验收：
 
-- [ ] 新建、切换、删除、重命名会话正常。
-- [ ] 会话标题自动更新和手动标题保护正常。
-- [ ] 切换会话时草稿联动正常。
-- [ ] `pnpm typecheck` 通过。
-- [ ] `pnpm test` 通过。
-- [ ] `pnpm build` 通过。
+- [x] 新建、切换、删除、重命名会话正常。
+- [x] 会话标题自动更新和手动标题保护正常。
+- [x] 切换会话时草稿联动正常。
+- [x] `pnpm typecheck` 通过。
+- [x] `pnpm test` 通过。
+- [x] `pnpm build` 通过。
 
 风险：
 

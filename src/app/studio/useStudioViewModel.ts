@@ -19,7 +19,7 @@ import {
 } from "../../services/conversationDrafts";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import { useComposerStore } from "../../stores/composerStore";
-import type { ConversationDraft, GenerationParams, Message } from "../../types/studio";
+import type { ConversationDraft, GenerationParams } from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
@@ -61,7 +61,6 @@ export function useStudioViewModel() {
   let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let draftSwitchQueue = Promise.resolve();
 
-  const messages = ref<Message[]>([]);
   const previewImageId = ref("");
   const settingsInitialTab = ref<SettingsTab>("api");
   const settingsInitialBatchPanel = ref<BatchPanel>("images");
@@ -78,13 +77,13 @@ export function useStudioViewModel() {
   const feedback = useStudioFeedback();
   const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
-    messages,
     notifyError: feedback.notifyError,
     notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
     refreshStorageUsage: refreshImagesStorageUsage,
     requestConfirmation: feedback.requestConfirmation,
   });
+  const messages = conversations.messages;
   const images = useStudioImages({
     activeConversationId: conversations.activeConversationId,
     messages,
@@ -460,20 +459,13 @@ export function useStudioViewModel() {
   const chatMessages = proxyRefs({
     activeAttachmentIds: attachedImageIds,
     activeMessages: conversations.activeMessages,
-    imageById: images.imageById,
   });
   const chatComposer = proxyRefs({
-    activeAttachments: images.activeAttachments,
     canSend: generation.canSend,
     isGenerating: generation.isGenerating,
   });
-  const chatEditor = proxyRefs({
-    createMaskAsset: images.createMaskAsset,
-  });
   const chatActions = {
-    attachImage: images.attachImage,
     closeAllEditors: composerState.closeAllEditors,
-    importImages: images.importImages,
     openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,
     previewImage: previewImageById,
@@ -522,7 +514,6 @@ export function useStudioViewModel() {
   const chat = {
     actions: chatActions,
     composer: chatComposer,
-    editor: chatEditor,
     header: chatHeader,
     messages: chatMessages,
   };

@@ -29,7 +29,6 @@ const studio = useStudioViewModel();
     <ChatWorkspace
       :actions="studio.chat.actions"
       :composer="studio.chat.composer"
-      :editor="studio.chat.editor"
       :header="studio.chat.header"
       :messages="studio.chat.messages"
     />
