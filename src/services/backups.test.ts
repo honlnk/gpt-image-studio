@@ -66,6 +66,7 @@ const settings: AppSettings = {
   model: "gpt-image-1",
   defaults: {
     size: "1024x1024",
+    resolution: "1k",
     width: 1024,
     height: 1024,
     quality: "auto",

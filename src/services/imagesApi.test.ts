@@ -4,6 +4,7 @@ import type { GenerationParams } from "../types/studio";
 
 const generationParams: GenerationParams = {
   size: "1024x1024",
+  resolution: "1k",
   width: 1024,
   height: 1024,
   quality: "auto",
@@ -35,6 +36,30 @@ describe("images API requests", () => {
 
     const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(requestBody.response_format).toBe("b64_json");
+  });
+
+  it("converts ratio size presets to calculated dimensions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "generated-image" }],
+      }),
+    );
+
+    await generateImage({
+      apiBaseUrl: "https://api.example.test/v1/images",
+      apiKey: "sk-test",
+      model: "gpt-image-2",
+      prompt: "画一张图",
+      params: {
+        ...generationParams,
+        size: "16:9",
+        width: 1920,
+        height: 1088,
+      },
+    });
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(requestBody.size).toBe("1920x1088");
   });
 
   it("requests base64 JSON for image edits", async () => {
