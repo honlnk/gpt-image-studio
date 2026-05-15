@@ -16,10 +16,7 @@ const emit = defineEmits<{
 
 <template>
   <section aria-labelledby="apiSettingsTitle">
-    <h3
-      id="apiSettingsTitle"
-      class="text-base font-semibold text-gray-900"
-    >
+    <h3 id="apiSettingsTitle" class="text-base font-semibold text-gray-900">
       接口
     </h3>
     <p class="mt-1 text-sm text-gray-500">
@@ -32,9 +29,7 @@ const emit = defineEmits<{
 
     <div class="mt-5 space-y-4">
       <div>
-        <p class="mb-2 block text-sm font-medium text-gray-700">
-          连接模式
-        </p>
+        <p class="mb-2 block text-sm font-medium text-gray-700">连接模式</p>
         <div class="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
           <button
             class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors"
@@ -103,14 +98,11 @@ const emit = defineEmits<{
           placeholder="https://api.openai.com/v1/images"
           type="url"
           @input="
-            emit(
-              'update:apiBaseUrl',
-              ($event.target as HTMLInputElement).value,
-            )
+            emit('update:apiBaseUrl', ($event.target as HTMLInputElement).value)
           "
         />
         <a
-          href="https://code.mrzengchn.com/register?aff=HMvx"
+          href="https://www.packyapi.com/register?aff=mUWS"
           class="mt-1.5 inline-block cursor-pointer text-xs text-gray-400 transition-colors hover:text-gray-600"
           target="_blank"
           rel="noopener"
