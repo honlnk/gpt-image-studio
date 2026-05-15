@@ -3,7 +3,7 @@ import { editImage, generateImage, getCustomSizeError } from "./imagesApi";
 import type { GenerationParams } from "../types/studio";
 
 const generationParams: GenerationParams = {
-  size: "1024x1024",
+  size: "1:1",
   resolution: "1k",
   width: 1024,
   height: 1024,

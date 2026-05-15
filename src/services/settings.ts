@@ -1,4 +1,8 @@
-import type { AppSettings, ConnectionMode, GenerationParams } from "../types/studio";
+import {
+  normalizeGenerationParams,
+  type StoredGenerationParams,
+} from "./generationParams";
+import type { AppSettings, ConnectionMode } from "../types/studio";
 import { getFromStore, putInStore, STORE_NAMES } from "./db";
 
 const SETTINGS_KEY = "app";
@@ -28,12 +32,13 @@ export function saveSettings(settings: AppSettings) {
 
 type StoredAppSettings = Omit<AppSettings, "connectionMode"> & {
   connectionMode?: ConnectionMode;
-  defaults: GenerationParams;
+  defaults: StoredGenerationParams;
 };
 
 function normalizeSettings(settings: StoredAppSettings): AppSettings {
   return {
     ...settings,
     connectionMode: settings.connectionMode ?? "direct",
+    defaults: normalizeGenerationParams(settings.defaults),
   };
 }

@@ -1,11 +1,21 @@
+import {
+  normalizeGenerationParams,
+  type StoredGenerationParams,
+} from "./generationParams";
 import type { ConversationDraft } from "../types/studio";
 import { deleteFromStore, getAllFromStore, getFromStore, putInStore, STORE_NAMES } from "./db";
 
-export function loadConversationDraft(conversationId: string) {
-  return getFromStore<ConversationDraft>(
+type StoredConversationDraft = Omit<ConversationDraft, "generationParams"> & {
+  generationParams: StoredGenerationParams;
+};
+
+export async function loadConversationDraft(conversationId: string) {
+  const draft = await getFromStore<StoredConversationDraft>(
     STORE_NAMES.conversationDrafts,
     conversationId,
   );
+
+  return draft ? normalizeConversationDraft(draft) : undefined;
 }
 
 export function saveConversationDraft(draft: ConversationDraft) {
@@ -20,6 +30,17 @@ export async function deleteConversationDrafts(conversationIds: string[]) {
   await Promise.all(conversationIds.map((id) => deleteConversationDraft(id)));
 }
 
-export function listConversationDrafts() {
-  return getAllFromStore<ConversationDraft>(STORE_NAMES.conversationDrafts);
+export async function listConversationDrafts() {
+  const drafts = await getAllFromStore<StoredConversationDraft>(
+    STORE_NAMES.conversationDrafts,
+  );
+
+  return drafts.map(normalizeConversationDraft);
+}
+
+function normalizeConversationDraft(draft: StoredConversationDraft): ConversationDraft {
+  return {
+    ...draft,
+    generationParams: normalizeGenerationParams(draft.generationParams),
+  };
 }

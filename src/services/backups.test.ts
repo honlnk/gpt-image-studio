@@ -65,7 +65,7 @@ const settings: AppSettings = {
   apiBaseUrl: "https://api.example.test/v1/images",
   model: "gpt-image-1",
   defaults: {
-    size: "1024x1024",
+    size: "1:1",
     resolution: "1k",
     width: 1024,
     height: 1024,

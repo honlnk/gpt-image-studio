@@ -1,5 +1,11 @@
 import type { Ref } from "vue";
 import { computed, ref, watch } from "vue";
+import {
+  isSizeRatio,
+  normalizeGenerationParams,
+  normalizeSizePreset,
+  type StoredGenerationParams,
+} from "../../services/generationParams";
 import { getCustomSizeError } from "../../services/imagesApi";
 import { saveSettings } from "../../services/settings";
 import { readStorage } from "../../shared/localStorage";
@@ -36,7 +42,6 @@ const SIZE_RESOLUTION_OPTIONS = [
   { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
   { value: "4k", label: "4K", targetPixels: 3840 * 2160 },
 ] as const;
-const LEGACY_SIZE_PRESETS = ["1024x1024", "1536x1024", "1024x1536"] as const;
 const MAX_CUSTOM_DIMENSION = 3840;
 const MAX_CUSTOM_PIXELS = 8294400;
 const SIZE_STEP = 16;
@@ -125,48 +130,40 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
     imageHeight.value = dimensions.height;
   }
 
-  function applySizePreset(preset: GenerationParams["size"]) {
+  function applySizePreset(preset: StoredGenerationParams["size"]) {
     const normalizedPreset = normalizeSizePreset(preset);
     if (preset === "auto") {
       activeSizePreset.value = "auto";
     } else if (preset === "custom") {
       activeSizePreset.value = "custom";
-    } else if (normalizedPreset) {
+    } else if (isSizeRatio(normalizedPreset)) {
       activeSizePreset.value = normalizedPreset;
       applyRatioDimensions(normalizedPreset, sizeResolution.value);
-    } else {
-      activeSizePreset.value = preset;
-      const [w, h] = preset.split("x").map(Number);
-      imageWidth.value = w;
-      imageHeight.value = h;
     }
   }
 
   function applySizeResolution(resolution: SizeResolution) {
     sizeResolution.value = resolution;
     const ratio = normalizeSizePreset(activeSizePreset.value);
-    if (!ratio) return;
+    if (!isSizeRatio(ratio)) return;
     applyRatioDimensions(ratio, resolution);
   }
 
   function applySettings(settings: AppSettings) {
+    const defaults = normalizeGenerationParams(settings.defaults);
     connectionMode.value = settings.connectionMode;
     apiKey.value = settings.apiKey;
     apiBaseUrl.value = settings.apiBaseUrl;
     model.value = settings.model;
-    sizeResolution.value =
-      settings.defaults.resolution ?? inferSizeResolution(settings.defaults);
-    applySizePreset(settings.defaults.size);
-    if (
-      settings.defaults.size === "custom" ||
-      isLegacySizePreset(settings.defaults.size)
-    ) {
-      imageWidth.value = settings.defaults.width;
-      imageHeight.value = settings.defaults.height;
+    sizeResolution.value = defaults.resolution;
+    applySizePreset(defaults.size);
+    if (defaults.size === "custom" || isSizeRatio(defaults.size)) {
+      imageWidth.value = defaults.width;
+      imageHeight.value = defaults.height;
     }
-    quality.value = settings.defaults.quality;
-    background.value = normalizeBackground(settings.defaults.background);
-    outputFormat.value = settings.defaults.outputFormat;
+    quality.value = defaults.quality;
+    background.value = normalizeBackground(defaults.background);
+    outputFormat.value = defaults.outputFormat;
   }
 
   function currentSettings(): AppSettings {
@@ -233,22 +230,6 @@ function normalizeBackground(background: GenerationParams["background"]) {
   return background;
 }
 
-function normalizeSizePreset(size: GenerationParams["size"]): SizeRatio | null {
-  if (isSizeRatio(size)) return size;
-  if (size === "1024x1024") return "1:1";
-  if (size === "1536x1024") return "3:2";
-  if (size === "1024x1536") return "2:3";
-  return null;
-}
-
-function isSizeRatio(size: GenerationParams["size"]): size is SizeRatio {
-  return SIZE_RATIO_OPTIONS.some((option) => option.value === size);
-}
-
-function isLegacySizePreset(size: GenerationParams["size"]) {
-  return LEGACY_SIZE_PRESETS.some((preset) => preset === size);
-}
-
 function dimensionsForRatio(ratio: SizeRatio, resolution: SizeResolution) {
   const ratioOption =
     SIZE_RATIO_OPTIONS.find((option) => option.value === ratio) ??
@@ -292,11 +273,4 @@ function roundToStep(value: number) {
 
 function clampDimension(value: number) {
   return Math.min(MAX_CUSTOM_DIMENSION, Math.max(SIZE_STEP, value));
-}
-
-function inferSizeResolution(params: GenerationParams): SizeResolution {
-  const pixels = params.width * params.height;
-  if (pixels > 2048 * 2048) return "4k";
-  if (pixels > 1024 * 1024) return "2k";
-  return "1k";
 }

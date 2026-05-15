@@ -17,8 +17,7 @@ import {
   saveConversationDraft,
 } from "../../services/conversationDrafts";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
-import { useStudioUiState } from "./useStudioUiState";
-import type { ConversationDraft, GenerationParams, Message } from "../../types/studio";
+import type { ConversationDraft, EditorKey, GenerationParams, Message } from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
@@ -44,7 +43,9 @@ export function useStudioViewModel() {
     isHydrated,
     onStorageError: reportStorageError,
   });
-  const ui = useStudioUiState();
+  const isSettingsOpen = ref(false);
+  const isLibraryOpen = ref(false);
+  const activeEditor = ref<EditorKey | null>(null);
   const composerText = ref("");
   const editModeEnabled = ref(false);
   const activeEditSourceImageId = ref("");
@@ -188,16 +189,32 @@ export function useStudioViewModel() {
     previewImageId.value = "";
   }
 
+  function toggleEditor(key: EditorKey) {
+    activeEditor.value = activeEditor.value === key ? null : key;
+  }
+
+  function closeAllEditors() {
+    activeEditor.value = null;
+  }
+
+  function openSettings() {
+    isSettingsOpen.value = true;
+  }
+
+  function closeSettings() {
+    isSettingsOpen.value = false;
+  }
+
   function openBatchImageOperations() {
     settingsInitialTab.value = "batch";
     settingsInitialBatchPanel.value = "images";
-    ui.openSettings();
+    openSettings();
   }
 
   function openSettingsDefault() {
     settingsInitialTab.value = "api";
     settingsInitialBatchPanel.value = "images";
-    ui.openSettings();
+    openSettings();
   }
 
   onMounted(() => {
@@ -275,7 +292,7 @@ export function useStudioViewModel() {
   }
 
   function applyGenerationParams(params: GenerationParams) {
-    settings.applySizeResolution(params.resolution ?? "1k");
+    settings.applySizeResolution(params.resolution);
     settings.applySizePreset(params.size);
     settings.imageWidth.value = params.width;
     settings.imageHeight.value = params.height;
@@ -447,7 +464,7 @@ export function useStudioViewModel() {
   const chat = proxyRefs({
     activeAttachments: images.activeAttachments,
     activeConversation: conversations.activeConversation,
-    activeEditor: ui.activeEditor,
+    activeEditor,
     activeMessages: conversations.activeMessages,
     activeSizePreset: settings.activeSizePreset,
     applySizePreset: settings.applySizePreset,
@@ -460,7 +477,7 @@ export function useStudioViewModel() {
     editModeEnabled,
     activeEditSourceImageId,
     activeEditMaskImageId,
-    closeAllEditors: ui.closeAllEditors,
+    closeAllEditors,
     composerText,
     customSizeError: settings.customSizeError,
     formatLabel: settings.formatLabel,
@@ -471,7 +488,7 @@ export function useStudioViewModel() {
     importImages: images.importImages,
     createMaskAsset: images.createMaskAsset,
     isGenerating: generation.isGenerating,
-    isLibraryOpen: ui.isLibraryOpen,
+    isLibraryOpen,
     model: settings.model,
     openConversations,
     openSettings: openSettingsDefault,
@@ -531,7 +548,7 @@ export function useStudioViewModel() {
     sizeResolution: settings.sizeResolution,
     sizeResolutionOptions: settings.sizeResolutionOptions,
     submitMessage: generation.submitMessage,
-    toggleEditor: ui.toggleEditor,
+    toggleEditor,
   });
   const library = proxyRefs({
     activeConversationId: conversations.activeConversationId,
@@ -539,7 +556,7 @@ export function useStudioViewModel() {
     attachedImageIds,
     deleteImage: images.deleteImage,
     images: libraryImages,
-    isOpen: ui.isLibraryOpen,
+    isOpen: isLibraryOpen,
     openBatchOperations: openBatchImageOperations,
     previewImage: previewImageById,
     renameImage: requestRenameImage,
@@ -550,7 +567,7 @@ export function useStudioViewModel() {
     apiBaseUrl: settings.apiBaseUrl,
     apiKey: settings.apiKey,
     connectionMode: settings.connectionMode,
-    close: ui.closeSettings,
+    close: closeSettings,
     conversations: conversations.conversations,
     deleteConversations: deleteConversationsWithDraft,
     deleteImages: images.deleteImages,
@@ -559,7 +576,7 @@ export function useStudioViewModel() {
     importBackup: backup.importBackup,
     initialBatchPanel: settingsInitialBatchPanel,
     initialTab: settingsInitialTab,
-    isOpen: ui.isSettingsOpen,
+    isOpen: isSettingsOpen,
     messages,
     previewImage: previewImageById,
   });

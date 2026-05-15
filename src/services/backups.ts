@@ -1,3 +1,7 @@
+import {
+  normalizeGenerationParams,
+  type StoredGenerationParams,
+} from "./generationParams";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
 import { clearStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
 import { saveSettings, loadSettings } from "./settings";
@@ -21,12 +25,18 @@ type BackupManifest = {
 
 type BackupData = {
   conversations: Conversation[];
-  messages: Message[];
+  messages: StoredMessage[];
   imageAssets: ImageAsset[];
-  settings?: Omit<AppSettings, "apiKey">;
+  settings?: StoredBackupSettings;
 };
 
 type ZipFileMap = Map<string, Blob>;
+type StoredMessage = Omit<Message, "generationParams"> & {
+  generationParams?: StoredGenerationParams;
+};
+type StoredBackupSettings = Omit<AppSettings, "apiKey" | "defaults"> & {
+  defaults: StoredGenerationParams;
+};
 
 export async function createStudioBackup() {
   const [conversations, messages, imageAssets, imageBlobs, settings] =
@@ -76,6 +86,7 @@ export async function restoreStudioBackup(file: File) {
     ? {
         ...data.settings,
         apiKey: currentSettings?.apiKey ?? "",
+        defaults: normalizeGenerationParams(data.settings.defaults),
       }
     : currentSettings;
 
@@ -92,7 +103,7 @@ export async function restoreStudioBackup(file: File) {
       putInStore(STORE_NAMES.conversations, conversation),
     ),
     ...data.messages.map((message) =>
-      putInStore(STORE_NAMES.messages, message),
+      putInStore(STORE_NAMES.messages, normalizeMessage(message)),
     ),
     ...data.imageAssets.map((asset) =>
       putInStore(STORE_NAMES.imageAssets, stripPreviewUrl(asset)),
@@ -131,6 +142,15 @@ function stripPreviewUrl(asset: ImageAsset): ImageAsset {
 function stripApiKey(settings: AppSettings): Omit<AppSettings, "apiKey"> {
   const { apiKey: _apiKey, ...safeSettings } = settings;
   return safeSettings;
+}
+
+function normalizeMessage(message: StoredMessage): Message {
+  return {
+    ...message,
+    generationParams: message.generationParams
+      ? normalizeGenerationParams(message.generationParams)
+      : undefined,
+  };
 }
 
 function blobEntryName(blobKey: string) {

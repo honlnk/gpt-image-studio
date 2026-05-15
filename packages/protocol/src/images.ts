@@ -1,9 +1,6 @@
 export type ProtocolGenerationParams = {
   size:
     | "auto"
-    | "1024x1024"
-    | "1536x1024"
-    | "1024x1536"
     | "21:9"
     | "16:9"
     | "3:2"
