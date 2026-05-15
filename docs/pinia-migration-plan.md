@@ -426,27 +426,27 @@ src/stores/generationStore.ts
 
 迁移状态：
 
-- [ ] generation jobs
-- [ ] `pendingJobCount`
-- [ ] `pendingJobCountByConversation`
-- [ ] `isGenerating`
-- [ ] `activeConversationPendingJobs`
-- [ ] `canSend`
+- [x] generation jobs
+- [x] `pendingJobCount`
+- [x] `pendingJobCountByConversation`
+- [x] `isGenerating`
+- [x] `activeConversationPendingJobs`
+- [x] `canSend`
 
 迁移动作：
 
-- [ ] `submitMessage`
-- [ ] `retryMessage`
-- [ ] 文生图请求
-- [ ] 图片编辑请求
-- [ ] 生成成功写入图片库
-- [ ] 生成失败写入错误消息
+- [x] `submitMessage`
+- [x] `retryMessage`
+- [x] 文生图请求
+- [x] 图片编辑请求
+- [x] 生成成功写入图片库
+- [x] 生成失败写入错误消息
 
 组件调整：
 
-- [ ] `ChatComposer.vue` 直接读取 `canSend`、`isGenerating`。
-- [ ] `ConversationSidebar.vue` 读取每个会话的 pending job count。
-- [ ] `ChatWorkspace.vue` 读取当前 pending job count。
+- [x] `ChatComposer.vue` 直接读取 `canSend`、`isGenerating`。
+- [x] `ConversationSidebar.vue` 读取每个会话的 pending job count。
+- [x] `ChatWorkspace.vue` 读取当前 pending job count。
 
 验收：
 
@@ -455,9 +455,10 @@ src/stores/generationStore.ts
 - [ ] mask 编辑正常。
 - [ ] 失败重试正常。
 - [ ] 并发任务计数展示正常。
-- [ ] `pnpm typecheck` 通过。
-- [ ] `pnpm test` 通过。
-- [ ] `pnpm build` 通过。
+- [x] 页面挂载烟测通过。
+- [x] `pnpm typecheck` 通过。
+- [x] `pnpm test` 通过。
+- [x] `pnpm build` 通过。
 
 风险：
 
@@ -473,19 +474,29 @@ src/stores/generationStore.ts
 
 ```text
 src/stores/feedbackStore.ts
-src/stores/dialogStore.ts
 ```
 
 迁移候选：
 
-- [ ] notice toast
-- [ ] confirm dialog
+- [x] notice toast
+- [x] confirm dialog
 - [ ] rename conversation modal
 - [ ] rename image modal
 
 建议：
 
-如果这些状态仍然只在 `App.vue` 附近使用，可以继续留在 `useStudioViewModel`。不要为了追求纯度而迁移。
+`notice toast` 和 `confirm dialog` 已迁移到 `feedbackStore`，并让 `imagesStore`、`conversationsStore` 直接使用，减少通过 `useStudioViewModel` 注入提示/确认回调。
+
+`rename conversation modal` 和 `rename image modal` 仍然只在页面级工作流里使用，暂时继续留在 `useStudioViewModel`。不要为了追求纯度而迁移。
+
+验收：
+
+- [x] `imagesStore` 不再通过 context 接收提示/确认回调。
+- [x] `conversationsStore` 不再通过 context 接收提示/确认回调。
+- [x] `useStudioFeedback` 作为兼容包装层保留。
+- [x] `pnpm typecheck` 通过。
+- [x] `pnpm test` 通过。
+- [x] `pnpm build` 通过。
 
 ## 组件最终目标
 

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useGenerationStore } from "../../stores/generationStore";
 import type { Conversation } from "../../types/studio";
 
 const props = defineProps<{
   conversations: Conversation[];
   activeConversationId: string;
-  pendingJobCountByConversation: Record<string, number>;
   isOpen: boolean;
 }>();
 
@@ -19,6 +19,7 @@ const emit = defineEmits<{
 }>();
 
 const searchText = ref("");
+const generation = useGenerationStore();
 const filteredConversations = computed(() => {
   const query = searchText.value.trim().toLowerCase();
   if (!query) return props.conversations;
@@ -169,10 +170,10 @@ const filteredConversations = computed(() => {
           {{ conversation.title }}
         </button>
         <span
-          v-if="(pendingJobCountByConversation[conversation.id] ?? 0) > 0"
+          v-if="(generation.pendingJobCountByConversation[conversation.id] ?? 0) > 0"
           class="inline-flex h-5 min-w-5 shrink-0 items-center mr-2 justify-center rounded-full bg-amber-500/20 px-1 text-[11px] font-semibold text-amber-200 group-hover:hidden"
         >
-          {{ pendingJobCountByConversation[conversation.id] }}
+          {{ generation.pendingJobCountByConversation[conversation.id] }}
         </span>
         <button
           class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-gray-200 group-hover:block focus:block"

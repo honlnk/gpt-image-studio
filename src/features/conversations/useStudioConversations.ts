@@ -1,14 +1,10 @@
 import { storeToRefs } from "pinia";
 import { useConversationsStore } from "../../stores/conversationsStore";
-import type { StudioConfirmDialog } from "../feedback";
 
 type UseStudioConversationsInput = {
   clearDraft: () => void;
-  notifyError: (message: string) => void;
-  notifySuccess: (message: string) => void;
   onStorageError: (error: unknown) => void;
   refreshStorageUsage: () => Promise<void>;
-  requestConfirmation: (input: StudioConfirmDialog) => Promise<boolean>;
 };
 
 export function useStudioConversations(input: UseStudioConversationsInput) {

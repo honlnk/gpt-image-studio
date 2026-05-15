@@ -405,11 +405,10 @@ export type CompanionAuthStatus = {
 
 参考文档：[并发生成任务](generation-jobs.md)。
 
-建议新增：
+当前实现：
 
 ```text
-src/features/generation/useGenerationJobs.ts
-src/features/generation/useSubmitGeneration.ts
+src/stores/generationStore.ts
 src/features/generation/generationJobTypes.ts
 ```
 

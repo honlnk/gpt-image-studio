@@ -13,17 +13,14 @@ import { isoTimestamp } from "../shared/dateTime";
 import { formatError } from "../shared/errors";
 import { createId } from "../shared/id";
 import { createObjectUrl, revokeObjectUrls } from "../shared/objectUrls";
+import { useFeedbackStore } from "./feedbackStore";
 import type { ImageAsset, Message } from "../types/studio";
-import type { StudioConfirmDialog } from "../features/feedback";
 import type { Ref } from "vue";
 
 type ImagesStoreContext = {
   activeConversationId: Ref<string>;
   messages: Ref<Message[]>;
-  notifyError: (message: string) => void;
-  notifySuccess: (message: string) => void;
   onStorageError: (error: unknown) => void;
-  requestConfirmation: (input: StudioConfirmDialog) => Promise<boolean>;
 };
 
 export const useImagesStore = defineStore("images", () => {
@@ -83,7 +80,8 @@ export const useImagesStore = defineStore("images", () => {
     const confirmMessage = relatedMessages.length || isAttached
       ? "这张图片正在被聊天记录或当前输入引用，删除后聊天记录中会保留无法显示的占位。确定删除吗？"
       : "确定从图片库中删除这张图片吗？";
-    const confirmed = await input.requestConfirmation({
+    const feedback = useFeedbackStore();
+    const confirmed = await feedback.requestConfirmation({
       title: "删除图片",
       description: confirmMessage,
       confirmLabel: "删除图片",
@@ -100,9 +98,9 @@ export const useImagesStore = defineStore("images", () => {
         image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
       ]);
       await refreshStorageUsage();
-      input.notifySuccess("图片已删除。");
+      feedback.notifySuccess("图片已删除。");
     } catch (error) {
-      input.notifyError(`删除图片失败：${formatError(error)}`);
+      feedback.notifyError(`删除图片失败：${formatError(error)}`);
       input.onStorageError(error);
     }
   }
@@ -112,6 +110,7 @@ export const useImagesStore = defineStore("images", () => {
     if (!idSet.size) return;
 
     const input = getContext();
+    const feedback = useFeedbackStore();
     const deletedImages = imageAssets.value.filter((image) =>
       idSet.has(image.id),
     );
@@ -126,9 +125,9 @@ export const useImagesStore = defineStore("images", () => {
         ]),
       );
       await refreshStorageUsage();
-      input.notifySuccess(`已删除 ${deletedImages.length} 张图片。`);
+      feedback.notifySuccess(`已删除 ${deletedImages.length} 张图片。`);
     } catch (error) {
-      input.notifyError(`删除图片失败：${formatError(error)}`);
+      feedback.notifyError(`删除图片失败：${formatError(error)}`);
       input.onStorageError(error);
     }
   }
@@ -171,6 +170,7 @@ export const useImagesStore = defineStore("images", () => {
     if (!imageFiles.length) return;
 
     const input = getContext();
+    const feedback = useFeedbackStore();
     try {
       const importedAssets = await Promise.all(
         imageFiles.map((file) => importImageFile(file)),
@@ -179,9 +179,9 @@ export const useImagesStore = defineStore("images", () => {
       imageAssets.value = [...importedAssets, ...imageAssets.value];
       importedAssets.forEach((asset) => attachImage(asset.id));
       await refreshStorageUsage();
-      input.notifySuccess(`已导入 ${importedAssets.length} 张图片并加入引用。`);
+      feedback.notifySuccess(`已导入 ${importedAssets.length} 张图片并加入引用。`);
     } catch (error) {
-      input.notifyError(`导入图片失败：${formatError(error)}`);
+      feedback.notifyError(`导入图片失败：${formatError(error)}`);
       input.onStorageError(error);
     }
   }

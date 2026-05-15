@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref } from "vue";
 import { useComposerStore } from "../../stores/composerStore";
+import { useGenerationStore } from "../../stores/generationStore";
 import { useImagesStore } from "../../stores/imagesStore";
 import type {
   Conversation,
@@ -13,17 +14,11 @@ import MessageList from "../chat/MessageList.vue";
 type ChatWorkspaceHeader = {
   activeConversation?: Conversation;
   isLibraryOpen: boolean;
-  pendingJobCount: number;
 };
 
 type ChatWorkspaceMessages = {
   activeAttachmentIds: string[];
   activeMessages: Message[];
-};
-
-type ChatWorkspaceComposer = {
-  canSend: boolean;
-  isGenerating: boolean;
 };
 
 type ChatWorkspaceActions = {
@@ -36,17 +31,16 @@ type ChatWorkspaceActions = {
   retryMessage: (message: Message) => void;
   setEditModeEnabled: (value: boolean) => void;
   setLibraryOpen: (value: boolean) => void;
-  submitMessage: () => void;
 };
 
-const { actions, composer, header, messages } = defineProps<{
+const { actions, header, messages } = defineProps<{
   actions: ChatWorkspaceActions;
-  composer: ChatWorkspaceComposer;
   header: ChatWorkspaceHeader;
   messages: ChatWorkspaceMessages;
 }>();
 
 const composerState = useComposerStore();
+const generation = useGenerationStore();
 const images = useImagesStore();
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
@@ -181,10 +175,10 @@ function imageFilesFromTransfer(
       </div>
       <div class="flex items-center gap-1">
         <span
-          v-if="header.pendingJobCount > 0"
+          v-if="generation.pendingJobCount > 0"
           class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
         >
-          正在生成 {{ header.pendingJobCount }} 张
+          正在生成 {{ generation.pendingJobCount }} 张
         </span>
         <a
           href="https://github.com/honlnk/gpt-image-studio"
@@ -237,12 +231,9 @@ function imageFilesFromTransfer(
 
     <ChatComposer
       ref="composerRef"
-      :can-send="composer.canSend"
       :is-drag-active="isDragActive"
-      :is-generating="composer.isGenerating"
       @close-all-editors="actions.closeAllEditors"
       @remove-attachment="actions.removeAttachment"
-      @submit-message="actions.submitMessage"
       @update:edit-mode-enabled="actions.setEditModeEnabled"
     />
 

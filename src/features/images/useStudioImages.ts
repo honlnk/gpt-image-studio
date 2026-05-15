@@ -2,16 +2,12 @@ import { onUnmounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useImagesStore } from "../../stores/imagesStore";
 import type { ImageAsset, Message } from "../../types/studio";
-import type { StudioConfirmDialog } from "../feedback";
 import type { Ref } from "vue";
 
 type UseStudioImagesInput = {
   activeConversationId: Ref<string>;
   messages: Ref<Message[]>;
-  notifyError: (message: string) => void;
-  notifySuccess: (message: string) => void;
   onStorageError: (error: unknown) => void;
-  requestConfirmation: (input: StudioConfirmDialog) => Promise<boolean>;
 };
 
 export function useStudioImages(input: UseStudioImagesInput) {

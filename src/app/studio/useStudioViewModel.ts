@@ -77,20 +77,14 @@ export function useStudioViewModel() {
   const feedback = useStudioFeedback();
   const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
-    notifyError: feedback.notifyError,
-    notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
     refreshStorageUsage: refreshImagesStorageUsage,
-    requestConfirmation: feedback.requestConfirmation,
   });
   const messages = conversations.messages;
   const images = useStudioImages({
     activeConversationId: conversations.activeConversationId,
     messages,
-    notifyError: feedback.notifyError,
-    notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
-    requestConfirmation: feedback.requestConfirmation,
   });
 
   function clearConversationDraft() {
@@ -447,22 +441,16 @@ export function useStudioViewModel() {
     deleteConversation: deleteConversationWithDraft,
     isOpen: isConversationSidebarOpen,
     openSettings: openSettingsDefault,
-    pendingJobCountByConversation: generation.pendingJobCountByConversation,
     renameConversation,
     selectConversation: selectConversationWithDraft,
   });
   const chatHeader = proxyRefs({
     activeConversation: conversations.activeConversation,
     isLibraryOpen,
-    pendingJobCount: generation.pendingJobCount,
   });
   const chatMessages = proxyRefs({
     activeAttachmentIds: attachedImageIds,
     activeMessages: conversations.activeMessages,
-  });
-  const chatComposer = proxyRefs({
-    canSend: generation.canSend,
-    isGenerating: generation.isGenerating,
   });
   const chatActions = {
     closeAllEditors: composerState.closeAllEditors,
@@ -508,12 +496,10 @@ export function useStudioViewModel() {
       images.attachedImages.value = [sourceImageId, maskImageId];
     },
     clearEditSelection: composerState.clearEditSelection,
-    submitMessage: generation.submitMessage,
     toggleEditor: composerState.toggleEditor,
   };
   const chat = {
     actions: chatActions,
-    composer: chatComposer,
     header: chatHeader,
     messages: chatMessages,
   };

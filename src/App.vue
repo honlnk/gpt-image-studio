@@ -18,7 +18,6 @@ const studio = useStudioViewModel();
       v-model:is-open="studio.sidebar.isOpen"
       :active-conversation-id="studio.sidebar.activeConversationId"
       :conversations="studio.sidebar.conversations"
-      :pending-job-count-by-conversation="studio.sidebar.pendingJobCountByConversation"
       @create-conversation="studio.sidebar.createConversation"
       @delete-conversation="studio.sidebar.deleteConversation"
       @rename-conversation="studio.sidebar.renameConversation"
@@ -28,7 +27,6 @@ const studio = useStudioViewModel();
 
     <ChatWorkspace
       :actions="studio.chat.actions"
-      :composer="studio.chat.composer"
       :header="studio.chat.header"
       :messages="studio.chat.messages"
     />
