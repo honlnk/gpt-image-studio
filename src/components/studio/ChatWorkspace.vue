@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { nextTick, ref } from "vue";
 import type {
   Conversation,
   EditorKey,
@@ -13,32 +13,36 @@ import ChatComposer from "../chat/ChatComposer.vue";
 import EditMaskModal from "../chat/EditMaskModal.vue";
 import MessageList from "../chat/MessageList.vue";
 
-const props = defineProps<{
-  activeAttachments: ImageAsset[];
+type ChatWorkspaceHeader = {
   activeConversation?: Conversation;
-  activeEditMaskImageId: string;
-  activeEditSourceImageId: string;
-  activeEditor: EditorKey | null;
+  isLibraryOpen: boolean;
+  pendingJobCount: number;
+};
+
+type ChatWorkspaceMessages = {
+  activeAttachmentIds: string[];
   activeMessages: Message[];
+  imageById: (id: string) => ImageAsset | undefined;
+};
+
+type ChatWorkspaceComposer = {
+  activeAttachments: ImageAsset[];
+  activeEditor: EditorKey | null;
   activeSizePreset: GenerationParams["size"];
   background: string;
   backgroundLabel: string;
   backgroundOptions: readonly { value: string; label: string }[];
   canSend: boolean;
   composerText: string;
-  createMaskAsset: (sourceImage: ImageAsset, maskBlob: Blob) => Promise<ImageAsset>;
   customSizeError: string;
   editModeEnabled: boolean;
   formatLabel: string;
   formatOptions: readonly { value: string; label: string }[];
-  imageById: (id: string) => ImageAsset | undefined;
   imageHeight: number;
   imageWidth: number;
   isGenerating: boolean;
-  isLibraryOpen: boolean;
   model: string;
   outputFormat: string;
-  pendingJobCount: number;
   quality: string;
   qualityLabel: string;
   qualityOptions: readonly { value: string; label: string }[];
@@ -51,30 +55,38 @@ const props = defineProps<{
   }[];
   sizeResolution: SizeResolution;
   sizeResolutionOptions: readonly { value: SizeResolution; label: string }[];
-}>();
+};
 
-const emit = defineEmits<{
-  applySizePreset: [preset: GenerationParams["size"]];
-  applySizeResolution: [resolution: SizeResolution];
-  attachImage: [id: string];
-  closeAllEditors: [];
-  openConversations: [];
-  importImages: [files: File[]];
-  removeAttachment: [id: string];
-  applyEditSelection: [sourceImageId: string, maskImageId: string];
-  retryMessage: [message: Message];
-  openSettings: [];
-  previewImage: [id: string];
-  submitMessage: [];
-  toggleEditor: [key: EditorKey];
-  "update:background": [value: string];
-  "update:composerText": [value: string];
-  "update:imageHeight": [value: number];
-  "update:imageWidth": [value: number];
-  "update:isLibraryOpen": [value: boolean];
-  "update:outputFormat": [value: string];
-  "update:quality": [value: string];
-  "update:editModeEnabled": [value: boolean];
+type ChatWorkspaceEditor = {
+  activeEditMaskImageId: string;
+  activeEditSourceImageId: string;
+  createMaskAsset: (sourceImage: ImageAsset, maskBlob: Blob) => Promise<ImageAsset>;
+};
+
+type ChatWorkspaceActions = {
+  applyEditSelection: (sourceImageId: string, maskImageId: string) => void;
+  applySizePreset: (preset: GenerationParams["size"]) => void;
+  applySizeResolution: (resolution: SizeResolution) => void;
+  attachImage: (id: string) => void;
+  closeAllEditors: () => void;
+  importImages: (files: File[]) => void;
+  openConversations: () => void;
+  openSettings: () => void;
+  previewImage: (id: string) => void;
+  removeAttachment: (id: string) => void;
+  retryMessage: (message: Message) => void;
+  setEditModeEnabled: (value: boolean) => void;
+  setLibraryOpen: (value: boolean) => void;
+  submitMessage: () => void;
+  toggleEditor: (key: EditorKey) => void;
+};
+
+const { actions, composer, editor, header, messages } = defineProps<{
+  actions: ChatWorkspaceActions;
+  composer: ChatWorkspaceComposer;
+  editor: ChatWorkspaceEditor;
+  header: ChatWorkspaceHeader;
+  messages: ChatWorkspaceMessages;
 }>();
 
 const isDragActive = ref(false);
@@ -82,18 +94,14 @@ const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 const selectingImageId = ref("");
 let dragDepth = 0;
 
-const activeAttachmentIds = computed(() =>
-  props.activeAttachments.map((image) => image.id),
-);
-
 function isImageAttached(id: string) {
-  return props.activeAttachments.some((image) => image.id === id);
+  return composer.activeAttachments.some((image) => image.id === id);
 }
 
 async function continueEdit(imageId: string) {
-  if (!props.editModeEnabled) {
+  if (!composer.editModeEnabled) {
     if (!isImageAttached(imageId)) {
-      emit("attachImage", imageId);
+      actions.attachImage(imageId);
     }
 
     await nextTick();
@@ -105,14 +113,14 @@ async function continueEdit(imageId: string) {
 }
 
 async function applyMask(maskBlob: Blob) {
-  const source = props.imageById(selectingImageId.value);
+  const source = messages.imageById(selectingImageId.value);
   if (!source) {
     selectingImageId.value = "";
     return;
   }
 
-  const maskAsset = await props.createMaskAsset(source, maskBlob);
-  emit("applyEditSelection", source.id, maskAsset.id);
+  const maskAsset = await editor.createMaskAsset(source, maskBlob);
+  actions.applyEditSelection(source.id, maskAsset.id);
   selectingImageId.value = "";
   await nextTick();
   composerRef.value?.focusComposer();
@@ -130,7 +138,7 @@ function importFromDrop(event: DragEvent) {
   );
 
   if (!files.length) return;
-  emit("importImages", files);
+  actions.importImages(files);
 }
 
 function handleDragEnter(event: DragEvent) {
@@ -204,20 +212,20 @@ function imageFilesFromTransfer(
         <button
           class="cursor-pointer rounded-lg px-2.5 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
           type="button"
-          @click="emit('openConversations')"
+          @click="actions.openConversations"
         >
           会话
         </button>
         <h1 class="truncate text-base font-semibold text-gray-800">
-          {{ activeConversation?.title || '新的对话' }}
+          {{ header.activeConversation?.title || '新的对话' }}
         </h1>
       </div>
       <div class="flex items-center gap-1">
         <span
-          v-if="pendingJobCount > 0"
+          v-if="header.pendingJobCount > 0"
           class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
         >
-          正在生成 {{ pendingJobCount }} 张
+          正在生成 {{ header.pendingJobCount }} 张
         </span>
         <a
           href="https://github.com/honlnk/gpt-image-studio"
@@ -232,7 +240,7 @@ function imageFilesFromTransfer(
           class="cursor-pointer rounded-lg p-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
           aria-label="打开设置"
           type="button"
-          @click="emit('openSettings')"
+          @click="actions.openSettings"
         >
           <svg
             class="h-4 w-4"
@@ -251,70 +259,70 @@ function imageFilesFromTransfer(
         <button
           class="cursor-pointer rounded-lg px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
           type="button"
-          @click="emit('update:isLibraryOpen', !isLibraryOpen)"
+          @click="actions.setLibraryOpen(!header.isLibraryOpen)"
         >
-          {{ isLibraryOpen ? "隐藏图片库" : "图片库" }}
+          {{ header.isLibraryOpen ? "隐藏图片库" : "图片库" }}
         </button>
       </div>
     </header>
 
     <MessageList
-      :attached-image-ids="activeAttachmentIds"
-      :image-by-id="imageById"
-      :messages="activeMessages"
-      @attach-image="emit('attachImage', $event)"
+      :attached-image-ids="messages.activeAttachmentIds"
+      :image-by-id="messages.imageById"
+      :messages="messages.activeMessages"
+      @attach-image="actions.attachImage"
       @continue-edit="continueEdit"
-      @preview-image="emit('previewImage', $event)"
-      @retry-message="emit('retryMessage', $event)"
+      @preview-image="actions.previewImage"
+      @retry-message="actions.retryMessage"
     />
 
     <ChatComposer
       ref="composerRef"
-      :active-attachments="activeAttachments"
-      :active-edit-mask-image-id="activeEditMaskImageId"
-      :active-edit-source-image-id="activeEditSourceImageId"
-      :active-editor="activeEditor"
-      :active-size-preset="activeSizePreset"
-      :background="background"
-      :background-label="backgroundLabel"
-      :background-options="backgroundOptions"
-      :can-send="canSend"
-      :composer-text="composerText"
-      :custom-size-error="customSizeError"
-      :edit-mode-enabled="editModeEnabled"
-      :format-label="formatLabel"
-      :format-options="formatOptions"
-      :image-height="imageHeight"
-      :image-width="imageWidth"
+      :active-attachments="composer.activeAttachments"
+      :active-edit-mask-image-id="editor.activeEditMaskImageId"
+      :active-edit-source-image-id="editor.activeEditSourceImageId"
+      :active-editor="composer.activeEditor"
+      :active-size-preset="composer.activeSizePreset"
+      :background="composer.background"
+      :background-label="composer.backgroundLabel"
+      :background-options="composer.backgroundOptions"
+      :can-send="composer.canSend"
+      :composer-text="composer.composerText"
+      :custom-size-error="composer.customSizeError"
+      :edit-mode-enabled="composer.editModeEnabled"
+      :format-label="composer.formatLabel"
+      :format-options="composer.formatOptions"
+      :image-height="composer.imageHeight"
+      :image-width="composer.imageWidth"
       :is-drag-active="isDragActive"
-      :is-generating="isGenerating"
-      :model="model"
-      :output-format="outputFormat"
-      :quality="quality"
-      :quality-label="qualityLabel"
-      :quality-options="qualityOptions"
-      :size-label="sizeLabel"
-      :size-ratio-options="sizeRatioOptions"
-      :size-resolution="sizeResolution"
-      :size-resolution-options="sizeResolutionOptions"
-      @apply-size-resolution="emit('applySizeResolution', $event)"
-      @apply-size-preset="emit('applySizePreset', $event)"
-      @close-all-editors="emit('closeAllEditors')"
-      @import-images="emit('importImages', $event)"
-      @remove-attachment="emit('removeAttachment', $event)"
-      @submit-message="emit('submitMessage')"
-      @toggle-editor="emit('toggleEditor', $event)"
-      @update:background="emit('update:background', $event)"
-      @update:composer-text="emit('update:composerText', $event)"
-      @update:image-height="emit('update:imageHeight', $event)"
-      @update:image-width="emit('update:imageWidth', $event)"
-      @update:output-format="emit('update:outputFormat', $event)"
-      @update:quality="emit('update:quality', $event)"
-      @update:edit-mode-enabled="emit('update:editModeEnabled', $event)"
+      :is-generating="composer.isGenerating"
+      :model="composer.model"
+      :output-format="composer.outputFormat"
+      :quality="composer.quality"
+      :quality-label="composer.qualityLabel"
+      :quality-options="composer.qualityOptions"
+      :size-label="composer.sizeLabel"
+      :size-ratio-options="composer.sizeRatioOptions"
+      :size-resolution="composer.sizeResolution"
+      :size-resolution-options="composer.sizeResolutionOptions"
+      @apply-size-resolution="actions.applySizeResolution"
+      @apply-size-preset="actions.applySizePreset"
+      @close-all-editors="actions.closeAllEditors"
+      @import-images="actions.importImages"
+      @remove-attachment="actions.removeAttachment"
+      @submit-message="actions.submitMessage"
+      @toggle-editor="actions.toggleEditor"
+      @update:background="composer.background = $event"
+      @update:composer-text="composer.composerText = $event"
+      @update:image-height="composer.imageHeight = $event"
+      @update:image-width="composer.imageWidth = $event"
+      @update:output-format="composer.outputFormat = $event"
+      @update:quality="composer.quality = $event"
+      @update:edit-mode-enabled="actions.setEditModeEnabled"
     />
 
     <EditMaskModal
-      :image="selectingImageId ? imageById(selectingImageId) : undefined"
+      :image="selectingImageId ? messages.imageById(selectingImageId) : undefined"
       @close="closeMaskModal"
       @apply="applyMask"
     />

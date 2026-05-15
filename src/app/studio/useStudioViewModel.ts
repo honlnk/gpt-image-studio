@@ -461,43 +461,56 @@ export function useStudioViewModel() {
     renameConversation,
     selectConversation: selectConversationWithDraft,
   });
-  const chat = proxyRefs({
-    activeAttachments: images.activeAttachments,
+  const chatHeader = proxyRefs({
     activeConversation: conversations.activeConversation,
-    activeEditor,
+    isLibraryOpen,
+    pendingJobCount: generation.pendingJobCount,
+  });
+  const chatMessages = proxyRefs({
+    activeAttachmentIds: attachedImageIds,
     activeMessages: conversations.activeMessages,
+    imageById: images.imageById,
+  });
+  const chatComposer = proxyRefs({
+    activeAttachments: images.activeAttachments,
+    activeEditor,
     activeSizePreset: settings.activeSizePreset,
-    applySizePreset: settings.applySizePreset,
-    applySizeResolution: settings.applySizeResolution,
-    attachImage: images.attachImage,
     background: settings.background,
     backgroundLabel: settings.backgroundLabel,
     backgroundOptions: settings.backgroundOptions,
     canSend: generation.canSend,
-    editModeEnabled,
-    activeEditSourceImageId,
-    activeEditMaskImageId,
-    closeAllEditors,
     composerText,
     customSizeError: settings.customSizeError,
+    editModeEnabled,
     formatLabel: settings.formatLabel,
     formatOptions: settings.formatOptions,
-    imageById: images.imageById,
     imageHeight: settings.imageHeight,
     imageWidth: settings.imageWidth,
-    importImages: images.importImages,
-    createMaskAsset: images.createMaskAsset,
     isGenerating: generation.isGenerating,
-    isLibraryOpen,
     model: settings.model,
-    openConversations,
-    openSettings: openSettingsDefault,
     outputFormat: settings.outputFormat,
-    pendingJobCount: generation.pendingJobCount,
-    previewImage: previewImageById,
     quality: settings.quality,
     qualityLabel: settings.qualityLabel,
     qualityOptions: settings.qualityOptions,
+    sizeLabel: settings.sizeLabel,
+    sizeRatioOptions: settings.sizeRatioOptions,
+    sizeResolution: settings.sizeResolution,
+    sizeResolutionOptions: settings.sizeResolutionOptions,
+  });
+  const chatEditor = proxyRefs({
+    activeEditMaskImageId,
+    activeEditSourceImageId,
+    createMaskAsset: images.createMaskAsset,
+  });
+  const chatActions = {
+    applySizePreset: settings.applySizePreset,
+    applySizeResolution: settings.applySizeResolution,
+    attachImage: images.attachImage,
+    closeAllEditors,
+    importImages: images.importImages,
+    openConversations,
+    openSettings: openSettingsDefault,
+    previewImage: previewImageById,
     removeAttachment: (id: string) => {
       if (
         id === activeEditSourceImageId.value ||
@@ -519,6 +532,7 @@ export function useStudioViewModel() {
 
       images.removeAttachment(id);
     },
+    retryMessage: generation.retryMessage,
     setEditModeEnabled: (value: boolean) => {
       editModeEnabled.value = value;
       if (!value) {
@@ -528,6 +542,9 @@ export function useStudioViewModel() {
         activeEditSourceImageId.value = "";
         activeEditMaskImageId.value = "";
       }
+    },
+    setLibraryOpen: (value: boolean) => {
+      isLibraryOpen.value = value;
     },
     applyEditSelection: (sourceImageId: string, maskImageId: string) => {
       const previousMaskId = activeEditMaskImageId.value;
@@ -542,14 +559,16 @@ export function useStudioViewModel() {
       activeEditSourceImageId.value = "";
       activeEditMaskImageId.value = "";
     },
-    retryMessage: generation.retryMessage,
-    sizeLabel: settings.sizeLabel,
-    sizeRatioOptions: settings.sizeRatioOptions,
-    sizeResolution: settings.sizeResolution,
-    sizeResolutionOptions: settings.sizeResolutionOptions,
     submitMessage: generation.submitMessage,
     toggleEditor,
-  });
+  };
+  const chat = {
+    actions: chatActions,
+    composer: chatComposer,
+    editor: chatEditor,
+    header: chatHeader,
+    messages: chatMessages,
+  };
   const library = proxyRefs({
     activeConversationId: conversations.activeConversationId,
     attachImage: images.attachImage,
