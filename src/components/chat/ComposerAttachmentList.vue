@@ -2,6 +2,21 @@
 import { computed } from "vue";
 import type { ImageAsset } from "../../types/studio";
 
+type EditingPairAttachment = {
+  kind: "editingPair";
+  id: string;
+  source: ImageAsset;
+  mask: ImageAsset;
+};
+
+type SingleAttachment = {
+  kind: "single";
+  id: string;
+  image: ImageAsset;
+};
+
+type AttachmentRow = EditingPairAttachment | SingleAttachment;
+
 const props = defineProps<{
   activeAttachments: ImageAsset[];
   activeEditMaskImageId: string;
@@ -12,37 +27,59 @@ const emit = defineEmits<{
   removeAttachment: [id: string];
 }>();
 
-const attachmentRows = computed(() => {
-  const sourceId = props.activeEditSourceImageId;
-  const maskId = props.activeEditMaskImageId;
-  const source = props.activeAttachments.find((image) => image.id === sourceId);
-  const mask = props.activeAttachments.find((image) => image.id === maskId);
-  const editingPair =
-    source && mask
-      ? {
-          kind: "editingPair" as const,
-          id: source.id,
-          source,
-          mask,
-        }
-      : null;
+const attachmentRows = computed(() =>
+  createAttachmentRows(
+    props.activeAttachments,
+    props.activeEditSourceImageId,
+    props.activeEditMaskImageId,
+  ),
+);
 
+function createAttachmentRows(
+  attachments: ImageAsset[],
+  sourceId: string,
+  maskId: string,
+): AttachmentRow[] {
+  const editingPair = createEditingPair(attachments, sourceId, maskId);
   const hiddenIds = new Set<string>();
+
   if (editingPair) {
     hiddenIds.add(editingPair.source.id);
     hiddenIds.add(editingPair.mask.id);
   }
 
-  const singles = props.activeAttachments
+  const singles = attachments
     .filter((image) => !hiddenIds.has(image.id))
-    .map((image) => ({
-      kind: "single" as const,
-      id: image.id,
-      image,
-    }));
+    .map(createSingleAttachment);
 
   return editingPair ? [editingPair, ...singles] : singles;
-});
+}
+
+function createEditingPair(
+  attachments: ImageAsset[],
+  sourceId: string,
+  maskId: string,
+): EditingPairAttachment | null {
+  const source = attachments.find((image) => image.id === sourceId);
+  const mask = attachments.find((image) => image.id === maskId);
+
+  if (!source || !mask) return null;
+
+  return {
+    kind: "editingPair",
+    id: source.id,
+    source,
+    mask,
+  };
+}
+
+function createSingleAttachment(image: ImageAsset): SingleAttachment {
+  return {
+    kind: "single",
+    id: image.id,
+    image,
+  };
+}
 </script>
 
 <template>
