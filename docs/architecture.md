@@ -146,12 +146,24 @@ export type ImageClient = {
 
 ## 状态管理方向
 
-项目当前不需要马上切到 Pinia。推荐短期路线：
+项目当前已经引入 Pinia，并按领域拆分 store：
 
-1. 继续使用 Composition API stores/composables。
-2. 将应用级入口改名为 `useStudioViewModel`。
-3. 可选增加 `StudioContext`，通过 Vue provide/inject 减少 `App.vue` 的 prop drilling。
-4. 等并发生成任务、对话级草稿和 companion 连接状态复杂到需要独立 store 时，再评估是否引入 Pinia。
+```text
+src/stores/
+  settingsStore.ts
+  composerStore.ts
+  imagesStore.ts
+  conversationsStore.ts
+  generationStore.ts
+  feedbackStore.ts
+```
+
+职责边界：
+
+- Store 管理跨组件共享的业务状态和领域动作。
+- `useStudioViewModel` 保留为页面级 orchestration 层，负责草稿切换、备份恢复、预览、重命名弹窗等跨 store 工作流。
+- 单组件内部 UI 状态继续留在组件内，例如搜索输入、筛选状态、拖拽深度、mask modal 当前选择等。
+- 旧 feature composable 中的 `useStudioSettings`、`useStudioImages`、`useStudioConversations`、`useStudioGeneration`、`useStudioFeedback` 暂时作为兼容 wrapper 保留。
 
 ## Companion 边界
 

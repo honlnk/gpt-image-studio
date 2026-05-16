@@ -1,19 +1,19 @@
-# Pinia 状态管理迁移计划
+# Pinia 状态管理迁移记录
 
-本文档记录 GPT Image Studio 从当前 Composition API ViewModel 状态组织，渐进迁移到 Pinia 的执行计划。
+本文档记录 GPT Image Studio 从 Composition API ViewModel 状态组织，渐进迁移到 Pinia 的执行过程、当前边界和后续可选收尾项。
 
-它不是一次性重写方案。迁移目标是解决深层组件反复转传状态和事件的问题，同时保留现有 IndexedDB service、业务行为和测试边界。
+这次迁移已按阶段完成。迁移目标是解决深层组件反复转传状态和事件的问题，同时保留现有 IndexedDB service、业务行为和测试边界。
 
 相关文档：
 
-- [架构说明](architecture.md)
+- [架构说明](../architecture.md)
 - [重构路线图](refactor-roadmap.md)
 - [并发生成任务](generation-jobs.md)
-- [遮罩局部编辑](mask-editing.md)
+- [遮罩局部编辑](../mask-editing.md)
 
 ## 背景
 
-当前项目没有使用 Pinia。应用状态主要由 `src/app/studio/useStudioViewModel.ts` 统一装配，再拆到多个 feature composable：
+迁移前，项目没有使用 Pinia。应用状态主要由 `src/app/studio/useStudioViewModel.ts` 统一装配，再拆到多个 feature composable：
 
 - `useStudioSettings`
 - `useStudioConversations`
@@ -24,9 +24,9 @@
 
 这套结构在早期是合适的，因为应用是单页工作台，状态入口集中，业务模块边界也比较清楚。
 
-但随着聊天区能力变多，组件树里已经出现明显的 prop drilling。例如生成参数、输入框、编辑模式、引用图和提交动作会从 `App.vue` 传到 `ChatWorkspace.vue`，再传到 `ChatComposer.vue`，再继续传到参数编辑组件。
+但随着聊天区能力变多，组件树里出现了明显的 prop drilling。例如生成参数、输入框、编辑模式、引用图和提交动作会从 `App.vue` 传到 `ChatWorkspace.vue`，再传到 `ChatComposer.vue`，再继续传到参数编辑组件。
 
-近期已完成一轮小重构，将 `App.vue -> ChatWorkspace` 的几十个参数收口为：
+迁移前曾完成一轮小重构，将 `App.vue -> ChatWorkspace` 的几十个参数收口为：
 
 ```text
 header
@@ -38,6 +38,19 @@ actions
 
 这让 `App.vue` 更清爽，但没有根治 `ChatWorkspace -> ChatComposer -> ComposerEditorPanel` 的深层转传问题。继续做对象分组只能缓解表面复杂度，不能解决状态来源和跨层调用越来越重的问题。
 
+## 当前状态
+
+截至 2026-05-16，Pinia 迁移主线已经完成：
+
+- `settingsStore` 管理生成参数、API 设置和参数选项。
+- `composerStore` 管理输入框、编辑模式、图片库和会话侧栏开关。
+- `imagesStore` 管理图片资产、引用图、transient mask 和存储用量。
+- `conversationsStore` 管理会话、消息、当前会话和标题摘要。
+- `generationStore` 管理生成任务、提交、重试和请求编排。
+- `feedbackStore` 管理 notice toast 和 confirm dialog。
+
+`useStudioViewModel` 继续保留为页面级 orchestration 层，负责草稿切换、备份恢复、预览、重命名弹窗等跨 store 工作流。
+
 ## 目标
 
 本次 Pinia 迁移的目标：
@@ -46,7 +59,7 @@ actions
 2. 让深层组件可以直接读取所属领域的状态，而不是依赖上层逐级传递。
 3. 将跨组件共享状态移动到明确的 store 边界。
 4. 保留 service 层，store 调用现有 IndexedDB、API、备份等 service。
-5. 保留 `useStudioViewModel` 作为过渡期页面装配层，避免一次性推倒重来。
+5. 保留 `useStudioViewModel` 作为页面装配和 orchestration 层，避免一次性推倒重来。
 6. 每个阶段都保持可构建、可测试、可回退。
 
 非目标：
@@ -92,15 +105,15 @@ src/stores/
 
 具体文件名可以在落地时按项目命名风格微调，但边界应保持清晰。
 
-### ViewModel 过渡期保留
+### ViewModel 保留为 Orchestration 层
 
-迁移过程中保留 `useStudioViewModel`：
+迁移完成后仍保留 `useStudioViewModel`：
 
 - 继续负责页面级装配。
-- 继续协调尚未迁移的 composable。
-- 作为 Pinia store 和旧 feature composable 之间的过渡层。
+- 继续协调跨 store 工作流。
+- 继续承载预览、重命名弹窗、备份恢复入口等页面级临时流程。
 
-当主要领域都迁移后，再评估是否拆薄或移除 `useStudioViewModel`。
+如果后续 `useStudioViewModel` 继续变薄，可以再评估是否抽一个独立 orchestration composable。
 
 ### Service 层不搬进 Store
 
@@ -398,7 +411,7 @@ src/stores/conversationsStore.ts
 
 - [x] `ConversationSidebar.vue` 可以直接读取 conversations store。
 - [x] `MessageList.vue` 可以直接读取 active messages，或继续接收纯展示 props。
-- [ ] 设置批量会话操作可以读取 conversations store。
+- [ ] 设置批量会话操作可以读取 conversations store。当前仍通过 `SettingsModal -> BatchOperationsPanel` 接收列表和删除动作，暂列为后续可选瘦身。
 
 验收：
 
@@ -568,15 +581,15 @@ pnpm build
 
 手动回归清单：
 
-- [ ] 刷新后设置恢复。
-- [ ] 切换会话后草稿恢复。
-- [ ] 上传/粘贴/拖拽图片作为引用图。
-- [ ] 文生图。
-- [ ] 引用图编辑。
-- [ ] mask 编辑。
-- [ ] 图片库引用、删除、重命名、批量下载。
+- [x] 刷新后设置恢复。
+- [x] 切换会话后草稿恢复。
+- [x] 上传/粘贴/拖拽图片作为引用图。
+- [x] 文生图。
+- [x] 引用图编辑。
+- [x] mask 编辑。
+- [x] 图片库引用、删除、重命名、批量下载。
 - [ ] 备份导出和恢复。
-- [ ] 移动端侧边栏和图片库开关。
+- [x] 移动端侧边栏和图片库开关。
 
 ## 回滚策略
 

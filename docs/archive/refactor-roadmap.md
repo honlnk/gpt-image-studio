@@ -6,10 +6,10 @@
 
 相关文档：
 
-- [架构说明](architecture.md)
-- [本地 CLI Companion](companion.md)
+- [架构说明](../architecture.md)
+- [本地 CLI Companion](../companion.md)
 - [并发生成任务](generation-jobs.md)
-- [连接模式 ADR](decisions/003-connection-modes.md)
+- [连接模式 ADR](../decisions/003-connection-modes.md)
 
 ## 背景
 
@@ -501,7 +501,7 @@ type ConversationDraft = {
 
 目标：将 mask 编辑接入对话级草稿和图片编辑请求。
 
-参考文档：[遮罩局部编辑](mask-editing.md)。
+参考文档：[遮罩局部编辑](../mask-editing.md)。
 
 建议类型：
 
@@ -535,7 +535,7 @@ type DraftMask = {
 
 目标：在 Web App 结构稳定后，再实现可选 CLI companion。
 
-参考文档：[本地 CLI Companion](companion.md)。
+参考文档：[本地 CLI Companion](../companion.md)。
 
 建议结构：
 
@@ -587,38 +587,31 @@ MVP 范围：
 
 ## 状态管理策略
 
-短期不引入 Pinia。
+当前已经引入 Pinia，并完成主要业务状态迁移。
 
-理由：
-
-- 当前状态仍集中在单个工作台页面内。
-- Composition API store 与现有代码贴合，迁移成本低。
-- 当前最大问题是模块边界，而不是缺少状态库。
-
-短期策略：
-
-- 使用 `useStudioViewModel` 作为应用级装配入口。
-- 业务状态放到 feature composables。
-- 可选用 provide/inject 提供 `StudioContext`，减少 `App.vue` 的 props/events 接线压力。
-
-重新评估 Pinia 的触发条件：
-
-- generation jobs、drafts、connection、settings 等状态变成多个独立 store。
-- 需要更强 DevTools 调试。
-- 需要更标准化的 store 测试方式。
-- 多页面或多入口开始共享同一批状态。
-
-如果引入 Pinia，建议的 store 边界：
+当前 store 边界：
 
 ```text
 settingsStore
-conversationsStore
-messagesStore
+composerStore
 imagesStore
-generationJobsStore
-draftsStore
-connectionStore
+conversationsStore
+generationStore
+feedbackStore
 ```
+
+当前策略：
+
+- 使用 Pinia store 承载跨组件共享状态和领域动作。
+- 使用 `useStudioViewModel` 作为应用级装配和 orchestration 入口。
+- 保留轻量 feature composable wrapper，降低迁移后的调用面变化。
+- 页面级临时流程继续留在 view model 或组件内部，例如预览、重命名弹窗、局部搜索和筛选状态。
+
+后续只做小步收尾：
+
+- 视需要让设置批量会话操作直接读取 `conversationsStore`。
+- 为 settings/composer/images/generation store 补更细的单元测试。
+- 如果 `useStudioViewModel` 继续变薄，再评估是否抽出独立 orchestration composable。
 
 ## 风险与注意事项
 
