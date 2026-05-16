@@ -51,7 +51,6 @@ export function useStudioViewModel() {
     activeEditSourceImageId,
     composerText,
     editModeEnabled,
-    isConversationSidebarOpen,
     isLibraryOpen,
   } = storeToRefs(composerState);
   const isSettingsOpen = ref(false);
@@ -168,9 +167,6 @@ export function useStudioViewModel() {
   const previewImage = computed(() => images.imageById(previewImageId.value));
   const attachedImageIds = computed(() =>
     images.activeAttachments.value.map((image) => image.id),
-  );
-  const libraryImages = computed(() =>
-    images.imageAssets.value.filter((image) => !image.isTransientMask),
   );
 
   function previewImageById(id: string) {
@@ -398,10 +394,6 @@ export function useStudioViewModel() {
     feedback.notifySuccess("图片已重命名。");
   }
 
-  async function setImageTagColor(id: string, color: (typeof images.imageAssets.value)[number]["tagColor"] | undefined) {
-    await images.setImageTagColor(id, color);
-  }
-
   async function deleteConversationWithDraft(id: string) {
     await conversations.deleteConversation(id);
     await deleteConversationDraft(id).catch(reportStorageError);
@@ -435,11 +427,8 @@ export function useStudioViewModel() {
   }
 
   const sidebar = proxyRefs({
-    activeConversationId: conversations.activeConversationId,
-    conversations: conversations.conversations,
     createConversation: createConversationWithDraft,
     deleteConversation: deleteConversationWithDraft,
-    isOpen: isConversationSidebarOpen,
     openSettings: openSettingsDefault,
     renameConversation,
     selectConversation: selectConversationWithDraft,
@@ -504,17 +493,9 @@ export function useStudioViewModel() {
     messages: chatMessages,
   };
   const library = proxyRefs({
-    activeConversationId: conversations.activeConversationId,
-    attachImage: images.attachImage,
-    attachedImageIds,
-    deleteImage: images.deleteImage,
-    images: libraryImages,
-    isOpen: isLibraryOpen,
     openBatchOperations: openBatchImageOperations,
     previewImage: previewImageById,
     renameImage: requestRenameImage,
-    setImageTagColor,
-    storageUsage: images.storageUsage,
   });
   const settingsModal = proxyRefs({
     apiBaseUrl: settings.apiBaseUrl,

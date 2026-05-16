@@ -347,7 +347,7 @@ src/stores/imagesStore.ts
 
 - [x] `ComposerAttachmentList.vue` 可以直接读取 active attachments，或接收一个较小对象。
 - [x] `MessageList.vue` 和 `MessageItem.vue` 根据实际情况决定是否直接读 image store。
-- [ ] `ImageLibrary.vue` 可以直接读取图片列表和 storage usage。
+- [x] `ImageLibrary.vue` 可以直接读取图片列表和 storage usage。
 
 验收：
 
@@ -396,7 +396,7 @@ src/stores/conversationsStore.ts
 
 组件调整：
 
-- [ ] `ConversationSidebar.vue` 可以直接读取 conversations store。
+- [x] `ConversationSidebar.vue` 可以直接读取 conversations store。
 - [x] `MessageList.vue` 可以直接读取 active messages，或继续接收纯展示 props。
 - [ ] 设置批量会话操作可以读取 conversations store。
 
@@ -601,20 +601,19 @@ refactor: move generation jobs to pinia
 
 ## 开放问题
 
-- `useStudioSettings` 是直接删除，还是保留为 settings store 的兼容 wrapper？
-- `PromptInputBox` 是否应该保持纯受控组件，还是直接读 composer store？
-- `MessageList` 是否应该直接读 images store，还是继续作为纯展示列表？
-- 备份恢复流程是否需要独立 orchestration 层，而不是放进单个 store？
-- Store 类型是否需要统一导出到 `src/stores/index.ts`？
+- `useStudioSettings`、`useStudioImages`、`useStudioConversations`、`useStudioGeneration`、`useStudioFeedback` 暂时保留为兼容 wrapper，降低迁移后的调用面变化。
+- `PromptInputBox` 继续保持纯受控组件。它是输入框展示组件，不直接绑定 store 更利于复用和测试。
+- `MessageList` 继续接收纯展示 props。消息列表仍由 `ChatWorkspace` 负责组合上下文，暂不强行接入更多 store。
+- 备份恢复流程继续留在 orchestration 层，不放进单个 store，避免把恢复、草稿、图片预览补水等流程塞进领域 store。
+- Store 类型暂不增加统一 `src/stores/index.ts`。当前直接按 store 文件导入更明确，等 store API 稳定后再评估。
 
 ## 推荐下一步
 
-下一次实现建议只做阶段一和阶段二的一部分：
+本轮 Pinia 迁移主线已完成。后续建议只做小步收尾：
 
-1. 安装并注册 Pinia。
-2. 新建 `settingsStore`。
-3. 迁移生成参数、labels、options 和参数 action。
-4. 改 `ComposerEditorPanel` 直接读 settings store。
-5. 保留 API key/Base URL 的设置弹窗接线，等第二个小步再处理。
+1. 视需要让设置批量会话操作直接读取 `conversationsStore`。
+2. 为 settings/composer/images/generation store 补更细的单元测试。
+3. 如果 `useStudioViewModel` 后续继续变薄，再评估是否抽一个独立 orchestration composable。
+4. 暂时不要迁移重命名弹窗，除非它们变成跨区域共享流程。
 
-这样可以优先消掉最刺眼的 `ChatComposer -> ComposerEditorPanel` 参数转传，同时把风险控制在生成参数这一块。
+这些都是可选优化，不影响当前已完成的 Pinia 状态迁移主线。

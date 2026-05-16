@@ -40,6 +40,10 @@ export const useComposerStore = defineStore("composer", () => {
     isConversationSidebarOpen.value = true;
   }
 
+  function setConversationSidebarOpen(value: boolean) {
+    isConversationSidebarOpen.value = value;
+  }
+
   function setLibraryOpen(value: boolean) {
     isLibraryOpen.value = value;
   }
@@ -56,6 +60,7 @@ export const useComposerStore = defineStore("composer", () => {
     clearEditSelection,
     closeAllEditors,
     openConversations,
+    setConversationSidebarOpen,
     setEditModeEnabled,
     setLibraryOpen,
     toggleEditor,

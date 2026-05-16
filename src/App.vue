@@ -15,9 +15,6 @@ const studio = useStudioViewModel();
 <template>
   <main class="flex h-screen bg-white text-gray-900 antialiased">
     <ConversationSidebar
-      v-model:is-open="studio.sidebar.isOpen"
-      :active-conversation-id="studio.sidebar.activeConversationId"
-      :conversations="studio.sidebar.conversations"
       @create-conversation="studio.sidebar.createConversation"
       @delete-conversation="studio.sidebar.deleteConversation"
       @rename-conversation="studio.sidebar.renameConversation"
@@ -32,17 +29,9 @@ const studio = useStudioViewModel();
     />
 
     <ImageLibrary
-      v-model:is-open="studio.library.isOpen"
-      :active-conversation-id="studio.library.activeConversationId"
-      :attached-image-ids="studio.library.attachedImageIds"
-      :images="studio.library.images"
-      @attach-image="studio.library.attachImage"
-      @delete-image="studio.library.deleteImage"
       @open-batch-operations="studio.library.openBatchOperations"
       @preview-image="studio.library.previewImage"
       @rename-image="studio.library.renameImage"
-      @set-image-tag-color="studio.library.setImageTagColor"
-      :storage-usage="studio.library.storageUsage"
     />
 
     <SettingsModal
