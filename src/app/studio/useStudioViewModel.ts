@@ -165,6 +165,11 @@ export function useStudioViewModel() {
     restoreFromStorage,
   });
   const previewImage = computed(() => images.imageById(previewImageId.value));
+  const previewMaskUrl = computed(() => {
+    if (previewImageId.value !== activeEditSourceImageId.value) return undefined;
+    const maskAsset = images.imageById(activeEditMaskImageId.value);
+    return maskAsset?.previewUrl;
+  });
   const attachedImageIds = computed(() =>
     images.activeAttachments.value.map((image) => image.id),
   );
@@ -517,6 +522,7 @@ export function useStudioViewModel() {
   const preview = proxyRefs({
     close: closePreview,
     image: previewImage,
+    maskUrl: previewMaskUrl,
   });
   const noticeToast = proxyRefs({
     close: feedback.dismissNotice,

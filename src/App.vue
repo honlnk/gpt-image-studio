@@ -54,6 +54,7 @@ const studio = useStudioViewModel();
 
     <ImagePreviewModal
       :image="studio.preview.image"
+      :mask-url="studio.preview.maskUrl"
       @close="studio.preview.close"
     />
 

@@ -233,6 +233,7 @@ function imageFilesFromTransfer(
       ref="composerRef"
       :is-drag-active="isDragActive"
       @close-all-editors="actions.closeAllEditors"
+      @preview-image="actions.previewImage"
       @remove-attachment="actions.removeAttachment"
       @update:edit-mode-enabled="actions.setEditModeEnabled"
     />

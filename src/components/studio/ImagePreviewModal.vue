@@ -4,6 +4,7 @@ import type { ImageAsset } from "../../types/studio";
 
 const props = defineProps<{
   image?: ImageAsset;
+  maskUrl?: string;
 }>();
 
 const emit = defineEmits<{
@@ -83,13 +84,28 @@ function clampZoom(value: number) {
         @click.self="emit('close')"
         @wheel="handleWheel"
       >
-        <img
-          class="max-h-full max-w-full rounded-lg object-contain shadow-2xl transition-transform duration-75"
-          :alt="image.name"
-          :src="image.previewUrl"
+        <div
+          class="relative max-h-full max-w-full"
           :style="{ transform: `scale(${zoom})` }"
           @dblclick="resetZoom"
-        />
+        >
+          <img
+            class="max-h-[calc(100vh-120px)] max-w-full rounded-lg object-contain shadow-2xl transition-transform duration-75"
+            :alt="image.name"
+            :src="image.previewUrl"
+          />
+          <div
+            v-if="maskUrl"
+            class="absolute inset-0 rounded-lg bg-black/60"
+            :style="{
+              maskImage: `url(${maskUrl})`,
+              maskSize: '100% 100%',
+              maskMode: 'luminance',
+              WebkitMaskImage: `url(${maskUrl})`,
+              WebkitMaskSize: '100% 100%',
+            } as any"
+          />
+        </div>
       </div>
     </div>
   </Teleport>
