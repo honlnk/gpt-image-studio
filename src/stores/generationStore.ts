@@ -159,6 +159,8 @@ export const useGenerationStore = defineStore("generation", () => {
       status: "pending",
       createdAt: isoTimestamp(now + 1),
       generationParams: input.value.currentGenerationParams(),
+      editSourceImageId,
+      editMaskImageId,
     };
 
     input.value.messages.value.push(userMessage, assistantMessage);
@@ -224,8 +226,8 @@ export const useGenerationStore = defineStore("generation", () => {
             message.generationParams ?? input.value.currentGenerationParams(),
           prompt: userMessage.content,
           referencedImageIds: message.referencedImageIds,
-          editSourceImageId: undefined,
-          editMaskImageId: undefined,
+          editSourceImageId: message.editSourceImageId,
+          editMaskImageId: message.editMaskImageId,
           userMessageId: userMessage.id,
         }),
       );

@@ -31,6 +31,8 @@ export type Message = {
   createdAt: string;
   generationParams?: GenerationParams;
   errorMessage?: string;
+  editSourceImageId?: string;
+  editMaskImageId?: string;
 };
 
 export type ImageAsset = {
