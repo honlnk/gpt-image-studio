@@ -1,4 +1,5 @@
 import { computed, onMounted, proxyRefs, ref, watch } from "vue";
+import { storeToRefs } from "pinia";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
 import { useStudioConversations } from "../../features/conversations";
 import { useStudioFeedback } from "../../features/feedback";
@@ -17,8 +18,8 @@ import {
   saveConversationDraft,
 } from "../../services/conversationDrafts";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
-import { useStudioUiState } from "./useStudioUiState";
-import type { ConversationDraft, GenerationParams, Message } from "../../types/studio";
+import { useComposerStore } from "../../stores/composerStore";
+import type { ConversationDraft, GenerationParams } from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
@@ -44,19 +45,21 @@ export function useStudioViewModel() {
     isHydrated,
     onStorageError: reportStorageError,
   });
-  const ui = useStudioUiState();
-  const composerText = ref("");
-  const editModeEnabled = ref(false);
-  const activeEditSourceImageId = ref("");
-  const activeEditMaskImageId = ref("");
+  const composerState = useComposerStore();
+  const {
+    activeEditMaskImageId,
+    activeEditSourceImageId,
+    composerText,
+    editModeEnabled,
+    isLibraryOpen,
+  } = storeToRefs(composerState);
+  const isSettingsOpen = ref(false);
   const legacyComposerText = readStorage(STORAGE_KEYS.draftComposerText, "");
   const legacyAttachedImageIds = readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []);
   let isApplyingDraft = false;
   let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let draftSwitchQueue = Promise.resolve();
 
-  const messages = ref<Message[]>([]);
-  const isConversationSidebarOpen = ref(false);
   const previewImageId = ref("");
   const settingsInitialTab = ref<SettingsTab>("api");
   const settingsInitialBatchPanel = ref<BatchPanel>("images");
@@ -73,27 +76,20 @@ export function useStudioViewModel() {
   const feedback = useStudioFeedback();
   const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
-    messages,
-    notifyError: feedback.notifyError,
-    notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
     refreshStorageUsage: refreshImagesStorageUsage,
-    requestConfirmation: feedback.requestConfirmation,
   });
+  const messages = conversations.messages;
   const images = useStudioImages({
     activeConversationId: conversations.activeConversationId,
     messages,
-    notifyError: feedback.notifyError,
-    notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
-    requestConfirmation: feedback.requestConfirmation,
   });
 
   function clearConversationDraft() {
     images.attachedImages.value = [];
     composerText.value = "";
-    activeEditSourceImageId.value = "";
-    activeEditMaskImageId.value = "";
+    composerState.clearEditSelection();
   }
 
   function refreshImagesStorageUsage() {
@@ -172,13 +168,6 @@ export function useStudioViewModel() {
   const attachedImageIds = computed(() =>
     images.activeAttachments.value.map((image) => image.id),
   );
-  const libraryImages = computed(() =>
-    images.imageAssets.value.filter((image) => !image.isTransientMask),
-  );
-
-  function openConversations() {
-    isConversationSidebarOpen.value = true;
-  }
 
   function previewImageById(id: string) {
     previewImageId.value = id;
@@ -188,16 +177,24 @@ export function useStudioViewModel() {
     previewImageId.value = "";
   }
 
+  function openSettings() {
+    isSettingsOpen.value = true;
+  }
+
+  function closeSettings() {
+    isSettingsOpen.value = false;
+  }
+
   function openBatchImageOperations() {
     settingsInitialTab.value = "batch";
     settingsInitialBatchPanel.value = "images";
-    ui.openSettings();
+    openSettings();
   }
 
   function openSettingsDefault() {
     settingsInitialTab.value = "api";
     settingsInitialBatchPanel.value = "images";
-    ui.openSettings();
+    openSettings();
   }
 
   onMounted(() => {
@@ -275,6 +272,7 @@ export function useStudioViewModel() {
   }
 
   function applyGenerationParams(params: GenerationParams) {
+    settings.applySizeResolution(params.resolution);
     settings.applySizePreset(params.size);
     settings.imageWidth.value = params.width;
     settings.imageHeight.value = params.height;
@@ -396,10 +394,6 @@ export function useStudioViewModel() {
     feedback.notifySuccess("图片已重命名。");
   }
 
-  async function setImageTagColor(id: string, color: (typeof images.imageAssets.value)[number]["tagColor"] | undefined) {
-    await images.setImageTagColor(id, color);
-  }
-
   async function deleteConversationWithDraft(id: string) {
     await conversations.deleteConversation(id);
     await deleteConversationDraft(id).catch(reportStorageError);
@@ -433,53 +427,25 @@ export function useStudioViewModel() {
   }
 
   const sidebar = proxyRefs({
-    activeConversationId: conversations.activeConversationId,
-    conversations: conversations.conversations,
     createConversation: createConversationWithDraft,
     deleteConversation: deleteConversationWithDraft,
-    isOpen: isConversationSidebarOpen,
     openSettings: openSettingsDefault,
-    pendingJobCountByConversation: generation.pendingJobCountByConversation,
     renameConversation,
     selectConversation: selectConversationWithDraft,
   });
-  const chat = proxyRefs({
-    activeAttachments: images.activeAttachments,
+  const chatHeader = proxyRefs({
     activeConversation: conversations.activeConversation,
-    activeEditor: ui.activeEditor,
+    isLibraryOpen,
+  });
+  const chatMessages = proxyRefs({
+    activeAttachmentIds: attachedImageIds,
     activeMessages: conversations.activeMessages,
-    activeSizePreset: settings.activeSizePreset,
-    applySizePreset: settings.applySizePreset,
-    attachImage: images.attachImage,
-    background: settings.background,
-    backgroundLabel: settings.backgroundLabel,
-    backgroundOptions: settings.backgroundOptions,
-    canSend: generation.canSend,
-    editModeEnabled,
-    activeEditSourceImageId,
-    activeEditMaskImageId,
-    closeAllEditors: ui.closeAllEditors,
-    composerText,
-    customSizeError: settings.customSizeError,
-    formatLabel: settings.formatLabel,
-    formatOptions: settings.formatOptions,
-    imageById: images.imageById,
-    imageHeight: settings.imageHeight,
-    imageWidth: settings.imageWidth,
-    importImages: images.importImages,
-    createMaskAsset: images.createMaskAsset,
-    isEditorExpanded: ui.isEditorExpanded,
-    isGenerating: generation.isGenerating,
-    isLibraryOpen: ui.isLibraryOpen,
-    model: settings.model,
-    openConversations,
+  });
+  const chatActions = {
+    closeAllEditors: composerState.closeAllEditors,
+    openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,
-    outputFormat: settings.outputFormat,
-    pendingJobCount: generation.pendingJobCount,
     previewImage: previewImageById,
-    quality: settings.quality,
-    qualityLabel: settings.qualityLabel,
-    qualityOptions: settings.qualityOptions,
     removeAttachment: (id: string) => {
       if (
         id === activeEditSourceImageId.value ||
@@ -494,60 +460,48 @@ export function useStudioViewModel() {
           images.removeAttachment(maskId);
           images.clearTransientMask(maskId);
         }
-        activeEditSourceImageId.value = "";
-        activeEditMaskImageId.value = "";
+        composerState.clearEditSelection();
         return;
       }
 
       images.removeAttachment(id);
     },
+    retryMessage: generation.retryMessage,
     setEditModeEnabled: (value: boolean) => {
-      editModeEnabled.value = value;
       if (!value) {
         if (activeEditMaskImageId.value) {
           images.clearTransientMask(activeEditMaskImageId.value);
         }
-        activeEditSourceImageId.value = "";
-        activeEditMaskImageId.value = "";
       }
+      composerState.setEditModeEnabled(value);
     },
+    setLibraryOpen: composerState.setLibraryOpen,
     applyEditSelection: (sourceImageId: string, maskImageId: string) => {
       const previousMaskId = activeEditMaskImageId.value;
       if (previousMaskId && previousMaskId !== maskImageId) {
         images.clearTransientMask(previousMaskId);
       }
-      activeEditSourceImageId.value = sourceImageId;
-      activeEditMaskImageId.value = maskImageId;
+      composerState.applyEditSelection(sourceImageId, maskImageId);
       images.attachedImages.value = [sourceImageId, maskImageId];
     },
-    clearEditSelection: () => {
-      activeEditSourceImageId.value = "";
-      activeEditMaskImageId.value = "";
-    },
-    retryMessage: generation.retryMessage,
-    sizeLabel: settings.sizeLabel,
-    sizePresets: settings.sizePresets,
-    submitMessage: generation.submitMessage,
-    toggleEditor: ui.toggleEditor,
-  });
+    clearEditSelection: composerState.clearEditSelection,
+    toggleEditor: composerState.toggleEditor,
+  };
+  const chat = {
+    actions: chatActions,
+    header: chatHeader,
+    messages: chatMessages,
+  };
   const library = proxyRefs({
-    activeConversationId: conversations.activeConversationId,
-    attachImage: images.attachImage,
-    attachedImageIds,
-    deleteImage: images.deleteImage,
-    images: libraryImages,
-    isOpen: ui.isLibraryOpen,
     openBatchOperations: openBatchImageOperations,
     previewImage: previewImageById,
     renameImage: requestRenameImage,
-    setImageTagColor,
-    storageUsage: images.storageUsage,
   });
   const settingsModal = proxyRefs({
     apiBaseUrl: settings.apiBaseUrl,
     apiKey: settings.apiKey,
     connectionMode: settings.connectionMode,
-    close: ui.closeSettings,
+    close: closeSettings,
     conversations: conversations.conversations,
     deleteConversations: deleteConversationsWithDraft,
     deleteImages: images.deleteImages,
@@ -556,7 +510,7 @@ export function useStudioViewModel() {
     importBackup: backup.importBackup,
     initialBatchPanel: settingsInitialBatchPanel,
     initialTab: settingsInitialTab,
-    isOpen: ui.isSettingsOpen,
+    isOpen: isSettingsOpen,
     messages,
     previewImage: previewImageById,
   });

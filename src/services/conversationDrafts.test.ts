@@ -33,7 +33,8 @@ const draft: ConversationDraft = {
   attachedImageIds: ["img-1"],
   editModeEnabled: false,
   generationParams: {
-    size: "1024x1024",
+    size: "1:1",
+    resolution: "1k",
     width: 1024,
     height: 1024,
     quality: "auto",

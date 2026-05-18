@@ -1,41 +1,37 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { StorageUsage } from "../../services/storageUsage";
+import { useComposerStore } from "../../stores/composerStore";
+import { useConversationsStore } from "../../stores/conversationsStore";
+import { useImagesStore } from "../../stores/imagesStore";
 import type { ImageAsset } from "../../types/studio";
 import { IMAGE_TAG_COLORS, imageTagDotColor } from "../image-library/imageTagColors";
 import ImageDetailsPanel from "../image-library/ImageDetailsPanel.vue";
 import ImageGrid from "../image-library/ImageGrid.vue";
 import StorageUsagePanel from "../image-library/StorageUsagePanel.vue";
 
-const props = defineProps<{
-  activeConversationId: string;
-  attachedImageIds: string[];
-  images: ImageAsset[];
-  isOpen: boolean;
-  storageUsage: StorageUsage | null;
-}>();
-
 const emit = defineEmits<{
-  attachImage: [id: string];
-  deleteImage: [id: string];
   openBatchOperations: [];
   previewImage: [id: string];
   renameImage: [id: string];
-  setImageTagColor: [id: string, color: ImageAsset["tagColor"] | undefined];
-  "update:isOpen": [value: boolean];
 }>();
 
+const composer = useComposerStore();
+const conversations = useConversationsStore();
+const images = useImagesStore();
 const activeFilter = ref<"current" | "all">("current");
 const activeColorFilter = ref<"all" | ImageAsset["tagColor"]>("all");
 const selectedImageId = ref("");
+const libraryImages = computed(() =>
+  images.imageAssets.filter((image) => !image.isTransientMask),
+);
 
 const currentConversationImages = computed(() =>
-  props.images.filter(
-    (image) => image.conversationId === props.activeConversationId,
+  libraryImages.value.filter(
+    (image) => image.conversationId === conversations.activeConversationId,
   ),
 );
 const scopeImages = computed(() =>
-  activeFilter.value === "current" ? currentConversationImages.value : props.images,
+  activeFilter.value === "current" ? currentConversationImages.value : libraryImages.value,
 );
 const filteredImages = computed(() => {
   if (activeColorFilter.value === "all") return scopeImages.value;
@@ -44,11 +40,11 @@ const filteredImages = computed(() => {
 const selectedImage = computed(() => {
   if (!selectedImageId.value) return null;
   return (
-    props.images.find((image) => image.id === selectedImageId.value) ?? null
+    libraryImages.value.find((image) => image.id === selectedImageId.value) ?? null
   );
 });
 watch(
-  () => [props.images, activeFilter.value, props.activeConversationId] as const,
+  () => [libraryImages.value, activeFilter.value, conversations.activeConversationId] as const,
   () => {
     if (!selectedImage.value) {
       selectedImageId.value = "";
@@ -105,7 +101,7 @@ function selectImage(id: string) {
 }
 
 function isAttached(id: string) {
-  return props.attachedImageIds.includes(id);
+  return images.attachedImages.includes(id);
 }
 
 function toggleColorFilter(nextColor: ImageAsset["tagColor"] | "all") {
@@ -113,21 +109,21 @@ function toggleColorFilter(nextColor: ImageAsset["tagColor"] | "all") {
 }
 
 function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined) {
-  emit("setImageTagColor", id, color);
+  images.setImageTagColor(id, color);
 }
 </script>
 
 <template>
   <div
-    v-if="isOpen"
+    v-if="composer.isLibraryOpen"
     class="fixed inset-0 z-10 bg-black/25 lg:hidden"
     role="presentation"
-    @click="emit('update:isOpen', false)"
+    @click="composer.setLibraryOpen(false)"
   ></div>
   <aside
     :class="[
       'flex w-[320px] shrink-0 flex-col border-l border-gray-200 bg-white max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:transition-transform max-lg:duration-200 max-lg:ease-out',
-      isOpen ? 'max-lg:translate-x-0' : 'max-lg:translate-x-full',
+      composer.isLibraryOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
     ]"
     aria-label="图片库"
   >
@@ -135,7 +131,7 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <span class="text-base font-semibold text-gray-800">图片库</span>
-          <span class="text-sm text-gray-500">{{ images.length }} 张图片</span>
+          <span class="text-sm text-gray-500">{{ libraryImages.length }} 张图片</span>
         </div>
         <div class="flex items-center gap-1">
           <button
@@ -149,7 +145,7 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
             class="cursor-pointer rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 lg:hidden"
             aria-label="关闭图片库"
             type="button"
-            @click="emit('update:isOpen', false)"
+            @click="composer.setLibraryOpen(false)"
           >
             <svg
               class="h-4 w-4"
@@ -165,8 +161,8 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
         </div>
       </div>
       <StorageUsagePanel
-        v-if="storageUsage"
-        :storage-usage="storageUsage"
+        v-if="images.storageUsage"
+        :storage-usage="images.storageUsage"
       />
 
       <div class="mt-3 grid grid-cols-2 rounded-lg bg-gray-100 p-1 text-sm">
@@ -229,10 +225,10 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
     <div class="flex min-h-0 flex-1 flex-col">
       <ImageGrid
         :active-filter="activeFilter"
-        :attached-image-ids="attachedImageIds"
+        :attached-image-ids="images.attachedImages"
         :images="filteredImages"
         :selected-image-id="selectedImage?.id ?? ''"
-        @attach-image="emit('attachImage', $event)"
+        @attach-image="images.attachImage"
         @preview-image="emit('previewImage', $event)"
         @select-image="selectImage"
       />
@@ -247,7 +243,7 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
           :image="selectedImage"
           :is-attached="isAttached(selectedImage.id)"
           @clear-selection="selectedImageId = ''"
-          @delete-image="emit('deleteImage', $event)"
+          @delete-image="images.deleteImage"
           @rename-image="emit('renameImage', $event)"
           @set-tag-color="setImageTagColor"
         />

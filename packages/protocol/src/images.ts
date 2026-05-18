@@ -1,5 +1,16 @@
 export type ProtocolGenerationParams = {
-  size: "auto" | "1024x1024" | "1536x1024" | "1024x1536" | "custom";
+  size:
+    | "auto"
+    | "21:9"
+    | "16:9"
+    | "3:2"
+    | "4:3"
+    | "1:1"
+    | "3:4"
+    | "2:3"
+    | "9:16"
+    | "custom";
+  resolution: "1k" | "2k" | "4k";
   width: number;
   height: number;
   quality: "auto" | "high" | "medium" | "low";

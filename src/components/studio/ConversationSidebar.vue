@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import type { Conversation } from "../../types/studio";
-
-const props = defineProps<{
-  conversations: Conversation[];
-  activeConversationId: string;
-  pendingJobCountByConversation: Record<string, number>;
-  isOpen: boolean;
-}>();
+import { useComposerStore } from "../../stores/composerStore";
+import { useConversationsStore } from "../../stores/conversationsStore";
+import { useGenerationStore } from "../../stores/generationStore";
 
 const emit = defineEmits<{
   createConversation: [];
@@ -15,33 +10,39 @@ const emit = defineEmits<{
   renameConversation: [id: string];
   openSettings: [];
   selectConversation: [id: string];
-  "update:isOpen": [value: boolean];
 }>();
 
 const searchText = ref("");
+const composer = useComposerStore();
+const conversations = useConversationsStore();
+const generation = useGenerationStore();
 const filteredConversations = computed(() => {
   const query = searchText.value.trim().toLowerCase();
-  if (!query) return props.conversations;
+  if (!query) return conversations.conversations;
 
-  return props.conversations.filter((conversation) =>
+  return conversations.conversations.filter((conversation) =>
     `${conversation.title} ${conversation.summary}`
       .toLowerCase()
       .includes(query),
   );
 });
+
+function closeSidebar() {
+  composer.setConversationSidebarOpen(false);
+}
 </script>
 
 <template>
   <div
-    v-if="isOpen"
+    v-if="composer.isConversationSidebarOpen"
     class="fixed inset-0 z-20 bg-black/35 md:hidden"
     role="presentation"
-    @click="emit('update:isOpen', false)"
+    @click="closeSidebar"
   ></div>
   <aside
     :class="[
       'flex w-65 shrink-0 flex-col bg-[#171717] text-gray-100 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-30 max-md:transition-transform max-md:duration-200',
-      isOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
+      composer.isConversationSidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
     ]"
     aria-label="历史会话"
   >
@@ -90,7 +91,7 @@ const filteredConversations = computed(() => {
         type="button"
         @click="
           emit('createConversation');
-          emit('update:isOpen', false);
+          closeSidebar();
         "
       >
         <svg
@@ -153,7 +154,7 @@ const filteredConversations = computed(() => {
         :key="conversation.id"
         :class="[
           'group mb-0.5 flex items-center gap-1 rounded-lg pr-1 transition-colors',
-          conversation.id === activeConversationId
+          conversation.id === conversations.activeConversationId
             ? 'bg-white/10 text-white'
             : 'text-gray-400 hover:bg-white/5 hover:text-gray-200',
         ]"
@@ -163,16 +164,16 @@ const filteredConversations = computed(() => {
           type="button"
           @click="
             emit('selectConversation', conversation.id);
-            emit('update:isOpen', false);
+            closeSidebar();
           "
         >
           {{ conversation.title }}
         </button>
         <span
-          v-if="(pendingJobCountByConversation[conversation.id] ?? 0) > 0"
+          v-if="(generation.pendingJobCountByConversation[conversation.id] ?? 0) > 0"
           class="inline-flex h-5 min-w-5 shrink-0 items-center mr-2 justify-center rounded-full bg-amber-500/20 px-1 text-[11px] font-semibold text-amber-200 group-hover:hidden"
         >
-          {{ pendingJobCountByConversation[conversation.id] }}
+          {{ generation.pendingJobCountByConversation[conversation.id] }}
         </span>
         <button
           class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-gray-200 group-hover:block focus:block"
