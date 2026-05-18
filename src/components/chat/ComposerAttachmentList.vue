@@ -90,10 +90,21 @@ function handleRemove(event: Event, item: AttachmentRow) {
   event.stopPropagation();
   emit("removeAttachment", item.id);
 }
+
+const totalSizeBytes = computed(() =>
+  props.activeAttachments.reduce((sum, img) => sum + (img.sizeBytes ?? 0), 0),
+);
+
+const totalSizeLabel = computed(() => {
+  const bytes = totalSizeBytes.value;
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+});
 </script>
 
 <template>
-  <div v-if="activeAttachments.length" class="mb-2 flex flex-wrap gap-2">
+  <div v-if="activeAttachments.length" class="mb-2 flex flex-wrap items-center gap-2">
     <Tooltip
       v-for="item in attachmentRows"
       :key="item.id"
@@ -149,5 +160,6 @@ function handleRemove(event: Event, item: AttachmentRow) {
         </button>
       </div>
     </Tooltip>
+    <span class="text-xs text-gray-400">{{ totalSizeLabel }}</span>
   </div>
 </template>

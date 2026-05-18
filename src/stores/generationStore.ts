@@ -1,22 +1,26 @@
-import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
+import type { ComputedRef, Ref } from "vue";
+import { computed, ref, watch } from "vue";
+import type { GenerationJob } from "../features/generation/generationJobTypes";
+import type { ImageClient } from "../features/generation/imageClients/imageClient";
+import {
+  loadImageBlob,
+  saveImageAsset,
+  saveImageBlob,
+} from "../services/imageAssets";
+import { readImageDimensions } from "../services/imageMetadata";
+import { base64ToBlob } from "../services/imagesApi";
+import { saveMessage } from "../services/messages";
 import { isoTimestamp, timestampFromCreatedAt } from "../shared/dateTime";
 import { formatError } from "../shared/errors";
 import { createId } from "../shared/id";
-import { saveImageAsset, saveImageBlob, loadImageBlob } from "../services/imageAssets";
-import { base64ToBlob } from "../services/imagesApi";
-import { readImageDimensions } from "../services/imageMetadata";
-import { saveMessage } from "../services/messages";
 import { createObjectUrl } from "../shared/objectUrls";
-import type { ImageClient } from "../features/generation/imageClients/imageClient";
-import type { GenerationJob } from "../features/generation/generationJobTypes";
 import type {
   Conversation,
   GenerationParams,
   ImageAsset,
   Message,
 } from "../types/studio";
-import type { ComputedRef, Ref } from "vue";
 
 type CreateConversationRecordInput = {
   title: string;
@@ -31,7 +35,9 @@ type GenerationStoreContext = {
   activeEditMaskImageId: Ref<string>;
   activeEditSourceImageId: Ref<string>;
   composerText: Ref<string>;
-  createConversationRecord: (input: CreateConversationRecordInput) => Promise<Conversation>;
+  createConversationRecord: (
+    input: CreateConversationRecordInput,
+  ) => Promise<Conversation>;
   currentGenerationParams: () => GenerationParams;
   customSizeError: ComputedRef<string>;
   imageAssets: Ref<ImageAsset[]>;
@@ -75,15 +81,20 @@ export const useGenerationStore = defineStore("generation", () => {
     return counts;
   });
   const imageModeLabel = computed(() =>
-    input.value.activeEditMaskImageId.value && input.value.activeEditSourceImageId.value
+    input.value.activeEditMaskImageId.value &&
+    input.value.activeEditSourceImageId.value
       ? "局部编辑"
       : input.value.attachedImages.value.length
         ? "引用图片编辑"
         : "文字生成图片",
   );
-  const canSend = computed(() =>
-    !input.value.customSizeError.value &&
-    Boolean(input.value.composerText.value.trim() || input.value.attachedImages.value.length),
+  const canSend = computed(
+    () =>
+      !input.value.customSizeError.value &&
+      Boolean(
+        input.value.composerText.value.trim() ||
+        input.value.attachedImages.value.length,
+      ),
   );
   let hasBeforeUnloadListener = false;
 
@@ -108,18 +119,21 @@ export const useGenerationStore = defineStore("generation", () => {
 
     const now = Date.now();
     const createdAt = isoTimestamp(now);
-    const text = input.value.composerText.value.trim() || "基于引用图片继续编辑。";
+    const text =
+      input.value.composerText.value.trim() || "基于引用图片继续编辑。";
     const conversation =
       input.value.activeConversation.value ??
-      await input.value.createConversationRecord({
+      (await input.value.createConversationRecord({
         title: titleFromPrompt(text),
         summary: imageModeLabel.value,
         updatedAt: createdAt,
-      });
+      }));
     const conversationId = conversation.id;
     const references = [...input.value.attachedImages.value];
-    const editSourceImageId = input.value.activeEditSourceImageId.value || undefined;
-    const editMaskImageId = input.value.activeEditMaskImageId.value || undefined;
+    const editSourceImageId =
+      input.value.activeEditSourceImageId.value || undefined;
+    const editMaskImageId =
+      input.value.activeEditMaskImageId.value || undefined;
     const userMessage: Message = {
       id: createId("m"),
       conversationId,
@@ -167,7 +181,9 @@ export const useGenerationStore = defineStore("generation", () => {
     const job = createJob({
       assistantMessageId: assistantMessage.id,
       conversationId,
-      generationParams: assistantMessage.generationParams ?? input.value.currentGenerationParams(),
+      generationParams:
+        assistantMessage.generationParams ??
+        input.value.currentGenerationParams(),
       prompt: text,
       referencedImageIds: references,
       editSourceImageId,
@@ -184,7 +200,9 @@ export const useGenerationStore = defineStore("generation", () => {
       : "正在生成图片。";
     message.resultImageIds = [];
     message.errorMessage = undefined;
-    await saveMessage(toPlainMessage(message)).catch(input.value.onStorageError);
+    await saveMessage(toPlainMessage(message)).catch(
+      input.value.onStorageError,
+    );
 
     const userMessage = [...input.value.messages.value]
       .reverse()
@@ -200,7 +218,8 @@ export const useGenerationStore = defineStore("generation", () => {
         createJob({
           assistantMessageId: message.id,
           conversationId: message.conversationId,
-          generationParams: message.generationParams ?? input.value.currentGenerationParams(),
+          generationParams:
+            message.generationParams ?? input.value.currentGenerationParams(),
           prompt: userMessage.content,
           referencedImageIds: message.referencedImageIds,
           editSourceImageId: undefined,
@@ -216,13 +235,16 @@ export const useGenerationStore = defineStore("generation", () => {
       const params = job.generationParams;
       const imageData = job.referencedImageIds.length
         ? await requestImageEdit(
-          job.prompt,
-          job.referencedImageIds,
-          params,
-          job.editSourceImageId,
-          job.editMaskImageId,
-        )
-        : await input.value.imageClient.generate({ prompt: job.prompt, params });
+            job.prompt,
+            job.referencedImageIds,
+            params,
+            job.editSourceImageId,
+            job.editMaskImageId,
+          )
+        : await input.value.imageClient.generate({
+            prompt: job.prompt,
+            params,
+          });
       const now = Date.now();
       const createdAt = isoTimestamp(now);
       const mimeType = `image/${params.outputFormat}`;
@@ -263,7 +285,10 @@ export const useGenerationStore = defineStore("generation", () => {
         assistantMessage.errorMessage = undefined;
         replaceMessage(assistantMessage);
       }
-      input.value.imageAssets.value = [imageAsset, ...input.value.imageAssets.value];
+      input.value.imageAssets.value = [
+        imageAsset,
+        ...input.value.imageAssets.value,
+      ];
 
       const saveTasks: Promise<unknown>[] = [
         saveImageBlob(blobKey, blob),
@@ -284,7 +309,9 @@ export const useGenerationStore = defineStore("generation", () => {
         assistantMessage.errorMessage = message;
         assistantMessage.resultImageIds = [];
         replaceMessage(assistantMessage);
-        await saveMessage(toPlainMessage(assistantMessage)).catch(input.value.onStorageError);
+        await saveMessage(toPlainMessage(assistantMessage)).catch(
+          input.value.onStorageError,
+        );
       }
       await input.value.refreshStorageUsage();
       markJobError(job.id, message);
@@ -298,10 +325,6 @@ export const useGenerationStore = defineStore("generation", () => {
     editSourceImageId?: string,
     editMaskImageId?: string,
   ) {
-    if (references.length > 16) {
-      throw new Error("一次最多支持编辑 16 张引用图片。");
-    }
-
     const imageSources = await Promise.all(
       references.map(async (id) => {
         const reference = input.value.imageById(id);
@@ -321,8 +344,21 @@ export const useGenerationStore = defineStore("generation", () => {
       }),
     );
 
-    const sourceImage = editSourceImageId ? input.value.imageById(editSourceImageId) : undefined;
-    const maskImage = editMaskImageId ? input.value.imageById(editMaskImageId) : undefined;
+    const totalBytes = imageSources.reduce((sum, img) => sum + img.blob.size, 0);
+    const MAX_PAYLOAD_BYTES = 20 * 1024 * 1024;
+    if (totalBytes > MAX_PAYLOAD_BYTES) {
+      const totalMB = (totalBytes / 1024 / 1024).toFixed(1);
+      throw new Error(
+        `引用图片总大小为 ${totalMB}MB，超过 20MB 上限。请减少图片数量或压缩图片后重试。`,
+      );
+    }
+
+    const sourceImage = editSourceImageId
+      ? input.value.imageById(editSourceImageId)
+      : undefined;
+    const maskImage = editMaskImageId
+      ? input.value.imageById(editMaskImageId)
+      : undefined;
     let maskBlob: Blob | undefined;
     if (maskImage) {
       maskBlob = await resolveImageBlob(maskImage);
@@ -358,20 +394,25 @@ export const useGenerationStore = defineStore("generation", () => {
       if (
         sourceSize &&
         maskSize &&
-        (sourceSize.width !== maskSize.width || sourceSize.height !== maskSize.height)
+        (sourceSize.width !== maskSize.width ||
+          sourceSize.height !== maskSize.height)
       ) {
         throw new Error("编辑遮罩尺寸与源图不一致，请重新选择编辑区域。");
       }
     }
 
     if (maskBlob) {
-      console.info("[generation] edit with mask", JSON.stringify({
-        prompt: prompt.slice(0, 80),
-        sourceImageId: editSourceImageId,
-        maskImageId: editMaskImageId,
-        referenceCount: references.length,
-        sentImageCount: (editImages.length ? editImages : imageSources).length,
-      }));
+      console.info(
+        "[generation] edit with mask",
+        JSON.stringify({
+          prompt: prompt.slice(0, 80),
+          sourceImageId: editSourceImageId,
+          maskImageId: editMaskImageId,
+          referenceCount: references.length,
+          sentImageCount: (editImages.length ? editImages : imageSources)
+            .length,
+        }),
+      );
     }
 
     return input.value.imageClient.edit({
@@ -383,9 +424,9 @@ export const useGenerationStore = defineStore("generation", () => {
       })),
       mask: maskBlob
         ? {
-          blob: maskBlob,
-          name: "mask.png",
-        }
+            blob: maskBlob,
+            name: "mask.png",
+          }
         : undefined,
     });
   }
@@ -475,11 +516,12 @@ function titleFromPrompt(prompt: string) {
 }
 
 function filenameFromAsset(asset: ImageAsset) {
-  const extension = asset.mimeType === "image/jpeg"
-    ? "jpeg"
-    : asset.mimeType === "image/webp"
-      ? "webp"
-      : "png";
+  const extension =
+    asset.mimeType === "image/jpeg"
+      ? "jpeg"
+      : asset.mimeType === "image/webp"
+        ? "webp"
+        : "png";
 
   return `${asset.name || asset.id}.${extension}`;
 }
