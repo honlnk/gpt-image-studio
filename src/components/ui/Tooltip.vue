@@ -4,8 +4,11 @@ import { computed, nextTick, ref } from "vue";
 const props = withDefaults(
   defineProps<{
     text: string;
+    preferredPlacement?: "top" | "bottom";
   }>(),
-  {},
+  {
+    preferredPlacement: "bottom",
+  },
 );
 
 const triggerRef = ref<HTMLElement | null>(null);
@@ -38,7 +41,14 @@ async function updatePosition() {
     Math.max(margin, unclampedLeft),
     Math.max(margin, vpW - width - margin),
   );
-  const y = rect.bottom + gap + height > vpH ? "top" : "bottom";
+  const y =
+    props.preferredPlacement === "top"
+      ? rect.top - height - gap >= margin
+        ? "top"
+        : "bottom"
+      : rect.bottom + gap + height > vpH
+        ? "top"
+        : "bottom";
   const top =
     y === "bottom"
       ? rect.bottom + gap

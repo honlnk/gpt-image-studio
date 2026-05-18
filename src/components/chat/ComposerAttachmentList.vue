@@ -94,9 +94,14 @@ function handleRemove(event: Event, item: AttachmentRow) {
 
 <template>
   <div v-if="activeAttachments.length" class="mb-2 flex flex-wrap gap-2">
-    <Tooltip v-for="item in attachmentRows" :key="item.id" :text="attachmentName(item)">
+    <Tooltip
+      v-for="item in attachmentRows"
+      :key="item.id"
+      :text="attachmentName(item)"
+      preferred-placement="top"
+    >
       <div
-        class="group relative h-16 cursor-pointer overflow-hidden rounded-lg border border-gray-200"
+        class="group relative h-20 cursor-pointer overflow-hidden rounded-lg border border-gray-200"
         @click="handleClick(item)"
       >
         <img
@@ -105,20 +110,34 @@ function handleRemove(event: Event, item: AttachmentRow) {
           :alt="attachmentName(item)"
           :src="attachmentPreviewUrl(item)"
         />
-        <span
-          v-if="item.kind === 'editingPair'"
-          class="absolute left-1 top-1 rounded bg-black/70 px-1 py-0.5 text-[10px] text-white"
-        >
-          编辑
+        <!-- 左上角编辑三角标识 -->
+        <span v-if="item.kind === 'editingPair'" class="absolute left-0 top-0">
+          <svg class="h-7 w-7" viewBox="0 0 28 28" aria-hidden="true">
+            <polygon points="0,0 28,0 0,28" fill="rgba(0,0,0,0.75)" />
+          </svg>
+          <svg
+            class="absolute left-0.75 top-0.75 h-3 w-3 text-white"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H3zm1 2h4v1H4V4zm0 2.5h4v1H4v-1zm0 2.5h3v1H4V9z"
+            />
+            <path
+              d="M11.5 5.5l1.5-1.5a1 1 0 0 1 1.414 1.414L12.5 7l-1.5-1.5z"
+            />
+            <path d="M11 6.5L8.5 9 8 11l2-0.5L12.5 8 11 6.5z" />
+          </svg>
         </span>
         <button
-          class="absolute right-1 top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100"
+          class="absolute right-0.5 top-0.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
           type="button"
           aria-label="移除引用图片"
           @click="handleRemove($event, item)"
         >
           <svg
-            class="h-3 w-3"
+            class="h-4 w-4"
             viewBox="0 0 20 20"
             fill="currentColor"
             aria-hidden="true"
