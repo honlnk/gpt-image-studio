@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { nextTick, onMounted, ref, watch } from "vue";
 import { useNow } from "../../composables/useNow";
 import type { ImageAsset, Message } from "../../types/studio";
 import MessageItem from "./MessageItem.vue";
 
-defineProps<{
+const props = defineProps<{
   attachedImageIds: string[];
   imageById: (id: string) => ImageAsset | undefined;
   messages: Message[];
@@ -17,10 +18,32 @@ const emit = defineEmits<{
 }>();
 
 const now = useNow();
+const scrollContainer = ref<HTMLDivElement | null>(null);
+
+async function scrollToBottom() {
+  await nextTick();
+
+  requestAnimationFrame(() => {
+    const container = scrollContainer.value;
+    if (!container) return;
+
+    container.scrollTop = container.scrollHeight;
+  });
+}
+
+onMounted(scrollToBottom);
+
+watch(
+  () => props.messages.map((message) => message.id).join("|"),
+  () => {
+    void scrollToBottom();
+  },
+  { flush: "post" },
+);
 </script>
 
 <template>
-  <div class="flex-1 overflow-y-auto">
+  <div ref="scrollContainer" class="flex-1 overflow-y-auto">
     <div class="mx-auto max-w-3xl px-4 py-6">
       <MessageItem
         v-for="message in messages"
