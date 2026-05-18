@@ -4,9 +4,12 @@ import { useComposerStore } from "../../stores/composerStore";
 import { useConversationsStore } from "../../stores/conversationsStore";
 import { useImagesStore } from "../../stores/imagesStore";
 import type { ImageAsset } from "../../types/studio";
-import { IMAGE_TAG_COLORS, imageTagDotColor } from "../image-library/imageTagColors";
 import ImageDetailsPanel from "../image-library/ImageDetailsPanel.vue";
 import ImageGrid from "../image-library/ImageGrid.vue";
+import {
+  IMAGE_TAG_COLORS,
+  imageTagDotColor,
+} from "../image-library/imageTagColors";
 import StorageUsagePanel from "../image-library/StorageUsagePanel.vue";
 
 const emit = defineEmits<{
@@ -31,20 +34,30 @@ const currentConversationImages = computed(() =>
   ),
 );
 const scopeImages = computed(() =>
-  activeFilter.value === "current" ? currentConversationImages.value : libraryImages.value,
+  activeFilter.value === "current"
+    ? currentConversationImages.value
+    : libraryImages.value,
 );
 const filteredImages = computed(() => {
   if (activeColorFilter.value === "all") return scopeImages.value;
-  return scopeImages.value.filter((image) => image.tagColor === activeColorFilter.value);
+  return scopeImages.value.filter(
+    (image) => image.tagColor === activeColorFilter.value,
+  );
 });
 const selectedImage = computed(() => {
   if (!selectedImageId.value) return null;
   return (
-    libraryImages.value.find((image) => image.id === selectedImageId.value) ?? null
+    libraryImages.value.find((image) => image.id === selectedImageId.value) ??
+    null
   );
 });
 watch(
-  () => [libraryImages.value, activeFilter.value, conversations.activeConversationId] as const,
+  () =>
+    [
+      libraryImages.value,
+      activeFilter.value,
+      conversations.activeConversationId,
+    ] as const,
   () => {
     if (!selectedImage.value) {
       selectedImageId.value = "";
@@ -71,7 +84,11 @@ function onPanelEnter(el: Element, done: () => void) {
       { maxHeight: "0px", transform: "translateY(8px)" },
       { maxHeight: `${height}px`, transform: "translateY(0)" },
     ],
-    { duration: 250, easing: "cubic-bezier(0.4, 0, 0.2, 1)" },
+    {
+      duration: 250,
+      easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+      fill: "forwards",
+    },
   ).onfinish = () => {
     htmlEl.style.overflow = "";
     htmlEl.style.maxHeight = "";
@@ -88,7 +105,11 @@ function onPanelLeave(el: Element, done: () => void) {
       { maxHeight: `${height}px`, transform: "translateY(0)" },
       { maxHeight: "0px", transform: "translateY(8px)" },
     ],
-    { duration: 200, easing: "cubic-bezier(0.4, 0, 0.2, 1)" },
+    {
+      duration: 200,
+      easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+      fill: "forwards",
+    },
   ).onfinish = () => {
     htmlEl.style.overflow = "";
     htmlEl.style.maxHeight = "";
@@ -108,7 +129,10 @@ function toggleColorFilter(nextColor: ImageAsset["tagColor"] | "all") {
   activeColorFilter.value = nextColor;
 }
 
-function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined) {
+function setImageTagColor(
+  id: string,
+  color: ImageAsset["tagColor"] | undefined,
+) {
   images.setImageTagColor(id, color);
 }
 </script>
@@ -123,7 +147,9 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
   <aside
     :class="[
       'flex w-[320px] shrink-0 flex-col border-l border-gray-200 bg-white max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:transition-transform max-lg:duration-200 max-lg:ease-out',
-      composer.isLibraryOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
+      composer.isLibraryOpen
+        ? 'max-lg:translate-x-0'
+        : 'max-lg:-translate-x-full',
     ]"
     aria-label="图片库"
   >
@@ -131,7 +157,9 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <span class="text-base font-semibold text-gray-800">图片库</span>
-          <span class="text-sm text-gray-500">{{ libraryImages.length }} 张图片</span>
+          <span class="text-sm text-gray-500"
+            >{{ libraryImages.length }} 张图片</span
+          >
         </div>
         <div class="flex items-center gap-1">
           <button
@@ -219,10 +247,9 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
           @click="toggleColorFilter(color)"
         />
       </div>
-
     </div>
 
-    <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ImageGrid
         :active-filter="activeFilter"
         :attached-image-ids="images.attachedImages"
@@ -233,11 +260,7 @@ function setImageTagColor(id: string, color: ImageAsset["tagColor"] | undefined)
         @select-image="selectImage"
       />
 
-      <Transition
-        :css="false"
-        @enter="onPanelEnter"
-        @leave="onPanelLeave"
-      >
+      <Transition :css="false" @enter="onPanelEnter" @leave="onPanelLeave">
         <ImageDetailsPanel
           v-if="selectedImage"
           :image="selectedImage"
