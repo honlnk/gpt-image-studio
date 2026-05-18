@@ -129,11 +129,13 @@ export const useGenerationStore = defineStore("generation", () => {
         updatedAt: createdAt,
       }));
     const conversationId = conversation.id;
-    const references = [...input.value.attachedImages.value];
-    const editSourceImageId =
-      input.value.activeEditSourceImageId.value || undefined;
     const editMaskImageId =
       input.value.activeEditMaskImageId.value || undefined;
+    const references = input.value.attachedImages.value.filter(
+      (id) => id !== editMaskImageId,
+    );
+    const editSourceImageId =
+      input.value.activeEditSourceImageId.value || undefined;
     const userMessage: Message = {
       id: createId("m"),
       conversationId,
