@@ -365,7 +365,7 @@ function clamp(value: number, min: number, max: number) {
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6"
       role="dialog"
       aria-modal="true"
-      @click.self="closeModal"
+      @mousedown.self="closeModal"
     >
       <div class="w-full max-w-5xl rounded-xl bg-white p-4">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-3">

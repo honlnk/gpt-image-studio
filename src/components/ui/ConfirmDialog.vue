@@ -22,7 +22,7 @@ const emit = defineEmits<{
       v-if="dialog"
       class="fixed inset-0 z-60 flex items-center justify-center bg-black/50 px-4"
       role="presentation"
-      @click.self="emit('cancel')"
+      @mousedown.self="emit('cancel')"
     >
       <section
         aria-labelledby="confirmDialogTitle"

@@ -51,7 +51,7 @@ function clampZoom(value: number) {
       class="fixed inset-0 z-50 flex flex-col bg-black/85 text-white"
       role="dialog"
       aria-modal="true"
-      @click.self="emit('close')"
+      @mousedown.self="emit('close')"
     >
       <div class="flex items-center justify-between gap-4 px-5 py-4">
         <div class="min-w-0">
