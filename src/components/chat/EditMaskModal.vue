@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { ImageAsset } from "../../types/studio";
 
 type EditTool = "brush" | "eraser" | "rect" | "ellipse" | "pan";
@@ -83,15 +83,30 @@ function closeModal() {
   emit("close");
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  const key = event.key.toLowerCase();
+  if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "z") {
+    event.preventDefault();
+    redoSelection();
+  } else if ((event.ctrlKey || event.metaKey) && key === "z") {
+    event.preventDefault();
+    undoSelection();
+  }
+}
+
+onMounted(() => window.addEventListener("keydown", handleKeydown));
+onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
+
 function startSelection(event: PointerEvent) {
-  if (!imageRef.value) return;
   if (tool.value === "pan") {
     isPanning.value = true;
     panStartPointer.value = { x: event.clientX, y: event.clientY };
     panStartOffset.value = { x: panX.value, y: panY.value };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     return;
   }
 
+  if (!imageRef.value) return;
   const point = pointerPosition(event);
   isPointerDown.value = true;
   if (tool.value === "brush" || tool.value === "eraser") {
@@ -174,17 +189,31 @@ function redoSelection() {
 }
 
 function zoomIn() {
-  zoom.value = clamp(Number((zoom.value + 0.1).toFixed(2)), 0.5, 3);
+  applyZoom(clamp(Number((zoom.value + 0.1).toFixed(2)), 0.5, 3));
 }
 
 function zoomOut() {
-  zoom.value = clamp(Number((zoom.value - 0.1).toFixed(2)), 0.5, 3);
+  applyZoom(clamp(Number((zoom.value - 0.1).toFixed(2)), 0.5, 3));
+}
+
+function applyZoom(newZoom: number) {
+  const ratio = newZoom / zoom.value;
+  panX.value *= ratio;
+  panY.value *= ratio;
+  zoom.value = newZoom;
 }
 
 function resetViewport() {
   zoom.value = 1;
   panX.value = 0;
   panY.value = 0;
+}
+
+function handleWheel(event: WheelEvent) {
+  if (!event.ctrlKey && !event.metaKey) return;
+  event.preventDefault();
+  const delta = event.deltaY > 0 ? -0.1 : 0.1;
+  applyZoom(clamp(Number((zoom.value + delta).toFixed(2)), 0.5, 3));
 }
 
 function pointerPosition(event: PointerEvent) {
@@ -504,17 +533,21 @@ function clamp(value: number, min: number, max: number) {
             应用区域
           </button>
         </div>
-        <div class="relative mx-auto flex max-h-[70vh] items-center justify-center overflow-auto rounded-lg bg-gray-50 p-2">
+        <div
+          class="relative mx-auto flex max-h-[70vh] items-center justify-center overflow-auto rounded-lg bg-gray-50 p-2"
+          :class="tool === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-crosshair'"
+          @wheel="handleWheel"
+          @pointerdown.prevent="startSelection"
+          @pointermove.prevent="updateSelection"
+          @pointerup.prevent="stopSelection"
+          @pointerleave.prevent="stopSelection"
+        >
           <div class="relative shrink-0" :style="{ transform: contentTransform, transformOrigin: 'center center' }">
             <img
               ref="imageRef"
               class="max-h-[66vh] max-w-full select-none rounded object-contain"
               :src="image.previewUrl"
               :alt="image.name"
-              @pointerdown.prevent="startSelection"
-              @pointermove.prevent="updateSelection"
-              @pointerup.prevent="stopSelection"
-              @pointerleave.prevent="stopSelection"
             />
             <svg
               class="pointer-events-none absolute inset-0 h-full w-full"

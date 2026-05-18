@@ -10,6 +10,7 @@ export const useComposerStore = defineStore("composer", () => {
   const activeEditMaskImageId = ref("");
   const isLibraryOpen = ref(false);
   const isConversationSidebarOpen = ref(false);
+  const selectingEditImageId = ref("");
 
   function toggleEditor(key: EditorKey) {
     activeEditor.value = activeEditor.value === key ? null : key;
@@ -56,6 +57,7 @@ export const useComposerStore = defineStore("composer", () => {
     editModeEnabled,
     isConversationSidebarOpen,
     isLibraryOpen,
+    selectingEditImageId,
     applyEditSelection,
     clearEditSelection,
     closeAllEditors,

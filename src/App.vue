@@ -56,6 +56,7 @@ const studio = useStudioViewModel();
       :image="studio.preview.image"
       :mask-url="studio.preview.maskUrl"
       @close="studio.preview.close"
+      @edit-image="studio.preview.editImage"
     />
 
     <NoticeToast

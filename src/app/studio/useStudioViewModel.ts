@@ -521,6 +521,10 @@ export function useStudioViewModel() {
   });
   const preview = proxyRefs({
     close: closePreview,
+    editImage: (id: string) => {
+      closePreview();
+      composerState.selectingEditImageId = id;
+    },
     image: previewImage,
     maskUrl: previewMaskUrl,
   });
