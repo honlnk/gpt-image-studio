@@ -222,6 +222,9 @@ type GenerationParams = {
 - 已完成：完整项目数据导出、备份、恢复。导出会话、消息、图片元数据、设置和图片 Blob；恢复时校验版本、重建 Blob 关联，并覆盖当前本地数据。
 - 已完成：设置中心重构与批量操作。设置页拆分为接口、数据备份、批量操作；支持图片批量 ZIP 下载、图片批量删除、对话批量删除和输入确认。
 - 已完成：体验收尾基础项。备份导出/恢复、图片导入、批量删除会给出成功或失败反馈；批量操作空状态补充下一步指引。
+- 已完成：Generation Jobs。生成任务队列化，支持并发生成、状态追踪和页面关闭保护（`src/stores/generationStore.ts`）。
+- 已完成：Per-conversation Drafts。每个会话独立保存草稿文本和生成参数（`src/services/conversationDrafts.ts`）。
+- 已完成：遮罩局部编辑。支持画笔、橡皮、矩形、圆形多工具绘制 mask，支持多选区叠加、撤销重做、软边、缩放平移（`docs/mask-editing.md`）。
 - 后置：更细的图片库筛选，例如来源、格式、时间等。
 - 无限期后置：File System Access API 本地目录导出。
 - 后置：Tauri / Electron 桌面端打包评估。
@@ -231,3 +234,5 @@ type GenerationParams = {
 1. 继续打磨错误提示和操作反馈，例如单张删除、会话删除、存储失败回滚提示。
 2. 增加更细的图片库筛选，例如来源、格式、时间等。
 3. 在 Web App 工作流继续稳定后，再评估 Tauri / Electron 桌面端打包。
+4. 本地 CLI Companion（`companion.md`）。
+5. 用户行为日志系统（`analytics-event-logging-plan.md`）。

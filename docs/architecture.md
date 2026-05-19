@@ -30,7 +30,7 @@ src/
 - `shared/` 承载跨模块复用的通用浏览器工具与纯函数。
 - `types/studio.ts` 保存主要业务类型。
 
-目前主要压力点已经从“入口和业务混杂”收敛到“shared 能力边界整理”。应用级入口已经移动到 `src/app/studio/useStudioViewModel.ts`，核心业务 composable 已迁移到 `src/features/*`。
+目前主要压力点已经从”入口和业务混杂”收敛到”shared 能力边界整理”。应用级入口已经移动到 `src/app/studio/useStudioViewModel.ts`，核心业务 composable 已迁移到 `src/features/*`，Pinia stores 已按领域拆分到 `src/stores/`。Drafts 功能当前以 service 形式存在于 `src/services/conversationDrafts.ts`，未独立为 feature 模块。
 
 ## 目标结构
 

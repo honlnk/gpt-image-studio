@@ -88,7 +88,8 @@ See `docs/roadmap.md` for the full roadmap. Current status:
 - Phases 1-4: Done (chat UI, IndexedDB persistence, text-to-image, image editing with references)
 - Phase 5: Experience enhancements — core items done
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
-- Upcoming: generation jobs, per-conversation drafts, mask editing, and optional local companion (`docs/generation-jobs.md`, `docs/companion.md`)
+- Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/mask-editing.md`)
+- Upcoming: optional local companion (`docs/companion.md`), analytics event logging (`docs/analytics-event-logging-plan.md`)
 
 ## Conventions
 
