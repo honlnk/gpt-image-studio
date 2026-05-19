@@ -21,6 +21,7 @@ let dragStartY = 0;
 let panStartX = 0;
 let panStartY = 0;
 let didDrag = false;
+let pointerDownOnSelf = false;
 
 const isTransformed = computed(() => zoom.value !== 1 || panX.value !== 0 || panY.value !== 0);
 
@@ -61,6 +62,7 @@ function clampZoom(value: number) {
 
 function onPointerDown(event: PointerEvent) {
   if (event.button !== 0) return;
+  pointerDownOnSelf = event.target === event.currentTarget;
   isDragging.value = true;
   didDrag = false;
   dragStartX = event.clientX;
@@ -87,6 +89,7 @@ function onPointerUp() {
 
 function handleBackdropClick() {
   if (didDrag) return;
+  if (!pointerDownOnSelf) return;
   emit("close");
 }
 
@@ -119,7 +122,7 @@ function handleEdit() {
       <div
         class="flex min-h-0 flex-1 items-center justify-center"
         :class="isDragging ? 'cursor-grabbing' : 'cursor-grab'"
-        @click.self="handleBackdropClick"
+        @click="handleBackdropClick"
         @wheel="handleWheel"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
