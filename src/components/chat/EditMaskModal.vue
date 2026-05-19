@@ -404,6 +404,21 @@ function clamp(value: number, min: number, max: number) {
             <div class="text-xs text-gray-500">支持画笔、矩形、圆形，多次叠加选区</div>
           </div>
           <div class="flex items-center gap-1">
+            <div v-if="tool === 'brush' || tool === 'eraser'" class="mr-2 flex items-center gap-2 whitespace-nowrap">
+              <span class="text-xs text-gray-500">{{ tool === "eraser" ? "橡皮" : "画笔" }}</span>
+              <input
+                v-model.number="brushRadius"
+                class="styled-range w-40"
+                type="range"
+                min="6"
+                max="80"
+                step="1"
+              />
+            </div>
+            <div class="mr-2 flex items-center gap-2">
+              <span class="text-xs text-gray-500">软边</span>
+              <input v-model.number="edgeSoftness" class="styled-range" type="range" min="0" max="24" step="1" />
+            </div>
             <Tooltip text="画笔" :delay="2000">
               <button
                 :class="[
@@ -464,21 +479,6 @@ function clamp(value: number, min: number, max: number) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
               </button>
             </Tooltip>
-            <div v-if="tool === 'brush' || tool === 'eraser'" class="ml-2 flex items-center gap-2 whitespace-nowrap">
-              <span class="text-xs text-gray-500">{{ tool === "eraser" ? "橡皮" : "画笔" }}</span>
-              <input
-                v-model.number="brushRadius"
-                class="w-40"
-                type="range"
-                min="6"
-                max="80"
-                step="1"
-              />
-            </div>
-            <div class="ml-2 flex items-center gap-2">
-              <span class="text-xs text-gray-500">软边</span>
-              <input v-model.number="edgeSoftness" type="range" min="0" max="24" step="1" />
-            </div>
           </div>
         </div>
         <div class="mb-3 flex items-center justify-end gap-1">
@@ -619,3 +619,55 @@ function clamp(value: number, min: number, max: number) {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.styled-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: #374151;
+  outline: none;
+  cursor: pointer;
+}
+
+.styled-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  border: 2px solid #6366f1;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.styled-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.styled-range::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #374151;
+}
+
+.styled-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  border: 2px solid #6366f1;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.styled-range::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+</style>
