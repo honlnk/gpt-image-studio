@@ -5,15 +5,19 @@ const props = withDefaults(
   defineProps<{
     text: string;
     preferredPlacement?: "top" | "bottom";
+    delay?: number;
   }>(),
   {
     preferredPlacement: "bottom",
+    delay: 0,
   },
 );
 
 const triggerRef = ref<HTMLElement | null>(null);
 const tooltipRef = ref<HTMLElement | null>(null);
 const isVisible = ref(false);
+let delayTimer: ReturnType<typeof setTimeout> | null = null;
+let isHovered = false;
 const placement = ref({ x: "center", y: "bottom" });
 const position = ref({ left: 0, top: 0, arrowLeft: 0 });
 const tooltipStyle = computed(() => ({
@@ -67,7 +71,23 @@ async function updatePosition() {
   position.value = { left, top, arrowLeft };
 }
 
+function showTooltip() {
+  isHovered = true;
+  if (props.delay > 0) {
+    delayTimer = setTimeout(() => {
+      if (isHovered) updatePosition();
+    }, props.delay);
+  } else {
+    updatePosition();
+  }
+}
+
 function hideTooltip() {
+  isHovered = false;
+  if (delayTimer) {
+    clearTimeout(delayTimer);
+    delayTimer = null;
+  }
   isVisible.value = false;
 }
 </script>
@@ -76,9 +96,9 @@ function hideTooltip() {
   <span
     ref="triggerRef"
     class="inline-flex"
-    @focusin="updatePosition"
+    @focusin="showTooltip"
     @focusout="hideTooltip"
-    @mouseenter="updatePosition"
+    @mouseenter="showTooltip"
     @mouseleave="hideTooltip"
   >
     <slot />
