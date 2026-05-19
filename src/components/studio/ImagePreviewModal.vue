@@ -23,7 +23,9 @@ let panStartY = 0;
 let didDrag = false;
 let pointerDownOnSelf = false;
 
-const isTransformed = computed(() => zoom.value !== 1 || panX.value !== 0 || panY.value !== 0);
+const isTransformed = computed(
+  () => zoom.value !== 1 || panX.value !== 0 || panY.value !== 0,
+);
 
 watch(
   () => props.image?.id,
@@ -103,24 +105,13 @@ function handleEdit() {
   <Teleport to="body">
     <div
       v-if="image?.previewUrl"
-      class="fixed inset-0 z-50 flex flex-col bg-black/85 text-white"
+      class="fixed inset-0 z-50 bg-black/85 text-white"
       role="dialog"
       aria-modal="true"
-      @mousedown.self="handleBackdropClick"
     >
-      <!-- 顶部信息栏 -->
-      <div class="pointer-events-none relative z-10 px-5 py-4">
-        <div class="pointer-events-auto inline-block max-w-full">
-          <div class="truncate text-sm font-semibold">{{ image.name }}</div>
-          <div class="mt-0.5 truncate text-xs text-white/60">
-            {{ image.prompt }}
-          </div>
-        </div>
-      </div>
-
-      <!-- 图片区域 -->
+      <!-- 图片区域 - 占满全屏，统一处理关闭 -->
       <div
-        class="flex min-h-0 flex-1 items-center justify-center"
+        class="absolute inset-0 flex items-center justify-center"
         :class="isDragging ? 'cursor-grabbing' : 'cursor-grab'"
         @click="handleBackdropClick"
         @wheel="handleWheel"
@@ -130,7 +121,9 @@ function handleEdit() {
       >
         <div
           class="relative max-h-full max-w-full select-none"
-          :style="{ transform: `scale(${zoom}) translate(${panX}px, ${panY}px)` }"
+          :style="{
+            transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
+          }"
           @dblclick="resetView"
         >
           <img
@@ -142,20 +135,34 @@ function handleEdit() {
           <div
             v-if="maskUrl"
             class="absolute inset-0 rounded-lg bg-black/60"
-            :style="{
-              maskImage: `url(${maskUrl})`,
-              maskSize: '100% 100%',
-              maskMode: 'luminance',
-              WebkitMaskImage: `url(${maskUrl})`,
-              WebkitMaskSize: '100% 100%',
-            } as any"
+            :style="
+              {
+                maskImage: `url(${maskUrl})`,
+                maskSize: '100% 100%',
+                maskMode: 'luminance',
+                WebkitMaskImage: `url(${maskUrl})`,
+                WebkitMaskSize: '100% 100%',
+              } as any
+            "
           />
         </div>
       </div>
 
+      <!-- 顶部信息栏 -->
+      <div class="pointer-events-none absolute top-0 right-0 left-0 z-10 px-5 py-4">
+        <div class="pointer-events-auto inline-block max-w-full">
+          <div class="truncate text-sm font-semibold">{{ image.name }}</div>
+          <div class="mt-0.5 truncate text-xs text-white/60">
+            {{ image.prompt }}
+          </div>
+        </div>
+      </div>
+
       <!-- 底部控制栏 -->
-      <div class="pointer-events-none relative z-10 flex justify-center pb-6">
-        <div class="pointer-events-auto flex items-center gap-1 rounded-xl bg-white/10 p-1.5 backdrop-blur-sm">
+      <div class="pointer-events-none absolute right-0 bottom-0 left-0 z-10 flex justify-center pb-6">
+        <div
+          class="pointer-events-auto flex items-center gap-1 rounded-xl bg-white/10 p-1.5 backdrop-blur-sm"
+        >
           <button
             class="cursor-pointer rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-white/15"
             type="button"
