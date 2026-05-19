@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { ImageAsset } from "../../types/studio";
+import Tooltip from "../ui/Tooltip.vue";
 
 type EditingPairAttachment = {
   kind: "editingPair";
   id: string;
   source: ImageAsset;
-  mask: ImageAsset;
 };
 
 type SingleAttachment = {
@@ -24,6 +24,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  previewImage: [id: string];
   removeAttachment: [id: string];
 }>();
 
@@ -40,12 +41,13 @@ function createAttachmentRows(
   sourceId: string,
   maskId: string,
 ): AttachmentRow[] {
-  const editingPair = createEditingPair(attachments, sourceId, maskId);
+  const editingPair = createEditingPair(attachments, sourceId);
   const hiddenIds = new Set<string>();
 
   if (editingPair) {
     hiddenIds.add(editingPair.source.id);
-    hiddenIds.add(editingPair.mask.id);
+    const mask = attachments.find((image) => image.id === maskId);
+    if (mask) hiddenIds.add(mask.id);
   }
 
   const singles = attachments
@@ -58,90 +60,106 @@ function createAttachmentRows(
 function createEditingPair(
   attachments: ImageAsset[],
   sourceId: string,
-  maskId: string,
 ): EditingPairAttachment | null {
   const source = attachments.find((image) => image.id === sourceId);
-  const mask = attachments.find((image) => image.id === maskId);
+  if (!source) return null;
 
-  if (!source || !mask) return null;
-
-  return {
-    kind: "editingPair",
-    id: source.id,
-    source,
-    mask,
-  };
+  return { kind: "editingPair", id: source.id, source };
 }
 
 function createSingleAttachment(image: ImageAsset): SingleAttachment {
-  return {
-    kind: "single",
-    id: image.id,
-    image,
-  };
+  return { kind: "single", id: image.id, image };
 }
+
+function attachmentName(item: AttachmentRow): string {
+  return item.kind === "editingPair" ? item.source.name : item.image.name;
+}
+
+function attachmentPreviewUrl(item: AttachmentRow): string | undefined {
+  return item.kind === "editingPair"
+    ? item.source.previewUrl
+    : item.image.previewUrl;
+}
+
+function handleClick(item: AttachmentRow) {
+  const id = item.kind === "editingPair" ? item.source.id : item.image.id;
+  emit("previewImage", id);
+}
+
+function handleRemove(event: Event, item: AttachmentRow) {
+  event.stopPropagation();
+  emit("removeAttachment", item.id);
+}
+
+const totalSizeBytes = computed(() =>
+  props.activeAttachments.reduce((sum, img) => sum + (img.sizeBytes ?? 0), 0),
+);
+
+const totalSizeLabel = computed(() => {
+  const bytes = totalSizeBytes.value;
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+});
 </script>
 
 <template>
-  <div v-if="activeAttachments.length" class="mb-2 flex flex-wrap gap-2">
-    <div
+  <div v-if="activeAttachments.length" class="mb-2 flex flex-wrap items-center gap-2">
+    <Tooltip
       v-for="item in attachmentRows"
       :key="item.id"
-      class="relative flex max-w-55 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-sm"
+      :text="attachmentName(item)"
+      preferred-placement="top"
     >
-      <template v-if="item.kind === 'editingPair'">
-        <span
-          class="absolute -left-1 -top-1 rounded bg-black px-1 py-0.5 text-[10px] text-white"
-        >
-          编辑
-        </span>
-        <div class="flex shrink-0 items-center gap-1">
-          <img
-            v-if="item.source.previewUrl"
-            class="h-7 w-7 rounded object-cover"
-            :alt="item.source.name"
-            :src="item.source.previewUrl"
-          />
-          <span class="text-[18px] text-gray-400">+</span>
-          <span
-            v-if="item.mask.previewUrl"
-            class="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded border border-black bg-black"
-          >
-            <img
-              class="h-full w-full object-cover"
-              :alt="item.mask.name"
-              :src="item.mask.previewUrl"
-            />
-          </span>
-        </div>
-        <span class="truncate text-gray-700">{{ item.source.name }}</span>
-      </template>
-      <template v-else>
-        <img
-          v-if="item.image.previewUrl"
-          class="h-7 w-7 shrink-0 rounded object-cover"
-          :alt="item.image.name"
-          :src="item.image.previewUrl"
-        />
-        <span class="truncate text-gray-700">{{ item.image.name }}</span>
-      </template>
-      <button
-        class="shrink-0 cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
-        type="button"
-        aria-label="移除引用图片"
-        @click="emit('removeAttachment', item.id)"
+      <div
+        class="group relative h-20 cursor-pointer overflow-hidden rounded-lg border border-gray-200"
+        @click="handleClick(item)"
       >
-        <svg
-          class="h-3.5 w-3.5"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          aria-hidden="true"
+        <img
+          v-if="attachmentPreviewUrl(item)"
+          class="h-full w-auto object-cover"
+          :alt="attachmentName(item)"
+          :src="attachmentPreviewUrl(item)"
+        />
+        <!-- 左上角编辑三角标识 -->
+        <span v-if="item.kind === 'editingPair'" class="absolute left-0 top-0">
+          <svg class="h-7 w-7" viewBox="0 0 28 28" aria-hidden="true">
+            <polygon points="0,0 28,0 0,28" fill="rgba(0,0,0,0.75)" />
+          </svg>
+          <svg
+            class="absolute left-0.75 top-0.75 h-3 w-3 text-white"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H3zm1 2h4v1H4V4zm0 2.5h4v1H4v-1zm0 2.5h3v1H4V9z"
+            />
+            <path
+              d="M11.5 5.5l1.5-1.5a1 1 0 0 1 1.414 1.414L12.5 7l-1.5-1.5z"
+            />
+            <path d="M11 6.5L8.5 9 8 11l2-0.5L12.5 8 11 6.5z" />
+          </svg>
+        </span>
+        <button
+          class="absolute right-0.5 top-0.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+          type="button"
+          aria-label="移除引用图片"
+          @click="handleRemove($event, item)"
         >
-          <path
-            d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22z"
-          />
-        </svg>
-      </button>
-    </div>
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22z"
+            />
+          </svg>
+        </button>
+      </div>
+    </Tooltip>
+    <span class="text-xs text-gray-400">{{ totalSizeLabel }}</span>
   </div>
 </template>

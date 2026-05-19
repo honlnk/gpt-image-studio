@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref } from "vue";
+import { storeToRefs } from "pinia";
 import { useComposerStore } from "../../stores/composerStore";
 import { useGenerationStore } from "../../stores/generationStore";
 import { useImagesStore } from "../../stores/imagesStore";
@@ -40,11 +41,11 @@ const { actions, header, messages } = defineProps<{
 }>();
 
 const composerState = useComposerStore();
+const { selectingEditImageId: selectingImageId } = storeToRefs(composerState);
 const generation = useGenerationStore();
 const images = useImagesStore();
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
-const selectingImageId = ref("");
 let dragDepth = 0;
 
 function isImageAttached(id: string) {
@@ -233,6 +234,7 @@ function imageFilesFromTransfer(
       ref="composerRef"
       :is-drag-active="isDragActive"
       @close-all-editors="actions.closeAllEditors"
+      @preview-image="actions.previewImage"
       @remove-attachment="actions.removeAttachment"
       @update:edit-mode-enabled="actions.setEditModeEnabled"
     />

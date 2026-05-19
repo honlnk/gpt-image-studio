@@ -13,6 +13,7 @@ defineProps<{
 
 const emit = defineEmits<{
   closeAllEditors: [];
+  previewImage: [id: string];
   removeAttachment: [id: string];
   "update:editModeEnabled": [value: boolean];
 }>();
@@ -39,6 +40,7 @@ defineExpose({ focusComposer });
         :active-attachments="images.activeAttachments"
         :active-edit-mask-image-id="composer.activeEditMaskImageId"
         :active-edit-source-image-id="composer.activeEditSourceImageId"
+        @preview-image="emit('previewImage', $event)"
         @remove-attachment="emit('removeAttachment', $event)"
       />
 

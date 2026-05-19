@@ -77,7 +77,7 @@ function confirmPendingAction() {
       v-if="isOpen"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-3"
       role="presentation"
-      @click.self="emit('close')"
+      @mousedown.self="emit('close')"
     >
       <section
         aria-labelledby="settingsTitle"
