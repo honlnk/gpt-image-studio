@@ -5,12 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-pnpm dev          # Start Vite dev server (127.0.0.1:8888)
-pnpm build        # Production build to dist/
-pnpm preview      # Preview production build
-pnpm typecheck    # Type-check with vue-tsc --noEmit
-pnpm test         # Run Vitest tests (all)
-pnpm test:watch   # Run Vitest in watch mode
+pnpm dev                  # Start Vite dev server (127.0.0.1:8888)
+pnpm dev:companion        # Start Companion CLI server (127.0.0.1:19750)
+pnpm build                # Production build to dist/
+pnpm preview              # Preview production build
+pnpm typecheck            # Type-check web app with vue-tsc --noEmit
+pnpm typecheck:companion  # Type-check companion with tsc --noEmit
+pnpm test                 # Run Vitest tests (all)
+pnpm test:watch           # Run Vitest in watch mode
 ```
 
 Run a single test file: `pnpm vitest run src/services/backups.test.ts`
