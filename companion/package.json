@@ -1,0 +1,26 @@
+{
+  "name": "@gpt-image-studio/companion",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "gpt-image-studio": "./dist/main.js"
+  },
+  "scripts": {
+    "dev": "tsx src/main.ts serve",
+    "build": "tsc",
+    "start": "node dist/main.js serve",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gpt-image-studio/protocol": "workspace:*",
+    "commander": "^13.1.0",
+    "fastify": "^5.3.3",
+    "@fastify/cors": "^11.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.15.0"
+  }
+}

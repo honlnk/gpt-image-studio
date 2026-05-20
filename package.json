@@ -13,6 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@gpt-image-studio/protocol": "workspace:*",
     "pinia": "^3.0.4",
     "vue": "^3.5.32"
   },

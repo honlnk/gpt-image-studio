@@ -38,6 +38,9 @@ const studio = useStudioViewModel();
       v-model:api-base-url="studio.settingsModal.apiBaseUrl"
       v-model:api-key="studio.settingsModal.apiKey"
       v-model:connection-mode="studio.settingsModal.connectionMode"
+      :companion-paired="studio.settingsModal.companionPaired"
+      :companion-session-token="studio.settingsModal.companionSessionToken"
+      :companion-url="studio.settingsModal.companionUrl"
       :conversations="studio.settingsModal.conversations"
       :images="studio.settingsModal.images"
       :initial-batch-panel="studio.settingsModal.initialBatchPanel"
@@ -50,6 +53,7 @@ const studio = useStudioViewModel();
       @export-backup="studio.settingsModal.exportBackup"
       @import-backup="studio.settingsModal.importBackup"
       @preview-image="studio.settingsModal.previewImage"
+      @update:companion-session-token="studio.settingsModal.companionSessionToken = $event"
     />
 
     <ImagePreviewModal

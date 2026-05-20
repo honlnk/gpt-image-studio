@@ -16,6 +16,9 @@ const props = defineProps<{
   connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
+  companionUrl: string;
+  companionSessionToken: string;
+  companionPaired: boolean;
   conversations: Conversation[];
   images: ImageAsset[];
   messages: Message[];
@@ -31,6 +34,7 @@ const emit = defineEmits<{
   "update:connectionMode": [value: ConnectionMode];
   "update:apiKey": [value: string];
   "update:apiBaseUrl": [value: string];
+  "update:companionSessionToken": [value: string];
 }>();
 
 const activeTab = ref<SettingsTab>("api");
@@ -139,9 +143,13 @@ function confirmPendingAction() {
               :connection-mode="connectionMode"
               :api-base-url="apiBaseUrl"
               :api-key="apiKey"
+              :companion-url="companionUrl"
+              :companion-session-token="companionSessionToken"
+              :companion-paired="companionPaired"
               @update:connection-mode="emit('update:connectionMode', $event)"
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
               @update:api-key="emit('update:apiKey', $event)"
+              @update:companion-session-token="emit('update:companionSessionToken', $event)"
             />
 
             <BackupPanel
