@@ -13,14 +13,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fastify/cors": "^11.0.0",
     "@gpt-image-studio/protocol": "workspace:*",
     "commander": "^13.1.0",
-    "fastify": "^5.3.3",
-    "@fastify/cors": "^11.0.0"
+    "fastify": "^5.3.3"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
+    "@types/node": "^22.15.0",
     "tsx": "^4.19.0",
-    "@types/node": "^22.15.0"
+    "typescript": "^6.0.3"
   }
 }

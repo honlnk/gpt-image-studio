@@ -101,7 +101,11 @@ export function useStudioViewModel() {
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
   });
-  const localCompanionImagesClient = createLocalCompanionImagesClient();
+  const localCompanionImagesClient = createLocalCompanionImagesClient({
+    getCompanionUrl: () => settings.companionUrl.value,
+    getSessionToken: () => settings.companionSessionToken.value,
+    getModel: () => settings.model.value,
+  });
   const imageClient: ImageClient = {
     generate(input) {
       if (settings.connectionMode.value === "localCompanion") {
