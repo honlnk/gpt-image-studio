@@ -3,6 +3,8 @@ import cors from "@fastify/cors";
 import type { CompanionHealthResponse } from "@gpt-image-studio/protocol";
 import { loadSession, isPaired } from "./pairingState";
 import { pairRoutes } from "./routes/pair";
+import { authRoutes } from "./routes/auth";
+import { imagesRoutes } from "./routes/images";
 import { authMiddleware } from "./middleware/auth";
 
 export async function startServer(opts: { port: number }) {
@@ -21,6 +23,8 @@ export async function startServer(opts: { port: number }) {
 
   await authMiddleware(app);
   await app.register(pairRoutes);
+  await app.register(authRoutes);
+  await app.register(imagesRoutes);
 
   app.get("/health", async (): Promise<CompanionHealthResponse> => {
     return {
