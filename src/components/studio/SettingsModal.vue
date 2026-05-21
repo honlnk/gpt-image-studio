@@ -178,7 +178,7 @@ function confirmPendingAction() {
             type="button"
             @click="emit('close')"
           >
-            完成
+            关闭
           </button>
         </div>
       </section>
