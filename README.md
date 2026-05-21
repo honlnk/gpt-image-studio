@@ -1,85 +1,101 @@
 # GPT Image Studio
 
-本地优先的 AI 图片创作工作台，基于 Vue 3 + TypeScript + Tailwind CSS 构建。
+[![Deploy](https://github.com/honlnk/gpt-image-studio/actions/workflows/deploy.yml/badge.svg)](https://github.com/honlnk/gpt-image-studio/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Vue 3](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
-通过聊天式界面调用 OpenAI 兼容的 Images API 进行图片生成和编辑，对话和图片数据保存在本地。
+> 🔗 **在线体验**：[gpt-image.honlnk.com](https://gpt-image.honlnk.com)
 
-## 当前进度
+本地优先的 AI 图片创作工作台。通过聊天式界面调用 OpenAI 兼容 Images API，生成和编辑图片。所有数据保存在浏览器本地，无需后端服务。
 
-**第五阶段体验增强核心项已完成，进入阶段性收尾。** 会话、消息、图片元数据、图片 Blob 和设置已接入 IndexedDB；纯文字文生图和带引用图的图片编辑都已接入 OpenAI 兼容 Images API；本地存储状态、图片元数据和完整备份恢复流程已补齐。
+## 功能特性
 
-- 三栏布局：会话侧边栏、聊天工作区、图片库面板
-- 聊天式消息流，支持生成状态（生成中 / 成功 / 失败）
-- 失败消息支持重试，生成中会防止重复发送
-- 输入框草稿和当前引用图会本地保存，刷新后可恢复
-- 会话侧边栏支持新建、搜索、切换和删除会话
-- 行内参数编辑器（尺寸、质量、背景、格式）
-- 自定义尺寸输入，支持预设快捷选择
-- 设置弹窗配置 API key 和 Base URL
-- IndexedDB 保存会话、消息、图片资源元数据、图片 Blob 和设置
-- 纯文字 prompt 调用 `${API Base URL}/generations`，生成结果保存到本地图片库
-- 支持上传、粘贴、拖拽本地图片作为下一条消息的引用图，多图引用会调用 `${API Base URL}/edits`
-- 图片库支持当前会话 / 全部图片切换、引用、删除、详情查看和单张下载
-- 图片库支持多选，并可将选中图片打包为 ZIP 下载
-- 聊天结果图和图片库缩略图支持大图预览，预览中可下载、滚轮缩放、双击重置缩放
-- 图片元数据记录真实宽高，旧图片会在读取 Blob 时补齐尺寸
-- 图片库展示 IndexedDB 本地存储用量和浏览器预计可用空间
-- 设置中心支持接口配置、完整项目备份恢复和批量操作，API key 不写入备份
-- 批量操作支持图片 ZIP 下载、图片批量删除和对话批量删除，高风险操作需要输入确认
-- 备份导出/恢复、图片导入和批量删除会显示成功或失败反馈
-- 删除图片后，历史聊天记录会保留“图片已删除”的占位提示
-- 生成结果支持继续编辑，一键加入引用图并聚焦输入框
-- 响应式布局（小屏自动折叠侧边栏和图片库）
+**图片创作**
+- 文生图：输入 prompt 直接生成图片
+- 图片编辑：附带引用图 + prompt 进行局部或整体编辑
+- 遮罩编辑：画笔、橡皮、矩形、圆形工具绘制编辑区域，支持撤销重做
+- 自定义参数：尺寸比例、分辨率、质量、背景透明度、输出格式
+
+**对话管理**
+- 聊天式消息流，完整保留创作历史
+- 多会话管理：新建、搜索、切换、重命名、删除
+- 每个会话独立保存草稿和参数设置
+- 生成失败支持重试
+
+**图片库**
+- 浏览所有生成和导入的图片
+- 大图预览，支持缩放
+- 多选批量下载（ZIP）、批量删除
+- 存储用量可视化
+
+**数据安全**
+- 本地优先：所有数据存储在浏览器 IndexedDB
+- 完整备份导出/恢复（ZIP 格式）
+- API key 不写入备份文件
+- 支持本地 Companion 模式，凭据不经过浏览器
+
+## 连接模式
+
+| 模式 | 说明 |
+|------|------|
+| 浏览器直连 | 配置 API Base URL 和 API key，浏览器直接调用接口 |
+| 本地 Companion | 安装本地 CLI 服务，凭据保存在本机，浏览器只与 localhost 通信 |
 
 ## 技术栈
 
-- **Vue 3**（Composition API，`<script setup>`）
-- **TypeScript**
-- **Vite**
-- **Tailwind CSS v4**
-- **pnpm**
+- Vue 3 (Composition API, `<script setup>`)
+- TypeScript
+- Pinia 状态管理
+- Tailwind CSS v4
+- Vite
+- IndexedDB 持久化
+- pnpm workspace monorepo
 
-## 开发
+## 快速开始
 
-```sh
+```bash
 pnpm install
-pnpm dev
+pnpm dev              # 启动 Web App (http://127.0.0.1:8888)
+```
+
+启动本地 Companion（可选）：
+
+```bash
+pnpm dev:companion    # 启动 Companion 服务 (http://127.0.0.1:19750)
 ```
 
 ## 构建
 
-```sh
-pnpm build
+```bash
+pnpm build            # 生产构建到 dist/
+pnpm preview          # 预览生产构建
 ```
 
-## 产品路线图
+## 项目结构
 
-完整路线图见 [docs/roadmap.md](docs/roadmap.md)，文档入口见 [docs/README.md](docs/README.md)。
+```
+gpt-image-studio/
+├── src/                    # Web App 源码
+├── companion/              # 本地 CLI Companion (Fastify + Commander)
+├── packages/protocol/      # 前后端共享类型
+└── docs/                   # 项目文档
+```
 
-- 第二阶段：IndexedDB 本地持久化 — 已完成
-- 第三阶段：接入真实图片生成 API — 已完成
-- 第四阶段：图片编辑流程（引用图片）— 基本完成
-- 第五阶段：体验增强 — 核心项已完成
-- 设置中心重构与批量操作 — 已完成
-- 后续：桌面端打包评估（Tauri / Electron）
+## 文档
 
-## 暂未实现
-
-- 会话重命名
-- 单条消息删除或管理
-- 设置页统一管理默认模型和默认生成参数
-- 桌面端打包
+- [架构说明](docs/architecture.md)
+- [产品路线图](docs/roadmap.md)
+- [本地 Companion 方案](docs/companion.md)
+- [遮罩编辑](docs/mask-editing.md)
+- [备份格式](docs/backup-format.md)
+- [文档索引](docs/README.md)
 
 ## 注意事项
 
-API Base URL 在设置弹窗中配置。当前设置（包括 API key）会保存到当前浏览器的 IndexedDB，输入框草稿会保存到 localStorage。浏览器直接调用可能被 CORS 拦截，生产环境建议通过自己的服务器转发请求，避免在浏览器中暴露 API key。
+API key 保存在当前浏览器本地 IndexedDB，适合个人设备使用。浏览器直连模式下，部分接口可能被 CORS 拦截，建议使用支持 CORS 的中转站或切换到本地 Companion 模式。
 
-### 接口连接问题
+## License
 
-如果生成或编辑图片时出现“网络请求失败：浏览器没有收到接口响应”，并且浏览器 DevTools 中显示 `net::ERR_EMPTY_RESPONSE`、`Failed to fetch`，或 Timing 长时间停在 `Initial connection`，通常表示浏览器没有拿到任何 HTTP 响应。这类问题多发生在 API 中转站、反向代理、CDN、本地代理/VPN 或网络链路层，不是模型拒绝生成，也通常不是前端业务逻辑主动取消。
-
-排查时建议先看 Network 面板：
-
-- 如果有 HTTP 状态码和 JSON 错误，优先按接口返回信息处理。
-- 如果没有状态码、没有 Response Headers，且卡在 `Initial connection`，优先检查中转站、代理节点、TLS/HTTP2 连接和本地网络。
-- 如果文生图 `/generations` 稳定成功，但图片编辑 `/edits` 偶发失败，重点检查中转站对 `multipart/form-data`、上传体积和长耗时请求的支持。
+[MIT](LICENSE)

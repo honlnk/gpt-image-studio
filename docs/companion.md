@@ -346,27 +346,32 @@ gpt-image-studio logout
 
 ## 分阶段计划
 
-### 阶段一：保持当前 Web-only 模式稳定
+### 阶段一：保持当前 Web-only 模式稳定 ✅ 已完成
 
 - 继续完成当前架构重构。
 - 保持 `imagesApi.ts` 作为唯一图片请求入口。
 - 补充 `imagesApi`、备份导出、设置迁移相关测试。
 - 在设置页继续明确提示 API key 本地保存和中转站信任边界。
 
-### 阶段二：协议和设置预留
+### 阶段二：协议和设置预留 ✅ 已完成
 
 - 新增 `connectionMode`，默认仍为 `direct`。
 - 抽出图片 client 接口。
 - 新增本地助手检测 UI，但可以先隐藏或标记为实验。
 - 起草 `packages/protocol` 的共享类型。
 
-### 阶段三：本地助手 API key 代理 MVP
+### 阶段三：本地助手 API key 代理 MVP 🚧 进行中
 
-- 新增 `companion/`。
-- 实现 `login`、`serve`、`status`、`logout`。
-- 实现 `/health`、`/pair/*`、`/auth/status`。
-- 实现 `/images/generations` 和 `/images/edits`。
-- 前端支持切换到本地助手模式。
+- ✅ 新增 `companion/`（pnpm workspace monorepo 结构）。
+- ✅ 实现 `serve` 命令（Fastify HTTP 服务，监听 `127.0.0.1:19750`）。
+- ✅ 实现 `/health` 端点。
+- ✅ 实现 `/pair/start` 和 `/pair/confirm`（6 位配对码 + session token）。
+- ✅ 实现 token 校验中间件。
+- ✅ 前端配对 UI（在线检测、配对码输入、已连接/断开状态）。
+- ⬜ 实现 `login`、`status`、`logout` 命令（凭据管理）。
+- ⬜ 实现 `/auth/status`。
+- ⬜ 实现 `/images/generations` 和 `/images/edits`（图片代理）。
+- ⬜ 前端 `localCompanionImagesClient` 对接真实请求。
 
 ### 阶段四：安全加固
 

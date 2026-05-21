@@ -10,3 +10,16 @@ export type CompanionAuthStatus = {
   ready: boolean;
   accountLabel: string;
 };
+
+export type PairStartResponse = {
+  pairingCode: string;
+  expiresInSeconds: number;
+};
+
+export type PairConfirmRequest = {
+  pairingCode: string;
+};
+
+export type PairConfirmResponse = {
+  sessionToken: string;
+};

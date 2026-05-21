@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
 import {
   isSizeRatio,
@@ -8,7 +8,7 @@ import {
 } from "../services/generationParams";
 import { getCustomSizeError } from "../services/imagesApi";
 import { saveSettings } from "../services/settings";
-import { readStorage } from "../shared/localStorage";
+import { readStorage, writeStorage } from "../shared/localStorage";
 import type {
   AppSettings,
   ConnectionMode,
@@ -20,6 +20,8 @@ import type {
 const SETTINGS_STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
   apiBaseUrl: "gpt-image-studio:api-base-url",
+  companionUrl: "gpt-image-studio:companion-url",
+  companionSessionToken: "gpt-image-studio:companion-session-token",
 } as const;
 
 const SIZE_RATIO_OPTIONS = [
@@ -46,6 +48,13 @@ export const useSettingsStore = defineStore("settings", () => {
   const model = ref("gpt-image-2");
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
+  const companionUrl = ref(
+    readStorage(SETTINGS_STORAGE_KEYS.companionUrl, "http://127.0.0.1:19750"),
+  );
+  const companionSessionToken = ref(
+    readStorage(SETTINGS_STORAGE_KEYS.companionSessionToken, ""),
+  );
+  const companionPaired = computed(() => companionSessionToken.value !== "");
   const imageWidth = ref(1024);
   const imageHeight = ref(1024);
   const activeSizePreset = ref<GenerationParams["size"]>("auto");
@@ -168,10 +177,18 @@ export const useSettingsStore = defineStore("settings", () => {
     return saveSettings(currentSettings());
   }
 
+  watch(companionUrl, (v) => writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v));
+  watch(companionSessionToken, (v) =>
+    writeStorage(SETTINGS_STORAGE_KEYS.companionSessionToken, v),
+  );
+
   return {
     activeSizePreset,
     apiBaseUrl,
     apiKey,
+    companionPaired,
+    companionSessionToken,
+    companionUrl,
     connectionMode,
     applySettings,
     applySizePreset,

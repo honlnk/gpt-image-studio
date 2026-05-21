@@ -505,6 +505,9 @@ export function useStudioViewModel() {
   const settingsModal = proxyRefs({
     apiBaseUrl: settings.apiBaseUrl,
     apiKey: settings.apiKey,
+    companionPaired: settings.companionPaired,
+    companionSessionToken: settings.companionSessionToken,
+    companionUrl: settings.companionUrl,
     connectionMode: settings.connectionMode,
     close: closeSettings,
     conversations: conversations.conversations,
