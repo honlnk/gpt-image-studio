@@ -6,11 +6,11 @@
   "packageManager": "pnpm@10.21.0",
   "scripts": {
     "dev": "vite",
-    "dev:companion": "pnpm --filter @gpt-image-studio/companion dev",
+    "dev:companion": "pnpm --filter @honlnk/image-studio-companion dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit",
-    "typecheck:companion": "pnpm --filter @gpt-image-studio/companion typecheck",
+    "typecheck:companion": "pnpm --filter @honlnk/image-studio-companion typecheck",
     "build": "vite build",
     "preview": "vite preview"
   },

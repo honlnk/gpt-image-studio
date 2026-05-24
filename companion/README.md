@@ -9,7 +9,7 @@
 推荐用户通过 npm 全局安装：
 
 ```bash
-npm install -g @gpt-image-studio/companion
+npm install -g @honlnk/image-studio-companion
 gpt-image-studio login
 gpt-image-studio serve --channel stable
 ```
@@ -17,7 +17,7 @@ gpt-image-studio serve --channel stable
 已安装 pnpm 的用户也可以使用：
 
 ```bash
-pnpm add -g @gpt-image-studio/companion
+pnpm add -g @honlnk/image-studio-companion
 gpt-image-studio login
 gpt-image-studio serve --channel stable
 ```
@@ -36,8 +36,8 @@ pnpm dev:companion
 ### 从源码构建后运行
 
 ```bash
-pnpm --filter @gpt-image-studio/companion build
-pnpm --filter @gpt-image-studio/companion start
+pnpm --filter @honlnk/image-studio-companion build
+pnpm --filter @honlnk/image-studio-companion start
 ```
 
 也可以直接调用入口文件：
@@ -154,9 +154,9 @@ npx tsx companion/src/main.ts unpair
 使用全局安装的用户可以通过同一包管理器升级：
 
 ```bash
-npm update -g @gpt-image-studio/companion
+npm update -g @honlnk/image-studio-companion
 # 或
-pnpm update -g @gpt-image-studio/companion
+pnpm update -g @honlnk/image-studio-companion
 ```
 
 升级后建议运行：
@@ -172,7 +172,7 @@ gpt-image-studio status
 ```bash
 git pull
 pnpm install
-pnpm --filter @gpt-image-studio/companion build
+pnpm --filter @honlnk/image-studio-companion build
 ```
 
 升级不会自动删除 `~/.gpt-image-studio/` 中的凭据和配对 session。升级后建议运行：
@@ -190,9 +190,9 @@ npx tsx companion/src/main.ts status
 使用全局安装的用户可以执行：
 
 ```bash
-npm uninstall -g @gpt-image-studio/companion
+npm uninstall -g @honlnk/image-studio-companion
 # 或
-pnpm remove -g @gpt-image-studio/companion
+pnpm remove -g @honlnk/image-studio-companion
 ```
 
 卸载 npm 包不会自动删除 `~/.gpt-image-studio/` 中的凭据和配对 session。

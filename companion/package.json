@@ -1,5 +1,5 @@
 {
-  "name": "@gpt-image-studio/companion",
+  "name": "@honlnk/image-studio-companion",
   "version": "0.1.0",
   "description": "Local CLI companion for GPT Image Studio image API credential proxying.",
   "type": "module",
