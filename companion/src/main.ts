@@ -5,7 +5,7 @@ import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "
 import { clearSession, getSessionInfo, loadSession } from "./pairingState.js";
 import { createSecurityConfig } from "./securityConfig.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 program
   .name("gpt-image-studio")
