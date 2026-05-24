@@ -160,11 +160,14 @@ function selectRatioMode() {
         <button
           v-for="opt in settings.backgroundOptions"
           :key="opt.value"
+          :disabled="opt.value === 'transparent' && settings.transparentDisabled"
           :class="[
-            'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-            settings.background === opt.value
-              ? 'border-gray-400 bg-gray-100 text-gray-900'
-              : 'border-gray-200 text-gray-400 hover:bg-gray-50',
+            'rounded border px-1.5 py-0.5 text-xs transition-colors',
+            opt.value === 'transparent' && settings.transparentDisabled
+              ? 'cursor-not-allowed border-gray-100 text-gray-300'
+              : settings.background === opt.value
+                ? 'cursor-pointer border-gray-400 bg-gray-100 text-gray-900'
+                : 'cursor-pointer border-gray-200 text-gray-400 hover:bg-gray-50',
           ]"
           type="button"
           @click="settings.background = opt.value"

@@ -75,6 +75,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const backgroundOptions = [
     { value: "auto", label: "自动" },
     { value: "opaque", label: "不透明" },
+    { value: "transparent", label: "透明" },
   ] as const;
   const formatOptions = [
     { value: "png", label: "PNG" },
@@ -102,6 +103,7 @@ export const useSettingsStore = defineStore("settings", () => {
       backgroundOptions.find((o) => o.value === background.value)?.label ??
       background.value,
   );
+  const transparentDisabled = computed(() => model.value === "gpt-image-2");
   const formatLabel = computed(
     () =>
       formatOptions.find((o) => o.value === outputFormat.value)?.label ??
@@ -196,6 +198,7 @@ export const useSettingsStore = defineStore("settings", () => {
     background,
     backgroundLabel,
     backgroundOptions,
+    transparentDisabled,
     currentGenerationParams,
     currentSettings,
     customSizeError,
