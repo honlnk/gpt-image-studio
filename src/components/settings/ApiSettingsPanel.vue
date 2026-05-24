@@ -6,6 +6,7 @@ import {
   getCompanionAuthStatus,
   startPairing,
   confirmPairing,
+  unpairCompanion,
 } from "../../services/companionApi";
 import type { CompanionAuthStatus, CompanionHealthResponse } from "../../types/companion";
 
@@ -29,7 +30,6 @@ const companionOnline = ref(false);
 const companionHealth = ref<CompanionHealthResponse | null>(null);
 const companionAuthStatus = ref<CompanionAuthStatus | null>(null);
 const pairingInProgress = ref(false);
-const pairingCode = ref("");
 const pairingError = ref("");
 const pairingCodeInput = ref("");
 
@@ -46,11 +46,12 @@ async function handleStartPairing() {
   pairingError.value = "";
   pairingCodeInput.value = "";
   try {
-    const result = await startPairing(props.companionUrl);
-    pairingCode.value = result.pairingCode;
+    await startPairing(props.companionUrl);
     pairingInProgress.value = true;
-  } catch {
-    pairingError.value = "无法连接 Companion 服务";
+  } catch (error) {
+    pairingError.value = error instanceof Error
+      ? error.message
+      : "无法连接 Companion 服务";
   }
 }
 
@@ -60,21 +61,36 @@ async function handleConfirmPairing() {
     const result = await confirmPairing(props.companionUrl, pairingCodeInput.value);
     emit("update:companionSessionToken", result.sessionToken);
     pairingInProgress.value = false;
-    pairingCode.value = "";
     companionAuthStatus.value = await getCompanionAuthStatus(props.companionUrl, result.sessionToken);
   } catch {
     pairingError.value = "配对码无效或已过期";
   }
 }
 
-function handleDisconnect() {
+async function handleDisconnect() {
+  pairingError.value = "";
+  const health = await checkCompanionHealth(props.companionUrl);
+  companionHealth.value = health;
+  companionOnline.value = health !== null;
+  if (!health) {
+    pairingError.value = "Companion 离线，无法确认断开连接。请先启动 Companion 后再断开。";
+    return;
+  }
+
+  try {
+    await unpairCompanion(props.companionUrl, props.companionSessionToken);
+  } catch {
+    pairingError.value = "断开失败，Companion 未确认清除本地 session。";
+    return;
+  }
+
   emit("update:companionSessionToken", "");
   companionAuthStatus.value = null;
+  await checkStatus();
 }
 
 function cancelPairing() {
   pairingInProgress.value = false;
-  pairingCode.value = "";
   pairingCodeInput.value = "";
   pairingError.value = "";
 }
@@ -203,7 +219,8 @@ watch(
           <div class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
             <div class="font-mono text-gray-800">npm install -g @honlnk/image-studio-companion</div>
             <div class="mt-1 font-mono text-gray-800">gpt-image-studio login</div>
-            <div class="mt-1 font-mono text-gray-800">gpt-image-studio serve</div>
+            <div class="mt-1 font-mono text-gray-800">gpt-image-studio start</div>
+            <div class="mt-1 font-mono text-gray-800">gpt-image-studio pair</div>
           </div>
 
           <!-- Status -->
@@ -244,10 +261,10 @@ watch(
           <!-- Not paired, not in progress -->
           <template v-else-if="!pairingInProgress">
             <p class="text-sm text-gray-500">
-              需要与本地 Companion 配对后才能使用。
+              需要与本地 Companion 配对后才能使用。请先在终端运行 <span class="font-mono text-gray-700">gpt-image-studio pair</span>，再点击开始配对。
             </p>
             <p v-if="!companionOnline" class="text-xs text-gray-500">
-              请先在终端启动 <span class="font-mono text-gray-700">gpt-image-studio serve</span>，然后点击刷新。
+              请先在终端启动 <span class="font-mono text-gray-700">gpt-image-studio start</span>，然后点击刷新。
             </p>
             <button
               class="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50 cursor-pointer"
@@ -262,7 +279,7 @@ watch(
           <!-- Pairing in progress -->
           <template v-if="pairingInProgress">
             <p class="text-sm text-gray-600">
-              请在 Companion 终端查看配对码，然后在下方输入：
+              请在 Companion 终端查看配对码，然后在下方输入。
             </p>
             <div class="flex gap-2">
               <input
@@ -295,7 +312,7 @@ watch(
             {{ pairingError }}
           </p>
 
-          <div v-if="companionPaired" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+          <div v-if="companionPaired && companionOnline" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
             <template v-if="companionAuthStatus">
               <span :class="companionAuthStatus.ready ? 'text-green-700' : 'text-amber-700'">
                 {{ companionAuthStatus.ready ? "凭据已配置" : "凭据未配置" }}

@@ -2,6 +2,7 @@
 import { createInterface } from "node:readline";
 import { existsSync, statSync } from "node:fs";
 import { program } from "commander";
+import type { CompanionHealthResponse, PairWaitResponse } from "./types.js";
 import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials.js";
 import { clearSession, getSessionInfo, loadSession } from "./pairingState.js";
 import { createSecurityConfig } from "./securityConfig.js";
@@ -15,7 +16,7 @@ import {
   stopManagedProcess,
 } from "./processManager.js";
 
-const VERSION = "0.2.1";
+const VERSION = "0.3.0";
 const DEFAULT_PORT = "19750";
 const DEFAULT_SESSION_TTL_DAYS = "30";
 
@@ -58,8 +59,6 @@ addServeOptions(program
   .command("start")
   .description("后台启动本地 companion 服务"))
   .action(async (opts: ServeLikeOptions) => {
-    loadSession();
-    const hadSession = getSessionInfo().paired;
     const info = startManagedProcess({
       port: Number(opts.port),
       channel: opts.channel ?? "stable",
@@ -70,13 +69,7 @@ addServeOptions(program
     console.log(`Companion 已在后台启动: http://127.0.0.1:${info.port}`);
     console.log(`PID: ${info.pid}`);
     console.log(`日志: ${info.logFile}`);
-
-    if (!hadSession) {
-      console.log("");
-      console.log("等待首次配对完成。请在网页设置中点击「开始配对」。");
-      console.log("按 Ctrl+C 可停止等待，后台服务会继续运行。");
-      await waitForFirstPairing(info.logFile);
-    }
+    console.log("需要配对时请运行：gpt-image-studio pair");
   });
 
 program
@@ -102,8 +95,6 @@ addServeOptions(program
       console.log(`已停止后台 Companion，PID: ${stopped.info.pid}`);
     }
 
-    loadSession();
-    const hadSession = getSessionInfo().paired;
     const info = startManagedProcess({
       port: Number(opts.port),
       channel: opts.channel ?? "stable",
@@ -113,7 +104,7 @@ addServeOptions(program
     console.log(`Companion 已在后台重启: http://127.0.0.1:${info.port}`);
     console.log(`PID: ${info.pid}`);
     console.log(`日志: ${info.logFile}`);
-    if (!hadSession) await waitForFirstPairing(info.logFile);
+    console.log("需要配对时请运行：gpt-image-studio pair");
   });
 
 program
@@ -135,6 +126,52 @@ program
     if (opts.follow) {
       console.log(`\n正在跟随日志：${logFile}`);
       await followLogFile(logFile);
+    }
+  });
+
+program
+  .command("pair")
+  .description("进入配对模式，等待网页端发起配对并完成确认")
+  .option("-p, --port <port>", "companion 服务端口", DEFAULT_PORT)
+  .option("--timeout <seconds>", "等待配对成功的秒数", "300")
+  .action(async (opts: { port: string; timeout: string }) => {
+    const port = Number(opts.port);
+    const timeoutSeconds = Number(opts.timeout);
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const managed = readManagedProcessInfo();
+    if (!managed || !isProcessRunning(managed.pid) || managed.port !== port) {
+      console.log(`没有找到由 start 启动的后台 Companion：${baseUrl}`);
+      console.log("请先运行 gpt-image-studio start，或确认 pair 使用了正确的 --port。");
+      return;
+    }
+    const logFile = managed.logFile;
+    let offset = existsSync(logFile) ? statSync(logFile).size : 0;
+
+    let result: PairWaitResponse;
+    try {
+      const res = await fetch(`${baseUrl}/pair/wait`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timeoutSeconds }),
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      result = await res.json() as PairWaitResponse;
+    } catch {
+      console.log(`无法连接 Companion 服务：${baseUrl}`);
+      console.log("请先运行 gpt-image-studio start，或确认 serve 正在前台运行。");
+      return;
+    }
+
+    console.log(`已进入配对模式，有效期 ${Math.floor(result.expiresInSeconds / 60)} 分钟。`);
+    console.log("请在网页设置中点击「开始配对」，随后在此处查看配对码。");
+    console.log("按 Ctrl+C 可停止等待，后台服务会继续运行。");
+
+    const paired = await waitForPairingFromLog(baseUrl, logFile, offset, timeoutSeconds * 1000);
+    if (paired) {
+      console.log("配对成功。");
+    } else {
+      console.log("等待超时。请重新运行 gpt-image-studio pair 后再在网页端开始配对。");
     }
   });
 
@@ -257,27 +294,6 @@ program
 
 program.parse();
 
-async function waitForFirstPairing(logFile: string): Promise<void> {
-  let offset = existsSync(logFile) ? statSync(logFile).size : 0;
-  while (true) {
-    await sleep(1000);
-    loadSession();
-    if (getSessionInfo().paired) {
-      console.log("配对成功，服务仍在后台运行。");
-      return;
-    }
-    if (!existsSync(logFile)) continue;
-    const size = statSync(logFile).size;
-    if (size <= offset) continue;
-    const chunk = readLogChunkSince(logFile, offset);
-    offset = size;
-    chunk
-      .split(/\r?\n/)
-      .filter((line) => /配对码|请在网页端输入此配对码|有效期|等待网页端发起配对/.test(line))
-      .forEach((line) => console.log(line));
-  }
-}
-
 async function followLogFile(logFile: string): Promise<void> {
   let offset = existsSync(logFile) ? statSync(logFile).size : 0;
   while (true) {
@@ -288,6 +304,42 @@ async function followLogFile(logFile: string): Promise<void> {
     const chunk = readLogChunkSince(logFile, offset);
     offset = size;
     process.stdout.write(chunk);
+  }
+}
+
+async function waitForPairingFromLog(
+  baseUrl: string,
+  logFile: string,
+  offset: number,
+  timeoutMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(1000);
+    if (existsSync(logFile)) {
+      const size = statSync(logFile).size;
+      if (size > offset) {
+        const chunk = readLogChunkSince(logFile, offset);
+        offset = size;
+        chunk
+          .split(/\r?\n/)
+          .filter((line) => /配对码|请在网页端输入此配对码|有效期/.test(line))
+          .forEach((line) => console.log(line));
+      }
+    }
+    if (await isRemotePaired(baseUrl)) return true;
+  }
+  return false;
+}
+
+async function isRemotePaired(baseUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) return false;
+    const health = await res.json() as CompanionHealthResponse;
+    return health.paired;
+  } catch {
+    return false;
   }
 }
 

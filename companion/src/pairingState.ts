@@ -16,6 +16,7 @@ type SessionData = {
 
 let activePairingCode: string | null = null;
 let pairingCodeExpiresAt: number = 0;
+let pairingWaitExpiresAt: number = 0;
 let sessionToken: string | null = null;
 let sessionExpiresAt: number | null = null;
 
@@ -73,22 +74,52 @@ export function getSessionInfo(): { paired: boolean; expiresAt: string | null } 
   return { paired: true, expiresAt: new Date(sessionExpiresAt).toISOString() };
 }
 
-export function startPairing(): { pairingCode: string; expiresInSeconds: number } {
+export function enterPairingMode(timeoutMs = PAIRING_CODE_EXPIRY_MS): { waiting: true; expiresInSeconds: number } {
+  clearSession();
+  activePairingCode = null;
+  pairingCodeExpiresAt = 0;
+  pairingWaitExpiresAt = Date.now() + timeoutMs;
+  return {
+    waiting: true,
+    expiresInSeconds: Math.floor(timeoutMs / 1000),
+  };
+}
+
+export function isPairingModeActive(): boolean {
+  if (Date.now() <= pairingWaitExpiresAt) return true;
+  pairingWaitExpiresAt = 0;
+  return false;
+}
+
+export function startPairing(): { expiresInSeconds: number } | null {
+  if (!isPairingModeActive()) return null;
+
+  clearSession();
+  if (activePairingCode && Date.now() <= pairingCodeExpiresAt) {
+    printPairingCode(activePairingCode);
+    return {
+      expiresInSeconds: Math.floor((pairingCodeExpiresAt - Date.now()) / 1000),
+    };
+  }
+
   activePairingCode = String(randomInt(100000, 999999));
   pairingCodeExpiresAt = Date.now() + PAIRING_CODE_EXPIRY_MS;
 
+  printPairingCode(activePairingCode);
+
+  return {
+    expiresInSeconds: Math.floor(PAIRING_CODE_EXPIRY_MS / 1000),
+  };
+}
+
+function printPairingCode(pairingCode: string) {
   console.log("");
   console.log("┌─────────────────────────────────┐");
-  console.log("│  配对码: " + activePairingCode + "                  │");
+  console.log("│  配对码: " + pairingCode + "                  │");
   console.log("│  请在网页端输入此配对码          │");
   console.log("│  有效期 5 分钟                   │");
   console.log("└─────────────────────────────────┘");
   console.log("");
-
-  return {
-    pairingCode: activePairingCode,
-    expiresInSeconds: Math.floor(PAIRING_CODE_EXPIRY_MS / 1000),
-  };
 }
 
 export function confirmPairing(
@@ -103,6 +134,7 @@ export function confirmPairing(
   if (code !== activePairingCode) return null;
 
   activePairingCode = null;
+  pairingWaitExpiresAt = 0;
   sessionToken = randomUUID();
   saveSession(sessionToken, ttlMs);
 

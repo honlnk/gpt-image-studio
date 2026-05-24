@@ -12,11 +12,14 @@ export type CompanionAuthStatus = {
 };
 
 export type PairStartResponse = {
-  pairingCode: string;
   expiresInSeconds: number;
 };
 
 export type PairConfirmResponse = {
   sessionToken: string;
   expiresAt?: string;
+};
+
+export type PairUnpairResponse = {
+  paired: false;
 };

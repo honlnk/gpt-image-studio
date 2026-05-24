@@ -87,7 +87,7 @@ npx tsx companion/src/main.ts serve
 gpt-image-studio start
 ```
 
-后台启动 companion 服务，日志写入 `~/.gpt-image-studio/logs/`，PID 信息写入 `~/.gpt-image-studio/companion.pid`。如果还没有有效配对，`start` 会等待首次配对成功后再退出。
+后台启动 companion 服务，日志写入 `~/.gpt-image-studio/logs/`，PID 信息写入 `~/.gpt-image-studio/companion.pid`。`start` 只负责启动服务，需要配对时请另行运行 `gpt-image-studio pair`。
 
 `start` 支持和 `serve` 相同的端口、channel、origin 和 session 参数。
 
@@ -110,6 +110,15 @@ gpt-image-studio logs --date 2026-05-25
 ```
 
 默认显示当前后台日志最后 100 行。每次 `start` 时会自动清理 7 天前的 companion 日志。
+
+### `pair` — 重新发起配对
+
+```bash
+gpt-image-studio pair
+gpt-image-studio pair --port 19750
+```
+
+进入配对模式并等待网页端发起配对。运行后在网页设置中点击「开始配对」，当前终端会显示 6 位配对码，并等待网页端完成确认。进入配对模式会清除旧的本地 session，适合网页端断开连接后重新连接。
 
 ### `login` — 配置 API 凭据
 
@@ -161,12 +170,15 @@ npx tsx companion/src/main.ts unpair
 
 ## 配对流程
 
-1. 启动 companion 服务（`gpt-image-studio start`，源码开发时可用 `pnpm dev:companion`）
-2. 在网页端设置中切换到「本地 Companion」模式
-3. 点击配对，终端会显示 6 位配对码
-4. 在网页端输入配对码完成连接
+1. 启动 companion 服务（`gpt-image-studio start`）
+2. 运行 `gpt-image-studio pair` 进入配对模式
+3. 在网页端设置中切换到「本地 Companion」模式并点击「开始配对」
+4. 在终端查看 6 位配对码
+5. 在网页端输入配对码完成连接
 
 配对码有效期 5 分钟。配对成功后，session token 保存在 `~/.gpt-image-studio/session.json`，默认有效期 30 天，下次启动服务时自动恢复。可以通过 `--session-ttl-days` 调整有效天数。
+
+网页端点击「断开连接」会通知 Companion 清除本地 session。如果浏览器已经丢失 token，也可以运行 `gpt-image-studio unpair` 手动清除。
 
 ## 数据目录
 
