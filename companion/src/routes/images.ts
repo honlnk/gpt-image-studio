@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { loadCredentials } from "../credentials";
-import type { CompanionSecurityConfig } from "../securityConfig";
+import { loadCredentials } from "../credentials.js";
+import type { CompanionSecurityConfig } from "../securityConfig.js";
 
 type ImagesRoutesOptions = {
   security: CompanionSecurityConfig;

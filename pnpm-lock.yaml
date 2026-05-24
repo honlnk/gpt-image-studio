@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@gpt-image-studio/protocol':
-        specifier: workspace:*
-        version: link:packages/protocol
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@6.0.3)(vue@3.5.33(typescript@6.0.3))
@@ -48,9 +45,6 @@ importers:
       '@fastify/cors':
         specifier: ^11.0.0
         version: 11.2.0
-      '@gpt-image-studio/protocol':
-        specifier: workspace:*
-        version: link:../packages/protocol
       commander:
         specifier: ^13.1.0
         version: 13.1.0
@@ -67,8 +61,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-
-  packages/protocol: {}
 
 packages:
 

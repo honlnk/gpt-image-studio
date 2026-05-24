@@ -50,8 +50,6 @@ GPT Image Studio 当前是一个本地优先 Web App。用户在网页中配置 
 gpt-image-studio/
   src/
   companion/
-  packages/
-    protocol/
   docs/
 ```
 
@@ -62,8 +60,6 @@ gpt-image-studio/
   apps/
     web/
     companion/
-  packages/
-    protocol/
 ```
 
 拆独立仓库的条件：
@@ -358,7 +354,7 @@ gpt-image-studio logout
 - 新增 `connectionMode`，默认仍为 `direct`。
 - 抽出图片 client 接口。
 - 新增本地助手检测 UI，但可以先隐藏或标记为实验。
-- 起草 `packages/protocol` 的共享类型。
+- 起草本地助手 HTTP 协议类型。当前类型分别保留在 Web App 和 companion 内部，不发布共享协议包。
 
 ### 阶段三：本地助手 API key 代理 MVP ✅ 已完成
 

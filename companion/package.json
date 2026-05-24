@@ -1,20 +1,41 @@
 {
   "name": "@gpt-image-studio/companion",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Local CLI companion for GPT Image Studio image API credential proxying.",
   "type": "module",
   "bin": {
-    "gpt-image-studio": "./dist/main.js"
+    "gpt-image-studio": "dist/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/honlnk/gpt-image-studio.git",
+    "directory": "companion"
+  },
+  "keywords": [
+    "gpt-image-studio",
+    "openai",
+    "images",
+    "cli",
+    "companion"
+  ],
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
     "dev": "tsx src/main.ts serve --channel dev",
+    "prepack": "pnpm build",
     "build": "tsc",
     "start": "node dist/main.js serve",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
-    "@gpt-image-studio/protocol": "workspace:*",
     "commander": "^13.1.0",
     "fastify": "^5.3.3"
   },

@@ -4,6 +4,24 @@
 
 ## 安装与运行
 
+### npm 安装
+
+推荐用户通过 npm 全局安装：
+
+```bash
+npm install -g @gpt-image-studio/companion
+gpt-image-studio login
+gpt-image-studio serve --channel stable
+```
+
+已安装 pnpm 的用户也可以使用：
+
+```bash
+pnpm add -g @gpt-image-studio/companion
+gpt-image-studio login
+gpt-image-studio serve --channel stable
+```
+
 ### 从源码开发运行
 
 项目使用 pnpm workspace。在仓库根目录执行：
@@ -15,7 +33,7 @@ pnpm dev:companion
 
 `pnpm dev:companion` 会以开发渠道启动服务，默认允许本地 Web App origin。
 
-### 构建后运行
+### 从源码构建后运行
 
 ```bash
 pnpm --filter @gpt-image-studio/companion build
@@ -30,16 +48,16 @@ npx tsx companion/src/main.ts serve --port 19750
 
 ### 生产渠道运行
 
-生产渠道默认只允许正式站点访问本地 companion：
+通过 npm 安装后，生产渠道默认只允许正式站点访问本地 companion：
 
 ```bash
-npx tsx companion/src/main.ts serve --channel stable
+gpt-image-studio serve --channel stable
 ```
 
 如需临时允许额外调试页面，必须显式提供完整 origin：
 
 ```bash
-npx tsx companion/src/main.ts serve --channel stable --allow-origin http://localhost:5173
+gpt-image-studio serve --channel stable --allow-origin http://localhost:5173
 ```
 
 启动后监听 `127.0.0.1:19750`，等待网页端发起配对连接。
@@ -49,6 +67,8 @@ npx tsx companion/src/main.ts serve --channel stable --allow-origin http://local
 ### `serve` — 启动本地服务
 
 ```bash
+gpt-image-studio serve
+# 源码开发时也可以直接调用入口文件
 npx tsx companion/src/main.ts serve
 ```
 
@@ -64,6 +84,8 @@ npx tsx companion/src/main.ts serve
 ### `login` — 配置 API 凭据
 
 ```bash
+gpt-image-studio login
+# 源码开发时
 npx tsx companion/src/main.ts login
 ```
 
@@ -77,6 +99,8 @@ npx tsx companion/src/main.ts login
 ### `status` — 查看状态
 
 ```bash
+gpt-image-studio status
+# 源码开发时
 npx tsx companion/src/main.ts status
 ```
 
@@ -88,6 +112,8 @@ npx tsx companion/src/main.ts status
 ### `logout` — 清除凭据
 
 ```bash
+gpt-image-studio logout
+# 源码开发时
 npx tsx companion/src/main.ts logout
 ```
 
@@ -96,6 +122,8 @@ npx tsx companion/src/main.ts logout
 ### `unpair` — 清除网页端配对
 
 ```bash
+gpt-image-studio unpair
+# 源码开发时
 npx tsx companion/src/main.ts unpair
 ```
 
@@ -121,6 +149,24 @@ npx tsx companion/src/main.ts unpair
 
 ## 升级
 
+### npm 安装升级
+
+使用全局安装的用户可以通过同一包管理器升级：
+
+```bash
+npm update -g @gpt-image-studio/companion
+# 或
+pnpm update -g @gpt-image-studio/companion
+```
+
+升级后建议运行：
+
+```bash
+gpt-image-studio status
+```
+
+### 源码升级
+
 从源码升级时，在仓库根目录拉取最新代码并重新安装依赖：
 
 ```bash
@@ -139,13 +185,31 @@ npx tsx companion/src/main.ts status
 
 ## 卸载与清理
 
+### npm 卸载
+
+使用全局安装的用户可以执行：
+
+```bash
+npm uninstall -g @gpt-image-studio/companion
+# 或
+pnpm remove -g @gpt-image-studio/companion
+```
+
+卸载 npm 包不会自动删除 `~/.gpt-image-studio/` 中的凭据和配对 session。
+
+### 本地状态清理
+
 停止 companion 进程后，可以按需要清理本地状态：
 
 ```bash
 # 只清除 API 凭据
+gpt-image-studio logout
+# 源码开发时
 npx tsx companion/src/main.ts logout
 
 # 只清除网页端配对 session
+gpt-image-studio unpair
+# 源码开发时
 npx tsx companion/src/main.ts unpair
 
 # 完整删除 companion 本地状态

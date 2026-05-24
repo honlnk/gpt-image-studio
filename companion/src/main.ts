@@ -1,13 +1,16 @@
+#!/usr/bin/env node
 import { createInterface } from "node:readline";
 import { program } from "commander";
-import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials";
-import { clearSession, getSessionInfo, loadSession } from "./pairingState";
-import { createSecurityConfig } from "./securityConfig";
+import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials.js";
+import { clearSession, getSessionInfo, loadSession } from "./pairingState.js";
+import { createSecurityConfig } from "./securityConfig.js";
+
+const VERSION = "0.1.0";
 
 program
   .name("gpt-image-studio")
   .description("GPT Image Studio 本地 CLI Companion")
-  .version("0.0.0");
+  .version(VERSION);
 
 program
   .command("serve")
@@ -17,7 +20,7 @@ program
   .option("--allow-origin <origin...>", "额外允许的完整 origin，例如 http://localhost:5173")
   .option("--session-ttl-days <days>", "配对 session 有效天数", "30")
   .action(async (opts) => {
-    const { startServer } = await import("./server");
+    const { startServer } = await import("./server.js");
     await startServer({
       port: Number(opts.port),
       security: createSecurityConfig({

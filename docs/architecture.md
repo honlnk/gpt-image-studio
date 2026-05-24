@@ -2,7 +2,7 @@
 
 GPT Image Studio 是一个本地优先的 AI 图片创作工作台。当前应用是基于 Vue 3 + TypeScript + Vite 的单页 Web App，本地数据主要保存在 IndexedDB。
 
-下一步架构调整不应该是重写，而是从当前偏平的 Vue 项目结构，逐步演进为：应用装配层、业务功能模块、共享浏览器工具、共享协议包，以及可选的本地 CLI companion。
+下一步架构调整不应该是重写，而是从当前偏平的 Vue 项目结构，逐步演进为：应用装配层、业务功能模块、共享浏览器工具，以及可选的本地 CLI companion。
 
 ## 当前结构
 
@@ -70,9 +70,6 @@ src/
   main.ts
   App.vue
 
-packages/
-  protocol/
-
 companion/
 ```
 
@@ -82,8 +79,6 @@ companion/
 apps/
   web/
   companion/
-packages/
-  protocol/
 ```
 
 这个迁移应该等它能解决真实发布或构建问题时再做。
@@ -169,4 +164,4 @@ src/stores/
 
 Companion 应该是可选能力。浏览器直连模式继续作为默认模式保留。
 
-Companion 不属于 `src/`，它应该通过 `packages/protocol` 中的显式协议类型和 Web App 通信。Web App 永远不应该读取 companion 中保存的真实凭据。
+Companion 不属于 `src/`。它通过明确的 HTTP 协议和 Web App 通信，协议相关类型分别保留在 Web App 与 companion 内部，避免为了简单工具额外发布共享协议包。Web App 永远不应该读取 companion 中保存的真实凭据。

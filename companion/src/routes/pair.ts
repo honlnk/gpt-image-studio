@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import type { PairConfirmRequest, PairStartResponse, PairConfirmResponse } from "@gpt-image-studio/protocol";
-import { startPairing, confirmPairing } from "../pairingState";
+import type { PairConfirmRequest, PairStartResponse, PairConfirmResponse } from "../types.js";
+import { startPairing, confirmPairing } from "../pairingState.js";
 
 type PairRoutesOptions = {
   sessionTtlMs: number;

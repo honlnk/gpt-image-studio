@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createSecurityConfig } from "../securityConfig";
-import { validateEditMultipart } from "./images";
+import { createSecurityConfig } from "../securityConfig.js";
+import { validateEditMultipart } from "./images.js";
 
 function multipart(parts: Array<{ name: string; contentType?: string; body?: string }>): Buffer {
   const boundary = "----test-boundary";

@@ -1,13 +1,13 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import type { CompanionHealthResponse } from "@gpt-image-studio/protocol";
-import { loadSession, isPaired } from "./pairingState";
-import { pairRoutes } from "./routes/pair";
-import { authRoutes } from "./routes/auth";
-import { imagesRoutes } from "./routes/images";
-import { authMiddleware } from "./middleware/auth";
-import type { CompanionSecurityConfig } from "./securityConfig";
-import { isOriginAllowed } from "./securityConfig";
+import type { CompanionHealthResponse } from "./types.js";
+import { loadSession, isPaired } from "./pairingState.js";
+import { pairRoutes } from "./routes/pair.js";
+import { authRoutes } from "./routes/auth.js";
+import { imagesRoutes } from "./routes/images.js";
+import { authMiddleware } from "./middleware/auth.js";
+import type { CompanionSecurityConfig } from "./securityConfig.js";
+import { isOriginAllowed } from "./securityConfig.js";
 
 export async function startServer(opts: { port: number; security: CompanionSecurityConfig }) {
   loadSession();
@@ -42,7 +42,7 @@ export async function startServer(opts: { port: number; security: CompanionSecur
   app.get("/health", async (): Promise<CompanionHealthResponse> => {
     return {
       app: "gpt-image-studio-companion",
-      version: "0.0.0",
+      version: "0.1.0",
       paired: isPaired(),
     };
   });

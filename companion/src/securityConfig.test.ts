@@ -3,7 +3,7 @@ import {
   createSecurityConfig,
   isOriginAllowed,
   normalizeOrigin,
-} from "./securityConfig";
+} from "./securityConfig.js";
 
 describe("companion security config", () => {
   it("uses stable origins by default", () => {
