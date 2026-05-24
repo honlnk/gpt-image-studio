@@ -1,7 +1,9 @@
 import type {
+  CompanionAuthStatus,
   CompanionHealthResponse,
   PairConfirmResponse,
   PairStartResponse,
+  PairUnpairResponse,
 } from "../types/companion";
 
 export async function checkCompanionHealth(
@@ -16,9 +18,33 @@ export async function checkCompanionHealth(
   }
 }
 
+export async function getCompanionAuthStatus(
+  url: string,
+  sessionToken: string,
+): Promise<CompanionAuthStatus | null> {
+  if (!sessionToken) return null;
+  try {
+    const res = await fetch(`${url}/auth/status`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function startPairing(url: string): Promise<PairStartResponse> {
   const res = await fetch(`${url}/pair/start`, { method: "POST" });
-  if (!res.ok) throw new Error("发起配对失败");
+  if (!res.ok) {
+    let message = "发起配对失败";
+    try {
+      const data = await res.json() as { error?: string };
+      message = data.error || message;
+    } catch {}
+    throw new Error(message);
+  }
   return await res.json();
 }
 
@@ -32,5 +58,17 @@ export async function confirmPairing(
     body: JSON.stringify({ pairingCode }),
   });
   if (!res.ok) throw new Error("配对码无效或已过期");
+  return await res.json();
+}
+
+export async function unpairCompanion(
+  url: string,
+  sessionToken: string,
+): Promise<PairUnpairResponse> {
+  const res = await fetch(`${url}/pair/unpair`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${sessionToken}` },
+  });
+  if (!res.ok) throw new Error("解除配对失败");
   return await res.json();
 }

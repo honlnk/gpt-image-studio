@@ -11,7 +11,7 @@
 ```bash
 npm install -g @honlnk/image-studio-companion
 gpt-image-studio login
-gpt-image-studio serve --channel stable
+gpt-image-studio start
 ```
 
 已安装 pnpm 的用户也可以使用：
@@ -19,7 +19,7 @@ gpt-image-studio serve --channel stable
 ```bash
 pnpm add -g @honlnk/image-studio-companion
 gpt-image-studio login
-gpt-image-studio serve --channel stable
+gpt-image-studio start
 ```
 
 ### 从源码开发运行
@@ -51,16 +51,16 @@ npx tsx companion/src/main.ts serve --port 19750
 通过 npm 安装后，生产渠道默认只允许正式站点访问本地 companion：
 
 ```bash
-gpt-image-studio serve --channel stable
+gpt-image-studio start
 ```
 
 如需临时允许额外调试页面，必须显式提供完整 origin：
 
 ```bash
-gpt-image-studio serve --channel stable --allow-origin http://localhost:5173
+gpt-image-studio start --channel stable --allow-origin http://localhost:5173
 ```
 
-启动后监听 `127.0.0.1:19750`，等待网页端发起配对连接。
+启动后监听 `127.0.0.1:19750`。如果还没有完成配对，`start` 会在当前终端等待网页端首次配对成功，然后退出；后台服务会继续运行。
 
 ## 命令
 
@@ -80,6 +80,45 @@ npx tsx companion/src/main.ts serve
 | `--channel stable|dev` | 指定安全渠道；stable 只允许正式站点，dev 额外允许本地开发 origin |
 | `--allow-origin <origin...>` | 追加允许的完整 origin，不支持通配符 |
 | `--session-ttl-days <days>` | 指定配对 session 有效天数，默认 30 天 |
+
+### `start` — 后台启动服务
+
+```bash
+gpt-image-studio start
+```
+
+后台启动 companion 服务，日志写入 `~/.gpt-image-studio/logs/`，PID 信息写入 `~/.gpt-image-studio/companion.pid`。`start` 只负责启动服务，需要配对时请另行运行 `gpt-image-studio pair`。
+
+`start` 支持和 `serve` 相同的端口、channel、origin 和 session 参数。
+
+### `stop` / `restart` — 管理后台服务
+
+```bash
+gpt-image-studio stop
+gpt-image-studio restart
+```
+
+`stop` 只会停止由 `start` 记录的 companion 后台进程，不会按端口杀掉未知进程。
+
+### `logs` — 查看后台日志
+
+```bash
+gpt-image-studio logs
+gpt-image-studio logs --lines 200
+gpt-image-studio logs --follow
+gpt-image-studio logs --date 2026-05-25
+```
+
+默认显示当前后台日志最后 100 行。每次 `start` 时会自动清理 7 天前的 companion 日志。
+
+### `pair` — 重新发起配对
+
+```bash
+gpt-image-studio pair
+gpt-image-studio pair --port 19750
+```
+
+进入配对模式并等待网页端发起配对。运行后在网页设置中点击「开始配对」，当前终端会显示 6 位配对码，并等待网页端完成确认。进入配对模式会清除旧的本地 session，适合网页端断开连接后重新连接。
 
 ### `login` — 配置 API 凭据
 
@@ -131,12 +170,15 @@ npx tsx companion/src/main.ts unpair
 
 ## 配对流程
 
-1. 启动 companion 服务（`pnpm dev:companion`）
-2. 在网页端设置中切换到「本地 Companion」模式
-3. 点击配对，终端会显示 6 位配对码
-4. 在网页端输入配对码完成连接
+1. 启动 companion 服务（`gpt-image-studio start`）
+2. 运行 `gpt-image-studio pair` 进入配对模式
+3. 在网页端设置中切换到「本地 Companion」模式并点击「开始配对」
+4. 在终端查看 6 位配对码
+5. 在网页端输入配对码完成连接
 
 配对码有效期 5 分钟。配对成功后，session token 保存在 `~/.gpt-image-studio/session.json`，默认有效期 30 天，下次启动服务时自动恢复。可以通过 `--session-ttl-days` 调整有效天数。
+
+网页端点击「断开连接」会通知 Companion 清除本地 session。如果浏览器已经丢失 token，也可以运行 `gpt-image-studio unpair` 手动清除。
 
 ## 数据目录
 

@@ -381,7 +381,74 @@ gpt-image-studio logout
 
 - ✅ 安装、升级和卸载说明。
 
-### 阶段五：更多 provider 和 OAuth
+### 阶段五：后台服务管理 ✅ 已完成
+
+目标是让普通用户不必长期占用一个终端窗口，同时仍然保留 `serve` 作为前台调试模式。
+
+已新增命令：
+
+```text
+gpt-image-studio start
+gpt-image-studio stop
+gpt-image-studio restart
+gpt-image-studio logs
+```
+
+命令行为：
+
+- `serve`：继续作为前台运行模式，日志直接输出到当前终端，适合开发和排错。
+- ✅ `start`：后台启动 companion 服务，写入 PID 文件和日志文件。
+- ✅ `stop`：读取 PID 文件，只停止 companion 自己启动的后台进程，不按端口粗暴杀进程。
+- ✅ `restart`：先 `stop`，再 `start`。
+- ✅ `logs`：查看本地运行日志，默认显示当天日志最后 100 行。
+
+本地状态文件：
+
+```text
+~/.gpt-image-studio/companion.pid
+~/.gpt-image-studio/logs/companion-YYYY-MM-DD.log
+```
+
+PID 文件建议保存：
+
+```json
+{
+  "pid": 12345,
+  "port": 19750,
+  "channel": "stable",
+  "logFile": "~/.gpt-image-studio/logs/companion-2026-05-25.log",
+  "startedAt": "2026-05-25T10:00:00.000Z"
+}
+```
+
+日志行为：
+
+- `start` 后台进程将 stdout/stderr 追加写入当天日志文件。
+- `logs --lines 200` 查看最后 200 行。
+- `logs --follow` 持续跟随日志。
+- `logs --date YYYY-MM-DD` 查看指定日期日志。
+- 每次 `start` 时自动删除 7 天前的 companion 日志。
+
+首次配对体验：
+
+- 如果已经存在有效 session，`start` 后台启动成功后直接退出。
+- 如果没有有效 session，`start` 启动后台服务后不立刻退出，而是在当前终端等待首次配对完成。
+- 用户在网页设置中点击「开始配对」后，终端显示日志里的 6 位配对码。
+- 用户在网页端输入配对码并配对成功后，`start` 输出成功提示并退出，后台服务继续运行。
+- 如果用户按 `Ctrl+C` 中断等待，后台服务继续运行；用户可以通过 `logs` 查看后续日志，或重新执行 `start` 继续等待配对。
+
+状态增强：
+
+- ✅ `status` 显示后台服务 PID、端口、channel、日志文件路径和启动时间。
+- ✅ 如果 PID 文件存在但进程已不存在，提示 stale PID 并建议重新 `start`。
+
+阶段五暂不做：
+
+- 暂不接入 macOS launchd、Windows Service 或 Linux systemd。
+- 暂不做开机自启。
+- 暂不按端口停止未知进程，避免误杀其它本地服务。
+
+### 阶段六：更多 provider 和 OAuth
 
 - 支持多个 provider profile。
 - 支持 provider 选择和模型能力探测。

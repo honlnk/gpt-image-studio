@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { validateToken } from "../pairingState.js";
 
-const PUBLIC_PATHS = ["/health", "/pair/start", "/pair/confirm"];
+const PUBLIC_PATHS = ["/health", "/pair/wait", "/pair/start", "/pair/confirm"];
 
 export async function authMiddleware(app: FastifyInstance) {
   app.addHook("onRequest", async (req, reply) => {

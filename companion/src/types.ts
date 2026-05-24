@@ -12,7 +12,15 @@ export type CompanionAuthStatus = {
 };
 
 export type PairStartResponse = {
-  pairingCode: string;
+  expiresInSeconds: number;
+};
+
+export type PairWaitRequest = {
+  timeoutSeconds?: number;
+};
+
+export type PairWaitResponse = {
+  waiting: true;
   expiresInSeconds: number;
 };
 
@@ -23,4 +31,8 @@ export type PairConfirmRequest = {
 export type PairConfirmResponse = {
   sessionToken: string;
   expiresAt?: string;
+};
+
+export type PairUnpairResponse = {
+  paired: false;
 };
