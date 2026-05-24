@@ -22,4 +22,5 @@ export type PairConfirmRequest = {
 
 export type PairConfirmResponse = {
   sessionToken: string;
+  expiresAt?: string;
 };

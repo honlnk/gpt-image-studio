@@ -7,7 +7,7 @@
     "gpt-image-studio": "./dist/main.js"
   },
   "scripts": {
-    "dev": "tsx src/main.ts serve",
+    "dev": "tsx src/main.ts serve --channel dev",
     "build": "tsc",
     "start": "node dist/main.js serve",
     "typecheck": "tsc --noEmit"

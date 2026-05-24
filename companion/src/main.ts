@@ -1,7 +1,8 @@
 import { createInterface } from "node:readline";
 import { program } from "commander";
 import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials";
-import { isPaired, loadSession } from "./pairingState";
+import { clearSession, getSessionInfo, loadSession } from "./pairingState";
+import { createSecurityConfig } from "./securityConfig";
 
 program
   .name("gpt-image-studio")
@@ -12,9 +13,19 @@ program
   .command("serve")
   .description("启动本地 companion HTTP 服务")
   .option("-p, --port <port>", "监听端口", "19750")
+  .option("--channel <channel>", "安全渠道：stable 或 dev", process.env.GPT_IMAGE_STUDIO_COMPANION_CHANNEL)
+  .option("--allow-origin <origin...>", "额外允许的完整 origin，例如 http://localhost:5173")
+  .option("--session-ttl-days <days>", "配对 session 有效天数", "30")
   .action(async (opts) => {
     const { startServer } = await import("./server");
-    await startServer({ port: Number(opts.port) });
+    await startServer({
+      port: Number(opts.port),
+      security: createSecurityConfig({
+        channel: opts.channel,
+        allowOrigins: opts.allowOrigin ?? [],
+        sessionTtlDays: Number(opts.sessionTtlDays),
+      }),
+    });
   });
 
 program
@@ -73,7 +84,7 @@ program
   .action(async () => {
     loadSession();
     const creds = loadCredentials();
-    const paired = isPaired();
+    const session = getSessionInfo();
 
     console.log("┌─────────────────────────────────┐");
     console.log("│  GPT Image Studio Companion     │");
@@ -89,7 +100,10 @@ program
       console.log("凭据:    未配置（运行 gpt-image-studio login 进行配置）");
     }
 
-    console.log(`配对:    ${paired ? "已配对" : "未配对"}`);
+    console.log(`配对:    ${session.paired ? "已配对" : "未配对"}`);
+    if (session.expiresAt) {
+      console.log(`  过期时间: ${session.expiresAt}`);
+    }
 
     try {
       const res = await fetch("http://127.0.0.1:19750/health", { signal: AbortSignal.timeout(2000) });
@@ -109,6 +123,14 @@ program
   .action(async () => {
     clearCredentials();
     console.log("凭据已清除。");
+  });
+
+program
+  .command("unpair")
+  .description("清除网页端配对 session")
+  .action(async () => {
+    clearSession();
+    console.log("配对 session 已清除。");
   });
 
 program.parse();

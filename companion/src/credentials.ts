@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -24,10 +24,11 @@ export function loadCredentials(): Credentials | null {
 
 export function saveCredentials(apiBaseUrl: string, apiKey: string): void {
   if (!existsSync(CONFIG_DIR)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
+    mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   }
   const data: Credentials = { apiBaseUrl, apiKey, savedAt: new Date().toISOString() };
-  writeFileSync(CREDENTIALS_FILE, JSON.stringify(data, null, 2));
+  writeFileSync(CREDENTIALS_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
+  chmodSync(CREDENTIALS_FILE, 0o600);
 }
 
 export function clearCredentials(): void {

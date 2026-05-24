@@ -375,12 +375,13 @@ gpt-image-studio logout
 
 ### 阶段四：安全加固 🚧 下一阶段
 
-- Origin 白名单。
-- 配对 token 过期和重置。
-- 请求大小限制。
-- 日志脱敏。
-- 本地凭据加密或系统 keychain。
-- 安装、升级和卸载说明。
+- ✅ Origin 白名单配置化。正式渠道默认只允许 `https://gpt-image.honlnk.com`，开发渠道允许本地开发 origin，并支持显式 `--allow-origin`。
+- ✅ 配对 token 过期和重置。session 默认 30 天过期，`unpair` 可清除配对，不影响 API 凭据。
+- ✅ 请求大小限制。JSON 和 multipart 编辑请求有独立 body limit，并限制编辑引用图数量与图片 MIME 类型。
+- ✅ 日志脱敏。服务日志脱敏 Authorization、API key 和图片 base64 字段，不记录请求 body。
+- ✅ 凭据和 session 文件权限收紧为 `0600`。
+- ⬜ 本地凭据加密或系统 keychain。
+- ⬜ 安装、升级和卸载说明。
 
 ### 阶段五：更多 provider 和 OAuth
 

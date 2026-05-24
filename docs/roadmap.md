@@ -234,5 +234,5 @@ type GenerationParams = {
 1. 继续打磨错误提示和操作反馈，例如单张删除、会话删除、存储失败回滚提示。
 2. 增加更细的图片库筛选，例如来源、格式、时间等。
 3. 在 Web App 工作流继续稳定后，再评估 Tauri / Electron 桌面端打包。
-4. 本地 CLI Companion（`companion.md`）— API key 代理 MVP 已完成，下一步做安全加固、测试补齐和安装升级说明。
+4. 本地 CLI Companion（`companion.md`）— API key 代理 MVP 已完成，安全加固基础项已落地，下一步做系统 keychain 评估和安装升级说明。
 5. 用户行为日志系统（`analytics-event-logging-plan.md`）。
