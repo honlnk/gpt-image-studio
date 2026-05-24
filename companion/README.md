@@ -221,7 +221,7 @@ rm -rf ~/.gpt-image-studio
 ## 安全说明
 
 - 服务仅监听 `127.0.0.1`，不对外暴露
-- CORS 白名单默认只允许 `https://gpt-image.honlnk.com`
+- CORS 白名单默认只允许 `https://image.honlnk.com`
 - `--channel dev` 会额外允许 `http://127.0.0.1:8888` 和 `http://localhost:8888`
 - `--allow-origin` 只接受完整 origin，不支持通配符
 - 非公开端点需要配对后的 Bearer token 鉴权

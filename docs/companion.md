@@ -197,7 +197,7 @@ POST /images/edits
 
 本地助手不能只是一个裸露的 localhost 代理。最低要求：
 
-- 校验 `Origin`，正式版默认只允许 `https://gpt-image.honlnk.com`。
+- 校验 `Origin`，正式版默认只允许 `https://image.honlnk.com`。
 - 开发版可以额外允许本地开发 origin，例如 `http://localhost:<port>`、`http://127.0.0.1:<port>`。
 - 首次使用必须配对。
 - 每个请求必须带配对后的 session token。
@@ -217,10 +217,10 @@ POST /images/edits
 
 ```text
 正式版默认白名单：
-  https://gpt-image.honlnk.com
+  https://image.honlnk.com
 
 开发版默认白名单：
-  https://gpt-image.honlnk.com
+  https://image.honlnk.com
   http://localhost:<dev-port>
   http://127.0.0.1:<dev-port>
 ```
@@ -234,7 +234,7 @@ GPT_IMAGE_STUDIO_COMPANION_CHANNEL=dev
 
 `stable` 渠道：
 
-- 默认只允许正式站点 `https://gpt-image.honlnk.com`。
+- 默认只允许正式站点 `https://image.honlnk.com`。
 - 不自动允许任意 localhost 网页。
 - 如确实需要临时调试，应要求用户显式启动调试模式，而不是默认开放。
 
@@ -371,7 +371,7 @@ gpt-image-studio logout
 
 ### 阶段四：基础安全加固 ✅ 已完成
 
-- ✅ Origin 白名单配置化。正式渠道默认只允许 `https://gpt-image.honlnk.com`，开发渠道允许本地开发 origin，并支持显式 `--allow-origin`。
+- ✅ Origin 白名单配置化。正式渠道默认只允许 `https://image.honlnk.com`，开发渠道允许本地开发 origin，并支持显式 `--allow-origin`。
 - ✅ 配对 token 过期和重置。session 默认 30 天过期，`unpair` 可清除配对，不影响 API 凭据。
 - ✅ 请求大小限制。JSON 和 multipart 编辑请求有独立 body limit，并限制编辑引用图数量与图片 MIME 类型。
 - ✅ 日志脱敏。服务日志脱敏 Authorization、API key 和图片 base64 字段，不记录请求 body。
