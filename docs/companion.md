@@ -1,6 +1,6 @@
 # 本地 CLI Companion 方案
 
-更新日期：2026-05-06
+更新日期：2026-05-24
 
 ## 背景
 
@@ -360,7 +360,7 @@ gpt-image-studio logout
 - 新增本地助手检测 UI，但可以先隐藏或标记为实验。
 - 起草 `packages/protocol` 的共享类型。
 
-### 阶段三：本地助手 API key 代理 MVP 🚧 进行中
+### 阶段三：本地助手 API key 代理 MVP ✅ 已完成
 
 - ✅ 新增 `companion/`（pnpm workspace monorepo 结构）。
 - ✅ 实现 `serve` 命令（Fastify HTTP 服务，监听 `127.0.0.1:19750`）。
@@ -368,12 +368,12 @@ gpt-image-studio logout
 - ✅ 实现 `/pair/start` 和 `/pair/confirm`（6 位配对码 + session token）。
 - ✅ 实现 token 校验中间件。
 - ✅ 前端配对 UI（在线检测、配对码输入、已连接/断开状态）。
-- ⬜ 实现 `login`、`status`、`logout` 命令（凭据管理）。
-- ⬜ 实现 `/auth/status`。
-- ⬜ 实现 `/images/generations` 和 `/images/edits`（图片代理）。
-- ⬜ 前端 `localCompanionImagesClient` 对接真实请求。
+- ✅ 实现 `login`、`status`、`logout` 命令（凭据管理）。
+- ✅ 实现 `/auth/status`。
+- ✅ 实现 `/images/generations` 和 `/images/edits`（图片代理）。
+- ✅ 前端 `localCompanionImagesClient` 对接真实请求。
 
-### 阶段四：安全加固
+### 阶段四：安全加固 🚧 下一阶段
 
 - Origin 白名单。
 - 配对 token 过期和重置。

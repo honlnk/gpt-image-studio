@@ -105,7 +105,7 @@ See `docs/roadmap.md` for the full roadmap. Current status:
 - Phase 5: Experience enhancements — core items done
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
 - Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/mask-editing.md`)
-- In progress: Local CLI Companion (`docs/companion.md`) — monorepo setup done, pairing flow done, next up: credential management and image proxy endpoints
+- In progress: Local CLI Companion (`docs/companion.md`) — API key proxy MVP done; next up: security hardening, test coverage, and install/upgrade docs
 - Upcoming: analytics event logging (`docs/analytics-event-logging-plan.md`)
 
 ## Conventions
