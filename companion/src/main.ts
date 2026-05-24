@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { program } from "commander";
 import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials.js";
 import { clearSession, getSessionInfo, loadSession } from "./pairingState.js";
@@ -9,12 +9,13 @@ import {
   getLogFilePath,
   isProcessRunning,
   readLastLines,
+  readLogChunkSince,
   readManagedProcessInfo,
   startManagedProcess,
   stopManagedProcess,
 } from "./processManager.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 const DEFAULT_PORT = "19750";
 const DEFAULT_SESSION_TTL_DAYS = "30";
 
@@ -268,7 +269,7 @@ async function waitForFirstPairing(logFile: string): Promise<void> {
     if (!existsSync(logFile)) continue;
     const size = statSync(logFile).size;
     if (size <= offset) continue;
-    const chunk = readFileSync(logFile, "utf-8").slice(offset);
+    const chunk = readLogChunkSince(logFile, offset);
     offset = size;
     chunk
       .split(/\r?\n/)
@@ -284,7 +285,7 @@ async function followLogFile(logFile: string): Promise<void> {
     if (!existsSync(logFile)) continue;
     const size = statSync(logFile).size;
     if (size <= offset) continue;
-    const chunk = readFileSync(logFile, "utf-8").slice(offset);
+    const chunk = readLogChunkSince(logFile, offset);
     offset = size;
     process.stdout.write(chunk);
   }

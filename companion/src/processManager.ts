@@ -117,6 +117,11 @@ export function appendLogLine(filePath: string, message: string): void {
   appendFileSync(filePath, `${message}\n`);
 }
 
+export function readLogChunkSince(filePath: string, byteOffset: number): string {
+  if (!existsSync(filePath)) return "";
+  return readFileSync(filePath).subarray(byteOffset).toString("utf-8");
+}
+
 export function startManagedProcess(input: StartManagedProcessInput): ManagedProcessInfo {
   ensureRuntimeDirs();
   cleanupOldLogs();

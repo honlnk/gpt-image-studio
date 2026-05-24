@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { cleanupOldLogs, getLogFilePath, readLastLines } from "./processManager.js";
+import { cleanupOldLogs, getLogFilePath, readLastLines, readLogChunkSince } from "./processManager.js";
 
 describe("process manager helpers", () => {
   it("uses dated companion log file names", () => {
@@ -17,6 +17,17 @@ describe("process manager helpers", () => {
     writeFileSync(file, "one\ntwo\nthree\n");
 
     expect(readLastLines(file, 2)).toEqual(["two", "three"]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reads chunks by byte offset when logs contain multibyte characters", () => {
+    const dir = mkdtempSync(join(tmpdir(), "companion-log-"));
+    const file = join(dir, "test.log");
+    writeFileSync(file, "等待网页端发起配对...\n");
+    const offset = statSync(file).size;
+    writeFileSync(file, "│  配对码: 123456                  │\n", { flag: "a" });
+
+    expect(readLogChunkSince(file, offset)).toContain("配对码: 123456");
     rmSync(dir, { recursive: true, force: true });
   });
 
