@@ -3,9 +3,11 @@ import { ref, onMounted, watch } from "vue";
 import type { ConnectionMode } from "../../types/studio";
 import {
   checkCompanionHealth,
+  getCompanionAuthStatus,
   startPairing,
   confirmPairing,
 } from "../../services/companionApi";
+import type { CompanionAuthStatus, CompanionHealthResponse } from "../../types/companion";
 
 const props = defineProps<{
   connectionMode: ConnectionMode;
@@ -24,6 +26,8 @@ const emit = defineEmits<{
 }>();
 
 const companionOnline = ref(false);
+const companionHealth = ref<CompanionHealthResponse | null>(null);
+const companionAuthStatus = ref<CompanionAuthStatus | null>(null);
 const pairingInProgress = ref(false);
 const pairingCode = ref("");
 const pairingError = ref("");
@@ -31,7 +35,11 @@ const pairingCodeInput = ref("");
 
 async function checkStatus() {
   const health = await checkCompanionHealth(props.companionUrl);
+  companionHealth.value = health;
   companionOnline.value = health !== null;
+  companionAuthStatus.value = health && props.companionSessionToken
+    ? await getCompanionAuthStatus(props.companionUrl, props.companionSessionToken)
+    : null;
 }
 
 async function handleStartPairing() {
@@ -53,6 +61,7 @@ async function handleConfirmPairing() {
     emit("update:companionSessionToken", result.sessionToken);
     pairingInProgress.value = false;
     pairingCode.value = "";
+    companionAuthStatus.value = await getCompanionAuthStatus(props.companionUrl, result.sessionToken);
   } catch {
     pairingError.value = "配对码无效或已过期";
   }
@@ -60,6 +69,7 @@ async function handleConfirmPairing() {
 
 function handleDisconnect() {
   emit("update:companionSessionToken", "");
+  companionAuthStatus.value = null;
 }
 
 function cancelPairing() {
@@ -79,6 +89,13 @@ watch(
   () => props.connectionMode,
   (mode) => {
     if (mode === "localCompanion") checkStatus();
+  },
+);
+
+watch(
+  () => props.companionSessionToken,
+  () => {
+    if (props.connectionMode === "localCompanion") checkStatus();
   },
 );
 </script>
@@ -183,6 +200,12 @@ watch(
       <!-- Local Companion mode -->
       <template v-if="connectionMode === 'localCompanion'">
         <div class="rounded-lg border border-gray-200 p-4 space-y-3">
+          <div class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+            <div class="font-mono text-gray-800">npm install -g @honlnk/image-studio-companion</div>
+            <div class="mt-1 font-mono text-gray-800">gpt-image-studio login</div>
+            <div class="mt-1 font-mono text-gray-800">gpt-image-studio serve</div>
+          </div>
+
           <!-- Status -->
           <div class="flex items-center gap-2">
             <span
@@ -191,6 +214,9 @@ watch(
             />
             <span class="text-sm text-gray-700">
               {{ companionOnline ? "Companion 在线" : "Companion 离线" }}
+            </span>
+            <span v-if="companionHealth" class="text-xs text-gray-400">
+              v{{ companionHealth.version }}
             </span>
             <button
               class="ml-auto text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
@@ -219,6 +245,9 @@ watch(
           <template v-else-if="!pairingInProgress">
             <p class="text-sm text-gray-500">
               需要与本地 Companion 配对后才能使用。
+            </p>
+            <p v-if="!companionOnline" class="text-xs text-gray-500">
+              请先在终端启动 <span class="font-mono text-gray-700">gpt-image-studio serve</span>，然后点击刷新。
             </p>
             <button
               class="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50 cursor-pointer"
@@ -265,6 +294,20 @@ watch(
           <p v-if="pairingError" class="text-xs text-red-600">
             {{ pairingError }}
           </p>
+
+          <div v-if="companionPaired" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+            <template v-if="companionAuthStatus">
+              <span :class="companionAuthStatus.ready ? 'text-green-700' : 'text-amber-700'">
+                {{ companionAuthStatus.ready ? "凭据已配置" : "凭据未配置" }}
+              </span>
+              <span v-if="companionAuthStatus.accountLabel">
+                ：{{ companionAuthStatus.accountLabel }}
+              </span>
+            </template>
+            <template v-else>
+              已配对，但暂时无法读取凭据状态。请确认服务仍在运行。
+            </template>
+          </div>
         </div>
       </template>
     </div>

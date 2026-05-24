@@ -105,7 +105,7 @@ See `docs/roadmap.md` for the full roadmap. Current status:
 - Phase 5: Experience enhancements — core items done
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
 - Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/mask-editing.md`)
-- Done: Local CLI Companion API key proxy MVP, baseline security hardening, and install/upgrade docs (`docs/companion.md`); system keychain is deferred
+- Next: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with first-pairing wait flow; system keychain is deferred
 - Upcoming: analytics event logging (`docs/analytics-event-logging-plan.md`)
 
 ## Conventions

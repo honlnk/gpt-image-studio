@@ -43,6 +43,16 @@
 | 浏览器直连 | 配置 API Base URL 和 API key，浏览器直接调用接口 |
 | 本地 Companion | 安装本地 CLI 服务，凭据保存在本机，浏览器只与 localhost 通信 |
 
+### 本地 Companion 快速开始
+
+```bash
+npm install -g @honlnk/image-studio-companion
+gpt-image-studio login
+gpt-image-studio serve
+```
+
+然后在网页设置中切换到「本地 Companion」，点击配对并输入终端中显示的 6 位配对码。
+
 ## 技术栈
 
 - Vue 3 (Composition API, `<script setup>`)

@@ -1,4 +1,5 @@
 import type {
+  CompanionAuthStatus,
   CompanionHealthResponse,
   PairConfirmResponse,
   PairStartResponse,
@@ -9,6 +10,23 @@ export async function checkCompanionHealth(
 ): Promise<CompanionHealthResponse | null> {
   try {
     const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function getCompanionAuthStatus(
+  url: string,
+  sessionToken: string,
+): Promise<CompanionAuthStatus | null> {
+  if (!sessionToken) return null;
+  try {
+    const res = await fetch(`${url}/auth/status`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      signal: AbortSignal.timeout(3000),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
