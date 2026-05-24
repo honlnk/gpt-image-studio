@@ -2,29 +2,64 @@
 
 本地 CLI 助手，为 GPT Image Studio 网页端提供安全的 API 凭据代理服务。
 
-## 安装
+## 安装与运行
 
-项目使用 pnpm workspace，在仓库根目录执行：
+### 从源码开发运行
+
+项目使用 pnpm workspace。在仓库根目录执行：
 
 ```bash
 pnpm install
+pnpm dev:companion
 ```
+
+`pnpm dev:companion` 会以开发渠道启动服务，默认允许本地 Web App origin。
+
+### 构建后运行
+
+```bash
+pnpm --filter @gpt-image-studio/companion build
+pnpm --filter @gpt-image-studio/companion start
+```
+
+也可以直接调用入口文件：
+
+```bash
+npx tsx companion/src/main.ts serve --port 19750
+```
+
+### 生产渠道运行
+
+生产渠道默认只允许正式站点访问本地 companion：
+
+```bash
+npx tsx companion/src/main.ts serve --channel stable
+```
+
+如需临时允许额外调试页面，必须显式提供完整 origin：
+
+```bash
+npx tsx companion/src/main.ts serve --channel stable --allow-origin http://localhost:5173
+```
+
+启动后监听 `127.0.0.1:19750`，等待网页端发起配对连接。
 
 ## 命令
 
 ### `serve` — 启动本地服务
 
 ```bash
-pnpm dev:companion
-# 或指定端口
-npx tsx companion/src/main.ts serve --port 19750
-# 开发渠道会允许本地 Web App origin
-npx tsx companion/src/main.ts serve --channel dev
-# 追加一个明确的调试 origin
-npx tsx companion/src/main.ts serve --allow-origin http://localhost:5173
+npx tsx companion/src/main.ts serve
 ```
 
-启动后监听 `127.0.0.1:19750`，等待网页端发起配对连接。
+常用参数：
+
+| 参数 | 说明 |
+|------|------|
+| `--port <port>` | 指定监听端口，默认 `19750` |
+| `--channel stable|dev` | 指定安全渠道；stable 只允许正式站点，dev 额外允许本地开发 origin |
+| `--allow-origin <origin...>` | 追加允许的完整 origin，不支持通配符 |
+| `--session-ttl-days <days>` | 指定配对 session 有效天数，默认 30 天 |
 
 ### `login` — 配置 API 凭据
 
@@ -83,6 +118,41 @@ npx tsx companion/src/main.ts unpair
 |------|------|
 | `credentials.json` | API Base URL + API Key |
 | `session.json` | 配对 session token |
+
+## 升级
+
+从源码升级时，在仓库根目录拉取最新代码并重新安装依赖：
+
+```bash
+git pull
+pnpm install
+pnpm --filter @gpt-image-studio/companion build
+```
+
+升级不会自动删除 `~/.gpt-image-studio/` 中的凭据和配对 session。升级后建议运行：
+
+```bash
+npx tsx companion/src/main.ts status
+```
+
+如果服务端口、正式站点 origin 或 session 策略发生变化，重新启动 `serve` 后按网页端提示重新配对。
+
+## 卸载与清理
+
+停止 companion 进程后，可以按需要清理本地状态：
+
+```bash
+# 只清除 API 凭据
+npx tsx companion/src/main.ts logout
+
+# 只清除网页端配对 session
+npx tsx companion/src/main.ts unpair
+
+# 完整删除 companion 本地状态
+rm -rf ~/.gpt-image-studio
+```
+
+如果只是切换 API key，运行 `login` 覆盖当前凭据即可，不需要删除整个目录。
 
 ## 安全说明
 
