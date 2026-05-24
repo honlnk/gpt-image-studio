@@ -48,7 +48,7 @@
 ```bash
 npm install -g @honlnk/image-studio-companion
 gpt-image-studio login
-gpt-image-studio serve
+gpt-image-studio start
 ```
 
 然后在网页设置中切换到「本地 Companion」，点击配对并输入终端中显示的 6 位配对码。

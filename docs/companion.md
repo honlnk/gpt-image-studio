@@ -381,11 +381,11 @@ gpt-image-studio logout
 
 - ✅ 安装、升级和卸载说明。
 
-### 阶段五：后台服务管理 🚧 下一阶段
+### 阶段五：后台服务管理 ✅ 已完成
 
 目标是让普通用户不必长期占用一个终端窗口，同时仍然保留 `serve` 作为前台调试模式。
 
-新增命令：
+已新增命令：
 
 ```text
 gpt-image-studio start
@@ -397,10 +397,10 @@ gpt-image-studio logs
 命令行为：
 
 - `serve`：继续作为前台运行模式，日志直接输出到当前终端，适合开发和排错。
-- `start`：后台启动 companion 服务，写入 PID 文件和日志文件。
-- `stop`：读取 PID 文件，只停止 companion 自己启动的后台进程，不按端口粗暴杀进程。
-- `restart`：先 `stop`，再 `start`。
-- `logs`：查看本地运行日志，默认显示当天日志最后 100 行。
+- ✅ `start`：后台启动 companion 服务，写入 PID 文件和日志文件。
+- ✅ `stop`：读取 PID 文件，只停止 companion 自己启动的后台进程，不按端口粗暴杀进程。
+- ✅ `restart`：先 `stop`，再 `start`。
+- ✅ `logs`：查看本地运行日志，默认显示当天日志最后 100 行。
 
 本地状态文件：
 
@@ -439,8 +439,8 @@ PID 文件建议保存：
 
 状态增强：
 
-- `status` 显示后台服务 PID、端口、channel、日志文件路径和启动时间。
-- 如果 PID 文件存在但进程已不存在，提示 stale PID 并建议重新 `start`。
+- ✅ `status` 显示后台服务 PID、端口、channel、日志文件路径和启动时间。
+- ✅ 如果 PID 文件存在但进程已不存在，提示 stale PID 并建议重新 `start`。
 
 阶段五暂不做：
 
