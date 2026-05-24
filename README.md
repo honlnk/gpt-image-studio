@@ -79,7 +79,6 @@ pnpm preview          # 预览生产构建
 gpt-image-studio/
 ├── src/                    # Web App 源码
 ├── companion/              # 本地 CLI Companion (Fastify + Commander)
-├── packages/protocol/      # 前后端共享类型
 └── docs/                   # 项目文档
 ```
 

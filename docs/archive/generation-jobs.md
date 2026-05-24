@@ -293,7 +293,6 @@ type EditImageInput = GenerateImageInput & {
 - 已支持画笔/橡皮/矩形/圆形/平移、撤销重做、缩放复位、软边。
 - 已支持编辑对复合 tag（源图+mask 绑定展示与联动删除）。
 - 发送时会同时携带 `image[]` 和 `mask`，并执行 PNG/MIME/尺寸等校验。
-- 多图场景下的“指定 mask 主图 UI”暂未实现，后置到下一阶段 UI 重设计。
 
 ## 第五阶段：登录和账号体系方向
 

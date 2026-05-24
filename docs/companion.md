@@ -1,6 +1,6 @@
 # 本地 CLI Companion 方案
 
-更新日期：2026-05-06
+更新日期：2026-05-24
 
 ## 背景
 
@@ -50,8 +50,6 @@ GPT Image Studio 当前是一个本地优先 Web App。用户在网页中配置 
 gpt-image-studio/
   src/
   companion/
-  packages/
-    protocol/
   docs/
 ```
 
@@ -62,8 +60,6 @@ gpt-image-studio/
   apps/
     web/
     companion/
-  packages/
-    protocol/
 ```
 
 拆独立仓库的条件：
@@ -358,9 +354,9 @@ gpt-image-studio logout
 - 新增 `connectionMode`，默认仍为 `direct`。
 - 抽出图片 client 接口。
 - 新增本地助手检测 UI，但可以先隐藏或标记为实验。
-- 起草 `packages/protocol` 的共享类型。
+- 起草本地助手 HTTP 协议类型。当前类型分别保留在 Web App 和 companion 内部，不发布共享协议包。
 
-### 阶段三：本地助手 API key 代理 MVP 🚧 进行中
+### 阶段三：本地助手 API key 代理 MVP ✅ 已完成
 
 - ✅ 新增 `companion/`（pnpm workspace monorepo 结构）。
 - ✅ 实现 `serve` 命令（Fastify HTTP 服务，监听 `127.0.0.1:19750`）。
@@ -368,24 +364,28 @@ gpt-image-studio logout
 - ✅ 实现 `/pair/start` 和 `/pair/confirm`（6 位配对码 + session token）。
 - ✅ 实现 token 校验中间件。
 - ✅ 前端配对 UI（在线检测、配对码输入、已连接/断开状态）。
-- ⬜ 实现 `login`、`status`、`logout` 命令（凭据管理）。
-- ⬜ 实现 `/auth/status`。
-- ⬜ 实现 `/images/generations` 和 `/images/edits`（图片代理）。
-- ⬜ 前端 `localCompanionImagesClient` 对接真实请求。
+- ✅ 实现 `login`、`status`、`logout` 命令（凭据管理）。
+- ✅ 实现 `/auth/status`。
+- ✅ 实现 `/images/generations` 和 `/images/edits`（图片代理）。
+- ✅ 前端 `localCompanionImagesClient` 对接真实请求。
 
-### 阶段四：安全加固
+### 阶段四：基础安全加固 ✅ 已完成
 
-- Origin 白名单。
-- 配对 token 过期和重置。
-- 请求大小限制。
-- 日志脱敏。
-- 本地凭据加密或系统 keychain。
-- 安装、升级和卸载说明。
+- ✅ Origin 白名单配置化。正式渠道默认只允许 `https://gpt-image.honlnk.com`，开发渠道允许本地开发 origin，并支持显式 `--allow-origin`。
+- ✅ 配对 token 过期和重置。session 默认 30 天过期，`unpair` 可清除配对，不影响 API 凭据。
+- ✅ 请求大小限制。JSON 和 multipart 编辑请求有独立 body limit，并限制编辑引用图数量与图片 MIME 类型。
+- ✅ 日志脱敏。服务日志脱敏 Authorization、API key 和图片 base64 字段，不记录请求 body。
+- ✅ 凭据和 session 文件权限收紧为 `0600`。
+
+### 阶段四补充：发布文档 ✅ 已完成
+
+- ✅ 安装、升级和卸载说明。
 
 ### 阶段五：更多 provider 和 OAuth
 
 - 支持多个 provider profile。
 - 支持 provider 选择和模型能力探测。
+- 后置：支持系统 keychain。
 - 评估 ChatGPT/Codex OAuth。
 - 如果做 Codex OAuth，参考 OpenClaw 的 token sink、refresh lock、auth profile order 和 app-server auth bridge 思路，但不要把 token 暴露给网页。
 

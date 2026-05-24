@@ -1,8 +1,8 @@
 import type {
   CompanionHealthResponse,
-  PairStartResponse,
   PairConfirmResponse,
-} from "@gpt-image-studio/protocol";
+  PairStartResponse,
+} from "../types/companion";
 
 export async function checkCompanionHealth(
   url: string,

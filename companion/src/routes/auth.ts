@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import type { CompanionAuthStatus } from "@gpt-image-studio/protocol";
-import { loadCredentials, maskApiKey } from "../credentials";
+import type { CompanionAuthStatus } from "../types.js";
+import { loadCredentials, maskApiKey } from "../credentials.js";
 
 export async function authRoutes(app: FastifyInstance) {
   app.get<{ Reply: CompanionAuthStatus }>("/auth/status", async () => {

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { validateToken } from "../pairingState";
+import { validateToken } from "../pairingState.js";
 
 const PUBLIC_PATHS = ["/health", "/pair/start", "/pair/confirm"];
 
