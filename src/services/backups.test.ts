@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
+import { PROMPT_REWRITE_GUARD_PREFIX } from "./imagesApi";
 import { createStudioBackup, restoreStudioBackup } from "./backups";
 import { STORE_NAMES } from "./db";
 import { createZipArchive } from "./zipArchive";
@@ -64,6 +65,15 @@ const settings: AppSettings = {
   apiKey: "sk-secret",
   apiBaseUrl: "https://api.example.test/v1/images",
   model: "gpt-image-1",
+  promptRewriteGuardEnabled: true,
+  promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
+  promptRewriteGuardHistory: [
+    {
+      id: "prompt-guard-default",
+      text: PROMPT_REWRITE_GUARD_PREFIX,
+      createdAt: "1970-01-01T00:00:00.000Z",
+    },
+  ],
   defaults: {
     size: "1:1",
     resolution: "1k",
@@ -110,6 +120,9 @@ describe("studio backups", () => {
       connectionMode: settings.connectionMode,
       apiBaseUrl: settings.apiBaseUrl,
       model: settings.model,
+      promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
+      promptRewriteGuardText: settings.promptRewriteGuardText,
+      promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
       defaults: settings.defaults,
       storageMode: settings.storageMode,
     });

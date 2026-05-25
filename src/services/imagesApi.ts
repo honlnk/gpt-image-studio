@@ -5,6 +5,8 @@ type GenerateImageInput = {
   apiKey: string;
   model: string;
   prompt: string;
+  promptRewriteGuardEnabled?: boolean;
+  promptRewriteGuardText?: string;
   params: GenerationParams;
 };
 
@@ -28,8 +30,32 @@ type ImageApiResponse = {
   };
 };
 
+export const PROMPT_REWRITE_GUARD_PREFIX =
+  "Use the following text as the complete prompt. Do not rewrite it:";
+
+export function normalizePromptRewriteGuardText(text?: string) {
+  const normalized = text?.trim();
+  return normalized || PROMPT_REWRITE_GUARD_PREFIX;
+}
+
+export function applyPromptRewriteGuard(
+  prompt: string,
+  enabled: boolean,
+  guardText?: string,
+) {
+  if (!enabled) return prompt;
+  const normalizedGuardText = normalizePromptRewriteGuardText(guardText);
+  if (prompt.startsWith(`${normalizedGuardText}\n`)) return prompt;
+  return `${normalizedGuardText}\n${prompt}`;
+}
+
 export async function generateImage(input: GenerateImageInput) {
   const params = imageApiParams(input.model, input.params);
+  const prompt = applyPromptRewriteGuard(
+    input.prompt,
+    input.promptRewriteGuardEnabled ?? false,
+    input.promptRewriteGuardText,
+  );
   const response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl)}/generations`, {
     method: "POST",
     headers: {
@@ -38,7 +64,7 @@ export async function generateImage(input: GenerateImageInput) {
     },
     body: JSON.stringify({
       model: input.model,
-      prompt: input.prompt,
+      prompt,
       ...params,
     }),
   });
@@ -55,8 +81,13 @@ export async function generateImage(input: GenerateImageInput) {
 
 export async function editImage(input: EditImageInput) {
   const body = new FormData();
+  const prompt = applyPromptRewriteGuard(
+    input.prompt,
+    input.promptRewriteGuardEnabled ?? false,
+    input.promptRewriteGuardText,
+  );
   body.append("model", input.model);
-  body.append("prompt", input.prompt);
+  body.append("prompt", prompt);
   input.images.forEach((image) => {
     body.append("image[]", image.blob, image.name);
   });

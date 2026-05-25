@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { editImage, generateImage, getCustomSizeError } from "./imagesApi";
+import {
+  PROMPT_REWRITE_GUARD_PREFIX,
+  editImage,
+  generateImage,
+  getCustomSizeError,
+} from "./imagesApi";
 import type { GenerationParams } from "../types/studio";
 
 const generationParams: GenerationParams = {
@@ -36,6 +41,47 @@ describe("images API requests", () => {
 
     const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(requestBody.response_format).toBe("b64_json");
+  });
+
+  it("adds the prompt rewrite guard when enabled for image generation", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "generated-image" }],
+      }),
+    );
+
+    await generateImage({
+      apiBaseUrl: "https://api.example.test/v1/images",
+      apiKey: "sk-test",
+      model: "gpt-image-2",
+      prompt: "画一张图",
+      promptRewriteGuardEnabled: true,
+      params: generationParams,
+    });
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(requestBody.prompt).toBe(`${PROMPT_REWRITE_GUARD_PREFIX}\n画一张图`);
+  });
+
+  it("uses custom prompt rewrite guard text when provided", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "generated-image" }],
+      }),
+    );
+
+    await generateImage({
+      apiBaseUrl: "https://api.example.test/v1/images",
+      apiKey: "sk-test",
+      model: "gpt-image-2",
+      prompt: "画一张图",
+      promptRewriteGuardEnabled: true,
+      promptRewriteGuardText: "请不要改写下面的提示词：",
+      params: generationParams,
+    });
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(requestBody.prompt).toBe("请不要改写下面的提示词：\n画一张图");
   });
 
   it("converts ratio size presets to calculated dimensions", async () => {
@@ -88,6 +134,32 @@ describe("images API requests", () => {
     const requestBody = fetchMock.mock.calls[0]?.[1]?.body;
     expect(requestBody).toBeInstanceOf(FormData);
     expect((requestBody as FormData).get("response_format")).toBe("b64_json");
+  });
+
+  it("adds the prompt rewrite guard when enabled for image edits", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "edited-image" }],
+      }),
+    );
+
+    await editImage({
+      apiBaseUrl: "https://api.example.test/v1/images",
+      apiKey: "sk-test",
+      model: "gpt-image-2",
+      prompt: "改一下图",
+      promptRewriteGuardEnabled: true,
+      params: generationParams,
+      images: [
+        {
+          blob: new Blob(["image"], { type: "image/png" }),
+          name: "image.png",
+        },
+      ],
+    });
+
+    const requestBody = fetchMock.mock.calls[0]?.[1]?.body as FormData;
+    expect(requestBody.get("prompt")).toBe(`${PROMPT_REWRITE_GUARD_PREFIX}\n改一下图`);
   });
 });
 

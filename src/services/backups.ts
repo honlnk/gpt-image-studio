@@ -2,6 +2,10 @@ import {
   normalizeGenerationParams,
   type StoredGenerationParams,
 } from "./generationParams";
+import {
+  PROMPT_REWRITE_GUARD_PREFIX,
+  normalizePromptRewriteGuardText,
+} from "./imagesApi";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
 import { clearStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
 import { saveSettings, loadSettings } from "./settings";
@@ -34,7 +38,17 @@ type ZipFileMap = Map<string, Blob>;
 type StoredMessage = Omit<Message, "generationParams"> & {
   generationParams?: StoredGenerationParams;
 };
-type StoredBackupSettings = Omit<AppSettings, "apiKey" | "defaults"> & {
+type StoredBackupSettings = Omit<
+  AppSettings,
+  | "apiKey"
+  | "defaults"
+  | "promptRewriteGuardEnabled"
+  | "promptRewriteGuardText"
+  | "promptRewriteGuardHistory"
+> & {
+  promptRewriteGuardEnabled?: boolean;
+  promptRewriteGuardText?: string;
+  promptRewriteGuardHistory?: AppSettings["promptRewriteGuardHistory"];
   defaults: StoredGenerationParams;
 };
 
@@ -86,6 +100,19 @@ export async function restoreStudioBackup(file: File) {
     ? {
         ...data.settings,
         apiKey: currentSettings?.apiKey ?? "",
+        promptRewriteGuardEnabled:
+          data.settings.promptRewriteGuardEnabled ?? true,
+        promptRewriteGuardText: normalizePromptRewriteGuardText(
+          data.settings.promptRewriteGuardText,
+        ),
+        promptRewriteGuardHistory:
+          data.settings.promptRewriteGuardHistory ?? [
+            {
+              id: "prompt-guard-default",
+              text: PROMPT_REWRITE_GUARD_PREFIX,
+              createdAt: new Date(0).toISOString(),
+            },
+          ],
         defaults: normalizeGenerationParams(data.settings.defaults),
       }
     : currentSettings;
