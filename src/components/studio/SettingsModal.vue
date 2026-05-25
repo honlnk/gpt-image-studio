@@ -105,7 +105,7 @@ function confirmPendingAction() {
       <section
         aria-labelledby="settingsTitle"
         aria-modal="true"
-        class="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+        class="flex h-[min(88vh,44rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
         role="dialog"
       >
         <div
