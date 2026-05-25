@@ -91,7 +91,7 @@ export type AppSettings = {
   storageMode: "indexeddb";
 };
 
-export type EditorKey = "size" | "quality" | "background" | "format";
+export type EditorKey = "size" | "background" | "format";
 
 export type ConversationDraft = {
   conversationId: string;

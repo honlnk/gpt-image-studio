@@ -11,7 +11,7 @@ import type { AppSettings } from "../types/studio";
 const currentSettings: AppSettings = {
   connectionMode: "direct",
   apiKey: "sk-current",
-  apiBaseUrl: "https://api.openai.com/v1/images",
+  apiBaseUrl: "https://api.packyapi.com/v1/images",
   model: "gpt-image-2",
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,

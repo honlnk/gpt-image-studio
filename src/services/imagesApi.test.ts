@@ -41,6 +41,7 @@ describe("images API requests", () => {
 
     const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(requestBody.response_format).toBe("b64_json");
+    expect(requestBody.quality).toBeUndefined();
   });
 
   it("adds the prompt rewrite guard when enabled for image generation", async () => {
@@ -134,6 +135,7 @@ describe("images API requests", () => {
     const requestBody = fetchMock.mock.calls[0]?.[1]?.body;
     expect(requestBody).toBeInstanceOf(FormData);
     expect((requestBody as FormData).get("response_format")).toBe("b64_json");
+    expect((requestBody as FormData).has("quality")).toBe(false);
   });
 
   it("adds the prompt rewrite guard when enabled for image edits", async () => {

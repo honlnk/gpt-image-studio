@@ -134,26 +134,6 @@ function selectRatioMode() {
       </div>
 
       <div
-        v-if="activeEditor === 'quality'"
-        class="flex flex-wrap items-center gap-1.5"
-      >
-        <button
-          v-for="opt in settings.qualityOptions"
-          :key="opt.value"
-          :class="[
-            'cursor-pointer rounded border px-1.5 py-0.5 text-xs transition-colors',
-            settings.quality === opt.value
-              ? 'border-gray-400 bg-gray-100 text-gray-900'
-              : 'border-gray-200 text-gray-400 hover:bg-gray-50',
-          ]"
-          type="button"
-          @click="settings.quality = opt.value"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
-
-      <div
         v-if="activeEditor === 'background'"
         class="flex flex-wrap items-center gap-1.5"
       >

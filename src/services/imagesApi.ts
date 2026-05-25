@@ -179,7 +179,6 @@ function imageApiParams(model: string, params: GenerationParams) {
 
   return {
     size: apiSize(params),
-    quality: params.quality,
     background: params.background,
     output_format: params.outputFormat,
     response_format: "b64_json",

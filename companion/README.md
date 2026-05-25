@@ -130,7 +130,7 @@ npx tsx companion/src/main.ts login
 
 交互式输入：
 
-1. **API Base URL** — 回车使用默认值 `https://api.openai.com/v1/images`
+1. **API Base URL** — 回车使用默认值 `https://api.packyapi.com/v1/images`
 2. **API Key** — 输入时不回显
 
 凭据保存到 `~/.gpt-image-studio/credentials.json`。

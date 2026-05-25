@@ -72,7 +72,7 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
   };
 }
 
-function buildParams(params: { size: string; width: number; height: number; quality: string; background: string; outputFormat: string }) {
+function buildParams(params: { size: string; width: number; height: number; background: string; outputFormat: string }) {
   const size = params.size === "auto"
     ? "auto"
     : params.size.includes(":") || params.size === "custom"
@@ -81,7 +81,6 @@ function buildParams(params: { size: string; width: number; height: number; qual
 
   return {
     size,
-    quality: params.quality,
     background: params.background,
     output_format: params.outputFormat,
     response_format: "b64_json",

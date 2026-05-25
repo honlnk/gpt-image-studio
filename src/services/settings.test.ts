@@ -21,7 +21,7 @@ vi.mock("./db", async (importOriginal) => {
 const fullSettings: AppSettings = {
   connectionMode: "direct",
   apiKey: "sk-test",
-  apiBaseUrl: "https://api.openai.com/v1/images",
+  apiBaseUrl: "https://api.packyapi.com/v1/images",
   model: "gpt-image-2",
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
