@@ -17,6 +17,8 @@ import {
   loadConversationDraft,
   saveConversationDraft,
 } from "../../services/conversationDrafts";
+import { saveSettings } from "../../services/settings";
+import { applyUrlSettings } from "../../services/urlSettings";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import { useComposerStore } from "../../stores/composerStore";
 import type { ConversationDraft, GenerationParams } from "../../types/studio";
@@ -26,7 +28,7 @@ const STORAGE_KEYS = {
   draftAttachments: "gpt-image-studio:draft-attachments",
 } as const;
 
-type SettingsTab = "api" | "backup" | "batch";
+type SettingsTab = "api" | "prompt" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 type RenameDialogState = {
   isOpen: boolean;
@@ -100,11 +102,15 @@ export function useStudioViewModel() {
     getApiBaseUrl: () => settings.apiBaseUrl.value,
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
+    getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
+    getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,
     getSessionToken: () => settings.companionSessionToken.value,
     getModel: () => settings.model.value,
+    getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
+    getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
   const imageClient: ImageClient = {
     generate(input) {
@@ -208,6 +214,12 @@ export function useStudioViewModel() {
 
   onMounted(() => {
     void restoreFromStorage().then(async () => {
+      await applyUrlSettings(
+        settings.currentSettings(),
+        saveSettings,
+        settings.applySettings,
+      ).catch(reportStorageError);
+
       const activeConversationId = conversations.activeConversationId.value;
       if (!activeConversationId) return;
 
@@ -403,6 +415,35 @@ export function useStudioViewModel() {
     feedback.notifySuccess("图片已重命名。");
   }
 
+  function persistSettingsChange() {
+    void settings.saveCurrentSettings().catch(reportStorageError);
+  }
+
+  function setPromptRewriteGuardEnabled(value: boolean) {
+    settings.promptRewriteGuardEnabled.value = value;
+    persistSettingsChange();
+  }
+
+  function savePromptRewriteGuardText(text: string) {
+    settings.savePromptRewriteGuardText(text);
+    persistSettingsChange();
+  }
+
+  function restoreDefaultPromptRewriteGuardText() {
+    settings.restoreDefaultPromptRewriteGuardText();
+    persistSettingsChange();
+  }
+
+  function restorePromptRewriteGuardHistoryItem(id: string) {
+    settings.restorePromptRewriteGuardHistoryItem(id);
+    persistSettingsChange();
+  }
+
+  function deletePromptRewriteGuardHistoryItem(id: string) {
+    settings.deletePromptRewriteGuardHistoryItem(id);
+    persistSettingsChange();
+  }
+
   async function deleteConversationWithDraft(id: string) {
     await conversations.deleteConversation(id);
     await deleteConversationDraft(id).catch(reportStorageError);
@@ -513,6 +554,9 @@ export function useStudioViewModel() {
     companionSessionToken: settings.companionSessionToken,
     companionUrl: settings.companionUrl,
     connectionMode: settings.connectionMode,
+    promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
+    promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
+    promptRewriteGuardText: settings.promptRewriteGuardText,
     close: closeSettings,
     conversations: conversations.conversations,
     deleteConversations: deleteConversationsWithDraft,
@@ -525,6 +569,11 @@ export function useStudioViewModel() {
     isOpen: isSettingsOpen,
     messages,
     previewImage: previewImageById,
+    deletePromptRewriteGuardHistoryItem,
+    restoreDefaultPromptRewriteGuardText,
+    restorePromptRewriteGuardHistoryItem,
+    savePromptRewriteGuardText,
+    setPromptRewriteGuardEnabled,
   });
   const preview = proxyRefs({
     close: closePreview,

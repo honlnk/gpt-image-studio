@@ -43,6 +43,35 @@
 | 浏览器直连 | 配置 API Base URL 和 API key，浏览器直接调用接口 |
 | 本地 Companion | 安装本地 CLI 服务，凭据保存在本机，浏览器只与 localhost 通信 |
 
+## 页面嵌入
+
+可以将完整工作台作为 iframe 嵌入到其他页面，并通过 URL 参数预填浏览器直连配置：
+
+```html
+<iframe
+  src="https://image.honlnk.com?apiUrl=https://api.example.com/v1/images&apiKey=sk-xxx&model=gpt-image-2"
+  allow="clipboard-read; clipboard-write"
+></iframe>
+```
+
+支持的参数：
+
+- `apiUrl` 或 `apiBaseUrl`：API Base URL
+- `apiKey`：API key
+- `model`：模型 ID
+
+页面读取这些参数后会保存到本地设置，并从地址栏清除已识别的配置参数，保留其他查询参数。
+
+本仓库提供了一个本地测试页，可用于验证 iframe 嵌入效果：
+
+```bash
+pnpm dev
+```
+
+然后在浏览器打开 `http://127.0.0.1:8888/embed-test.html`。测试页左侧会显示平台地址、API URL、API Key、Model 等输入框；右侧 iframe 默认加载 `http://127.0.0.1:8888/`。如果需要测试线上站点，可以在测试页左侧把平台地址改成 `https://image.honlnk.com`，并确认线上版本已经部署了 URL 参数支持。
+
+跨站 iframe 中的 IndexedDB 可能被浏览器按顶层站点分区，因此测试页里看到的会话和图片数据可能不同于直接打开平台时的数据。
+
 ### 本地 Companion 快速开始
 
 ```bash

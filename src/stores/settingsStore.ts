@@ -6,13 +6,20 @@ import {
   normalizeSizePreset,
   type StoredGenerationParams,
 } from "../services/generationParams";
-import { getCustomSizeError } from "../services/imagesApi";
+import {
+  PROMPT_REWRITE_GUARD_PREFIX,
+  getCustomSizeError,
+  normalizePromptRewriteGuardText,
+} from "../services/imagesApi";
 import { saveSettings } from "../services/settings";
 import { readStorage, writeStorage } from "../shared/localStorage";
+import { isoTimestamp } from "../shared/dateTime";
+import { createId } from "../shared/id";
 import type {
   AppSettings,
   ConnectionMode,
   GenerationParams,
+  PromptRewriteGuardHistoryItem,
   SizeRatio,
   SizeResolution,
 } from "../types/studio";
@@ -42,12 +49,22 @@ const SIZE_RESOLUTION_OPTIONS = [
 const MAX_CUSTOM_DIMENSION = 3840;
 const MAX_CUSTOM_PIXELS = 8294400;
 const SIZE_STEP = 16;
+const MAX_PROMPT_REWRITE_GUARD_HISTORY = 20;
 
 export const useSettingsStore = defineStore("settings", () => {
   const connectionMode = ref<ConnectionMode>("direct");
   const model = ref("gpt-image-2");
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
+  const promptRewriteGuardEnabled = ref(true);
+  const promptRewriteGuardText = ref(PROMPT_REWRITE_GUARD_PREFIX);
+  const promptRewriteGuardHistory = ref<PromptRewriteGuardHistoryItem[]>([
+    {
+      id: "prompt-guard-default",
+      text: PROMPT_REWRITE_GUARD_PREFIX,
+      createdAt: isoTimestamp(0),
+    },
+  ]);
   const companionUrl = ref(
     readStorage(SETTINGS_STORAGE_KEYS.companionUrl, "http://127.0.0.1:19750"),
   );
@@ -141,6 +158,14 @@ export const useSettingsStore = defineStore("settings", () => {
     apiKey.value = settings.apiKey;
     apiBaseUrl.value = settings.apiBaseUrl;
     model.value = settings.model;
+    promptRewriteGuardEnabled.value = settings.promptRewriteGuardEnabled;
+    promptRewriteGuardText.value = normalizePromptRewriteGuardText(
+      settings.promptRewriteGuardText,
+    );
+    promptRewriteGuardHistory.value = normalizePromptRewriteGuardHistory(
+      settings.promptRewriteGuardHistory,
+      promptRewriteGuardText.value,
+    );
     sizeResolution.value = defaults.resolution;
     applySizePreset(defaults.size);
     if (defaults.size === "custom" || isSizeRatio(defaults.size)) {
@@ -158,6 +183,11 @@ export const useSettingsStore = defineStore("settings", () => {
       apiKey: apiKey.value.trim(),
       apiBaseUrl: apiBaseUrl.value.trim(),
       model: model.value,
+      promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
+      promptRewriteGuardText: promptRewriteGuardText.value,
+      promptRewriteGuardHistory: promptRewriteGuardHistory.value.map(
+        toPlainPromptRewriteGuardHistoryItem,
+      ),
       defaults: currentGenerationParams(),
       storageMode: "indexeddb",
     };
@@ -177,6 +207,32 @@ export const useSettingsStore = defineStore("settings", () => {
 
   function saveCurrentSettings() {
     return saveSettings(currentSettings());
+  }
+
+  function savePromptRewriteGuardText(text: string) {
+    const normalizedText = normalizePromptRewriteGuardText(text);
+    promptRewriteGuardText.value = normalizedText;
+    promptRewriteGuardHistory.value = addPromptGuardHistoryItem(
+      promptRewriteGuardHistory.value,
+      normalizedText,
+    );
+  }
+
+  function restoreDefaultPromptRewriteGuardText() {
+    savePromptRewriteGuardText(PROMPT_REWRITE_GUARD_PREFIX);
+  }
+
+  function restorePromptRewriteGuardHistoryItem(id: string) {
+    const item = promptRewriteGuardHistory.value.find((entry) => entry.id === id);
+    if (!item) return false;
+    promptRewriteGuardText.value = normalizePromptRewriteGuardText(item.text);
+    return true;
+  }
+
+  function deletePromptRewriteGuardHistoryItem(id: string) {
+    promptRewriteGuardHistory.value = promptRewriteGuardHistory.value.filter(
+      (item) => item.id !== id,
+    );
   }
 
   watch(companionUrl, (v) => writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v));
@@ -208,6 +264,9 @@ export const useSettingsStore = defineStore("settings", () => {
     imageWidth,
     model,
     outputFormat,
+    promptRewriteGuardEnabled,
+    promptRewriteGuardHistory,
+    promptRewriteGuardText,
     quality,
     qualityLabel,
     qualityOptions,
@@ -216,8 +275,66 @@ export const useSettingsStore = defineStore("settings", () => {
     sizeRatioOptions,
     sizeResolution,
     sizeResolutionOptions,
+    deletePromptRewriteGuardHistoryItem,
+    restoreDefaultPromptRewriteGuardText,
+    restorePromptRewriteGuardHistoryItem,
+    savePromptRewriteGuardText,
   };
 });
+
+function normalizePromptRewriteGuardHistory(
+  history: PromptRewriteGuardHistoryItem[] | undefined,
+  currentText: string,
+) {
+  const seen = new Set<string>();
+  const normalizedItems = (Array.isArray(history) ? history : [])
+    .map((item) => ({
+      id: item.id || createId("prompt-guard"),
+      text: normalizePromptRewriteGuardText(item.text),
+      createdAt: item.createdAt || isoTimestamp(),
+    }))
+    .filter((item) => {
+      if (seen.has(item.text)) return false;
+      seen.add(item.text);
+      return true;
+    });
+
+  if (!seen.has(currentText)) {
+    normalizedItems.unshift({
+      id: createId("prompt-guard"),
+      text: currentText,
+      createdAt: isoTimestamp(),
+    });
+  }
+
+  return normalizedItems.slice(0, MAX_PROMPT_REWRITE_GUARD_HISTORY);
+}
+
+function addPromptGuardHistoryItem(
+  history: PromptRewriteGuardHistoryItem[],
+  text: string,
+) {
+  if (history[0]?.text === text) return history;
+
+  return [
+    {
+      id: createId("prompt-guard"),
+      text,
+      createdAt: isoTimestamp(),
+    },
+    ...history.filter((item) => item.text !== text),
+  ].slice(0, MAX_PROMPT_REWRITE_GUARD_HISTORY);
+}
+
+function toPlainPromptRewriteGuardHistoryItem(
+  item: PromptRewriteGuardHistoryItem,
+): PromptRewriteGuardHistoryItem {
+  return {
+    id: item.id,
+    text: item.text,
+    createdAt: item.createdAt,
+  };
+}
 
 function normalizeBackground(background: GenerationParams["background"]) {
   if (background === "transparent") return "auto";

@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import type { ConnectionMode, Conversation, ImageAsset, Message } from "../../types/studio";
+import type {
+  ConnectionMode,
+  Conversation,
+  ImageAsset,
+  Message,
+  PromptRewriteGuardHistoryItem,
+} from "../../types/studio";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
+import PromptGuardSettingsPanel from "../settings/PromptGuardSettingsPanel.vue";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
 
-type SettingsTab = "api" | "backup" | "batch";
+type SettingsTab = "api" | "prompt" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 
 const props = defineProps<{
@@ -19,6 +26,9 @@ const props = defineProps<{
   companionUrl: string;
   companionSessionToken: string;
   companionPaired: boolean;
+  promptRewriteGuardEnabled: boolean;
+  promptRewriteGuardText: string;
+  promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
   conversations: Conversation[];
   images: ImageAsset[];
   messages: Message[];
@@ -35,6 +45,12 @@ const emit = defineEmits<{
   "update:apiKey": [value: string];
   "update:apiBaseUrl": [value: string];
   "update:companionSessionToken": [value: string];
+  "update:promptRewriteGuardEnabled": [value: boolean];
+  savePromptRewriteGuardText: [value: string];
+  restoreDefaultPromptRewriteGuardText: [];
+  restorePromptRewriteGuardHistoryItem: [id: string];
+  deletePromptRewriteGuardHistoryItem: [id: string];
+  setPromptRewriteGuardEnabled: [value: boolean];
 }>();
 
 const activeTab = ref<SettingsTab>("api");
@@ -43,6 +59,7 @@ const isRestoreConfirmOpen = ref(false);
 
 const tabs: { key: SettingsTab; label: string }[] = [
   { key: "api", label: "接口" },
+  { key: "prompt", label: "提示词保护" },
   { key: "backup", label: "数据备份" },
   { key: "batch", label: "批量操作" },
 ];
@@ -150,6 +167,18 @@ function confirmPendingAction() {
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
               @update:api-key="emit('update:apiKey', $event)"
               @update:companion-session-token="emit('update:companionSessionToken', $event)"
+            />
+
+            <PromptGuardSettingsPanel
+              v-else-if="activeTab === 'prompt'"
+              :enabled="promptRewriteGuardEnabled"
+              :history="promptRewriteGuardHistory"
+              :text="promptRewriteGuardText"
+              @delete-history="emit('deletePromptRewriteGuardHistoryItem', $event)"
+              @restore-default="emit('restoreDefaultPromptRewriteGuardText')"
+              @restore-history="emit('restorePromptRewriteGuardHistoryItem', $event)"
+              @save-text="emit('savePromptRewriteGuardText', $event)"
+              @update:enabled="emit('setPromptRewriteGuardEnabled', $event)"
             />
 
             <BackupPanel

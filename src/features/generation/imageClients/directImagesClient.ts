@@ -5,6 +5,8 @@ type DirectClientConfig = {
   getApiBaseUrl: () => string;
   getApiKey: () => string;
   getModel: () => string;
+  getPromptRewriteGuardEnabled: () => boolean;
+  getPromptRewriteGuardText: () => string;
 };
 
 export function createDirectImagesClient(config: DirectClientConfig): ImageClient {
@@ -27,6 +29,8 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         apiKey,
         model,
         prompt: input.prompt,
+        promptRewriteGuardEnabled: config.getPromptRewriteGuardEnabled(),
+        promptRewriteGuardText: config.getPromptRewriteGuardText(),
         params: input.params,
       });
     },
@@ -48,6 +52,8 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         apiKey,
         model,
         prompt: input.prompt,
+        promptRewriteGuardEnabled: config.getPromptRewriteGuardEnabled(),
+        promptRewriteGuardText: config.getPromptRewriteGuardText(),
         params: input.params,
         images: input.images,
         mask: input.mask,

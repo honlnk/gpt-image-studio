@@ -2,7 +2,15 @@ import {
   normalizeGenerationParams,
   type StoredGenerationParams,
 } from "./generationParams";
-import type { AppSettings, ConnectionMode } from "../types/studio";
+import {
+  PROMPT_REWRITE_GUARD_PREFIX,
+  normalizePromptRewriteGuardText,
+} from "./imagesApi";
+import type {
+  AppSettings,
+  ConnectionMode,
+  PromptRewriteGuardHistoryItem,
+} from "../types/studio";
 import { getFromStore, putInStore, STORE_NAMES } from "./db";
 
 const SETTINGS_KEY = "app";
@@ -30,15 +38,37 @@ export function saveSettings(settings: AppSettings) {
   });
 }
 
-type StoredAppSettings = Omit<AppSettings, "connectionMode"> & {
+type StoredAppSettings = Omit<
+  AppSettings,
+  | "connectionMode"
+  | "promptRewriteGuardEnabled"
+  | "promptRewriteGuardText"
+  | "promptRewriteGuardHistory"
+> & {
   connectionMode?: ConnectionMode;
+  promptRewriteGuardEnabled?: boolean;
+  promptRewriteGuardText?: string;
+  promptRewriteGuardHistory?: PromptRewriteGuardHistoryItem[];
   defaults: StoredGenerationParams;
 };
 
 function normalizeSettings(settings: StoredAppSettings): AppSettings {
+  const promptRewriteGuardText = normalizePromptRewriteGuardText(
+    settings.promptRewriteGuardText,
+  );
   return {
     ...settings,
     connectionMode: settings.connectionMode ?? "direct",
+    promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled ?? true,
+    promptRewriteGuardText,
+    promptRewriteGuardHistory:
+      settings.promptRewriteGuardHistory ?? [
+        {
+          id: "prompt-guard-default",
+          text: PROMPT_REWRITE_GUARD_PREFIX,
+          createdAt: new Date(0).toISOString(),
+        },
+      ],
     defaults: normalizeGenerationParams(settings.defaults),
   };
 }

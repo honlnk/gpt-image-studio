@@ -18,6 +18,9 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
       refs.apiKey,
       refs.apiBaseUrl,
       refs.model,
+      refs.promptRewriteGuardEnabled,
+      refs.promptRewriteGuardText,
+      refs.promptRewriteGuardHistory,
       refs.activeSizePreset,
       refs.sizeResolution,
       refs.imageWidth,
@@ -39,6 +42,13 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
     applySizeResolution: settings.applySizeResolution,
     currentGenerationParams: settings.currentGenerationParams,
     currentSettings: settings.currentSettings,
+    deletePromptRewriteGuardHistoryItem:
+      settings.deletePromptRewriteGuardHistoryItem,
+    restoreDefaultPromptRewriteGuardText:
+      settings.restoreDefaultPromptRewriteGuardText,
+    restorePromptRewriteGuardHistoryItem:
+      settings.restorePromptRewriteGuardHistoryItem,
+    savePromptRewriteGuardText: settings.savePromptRewriteGuardText,
     saveCurrentSettings: settings.saveCurrentSettings,
   };
 }

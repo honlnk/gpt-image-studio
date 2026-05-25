@@ -73,11 +73,20 @@ export type GenerationParams = {
 
 export type ConnectionMode = "direct" | "localCompanion";
 
+export type PromptRewriteGuardHistoryItem = {
+  id: string;
+  text: string;
+  createdAt: string;
+};
+
 export type AppSettings = {
   connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
   model: string;
+  promptRewriteGuardEnabled: boolean;
+  promptRewriteGuardText: string;
+  promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
   defaults: GenerationParams;
   storageMode: "indexeddb";
 };

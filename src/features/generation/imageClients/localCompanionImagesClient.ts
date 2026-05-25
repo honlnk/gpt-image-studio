@@ -1,9 +1,12 @@
+import { applyPromptRewriteGuard } from "../../../services/imagesApi";
 import type { ImageClient } from "./imageClient";
 
 type CompanionClientConfig = {
   getCompanionUrl: () => string;
   getSessionToken: () => string;
   getModel: () => string;
+  getPromptRewriteGuardEnabled: () => boolean;
+  getPromptRewriteGuardText: () => string;
 };
 
 export function createLocalCompanionImagesClient(config: CompanionClientConfig): ImageClient {
@@ -19,12 +22,17 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
     async generate(input) {
       const url = `${config.getCompanionUrl()}/images/generations`;
       const model = config.getModel();
+      const prompt = applyPromptRewriteGuard(
+        input.prompt,
+        config.getPromptRewriteGuardEnabled(),
+        config.getPromptRewriteGuardText(),
+      );
 
       const params = buildParams(input.params);
       const response = await fetch(url, {
         method: "POST",
         headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ model, prompt: input.prompt, ...params }),
+        body: JSON.stringify({ model, prompt, ...params }),
       });
 
       return extractB64Json(response);
@@ -33,10 +41,15 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
     async edit(input) {
       const url = `${config.getCompanionUrl()}/images/edits`;
       const model = config.getModel();
+      const prompt = applyPromptRewriteGuard(
+        input.prompt,
+        config.getPromptRewriteGuardEnabled(),
+        config.getPromptRewriteGuardText(),
+      );
 
       const body = new FormData();
       body.append("model", model);
-      body.append("prompt", input.prompt);
+      body.append("prompt", prompt);
       input.images.forEach((image) => {
         body.append("image[]", image.blob, image.name);
       });
