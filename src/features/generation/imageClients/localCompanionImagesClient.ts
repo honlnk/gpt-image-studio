@@ -1,5 +1,5 @@
 import { applyPromptRewriteGuard } from "../../../services/imagesApi";
-import type { ImageClient } from "./imageClient";
+import type { ImageClient, ImageClientResult } from "./imageClient";
 
 type CompanionClientConfig = {
   getCompanionUrl: () => string;
@@ -87,7 +87,7 @@ function buildParams(params: { size: string; width: number; height: number; back
   };
 }
 
-async function extractB64Json(response: Response): Promise<string> {
+async function extractB64Json(response: Response): Promise<ImageClientResult> {
   const text = await response.text();
   const payload = text ? JSON.parse(text) : {};
 
@@ -100,5 +100,8 @@ async function extractB64Json(response: Response): Promise<string> {
   if (!imageData) {
     throw new Error("响应中没有 data[0].b64_json。");
   }
-  return imageData;
+  return {
+    b64Json: imageData,
+    revisedPrompt: payload.data?.[0]?.revised_prompt,
+  };
 }

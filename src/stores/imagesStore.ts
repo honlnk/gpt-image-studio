@@ -337,6 +337,7 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     conversationId: imageAsset.conversationId,
     messageId: imageAsset.messageId,
     prompt: imageAsset.prompt,
+    revisedPrompt: imageAsset.revisedPrompt,
     referencedImageIds: imageAsset.referencedImageIds
       ? [...imageAsset.referencedImageIds]
       : undefined,

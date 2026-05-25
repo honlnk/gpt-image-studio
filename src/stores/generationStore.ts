@@ -237,7 +237,7 @@ export const useGenerationStore = defineStore("generation", () => {
   async function runImageRequest(job: GenerationJob) {
     try {
       const params = job.generationParams;
-      const imageData = job.referencedImageIds.length
+      const imageResult = job.referencedImageIds.length
         ? await requestImageEdit(
             job.prompt,
             job.referencedImageIds,
@@ -252,7 +252,7 @@ export const useGenerationStore = defineStore("generation", () => {
       const now = Date.now();
       const createdAt = isoTimestamp(now);
       const mimeType = `image/${params.outputFormat}`;
-      const blob = base64ToBlob(imageData, mimeType);
+      const blob = base64ToBlob(imageResult.b64Json, mimeType);
       const dimensions = await readImageDimensions(blob);
       const imageId = createId("img");
       const blobKey = createId("blob");
@@ -272,6 +272,7 @@ export const useGenerationStore = defineStore("generation", () => {
           ? job.assistantMessageId
           : undefined,
         prompt: job.prompt,
+        revisedPrompt: imageResult.revisedPrompt,
         referencedImageIds: job.referencedImageIds,
         editSourceImageId: job.editSourceImageId,
         createdAt,
@@ -561,6 +562,7 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
     conversationId: imageAsset.conversationId,
     messageId: imageAsset.messageId,
     prompt: imageAsset.prompt,
+    revisedPrompt: imageAsset.revisedPrompt,
     referencedImageIds: imageAsset.referencedImageIds
       ? [...imageAsset.referencedImageIds]
       : undefined,

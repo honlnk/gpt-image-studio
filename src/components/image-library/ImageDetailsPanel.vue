@@ -127,11 +127,25 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
       </div>
     </dl>
 
-    <div class="mt-3">
-      <div class="text-xs text-gray-400">Prompt</div>
-      <p class="mt-1 line-clamp-3 text-xs leading-relaxed text-gray-600">
-        {{ image.prompt }}
-      </p>
+    <div class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+      <div class="min-w-0">
+        <div class="text-xs text-gray-400">原始 Prompt</div>
+        <p class="mt-1 line-clamp-3 text-xs leading-relaxed text-gray-600">
+          {{ image.prompt }}
+        </p>
+      </div>
+      <div class="min-w-0">
+        <div class="text-xs text-gray-400">API 改写 Prompt</div>
+        <p
+          v-if="image.revisedPrompt"
+          class="mt-1 line-clamp-3 text-xs leading-relaxed text-gray-600"
+        >
+          {{ image.revisedPrompt }}
+        </p>
+        <p v-else class="mt-1 text-xs leading-relaxed text-gray-400">
+          未返回
+        </p>
+      </div>
     </div>
   </div>
 </template>
