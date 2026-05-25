@@ -64,6 +64,7 @@ const settings: AppSettings = {
   connectionMode: "direct",
   apiKey: "sk-secret",
   apiBaseUrl: "https://api.example.test/v1/images",
+  apiBaseUrlMode: "full",
   model: "gpt-image-1",
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
@@ -119,6 +120,7 @@ describe("studio backups", () => {
     expect(data.settings).toEqual({
       connectionMode: settings.connectionMode,
       apiBaseUrl: settings.apiBaseUrl,
+      apiBaseUrlMode: settings.apiBaseUrlMode,
       model: settings.model,
       promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
       promptRewriteGuardText: settings.promptRewriteGuardText,
@@ -176,6 +178,7 @@ describe("studio backups", () => {
         settings: {
           connectionMode: settings.connectionMode,
           apiBaseUrl: settings.apiBaseUrl,
+          apiBaseUrlMode: settings.apiBaseUrlMode,
           model: settings.model,
           defaults: settings.defaults,
           storageMode: settings.storageMode,

@@ -1,5 +1,5 @@
-import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
+import { computed, ref, watch } from "vue";
 import {
   isSizeRatio,
   normalizeGenerationParams,
@@ -12,9 +12,9 @@ import {
   normalizePromptRewriteGuardText,
 } from "../services/imagesApi";
 import { saveSettings } from "../services/settings";
-import { readStorage, writeStorage } from "../shared/localStorage";
 import { isoTimestamp } from "../shared/dateTime";
 import { createId } from "../shared/id";
+import { readStorage, writeStorage } from "../shared/localStorage";
 import type {
   AppSettings,
   ConnectionMode,
@@ -56,6 +56,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const model = ref("gpt-image-2");
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
+  const apiBaseUrlMode = ref<AppSettings["apiBaseUrlMode"]>("origin");
   const promptRewriteGuardEnabled = ref(true);
   const promptRewriteGuardText = ref(PROMPT_REWRITE_GUARD_PREFIX);
   const promptRewriteGuardHistory = ref<PromptRewriteGuardHistoryItem[]>([
@@ -156,7 +157,8 @@ export const useSettingsStore = defineStore("settings", () => {
     const defaults = normalizeGenerationParams(settings.defaults);
     connectionMode.value = settings.connectionMode;
     apiKey.value = settings.apiKey;
-    apiBaseUrl.value = settings.apiBaseUrl;
+    apiBaseUrlMode.value = settings.apiBaseUrlMode;
+    apiBaseUrl.value = displayApiBaseUrl(settings.apiBaseUrl, settings.apiBaseUrlMode);
     model.value = settings.model;
     promptRewriteGuardEnabled.value = settings.promptRewriteGuardEnabled;
     promptRewriteGuardText.value = normalizePromptRewriteGuardText(
@@ -182,6 +184,7 @@ export const useSettingsStore = defineStore("settings", () => {
       connectionMode: connectionMode.value,
       apiKey: apiKey.value.trim(),
       apiBaseUrl: apiBaseUrl.value.trim(),
+      apiBaseUrlMode: apiBaseUrlMode.value,
       model: model.value,
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
       promptRewriteGuardText: promptRewriteGuardText.value,
@@ -223,7 +226,9 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   function restorePromptRewriteGuardHistoryItem(id: string) {
-    const item = promptRewriteGuardHistory.value.find((entry) => entry.id === id);
+    const item = promptRewriteGuardHistory.value.find(
+      (entry) => entry.id === id,
+    );
     if (!item) return false;
     promptRewriteGuardText.value = normalizePromptRewriteGuardText(item.text);
     return true;
@@ -235,7 +240,9 @@ export const useSettingsStore = defineStore("settings", () => {
     );
   }
 
-  watch(companionUrl, (v) => writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v));
+  watch(companionUrl, (v) =>
+    writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v),
+  );
   watch(companionSessionToken, (v) =>
     writeStorage(SETTINGS_STORAGE_KEYS.companionSessionToken, v),
   );
@@ -243,6 +250,7 @@ export const useSettingsStore = defineStore("settings", () => {
   return {
     activeSizePreset,
     apiBaseUrl,
+    apiBaseUrlMode,
     apiKey,
     companionPaired,
     companionSessionToken,
@@ -340,6 +348,15 @@ function normalizeBackground(background: GenerationParams["background"]) {
   if (background === "transparent") return "auto";
 
   return background;
+}
+
+function displayApiBaseUrl(apiBaseUrl: string, mode: AppSettings["apiBaseUrlMode"]) {
+  if (mode === "full") return apiBaseUrl;
+  return stripImagesApiPath(apiBaseUrl);
+}
+
+function stripImagesApiPath(apiBaseUrl: string) {
+  return apiBaseUrl.trim().replace(/\/+$/, "").replace(/\/v1\/images$/i, "");
 }
 
 function dimensionsForRatio(ratio: SizeRatio, resolution: SizeResolution) {

@@ -21,7 +21,8 @@ vi.mock("./db", async (importOriginal) => {
 const fullSettings: AppSettings = {
   connectionMode: "direct",
   apiKey: "sk-test",
-  apiBaseUrl: "https://api.openai.com/v1/images",
+  apiBaseUrl: "https://api.packyapi.com/v1/images",
+  apiBaseUrlMode: "full",
   model: "gpt-image-2",
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
@@ -64,6 +65,7 @@ describe("settings service", () => {
   it("defaults old settings to direct connection mode and enabled prompt guard", async () => {
     const {
       connectionMode: _ignoredConnectionMode,
+      apiBaseUrlMode: _ignoredApiBaseUrlMode,
       promptRewriteGuardEnabled: _ignoredPromptRewriteGuardEnabled,
       promptRewriteGuardText: _ignoredPromptRewriteGuardText,
       promptRewriteGuardHistory: _ignoredPromptRewriteGuardHistory,
@@ -77,6 +79,7 @@ describe("settings service", () => {
     const result = await loadSettings();
 
     expect(result?.connectionMode).toBe("direct");
+    expect(result?.apiBaseUrlMode).toBe("origin");
     expect(result?.promptRewriteGuardEnabled).toBe(true);
     expect(result?.promptRewriteGuardText).toBe(PROMPT_REWRITE_GUARD_PREFIX);
     expect(result?.promptRewriteGuardHistory).toEqual([

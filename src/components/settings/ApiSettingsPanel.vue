@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, onUnmounted, watch } from "vue";
 import type { ConnectionMode } from "../../types/studio";
 import {
   checkCompanionHealth,
@@ -13,6 +13,7 @@ import type { CompanionAuthStatus, CompanionHealthResponse } from "../../types/c
 const props = defineProps<{
   connectionMode: ConnectionMode;
   apiBaseUrl: string;
+  apiBaseUrlMode: "origin" | "full";
   apiKey: string;
   companionUrl: string;
   companionSessionToken: string;
@@ -22,6 +23,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:connectionMode": [value: ConnectionMode];
   "update:apiBaseUrl": [value: string];
+  "update:apiBaseUrlMode": [value: "origin" | "full"];
   "update:apiKey": [value: string];
   "update:companionSessionToken": [value: string];
 }>();
@@ -32,6 +34,9 @@ const companionAuthStatus = ref<CompanionAuthStatus | null>(null);
 const pairingInProgress = ref(false);
 const pairingError = ref("");
 const pairingCodeInput = ref("");
+const apiKeyVisible = ref(false);
+const apiKeyCopyStatus = ref<"idle" | "copied" | "failed">("idle");
+let apiKeyCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function checkStatus() {
   const health = await checkCompanionHealth(props.companionUrl);
@@ -95,9 +100,46 @@ function cancelPairing() {
   pairingError.value = "";
 }
 
+function normalizeApiBaseUrlInput(value: string) {
+  return value.trim().replace(/\/+$/, "");
+}
+
+function resetApiKeyCopyStatusSoon() {
+  if (apiKeyCopyStatusTimer) {
+    clearTimeout(apiKeyCopyStatusTimer);
+  }
+  apiKeyCopyStatusTimer = setTimeout(() => {
+    apiKeyCopyStatus.value = "idle";
+  }, 1600);
+}
+
+function toggleApiKeyVisibility() {
+  apiKeyVisible.value = !apiKeyVisible.value;
+  apiKeyCopyStatus.value = "idle";
+}
+
+async function copyApiKey() {
+  if (!apiKeyVisible.value || !props.apiKey) return;
+
+  try {
+    await navigator.clipboard.writeText(props.apiKey);
+    apiKeyCopyStatus.value = "copied";
+  } catch {
+    apiKeyCopyStatus.value = "failed";
+  }
+
+  resetApiKeyCopyStatusSoon();
+}
+
 onMounted(() => {
   if (props.connectionMode === "localCompanion") {
     checkStatus();
+  }
+});
+
+onUnmounted(() => {
+  if (apiKeyCopyStatusTimer) {
+    clearTimeout(apiKeyCopyStatusTimer);
   }
 });
 
@@ -169,39 +211,126 @@ watch(
           >
             OpenAI API key
           </label>
-          <input
-            id="apiKey"
-            :value="apiKey"
-            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-gray-500"
-            autocomplete="off"
-            placeholder="sk-..."
-            type="password"
-            @input="
-              emit('update:apiKey', ($event.target as HTMLInputElement).value)
-            "
-          />
+          <div class="flex rounded-lg border border-gray-300 bg-white focus-within:border-gray-500">
+            <input
+              id="apiKey"
+              :value="apiKey"
+              class="min-w-0 flex-1 rounded-l-lg bg-transparent px-3 py-2 text-sm text-gray-900 outline-none"
+              autocomplete="off"
+              placeholder="sk-..."
+              :type="apiKeyVisible ? 'text' : 'password'"
+              @input="
+                emit('update:apiKey', ($event.target as HTMLInputElement).value)
+              "
+            />
+            <button
+              class="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center border-l border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+              type="button"
+              :aria-label="apiKeyVisible ? '隐藏 API key' : '显示 API key'"
+              :title="apiKeyVisible ? '隐藏 API key' : '显示 API key'"
+              @click="toggleApiKeyVisibility"
+            >
+              <svg
+                v-if="apiKeyVisible"
+                aria-hidden="true"
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <svg
+                v-else
+                aria-hidden="true"
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <path d="m3 3 18 18" />
+                <path d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58" />
+                <path d="M9.88 4.24A10.38 10.38 0 0 1 12 4c7 0 10 8 10 8a15.51 15.51 0 0 1-2.45 3.67" />
+                <path d="M6.61 6.61A15.8 15.8 0 0 0 2 12s3 8 10 8a10.4 10.4 0 0 0 5.39-1.61" />
+              </svg>
+            </button>
+            <button
+              v-if="apiKeyVisible"
+              class="flex h-10 shrink-0 cursor-pointer items-center justify-center border-l border-gray-200 px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:text-gray-300"
+              type="button"
+              :disabled="!apiKey"
+              :aria-label="apiKeyCopyStatus === 'copied' ? 'API key 已复制' : '复制 API key'"
+              :title="apiKeyCopyStatus === 'copied' ? '已复制' : '复制 API key'"
+              @click="copyApiKey"
+            >
+              {{ apiKeyCopyStatus === "copied" ? "已复制" : "复制" }}
+            </button>
+          </div>
+          <p
+            v-if="apiKeyCopyStatus === 'failed'"
+            class="mt-1.5 text-xs text-red-500"
+          >
+            复制失败，请手动选择复制。
+          </p>
         </div>
 
         <div>
-          <label
-            class="mb-1 block text-sm font-medium text-gray-700"
-            for="apiBaseUrl"
-          >
-            API Base URL
-          </label>
-          <input
-            id="apiBaseUrl"
-            :value="apiBaseUrl"
-            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-gray-500"
-            placeholder="https://api.openai.com/v1/images"
-            type="url"
-            @input="
-              emit(
-                'update:apiBaseUrl',
-                ($event.target as HTMLInputElement).value,
-              )
-            "
-          />
+          <div class="mb-1 flex items-center justify-between gap-3">
+            <label
+              class="block text-sm font-medium text-gray-700"
+              for="apiBaseUrl"
+            >
+              API 地址
+            </label>
+            <label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-500">
+              <input
+                class="h-3.5 w-3.5 cursor-pointer accent-gray-900"
+                type="checkbox"
+                :checked="apiBaseUrlMode === 'full'"
+                @change="
+                  emit(
+                    'update:apiBaseUrlMode',
+                    ($event.target as HTMLInputElement).checked ? 'full' : 'origin',
+                  )
+                "
+              />
+              输入完整 API Base URL
+            </label>
+          </div>
+          <div class="flex rounded-lg border border-gray-300 bg-white focus-within:border-gray-500">
+            <input
+              id="apiBaseUrl"
+              :value="apiBaseUrl"
+              class="min-w-0 flex-1 rounded-l-lg bg-transparent px-3 py-2 text-sm text-gray-900 outline-none"
+              :placeholder="apiBaseUrlMode === 'full' ? 'https://api.packyapi.com/v1/images' : 'https://api.packyapi.com'"
+              type="url"
+              @input="
+                emit(
+                  'update:apiBaseUrl',
+                  ($event.target as HTMLInputElement).value,
+                )
+              "
+              @blur="
+                emit(
+                  'update:apiBaseUrl',
+                  normalizeApiBaseUrlInput(($event.target as HTMLInputElement).value),
+                )
+              "
+            />
+            <span
+              v-if="apiBaseUrlMode === 'origin'"
+              class="flex shrink-0 items-center border-l border-gray-200 px-3 text-sm font-medium text-red-500"
+            >
+              /v1/images
+            </span>
+          </div>
           <a
             href="https://www.packyapi.com/register?aff=mUWS"
             class="mt-1.5 inline-block cursor-pointer text-xs text-gray-400 transition-colors hover:text-gray-600"

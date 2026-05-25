@@ -32,6 +32,7 @@ describe("images API requests", () => {
     await expect(
       generateImage({
         apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
         apiKey: "sk-test",
         model: "gpt-image-2",
         prompt: "画一张图",
@@ -40,7 +41,47 @@ describe("images API requests", () => {
     ).resolves.toBe("generated-image");
 
     const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.example.test/v1/images/generations");
     expect(requestBody.response_format).toBe("b64_json");
+    expect(requestBody.quality).toBeUndefined();
+  });
+
+  it("appends the Images API path when API base URL is configured as an origin", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "generated-image" }],
+      }),
+    );
+
+    await generateImage({
+      apiBaseUrl: "https://api.example.test",
+      apiBaseUrlMode: "origin",
+      apiKey: "sk-test",
+      model: "gpt-image-2",
+      prompt: "画一张图",
+      params: generationParams,
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.example.test/v1/images/generations");
+  });
+
+  it("normalizes extra trailing slashes before appending the Images API path", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "generated-image" }],
+      }),
+    );
+
+    await generateImage({
+      apiBaseUrl: "https://api.example.test///",
+      apiBaseUrlMode: "origin",
+      apiKey: "sk-test",
+      model: "gpt-image-2",
+      prompt: "画一张图",
+      params: generationParams,
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.example.test/v1/images/generations");
   });
 
   it("adds the prompt rewrite guard when enabled for image generation", async () => {
@@ -52,6 +93,7 @@ describe("images API requests", () => {
 
     await generateImage({
       apiBaseUrl: "https://api.example.test/v1/images",
+      apiBaseUrlMode: "full",
       apiKey: "sk-test",
       model: "gpt-image-2",
       prompt: "画一张图",
@@ -72,6 +114,7 @@ describe("images API requests", () => {
 
     await generateImage({
       apiBaseUrl: "https://api.example.test/v1/images",
+      apiBaseUrlMode: "full",
       apiKey: "sk-test",
       model: "gpt-image-2",
       prompt: "画一张图",
@@ -93,6 +136,7 @@ describe("images API requests", () => {
 
     await generateImage({
       apiBaseUrl: "https://api.example.test/v1/images",
+      apiBaseUrlMode: "full",
       apiKey: "sk-test",
       model: "gpt-image-2",
       prompt: "画一张图",
@@ -118,6 +162,7 @@ describe("images API requests", () => {
     await expect(
       editImage({
         apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
         apiKey: "sk-test",
         model: "gpt-image-2",
         prompt: "改一下图",
@@ -134,6 +179,7 @@ describe("images API requests", () => {
     const requestBody = fetchMock.mock.calls[0]?.[1]?.body;
     expect(requestBody).toBeInstanceOf(FormData);
     expect((requestBody as FormData).get("response_format")).toBe("b64_json");
+    expect((requestBody as FormData).has("quality")).toBe(false);
   });
 
   it("adds the prompt rewrite guard when enabled for image edits", async () => {
@@ -145,6 +191,7 @@ describe("images API requests", () => {
 
     await editImage({
       apiBaseUrl: "https://api.example.test/v1/images",
+      apiBaseUrlMode: "full",
       apiKey: "sk-test",
       model: "gpt-image-2",
       prompt: "改一下图",

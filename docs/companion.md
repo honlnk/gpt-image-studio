@@ -173,7 +173,6 @@ POST /images/edits
 - `model`
 - `prompt`
 - `size`
-- `quality`
 - `background`
 - `output_format`
 
@@ -187,7 +186,6 @@ POST /images/edits
 - `prompt`
 - `image[]`
 - `size`
-- `quality`
 - `background`
 - `output_format`
 

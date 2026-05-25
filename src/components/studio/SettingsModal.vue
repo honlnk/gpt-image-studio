@@ -23,6 +23,7 @@ const props = defineProps<{
   connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
+  apiBaseUrlMode: "origin" | "full";
   companionUrl: string;
   companionSessionToken: string;
   companionPaired: boolean;
@@ -44,6 +45,7 @@ const emit = defineEmits<{
   "update:connectionMode": [value: ConnectionMode];
   "update:apiKey": [value: string];
   "update:apiBaseUrl": [value: string];
+  "update:apiBaseUrlMode": [value: "origin" | "full"];
   "update:companionSessionToken": [value: string];
   "update:promptRewriteGuardEnabled": [value: boolean];
   savePromptRewriteGuardText: [value: string];
@@ -103,7 +105,7 @@ function confirmPendingAction() {
       <section
         aria-labelledby="settingsTitle"
         aria-modal="true"
-        class="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+        class="flex h-[min(88vh,44rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
         role="dialog"
       >
         <div
@@ -159,12 +161,14 @@ function confirmPendingAction() {
               v-if="activeTab === 'api'"
               :connection-mode="connectionMode"
               :api-base-url="apiBaseUrl"
+              :api-base-url-mode="apiBaseUrlMode"
               :api-key="apiKey"
               :companion-url="companionUrl"
               :companion-session-token="companionSessionToken"
               :companion-paired="companionPaired"
               @update:connection-mode="emit('update:connectionMode', $event)"
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
+              @update:api-base-url-mode="emit('update:apiBaseUrlMode', $event)"
               @update:api-key="emit('update:apiKey', $event)"
               @update:companion-session-token="emit('update:companionSessionToken', $event)"
             />

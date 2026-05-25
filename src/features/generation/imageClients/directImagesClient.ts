@@ -3,6 +3,7 @@ import type { ImageClient } from "./imageClient";
 
 type DirectClientConfig = {
   getApiBaseUrl: () => string;
+  getApiBaseUrlMode: () => "origin" | "full";
   getApiKey: () => string;
   getModel: () => string;
   getPromptRewriteGuardEnabled: () => boolean;
@@ -26,6 +27,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
 
       return generateImage({
         apiBaseUrl,
+        apiBaseUrlMode: config.getApiBaseUrlMode(),
         apiKey,
         model,
         prompt: input.prompt,
@@ -49,6 +51,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
 
       return editImage({
         apiBaseUrl,
+        apiBaseUrlMode: config.getApiBaseUrlMode(),
         apiKey,
         model,
         prompt: input.prompt,

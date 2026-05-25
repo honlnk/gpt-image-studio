@@ -61,7 +61,9 @@
         font-weight: 600;
       }
 
-      input {
+      input,
+      select,
+      textarea {
         width: 100%;
         border: 1px solid #d6d3d1;
         border-radius: 8px;
@@ -73,9 +75,27 @@
         padding: 9px 10px;
       }
 
-      input:focus {
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
         border-color: #57534e;
         box-shadow: 0 0 0 3px rgb(87 83 78 / 12%);
+      }
+
+      .inline-label {
+        align-items: center;
+        display: flex;
+        flex-direction: row;
+        gap: 8px;
+      }
+
+      .inline-label input {
+        width: auto;
       }
 
       button {
@@ -166,7 +186,7 @@
 
           <label>
             API URL
-            <input id="apiUrl" value="https://api.openai.com/v1/images" />
+            <input id="apiUrl" value="https://api.packyapi.com/v1/images" />
           </label>
 
           <label>
@@ -177,6 +197,54 @@
           <label>
             Model
             <input id="model" value="gpt-image-2" />
+          </label>
+
+          <label>
+            Prompt
+            <textarea id="prompt">生成一张白底商品主图</textarea>
+          </label>
+
+          <label>
+            尺寸
+            <select id="size">
+              <option value="auto">auto</option>
+              <option value="1:1" selected>1:1</option>
+              <option value="16:9">16:9</option>
+              <option value="9:16">9:16</option>
+              <option value="custom">custom</option>
+            </select>
+          </label>
+
+          <label>
+            分辨率
+            <select id="resolution">
+              <option value="1k" selected>1k</option>
+              <option value="2k">2k</option>
+              <option value="4k">4k</option>
+            </select>
+          </label>
+
+          <label>
+            背景
+            <select id="background">
+              <option value="auto" selected>auto</option>
+              <option value="opaque">opaque</option>
+              <option value="transparent">transparent</option>
+            </select>
+          </label>
+
+          <label>
+            输出格式
+            <select id="outputFormat">
+              <option value="png" selected>png</option>
+              <option value="webp">webp</option>
+              <option value="jpeg">jpeg</option>
+            </select>
+          </label>
+
+          <label class="inline-label">
+            <input id="useSettingsParam" type="checkbox" checked />
+            使用 settings JSON 参数
           </label>
 
           <button type="submit">刷新 iframe</button>
@@ -207,13 +275,37 @@
       const apiUrl = document.querySelector("#apiUrl");
       const apiKey = document.querySelector("#apiKey");
       const model = document.querySelector("#model");
+      const prompt = document.querySelector("#prompt");
+      const size = document.querySelector("#size");
+      const resolution = document.querySelector("#resolution");
+      const background = document.querySelector("#background");
+      const outputFormat = document.querySelector("#outputFormat");
+      const useSettingsParam = document.querySelector("#useSettingsParam");
       const crossOriginNotice = document.querySelector("#crossOriginNotice");
 
       function buildEmbedUrl() {
         const url = new URL(studioUrl.value);
-        url.searchParams.set("apiUrl", apiUrl.value);
-        url.searchParams.set("apiKey", apiKey.value);
-        url.searchParams.set("model", model.value);
+        if (useSettingsParam.checked) {
+          url.searchParams.set("settings", JSON.stringify({
+            apiUrl: apiUrl.value,
+            apiKey: apiKey.value,
+            model: model.value,
+            prompt: prompt.value,
+            size: size.value,
+            resolution: resolution.value,
+            background: background.value,
+            outputFormat: outputFormat.value,
+          }));
+        } else {
+          url.searchParams.set("apiUrl", apiUrl.value);
+          url.searchParams.set("apiKey", apiKey.value);
+          url.searchParams.set("model", model.value);
+          url.searchParams.set("prompt", prompt.value);
+          url.searchParams.set("size", size.value);
+          url.searchParams.set("resolution", resolution.value);
+          url.searchParams.set("background", background.value);
+          url.searchParams.set("outputFormat", outputFormat.value);
+        }
         return url.toString();
       }
 

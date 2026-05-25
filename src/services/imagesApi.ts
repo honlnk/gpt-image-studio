@@ -2,6 +2,7 @@ import type { GenerationParams } from "../types/studio";
 
 type GenerateImageInput = {
   apiBaseUrl: string;
+  apiBaseUrlMode: "origin" | "full";
   apiKey: string;
   model: string;
   prompt: string;
@@ -56,7 +57,7 @@ export async function generateImage(input: GenerateImageInput) {
     input.promptRewriteGuardEnabled ?? false,
     input.promptRewriteGuardText,
   );
-  const response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl)}/generations`, {
+  const response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl, input.apiBaseUrlMode)}/generations`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${input.apiKey}`,
@@ -110,7 +111,7 @@ export async function editImage(input: EditImageInput) {
 
   let response: Response;
   try {
-    response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl)}/edits`, {
+    response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl, input.apiBaseUrlMode)}/edits`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${input.apiKey}`,
@@ -170,8 +171,10 @@ export function base64ToBlob(base64: string, mimeType: string) {
   return new Blob([bytes], { type: mimeType });
 }
 
-function normalizeApiBaseUrl(url: string) {
-  return url.replace(/\/+$/, "");
+export function normalizeApiBaseUrl(url: string, mode: "origin" | "full" = "full") {
+  const trimmed = url.trim().replace(/\/+$/, "");
+  if (mode === "full") return trimmed;
+  return `${trimmed}/v1/images`;
 }
 
 function imageApiParams(model: string, params: GenerationParams) {
@@ -179,7 +182,6 @@ function imageApiParams(model: string, params: GenerationParams) {
 
   return {
     size: apiSize(params),
-    quality: params.quality,
     background: params.background,
     output_format: params.outputFormat,
     response_format: "b64_json",

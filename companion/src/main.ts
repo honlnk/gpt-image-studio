@@ -183,8 +183,8 @@ program
     const ask = (q: string): Promise<string> =>
       new Promise((resolve) => rl.question(q, resolve));
 
-    const apiBaseUrl = (await ask("API Base URL (默认 https://api.openai.com/v1/images): ")).trim()
-      || "https://api.openai.com/v1/images";
+    const apiBaseUrl = (await ask("API Base URL (默认 https://api.packyapi.com/v1/images): ")).trim()
+      || "https://api.packyapi.com/v1/images";
 
     const apiKey = await new Promise<string>((resolve) => {
       process.stdout.write("API Key: ");
