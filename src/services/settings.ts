@@ -7,6 +7,7 @@ import {
   normalizePromptRewriteGuardText,
 } from "./imagesApi";
 import type {
+  ApiBaseUrlMode,
   AppSettings,
   ConnectionMode,
   PromptRewriteGuardHistoryItem,
@@ -41,11 +42,13 @@ export function saveSettings(settings: AppSettings) {
 type StoredAppSettings = Omit<
   AppSettings,
   | "connectionMode"
+  | "apiBaseUrlMode"
   | "promptRewriteGuardEnabled"
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
 > & {
   connectionMode?: ConnectionMode;
+  apiBaseUrlMode?: ApiBaseUrlMode;
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   promptRewriteGuardHistory?: PromptRewriteGuardHistoryItem[];
@@ -59,6 +62,7 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
   return {
     ...settings,
     connectionMode: settings.connectionMode ?? "direct",
+    apiBaseUrlMode: settings.apiBaseUrlMode === "full" ? "full" : "origin",
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled ?? true,
     promptRewriteGuardText,
     promptRewriteGuardHistory:

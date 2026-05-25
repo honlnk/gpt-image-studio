@@ -36,6 +36,7 @@ const studio = useStudioViewModel();
 
     <SettingsModal
       v-model:api-base-url="studio.settingsModal.apiBaseUrl"
+      v-model:api-base-url-mode="studio.settingsModal.apiBaseUrlMode"
       v-model:api-key="studio.settingsModal.apiKey"
       v-model:connection-mode="studio.settingsModal.connectionMode"
       :companion-paired="studio.settingsModal.companionPaired"

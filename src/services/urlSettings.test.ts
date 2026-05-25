@@ -12,6 +12,7 @@ const currentSettings: AppSettings = {
   connectionMode: "direct",
   apiKey: "sk-current",
   apiBaseUrl: "https://api.packyapi.com/v1/images",
+  apiBaseUrlMode: "full",
   model: "gpt-image-2",
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
@@ -43,12 +44,39 @@ describe("URL settings", () => {
     const next = buildSettingsFromUrlParams(currentSettings, params);
 
     expect(next).toMatchObject({
-      apiBaseUrl: "https://proxy.example.com/v1/images",
+      apiBaseUrl: "https://proxy.example.com",
+      apiBaseUrlMode: "origin",
       apiKey: "sk-url",
       model: "gpt-image-1",
       connectionMode: "direct",
     });
     expect(next?.defaults).toEqual(currentSettings.defaults);
+  });
+
+  it("normalizes URL API origins with extra trailing slashes", () => {
+    const params = new URLSearchParams(
+      "apiUrl=https://proxy.example.com///&apiKey=sk-url",
+    );
+
+    const next = buildSettingsFromUrlParams(currentSettings, params);
+
+    expect(next).toMatchObject({
+      apiBaseUrl: "https://proxy.example.com",
+      apiBaseUrlMode: "origin",
+    });
+  });
+
+  it("keeps the full API base URL when explicitly requested", () => {
+    const params = new URLSearchParams(
+      "apiUrl=https://proxy.example.com/v1/images&apiBaseUrlMode=full",
+    );
+
+    const next = buildSettingsFromUrlParams(currentSettings, params);
+
+    expect(next).toMatchObject({
+      apiBaseUrl: "https://proxy.example.com/v1/images",
+      apiBaseUrlMode: "full",
+    });
   });
 
   it("clears known URL settings without removing unrelated params", () => {

@@ -13,6 +13,7 @@ import type { CompanionAuthStatus, CompanionHealthResponse } from "../../types/c
 const props = defineProps<{
   connectionMode: ConnectionMode;
   apiBaseUrl: string;
+  apiBaseUrlMode: "origin" | "full";
   apiKey: string;
   companionUrl: string;
   companionSessionToken: string;
@@ -22,6 +23,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:connectionMode": [value: ConnectionMode];
   "update:apiBaseUrl": [value: string];
+  "update:apiBaseUrlMode": [value: "origin" | "full"];
   "update:apiKey": [value: string];
   "update:companionSessionToken": [value: string];
 }>();
@@ -93,6 +95,10 @@ function cancelPairing() {
   pairingInProgress.value = false;
   pairingCodeInput.value = "";
   pairingError.value = "";
+}
+
+function normalizeApiBaseUrlInput(value: string) {
+  return value.trim().replace(/\/+$/, "");
 }
 
 onMounted(() => {
@@ -183,25 +189,55 @@ watch(
         </div>
 
         <div>
-          <label
-            class="mb-1 block text-sm font-medium text-gray-700"
-            for="apiBaseUrl"
-          >
-            API Base URL
-          </label>
-          <input
-            id="apiBaseUrl"
-            :value="apiBaseUrl"
-            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-gray-500"
-            placeholder="https://api.packyapi.com/v1/images"
-            type="url"
-            @input="
-              emit(
-                'update:apiBaseUrl',
-                ($event.target as HTMLInputElement).value,
-              )
-            "
-          />
+          <div class="mb-1 flex items-center justify-between gap-3">
+            <label
+              class="block text-sm font-medium text-gray-700"
+              for="apiBaseUrl"
+            >
+              API 地址
+            </label>
+            <label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-500">
+              <input
+                class="h-3.5 w-3.5 cursor-pointer accent-gray-900"
+                type="checkbox"
+                :checked="apiBaseUrlMode === 'full'"
+                @change="
+                  emit(
+                    'update:apiBaseUrlMode',
+                    ($event.target as HTMLInputElement).checked ? 'full' : 'origin',
+                  )
+                "
+              />
+              输入完整 API Base URL
+            </label>
+          </div>
+          <div class="flex rounded-lg border border-gray-300 bg-white focus-within:border-gray-500">
+            <input
+              id="apiBaseUrl"
+              :value="apiBaseUrl"
+              class="min-w-0 flex-1 rounded-l-lg bg-transparent px-3 py-2 text-sm text-gray-900 outline-none"
+              :placeholder="apiBaseUrlMode === 'full' ? 'https://api.packyapi.com/v1/images' : 'https://api.packyapi.com'"
+              type="url"
+              @input="
+                emit(
+                  'update:apiBaseUrl',
+                  ($event.target as HTMLInputElement).value,
+                )
+              "
+              @blur="
+                emit(
+                  'update:apiBaseUrl',
+                  normalizeApiBaseUrlInput(($event.target as HTMLInputElement).value),
+                )
+              "
+            />
+            <span
+              v-if="apiBaseUrlMode === 'origin'"
+              class="flex shrink-0 items-center border-l border-gray-200 px-3 text-sm font-medium text-red-500"
+            >
+              /v1/images
+            </span>
+          </div>
           <a
             href="https://www.packyapi.com/register?aff=mUWS"
             class="mt-1.5 inline-block cursor-pointer text-xs text-gray-400 transition-colors hover:text-gray-600"

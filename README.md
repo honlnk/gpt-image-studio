@@ -49,7 +49,7 @@
 
 ```html
 <iframe
-  src="https://image.honlnk.com?apiUrl=https://api.example.com/v1/images&apiKey=sk-xxx&model=gpt-image-2"
+  src="https://image.honlnk.com?apiUrl=https://api.example.com&apiKey=sk-xxx&model=gpt-image-2"
   allow="clipboard-read; clipboard-write"
 ></iframe>
 ```
@@ -59,6 +59,7 @@
 - `apiUrl` 或 `apiBaseUrl`：API Base URL
 - `apiKey`：API key
 - `model`：模型 ID
+- `apiBaseUrlMode=full`：将 `apiUrl` / `apiBaseUrl` 视为完整 API Base URL；默认会将其视为站点根地址并自动追加 `/v1/images`
 
 页面读取这些参数后会保存到本地设置，并从地址栏清除已识别的配置参数，保留其他查询参数。
 

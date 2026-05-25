@@ -100,6 +100,7 @@ export function useStudioViewModel() {
 
   const directImagesClient = createDirectImagesClient({
     getApiBaseUrl: () => settings.apiBaseUrl.value,
+    getApiBaseUrlMode: () => settings.apiBaseUrlMode.value,
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
     getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
@@ -549,6 +550,7 @@ export function useStudioViewModel() {
   });
   const settingsModal = proxyRefs({
     apiBaseUrl: settings.apiBaseUrl,
+    apiBaseUrlMode: settings.apiBaseUrlMode,
     apiKey: settings.apiKey,
     companionPaired: settings.companionPaired,
     companionSessionToken: settings.companionSessionToken,

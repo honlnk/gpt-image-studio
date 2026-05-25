@@ -5,6 +5,7 @@ const URL_SETTING_KEYS = [
   "apiUrl",
   "apiKey",
   "model",
+  "apiBaseUrlMode",
 ] as const;
 
 type UrlSettingKey = typeof URL_SETTING_KEYS[number];
@@ -58,14 +59,30 @@ export async function applyUrlSettings(
 function getQuerySettingsPatch(searchParams: URLSearchParams): Partial<AppSettings> {
   const patch: Partial<AppSettings> = {};
   const apiBaseUrl = searchParams.get("apiBaseUrl") ?? searchParams.get("apiUrl");
+  const apiBaseUrlMode = normalizeApiBaseUrlMode(searchParams.get("apiBaseUrlMode"));
   const apiKey = searchParams.get("apiKey");
   const model = searchParams.get("model");
 
-  if (apiBaseUrl !== null) patch.apiBaseUrl = apiBaseUrl.trim();
+  if (apiBaseUrl !== null) {
+    patch.apiBaseUrlMode = apiBaseUrlMode ?? "origin";
+    patch.apiBaseUrl = patch.apiBaseUrlMode === "origin"
+      ? stripImagesApiPath(apiBaseUrl)
+      : apiBaseUrl.trim();
+  } else if (apiBaseUrlMode) {
+    patch.apiBaseUrlMode = apiBaseUrlMode;
+  }
   if (apiKey !== null) patch.apiKey = apiKey.trim();
   if (model !== null && model.trim()) patch.model = model.trim();
 
   return patch;
+}
+
+function normalizeApiBaseUrlMode(value: unknown): "origin" | "full" | undefined {
+  return value === "origin" || value === "full" ? value : undefined;
+}
+
+function stripImagesApiPath(apiBaseUrl: string) {
+  return apiBaseUrl.trim().replace(/\/+$/, "").replace(/\/v1\/images$/i, "");
 }
 
 export type { UrlSettingKey };

@@ -72,6 +72,7 @@ export type GenerationParams = {
 };
 
 export type ConnectionMode = "direct" | "localCompanion";
+export type ApiBaseUrlMode = "origin" | "full";
 
 export type PromptRewriteGuardHistoryItem = {
   id: string;
@@ -83,6 +84,7 @@ export type AppSettings = {
   connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
+  apiBaseUrlMode: ApiBaseUrlMode;
   model: string;
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
