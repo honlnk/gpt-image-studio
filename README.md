@@ -45,23 +45,60 @@
 
 ## 页面嵌入
 
-可以将完整工作台作为 iframe 嵌入到其他页面，并通过 URL 参数预填浏览器直连配置：
+可以将完整工作台作为 iframe 嵌入到其他页面，并通过 URL 参数预填浏览器直连配置和默认生成参数：
+
+使用 `settings` JSON 传入完整配置：
 
 ```html
 <iframe
-  src="https://image.honlnk.com?apiUrl=https://api.example.com&apiKey=sk-xxx&model=gpt-image-2"
+  id="imageStudioFrame"
+  allow="clipboard-read; clipboard-write"
+></iframe>
+
+<script>
+  const settings = {
+    apiUrl: "https://api.example.com",
+    apiKey: "sk-xxx",
+    model: "gpt-image-2",
+    prompt: "生成一张白底商品主图",
+    size: "1:1",
+    background: "opaque",
+    outputFormat: "png",
+  };
+
+  document.querySelector("#imageStudioFrame").src =
+    `https://image.honlnk.com?settings=${encodeURIComponent(JSON.stringify(settings))}`;
+</script>
+```
+
+也可以直接使用普通查询参数：
+
+```html
+<iframe
+  src="https://image.honlnk.com?apiUrl=https://api.example.com&apiKey=sk-xxx&model=gpt-image-2&prompt=生成一张白底商品主图&size=1:1&background=opaque&outputFormat=png"
   allow="clipboard-read; clipboard-write"
 ></iframe>
 ```
 
+`settings` 和普通查询参数可以同时存在；同时存在时，普通查询参数会覆盖 `settings` 中的同名配置。
+
 支持的参数：
 
+- `settings`：URL 编码后的 JSON 配置。可包含下方所有参数；如果 `settings` 与独立参数同时存在，以独立参数为准
 - `apiUrl` 或 `apiBaseUrl`：API Base URL
 - `apiKey`：API key
 - `model`：模型 ID
 - `apiBaseUrlMode=full`：将 `apiUrl` / `apiBaseUrl` 视为完整 API Base URL；默认会将其视为站点根地址并自动追加 `/v1/images`
+- `prompt`：预填输入框内容，不会自动提交
+- `size`：默认尺寸，支持 `auto`、`1:1`、`16:9`、`9:16`、`custom` 等
+- `resolution`：默认分辨率，支持 `1k`、`2k`、`4k`
+- `width` / `height`：自定义尺寸，通常与 `size=custom` 配合使用
+- `background`：默认背景，支持 `auto`、`opaque`、`transparent`
+- `outputFormat`：默认输出格式，支持 `png`、`webp`、`jpeg`
+- `promptRewriteGuard` 或 `promptRewriteGuardEnabled`：是否启用提示词防改写，支持 `1` / `0`、`true` / `false`
+- `promptRewriteGuardText`：自定义提示词防改写前缀
 
-页面读取这些参数后会保存到本地设置，并从地址栏清除已识别的配置参数，保留其他查询参数。
+页面读取这些参数后会保存设置类配置，并从地址栏清除已识别的配置参数，保留其他查询参数。`prompt` 只会写入当前输入框草稿。
 
 本仓库提供了一个本地测试页，可用于验证 iframe 嵌入效果：
 

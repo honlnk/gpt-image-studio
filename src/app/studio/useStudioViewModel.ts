@@ -18,7 +18,11 @@ import {
   saveConversationDraft,
 } from "../../services/conversationDrafts";
 import { saveSettings } from "../../services/settings";
-import { applyUrlSettings } from "../../services/urlSettings";
+import {
+  applyUrlSettings,
+  getPromptFromUrlParams,
+  hasUrlGenerationParams,
+} from "../../services/urlSettings";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import { useComposerStore } from "../../stores/composerStore";
 import type { ConversationDraft, GenerationParams } from "../../types/studio";
@@ -215,6 +219,10 @@ export function useStudioViewModel() {
 
   onMounted(() => {
     void restoreFromStorage().then(async () => {
+      const urlSearchParams = new URLSearchParams(window.location.search);
+      const urlPrompt = getPromptFromUrlParams(urlSearchParams);
+      const shouldApplyUrlGenerationParams = hasUrlGenerationParams(urlSearchParams);
+
       await applyUrlSettings(
         settings.currentSettings(),
         saveSettings,
@@ -227,6 +235,7 @@ export function useStudioViewModel() {
       const draft = await loadConversationDraft(activeConversationId).catch(reportStorageError);
       if (draft) {
         applyConversationDraft(draft);
+        applyUrlDraftOverrides(urlPrompt, shouldApplyUrlGenerationParams);
         return;
       }
 
@@ -235,6 +244,7 @@ export function useStudioViewModel() {
       } else {
         applyConversationDraft(createDefaultDraft(activeConversationId));
       }
+      applyUrlDraftOverrides(urlPrompt, shouldApplyUrlGenerationParams);
     });
   });
 
@@ -301,6 +311,21 @@ export function useStudioViewModel() {
     settings.quality.value = params.quality;
     settings.background.value = params.background;
     settings.outputFormat.value = params.outputFormat;
+  }
+
+  function applyUrlDraftOverrides(
+    prompt: string | undefined,
+    shouldApplyGenerationParams: boolean,
+  ) {
+    if (prompt === undefined && !shouldApplyGenerationParams) return;
+
+    isApplyingDraft = true;
+    if (prompt !== undefined) composerText.value = prompt;
+    if (shouldApplyGenerationParams) {
+      applyGenerationParams(settings.currentGenerationParams());
+    }
+    isApplyingDraft = false;
+    void saveActiveDraft().catch(reportStorageError);
   }
 
   function currentConversationDraft(conversationId: string): ConversationDraft {
