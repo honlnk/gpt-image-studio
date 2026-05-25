@@ -17,6 +17,8 @@ import {
   loadConversationDraft,
   saveConversationDraft,
 } from "../../services/conversationDrafts";
+import { saveSettings } from "../../services/settings";
+import { applyUrlSettings } from "../../services/urlSettings";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import { useComposerStore } from "../../stores/composerStore";
 import type { ConversationDraft, GenerationParams } from "../../types/studio";
@@ -212,6 +214,12 @@ export function useStudioViewModel() {
 
   onMounted(() => {
     void restoreFromStorage().then(async () => {
+      await applyUrlSettings(
+        settings.currentSettings(),
+        saveSettings,
+        settings.applySettings,
+      ).catch(reportStorageError);
+
       const activeConversationId = conversations.activeConversationId.value;
       if (!activeConversationId) return;
 

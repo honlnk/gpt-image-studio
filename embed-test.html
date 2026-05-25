@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPT Image Studio iframe Embed Test</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: #f5f5f4;
+        color: #1c1917;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      aside {
+        border-right: 1px solid #e7e5e4;
+        background: #ffffff;
+        padding: 20px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 8px 0 0;
+        color: #78716c;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: #57534e;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid #d6d3d1;
+        border-radius: 8px;
+        background: #ffffff;
+        color: #1c1917;
+        font: inherit;
+        font-weight: 400;
+        outline: none;
+        padding: 9px 10px;
+      }
+
+      input:focus {
+        border-color: #57534e;
+        box-shadow: 0 0 0 3px rgb(87 83 78 / 12%);
+      }
+
+      button {
+        border: 0;
+        border-radius: 8px;
+        background: #1c1917;
+        color: #ffffff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        padding: 10px 12px;
+      }
+
+      button:hover {
+        background: #44403c;
+      }
+
+      code {
+        display: block;
+        margin-top: 16px;
+        overflow-wrap: anywhere;
+        border-radius: 8px;
+        background: #f5f5f4;
+        color: #44403c;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 12px;
+      }
+
+      section {
+        min-width: 0;
+        padding: 16px;
+      }
+
+      iframe {
+        display: block;
+        width: 100%;
+        height: calc(100vh - 32px);
+        border: 1px solid #d6d3d1;
+        border-radius: 10px;
+        background: #ffffff;
+      }
+
+      @media (max-width: 860px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+
+        aside {
+          border-right: 0;
+          border-bottom: 1px solid #e7e5e4;
+        }
+
+        iframe {
+          height: 720px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <aside>
+        <h1>iframe 嵌入测试</h1>
+        <p>修改参数后刷新右侧 iframe，确认页面能加载、参数会写入设置，并且地址栏里的敏感参数会被清除。</p>
+
+        <form id="embedForm">
+          <label>
+            平台地址
+            <input id="studioUrl" value="http://127.0.0.1:8888/" />
+          </label>
+
+          <label>
+            API URL
+            <input id="apiUrl" value="https://api.openai.com/v1/images" />
+          </label>
+
+          <label>
+            API Key
+            <input id="apiKey" value="sk-test" />
+          </label>
+
+          <label>
+            Model
+            <input id="model" value="gpt-image-2" />
+          </label>
+
+          <button type="submit">刷新 iframe</button>
+        </form>
+
+        <code id="iframeSrc"></code>
+      </aside>
+
+      <section>
+        <iframe
+          id="studioFrame"
+          title="GPT Image Studio"
+          allow="clipboard-read; clipboard-write"
+        ></iframe>
+      </section>
+    </main>
+
+    <script>
+      const form = document.querySelector("#embedForm");
+      const frame = document.querySelector("#studioFrame");
+      const iframeSrc = document.querySelector("#iframeSrc");
+      const studioUrl = document.querySelector("#studioUrl");
+      const apiUrl = document.querySelector("#apiUrl");
+      const apiKey = document.querySelector("#apiKey");
+      const model = document.querySelector("#model");
+
+      function buildEmbedUrl() {
+        const url = new URL(studioUrl.value);
+        url.searchParams.set("apiUrl", apiUrl.value);
+        url.searchParams.set("apiKey", apiKey.value);
+        url.searchParams.set("model", model.value);
+        return url.toString();
+      }
+
+      function refreshFrame() {
+        const src = buildEmbedUrl();
+        frame.src = src;
+        iframeSrc.textContent = src;
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        refreshFrame();
+      });
+
+      refreshFrame();
+    </script>
+  </body>
+</html>
