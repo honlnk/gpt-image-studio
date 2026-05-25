@@ -68,7 +68,9 @@
 pnpm dev
 ```
 
-然后在浏览器打开 `embed-test.html`，默认会加载 `http://127.0.0.1:8888/`。如果需要测试线上站点，可以在测试页左侧把平台地址改成 `https://image.honlnk.com`。
+然后在浏览器打开 `http://127.0.0.1:8888/embed-test.html`。测试页左侧会显示平台地址、API URL、API Key、Model 等输入框；右侧 iframe 默认加载 `http://127.0.0.1:8888/`。如果需要测试线上站点，可以在测试页左侧把平台地址改成 `https://image.honlnk.com`，并确认线上版本已经部署了 URL 参数支持。
+
+跨站 iframe 中的 IndexedDB 可能被浏览器按顶层站点分区，因此测试页里看到的会话和图片数据可能不同于直接打开平台时的数据。
 
 ### 本地 Companion 快速开始
 

@@ -107,6 +107,21 @@
         padding: 12px;
       }
 
+      .notice {
+        display: none;
+        margin-top: 14px;
+        border-radius: 8px;
+        background: #fff7ed;
+        color: #9a3412;
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 10px 12px;
+      }
+
+      .notice[data-visible="true"] {
+        display: block;
+      }
+
       section {
         min-width: 0;
         padding: 16px;
@@ -168,6 +183,11 @@
         </form>
 
         <code id="iframeSrc"></code>
+        <div class="notice" id="crossOriginNotice">
+          当前 iframe 与测试页不是同源。浏览器可能会把 IndexedDB
+          按顶层站点分区，因此这里看到的数据可能不同于直接打开平台时的数据。
+          如果平台地址是线上域名，还需要确认线上版本已经部署了 URL 参数支持。
+        </div>
       </aside>
 
       <section>
@@ -187,6 +207,7 @@
       const apiUrl = document.querySelector("#apiUrl");
       const apiKey = document.querySelector("#apiKey");
       const model = document.querySelector("#model");
+      const crossOriginNotice = document.querySelector("#crossOriginNotice");
 
       function buildEmbedUrl() {
         const url = new URL(studioUrl.value);
@@ -200,6 +221,7 @@
         const src = buildEmbedUrl();
         frame.src = src;
         iframeSrc.textContent = src;
+        crossOriginNotice.dataset.visible = String(new URL(src).origin !== window.location.origin);
       }
 
       form.addEventListener("submit", (event) => {
