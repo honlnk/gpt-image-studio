@@ -15,7 +15,12 @@ export type EditImageInput = GenerateImageInput & {
   mask?: ImageEditSource;
 };
 
+export type ImageClientResult = {
+  b64Json: string;
+  revisedPrompt?: string;
+};
+
 export type ImageClient = {
-  generate(input: GenerateImageInput): Promise<string>;
-  edit(input: EditImageInput): Promise<string>;
+  generate(input: GenerateImageInput): Promise<ImageClientResult>;
+  edit(input: EditImageInput): Promise<ImageClientResult>;
 };

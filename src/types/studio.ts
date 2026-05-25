@@ -48,6 +48,7 @@ export type ImageAsset = {
   conversationId?: string;
   messageId?: string;
   prompt: string;
+  revisedPrompt?: string;
   referencedImageIds?: string[];
   editSourceImageId?: string;
   isEditMask?: boolean;

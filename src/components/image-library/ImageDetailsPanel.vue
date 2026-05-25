@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useNow } from "../../composables/useNow";
 import { formatRelativeTime } from "../../shared/dateTime";
 import type { ImageAsset } from "../../types/studio";
+import Tooltip from "../ui/Tooltip.vue";
 import {
   fileSize,
   imageDownloadName,
@@ -127,11 +128,41 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
       </div>
     </dl>
 
-    <div class="mt-3">
-      <div class="text-xs text-gray-400">Prompt</div>
-      <p class="mt-1 line-clamp-3 text-xs leading-relaxed text-gray-600">
-        {{ image.prompt }}
-      </p>
+    <div class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+      <div class="min-w-0">
+        <div class="text-xs text-gray-400">原始 Prompt</div>
+        <Tooltip
+          :text="image.prompt"
+          :delay="500"
+          :hide-delay="300"
+          hoverable
+          multiline
+          preferred-placement="top"
+        >
+          <p class="mt-1 line-clamp-2 text-left text-xs leading-relaxed text-gray-600">
+            {{ image.prompt }}
+          </p>
+        </Tooltip>
+      </div>
+      <div class="min-w-0">
+        <div class="text-xs text-gray-400">API 改写 Prompt</div>
+        <Tooltip
+          v-if="image.revisedPrompt"
+          :text="image.revisedPrompt"
+          :delay="500"
+          :hide-delay="300"
+          hoverable
+          multiline
+          preferred-placement="top"
+        >
+          <p class="mt-1 line-clamp-2 text-left text-xs leading-relaxed text-gray-600">
+            {{ image.revisedPrompt }}
+          </p>
+        </Tooltip>
+        <p v-else class="mt-1 text-xs leading-relaxed text-gray-400">
+          未返回
+        </p>
+      </div>
     </div>
   </div>
 </template>

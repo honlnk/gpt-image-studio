@@ -25,10 +25,16 @@ type EditImageInput = GenerateImageInput & {
 type ImageApiResponse = {
   data?: Array<{
     b64_json?: string;
+    revised_prompt?: string;
   }>;
   error?: {
     message?: string;
   };
+};
+
+export type ImageApiResult = {
+  b64Json: string;
+  revisedPrompt?: string;
 };
 
 export const PROMPT_REWRITE_GUARD_PREFIX =
@@ -71,11 +77,7 @@ export async function generateImage(input: GenerateImageInput) {
   });
 
   const payload = await parseImageResponse(response);
-  const imageData = payload.data?.[0]?.b64_json;
-
-  if (!imageData) {
-    throw new Error("响应中没有 data[0].b64_json。");
-  }
+  const imageData = extractImageResult(payload);
 
   return imageData;
 }
@@ -130,13 +132,7 @@ export async function editImage(input: EditImageInput) {
   }
 
   const payload = await parseImageResponse(response);
-  const imageData = payload.data?.[0]?.b64_json;
-
-  if (!imageData) {
-    throw new Error("响应中没有 data[0].b64_json。");
-  }
-
-  return imageData;
+  return extractImageResult(payload);
 }
 
 function logImageRequest(
@@ -265,4 +261,18 @@ async function parseImageResponse(response: Response) {
   }
 
   return payload;
+}
+
+function extractImageResult(payload: ImageApiResponse): ImageApiResult {
+  const item = payload.data?.[0];
+  const imageData = item?.b64_json;
+
+  if (!imageData) {
+    throw new Error("响应中没有 data[0].b64_json。");
+  }
+
+  return {
+    b64Json: imageData,
+    revisedPrompt: item.revised_prompt,
+  };
 }

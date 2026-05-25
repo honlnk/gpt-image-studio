@@ -38,7 +38,10 @@ describe("images API requests", () => {
         prompt: "画一张图",
         params: generationParams,
       }),
-    ).resolves.toBe("generated-image");
+    ).resolves.toEqual({
+      b64Json: "generated-image",
+      revisedPrompt: undefined,
+    });
 
     const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.example.test/v1/images/generations");
@@ -155,7 +158,7 @@ describe("images API requests", () => {
   it("requests base64 JSON for image edits", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
-        data: [{ b64_json: "edited-image" }],
+        data: [{ b64_json: "edited-image", revised_prompt: "rewritten edit" }],
       }),
     );
 
@@ -174,7 +177,10 @@ describe("images API requests", () => {
           },
         ],
       }),
-    ).resolves.toBe("edited-image");
+    ).resolves.toEqual({
+      b64Json: "edited-image",
+      revisedPrompt: "rewritten edit",
+    });
 
     const requestBody = fetchMock.mock.calls[0]?.[1]?.body;
     expect(requestBody).toBeInstanceOf(FormData);

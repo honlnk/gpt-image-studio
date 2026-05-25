@@ -6,10 +6,16 @@ const props = withDefaults(
     text: string;
     preferredPlacement?: "top" | "bottom";
     delay?: number;
+    hideDelay?: number;
+    hoverable?: boolean;
+    multiline?: boolean;
   }>(),
   {
     preferredPlacement: "bottom",
     delay: 0,
+    hideDelay: 0,
+    hoverable: false,
+    multiline: false,
   },
 );
 
@@ -17,6 +23,7 @@ const triggerRef = ref<HTMLElement | null>(null);
 const tooltipRef = ref<HTMLElement | null>(null);
 const isVisible = ref(false);
 let delayTimer: ReturnType<typeof setTimeout> | null = null;
+let hideTimer: ReturnType<typeof setTimeout> | null = null;
 let isHovered = false;
 const placement = ref({ x: "center", y: "bottom" });
 const position = ref({ left: 0, top: 0, arrowLeft: 0 });
@@ -73,7 +80,18 @@ async function updatePosition() {
 
 function showTooltip() {
   isHovered = true;
+  if (hideTimer) {
+    clearTimeout(hideTimer);
+    hideTimer = null;
+  }
+
+  if (isVisible.value) {
+    updatePosition();
+    return;
+  }
+
   if (props.delay > 0) {
+    if (delayTimer) clearTimeout(delayTimer);
     delayTimer = setTimeout(() => {
       if (isHovered) updatePosition();
     }, props.delay);
@@ -88,6 +106,16 @@ function hideTooltip() {
     clearTimeout(delayTimer);
     delayTimer = null;
   }
+
+  if (props.hideDelay > 0) {
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      if (!isHovered) isVisible.value = false;
+      hideTimer = null;
+    }, props.hideDelay);
+    return;
+  }
+
   isVisible.value = false;
 }
 </script>
@@ -95,7 +123,7 @@ function hideTooltip() {
 <template>
   <span
     ref="triggerRef"
-    class="inline-flex"
+    class="inline-flex max-w-full"
     @focusin="showTooltip"
     @focusout="hideTooltip"
     @mouseenter="showTooltip"
@@ -107,9 +135,16 @@ function hideTooltip() {
     <span
       v-if="isVisible"
       ref="tooltipRef"
-      class="pointer-events-none fixed z-50 max-w-[calc(100vw-16px)] rounded-lg bg-gray-800 px-3 py-1.5 text-[11px] leading-snug text-white shadow-lg"
-      :class="{ 'whitespace-nowrap': placement.x === 'center' }"
+      class="fixed z-50 max-w-[calc(100vw-16px)] rounded-lg bg-gray-800 px-3 py-1.5 text-[11px] leading-snug text-white shadow-lg"
+      :class="[
+        hoverable ? 'pointer-events-auto' : 'pointer-events-none',
+        multiline
+          ? 'w-max max-w-80 whitespace-pre-wrap break-words'
+          : { 'whitespace-nowrap': placement.x === 'center' },
+      ]"
       :style="tooltipStyle"
+      @mouseenter="hoverable ? showTooltip() : undefined"
+      @mouseleave="hoverable ? hideTooltip() : undefined"
     >
       <span
         class="absolute border-4 border-transparent"
