@@ -8,6 +8,7 @@
 - [产品路线图](roadmap.md)：产品方向和阶段性功能规划。
 - [本地 CLI Companion](companion.md)：本地伴侣的设计、协议、安全要求和分阶段计划。
 - [遮罩局部编辑](mask-editing.md)：基于本地遮罩绘制的图片局部编辑方案。
+- [提示词模式开发计划](prompt-modes.md)：安全、创意、成人三级提示词模式的设计和实现计划。
 - [备份格式](backup-format.md)：当前备份 ZIP 结构和恢复行为。
 - [用户行为日志计划](analytics-event-logging-plan.md)：后续本地行为日志系统方案。
 
