@@ -19,6 +19,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
       refs.apiBaseUrl,
       refs.apiBaseUrlMode,
       refs.model,
+      refs.promptMode,
       refs.promptRewriteGuardEnabled,
       refs.promptRewriteGuardText,
       refs.promptRewriteGuardHistory,

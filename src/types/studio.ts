@@ -74,6 +74,7 @@ export type GenerationParams = {
 
 export type ConnectionMode = "direct" | "localCompanion";
 export type ApiBaseUrlMode = "origin" | "full";
+export type PromptMode = "default" | "safe" | "creative" | "adult";
 
 export type PromptRewriteGuardHistoryItem = {
   id: string;
@@ -87,6 +88,7 @@ export type AppSettings = {
   apiBaseUrl: string;
   apiBaseUrlMode: ApiBaseUrlMode;
   model: string;
+  promptMode: PromptMode;
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];

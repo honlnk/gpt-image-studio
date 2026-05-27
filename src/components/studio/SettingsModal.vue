@@ -5,12 +5,14 @@ import type {
   Conversation,
   ImageAsset,
   Message,
+  PromptMode,
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
 import PromptGuardSettingsPanel from "../settings/PromptGuardSettingsPanel.vue";
+import PromptModeSettingsPanel from "../settings/PromptModeSettingsPanel.vue";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
 
 type SettingsTab = "api" | "prompt" | "backup" | "batch";
@@ -27,6 +29,7 @@ const props = defineProps<{
   companionUrl: string;
   companionSessionToken: string;
   companionPaired: boolean;
+  promptMode: PromptMode;
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
@@ -47,6 +50,7 @@ const emit = defineEmits<{
   "update:apiBaseUrl": [value: string];
   "update:apiBaseUrlMode": [value: "origin" | "full"];
   "update:companionSessionToken": [value: string];
+  "update:promptMode": [value: PromptMode];
   "update:promptRewriteGuardEnabled": [value: boolean];
   savePromptRewriteGuardText: [value: string];
   restoreDefaultPromptRewriteGuardText: [];
@@ -173,17 +177,23 @@ function confirmPendingAction() {
               @update:companion-session-token="emit('update:companionSessionToken', $event)"
             />
 
-            <PromptGuardSettingsPanel
-              v-else-if="activeTab === 'prompt'"
-              :enabled="promptRewriteGuardEnabled"
-              :history="promptRewriteGuardHistory"
-              :text="promptRewriteGuardText"
-              @delete-history="emit('deletePromptRewriteGuardHistoryItem', $event)"
-              @restore-default="emit('restoreDefaultPromptRewriteGuardText')"
-              @restore-history="emit('restorePromptRewriteGuardHistoryItem', $event)"
-              @save-text="emit('savePromptRewriteGuardText', $event)"
-              @update:enabled="emit('setPromptRewriteGuardEnabled', $event)"
-            />
+            <div v-else-if="activeTab === 'prompt'" class="space-y-8">
+              <PromptModeSettingsPanel
+                :model-value="promptMode"
+                @update:model-value="emit('update:promptMode', $event)"
+              />
+
+              <PromptGuardSettingsPanel
+                :enabled="promptRewriteGuardEnabled"
+                :history="promptRewriteGuardHistory"
+                :text="promptRewriteGuardText"
+                @delete-history="emit('deletePromptRewriteGuardHistoryItem', $event)"
+                @restore-default="emit('restoreDefaultPromptRewriteGuardText')"
+                @restore-history="emit('restorePromptRewriteGuardHistoryItem', $event)"
+                @save-text="emit('savePromptRewriteGuardText', $event)"
+                @update:enabled="emit('setPromptRewriteGuardEnabled', $event)"
+              />
+            </div>
 
             <BackupPanel
               v-else-if="activeTab === 'backup'"

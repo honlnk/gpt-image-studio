@@ -16,6 +16,7 @@ const currentSettings: AppSettings = {
   apiBaseUrl: "https://api.packyapi.com/v1/images",
   apiBaseUrlMode: "full",
   model: "gpt-image-2",
+  promptMode: "default",
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
   promptRewriteGuardHistory: [

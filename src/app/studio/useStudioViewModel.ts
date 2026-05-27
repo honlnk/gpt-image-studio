@@ -25,7 +25,7 @@ import {
 } from "../../services/urlSettings";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import { useComposerStore } from "../../stores/composerStore";
-import type { ConversationDraft, GenerationParams } from "../../types/studio";
+import type { ConversationDraft, GenerationParams, PromptMode } from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
@@ -107,6 +107,7 @@ export function useStudioViewModel() {
     getApiBaseUrlMode: () => settings.apiBaseUrlMode.value,
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
+    getPromptMode: () => settings.promptMode.value,
     getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
     getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
@@ -114,6 +115,7 @@ export function useStudioViewModel() {
     getCompanionUrl: () => settings.companionUrl.value,
     getSessionToken: () => settings.companionSessionToken.value,
     getModel: () => settings.model.value,
+    getPromptMode: () => settings.promptMode.value,
     getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
     getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
@@ -450,6 +452,11 @@ export function useStudioViewModel() {
     persistSettingsChange();
   }
 
+  function setPromptMode(value: PromptMode) {
+    settings.promptMode.value = value;
+    persistSettingsChange();
+  }
+
   function savePromptRewriteGuardText(text: string) {
     settings.savePromptRewriteGuardText(text);
     persistSettingsChange();
@@ -581,6 +588,7 @@ export function useStudioViewModel() {
     companionSessionToken: settings.companionSessionToken,
     companionUrl: settings.companionUrl,
     connectionMode: settings.connectionMode,
+    promptMode: settings.promptMode,
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
     promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
     promptRewriteGuardText: settings.promptRewriteGuardText,
@@ -600,6 +608,7 @@ export function useStudioViewModel() {
     restoreDefaultPromptRewriteGuardText,
     restorePromptRewriteGuardHistoryItem,
     savePromptRewriteGuardText,
+    setPromptMode,
     setPromptRewriteGuardEnabled,
   });
   const preview = proxyRefs({

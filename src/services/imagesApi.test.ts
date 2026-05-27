@@ -108,6 +108,30 @@ describe("images API requests", () => {
     expect(requestBody.prompt).toBe(`${PROMPT_REWRITE_GUARD_PREFIX}\n画一张图`);
   });
 
+  it("applies prompt mode before the prompt rewrite guard", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        data: [{ b64_json: "generated-image" }],
+      }),
+    );
+
+    await generateImage({
+      apiBaseUrl: "https://api.example.test/v1/images",
+      apiBaseUrlMode: "full",
+      apiKey: "sk-test",
+      model: "gpt-image-2",
+      prompt: "画一张图",
+      promptMode: "creative",
+      promptRewriteGuardEnabled: true,
+      params: generationParams,
+    });
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(requestBody.prompt).toContain(`${PROMPT_REWRITE_GUARD_PREFIX}\n`);
+    expect(requestBody.prompt).toContain("当前模式：创意");
+    expect(requestBody.prompt).toContain("用户原始提示词：\n画一张图");
+  });
+
   it("uses custom prompt rewrite guard text when provided", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({

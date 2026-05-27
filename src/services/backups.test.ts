@@ -66,6 +66,7 @@ const settings: AppSettings = {
   apiBaseUrl: "https://api.example.test/v1/images",
   apiBaseUrlMode: "full",
   model: "gpt-image-1",
+  promptMode: "creative",
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
   promptRewriteGuardHistory: [
@@ -122,6 +123,7 @@ describe("studio backups", () => {
       apiBaseUrl: settings.apiBaseUrl,
       apiBaseUrlMode: settings.apiBaseUrlMode,
       model: settings.model,
+      promptMode: settings.promptMode,
       promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
       promptRewriteGuardText: settings.promptRewriteGuardText,
       promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
@@ -180,6 +182,7 @@ describe("studio backups", () => {
           apiBaseUrl: settings.apiBaseUrl,
           apiBaseUrlMode: settings.apiBaseUrlMode,
           model: settings.model,
+          promptMode: settings.promptMode,
           defaults: settings.defaults,
           storageMode: settings.storageMode,
         },

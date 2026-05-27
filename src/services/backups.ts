@@ -42,6 +42,7 @@ type StoredBackupSettings = Omit<
   AppSettings,
   | "apiKey"
   | "defaults"
+  | "promptMode"
   | "promptRewriteGuardEnabled"
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
@@ -49,6 +50,7 @@ type StoredBackupSettings = Omit<
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   promptRewriteGuardHistory?: AppSettings["promptRewriteGuardHistory"];
+  promptMode?: AppSettings["promptMode"];
   defaults: StoredGenerationParams;
 };
 
@@ -100,6 +102,7 @@ export async function restoreStudioBackup(file: File) {
     ? {
         ...data.settings,
         apiKey: currentSettings?.apiKey ?? "",
+        promptMode: data.settings.promptMode ?? "default",
         promptRewriteGuardEnabled:
           data.settings.promptRewriteGuardEnabled ?? true,
         promptRewriteGuardText: normalizePromptRewriteGuardText(

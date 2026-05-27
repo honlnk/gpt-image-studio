@@ -10,6 +10,7 @@ import type {
   ApiBaseUrlMode,
   AppSettings,
   ConnectionMode,
+  PromptMode,
   PromptRewriteGuardHistoryItem,
 } from "../types/studio";
 import { getFromStore, putInStore, STORE_NAMES } from "./db";
@@ -43,6 +44,7 @@ type StoredAppSettings = Omit<
   AppSettings,
   | "connectionMode"
   | "apiBaseUrlMode"
+  | "promptMode"
   | "promptRewriteGuardEnabled"
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
@@ -52,6 +54,7 @@ type StoredAppSettings = Omit<
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   promptRewriteGuardHistory?: PromptRewriteGuardHistoryItem[];
+  promptMode?: PromptMode;
   defaults: StoredGenerationParams;
 };
 
@@ -63,6 +66,7 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
     ...settings,
     connectionMode: settings.connectionMode ?? "direct",
     apiBaseUrlMode: settings.apiBaseUrlMode === "full" ? "full" : "origin",
+    promptMode: normalizePromptMode(settings.promptMode),
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled ?? true,
     promptRewriteGuardText,
     promptRewriteGuardHistory:
@@ -75,4 +79,17 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
       ],
     defaults: normalizeGenerationParams(settings.defaults),
   };
+}
+
+function normalizePromptMode(mode: PromptMode | undefined): PromptMode {
+  if (
+    mode === "default" ||
+    mode === "safe" ||
+    mode === "creative" ||
+    mode === "adult"
+  ) {
+    return mode;
+  }
+
+  return "default";
 }
