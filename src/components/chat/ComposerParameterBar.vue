@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useComposerStore } from "../../stores/composerStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import ComposerEditorPanel from "./ComposerEditorPanel.vue";
@@ -9,6 +10,15 @@ const emit = defineEmits<{
 
 const composer = useComposerStore();
 const settings = useSettingsStore();
+const promptModeLabel = computed(() => {
+  const labels = {
+    default: "默认",
+    safe: "安全",
+    creative: "创意",
+    adult: "开放",
+  };
+  return labels[settings.promptMode];
+});
 </script>
 
 <template>
@@ -17,6 +27,11 @@ const settings = useSettingsStore();
       class="cursor-not-allowed rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-400"
     >
       模型: {{ settings.model }}
+    </span>
+    <span
+      class="cursor-not-allowed rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-400"
+    >
+      内容: {{ promptModeLabel }}
     </span>
     <button
       :class="[

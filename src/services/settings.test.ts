@@ -24,6 +24,7 @@ const fullSettings: AppSettings = {
   apiBaseUrl: "https://api.packyapi.com/v1/images",
   apiBaseUrlMode: "full",
   model: "gpt-image-2",
+  promptMode: "default",
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
   promptRewriteGuardHistory: [
@@ -69,6 +70,7 @@ describe("settings service", () => {
       promptRewriteGuardEnabled: _ignoredPromptRewriteGuardEnabled,
       promptRewriteGuardText: _ignoredPromptRewriteGuardText,
       promptRewriteGuardHistory: _ignoredPromptRewriteGuardHistory,
+      promptMode: _ignoredPromptMode,
       ...legacySettings
     } = fullSettings;
     mocks.getFromStore.mockResolvedValue({
@@ -80,6 +82,7 @@ describe("settings service", () => {
 
     expect(result?.connectionMode).toBe("direct");
     expect(result?.apiBaseUrlMode).toBe("origin");
+    expect(result?.promptMode).toBe("default");
     expect(result?.promptRewriteGuardEnabled).toBe(true);
     expect(result?.promptRewriteGuardText).toBe(PROMPT_REWRITE_GUARD_PREFIX);
     expect(result?.promptRewriteGuardHistory).toEqual([

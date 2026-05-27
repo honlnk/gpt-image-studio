@@ -19,6 +19,7 @@ import type {
   AppSettings,
   ConnectionMode,
   GenerationParams,
+  PromptMode,
   PromptRewriteGuardHistoryItem,
   SizeRatio,
   SizeResolution,
@@ -57,6 +58,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
   const apiBaseUrlMode = ref<AppSettings["apiBaseUrlMode"]>("origin");
+  const promptMode = ref<PromptMode>("default");
   const promptRewriteGuardEnabled = ref(true);
   const promptRewriteGuardText = ref(PROMPT_REWRITE_GUARD_PREFIX);
   const promptRewriteGuardHistory = ref<PromptRewriteGuardHistoryItem[]>([
@@ -160,6 +162,7 @@ export const useSettingsStore = defineStore("settings", () => {
     apiBaseUrlMode.value = settings.apiBaseUrlMode;
     apiBaseUrl.value = displayApiBaseUrl(settings.apiBaseUrl, settings.apiBaseUrlMode);
     model.value = settings.model;
+    promptMode.value = settings.promptMode;
     promptRewriteGuardEnabled.value = settings.promptRewriteGuardEnabled;
     promptRewriteGuardText.value = normalizePromptRewriteGuardText(
       settings.promptRewriteGuardText,
@@ -186,6 +189,7 @@ export const useSettingsStore = defineStore("settings", () => {
       apiBaseUrl: apiBaseUrl.value.trim(),
       apiBaseUrlMode: apiBaseUrlMode.value,
       model: model.value,
+      promptMode: promptMode.value,
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
       promptRewriteGuardText: promptRewriteGuardText.value,
       promptRewriteGuardHistory: promptRewriteGuardHistory.value.map(
@@ -272,6 +276,7 @@ export const useSettingsStore = defineStore("settings", () => {
     imageWidth,
     model,
     outputFormat,
+    promptMode,
     promptRewriteGuardEnabled,
     promptRewriteGuardHistory,
     promptRewriteGuardText,

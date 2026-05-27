@@ -42,6 +42,7 @@ const studio = useStudioViewModel();
       :companion-paired="studio.settingsModal.companionPaired"
       :companion-session-token="studio.settingsModal.companionSessionToken"
       :companion-url="studio.settingsModal.companionUrl"
+      :prompt-mode="studio.settingsModal.promptMode"
       :prompt-rewrite-guard-enabled="studio.settingsModal.promptRewriteGuardEnabled"
       :prompt-rewrite-guard-history="studio.settingsModal.promptRewriteGuardHistory"
       :prompt-rewrite-guard-text="studio.settingsModal.promptRewriteGuardText"
@@ -63,6 +64,7 @@ const studio = useStudioViewModel();
       @save-prompt-rewrite-guard-text="studio.settingsModal.savePromptRewriteGuardText"
       @set-prompt-rewrite-guard-enabled="studio.settingsModal.setPromptRewriteGuardEnabled"
       @update:companion-session-token="studio.settingsModal.companionSessionToken = $event"
+      @update:prompt-mode="studio.settingsModal.setPromptMode"
     />
 
     <ImagePreviewModal

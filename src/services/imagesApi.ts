@@ -1,4 +1,5 @@
-import type { GenerationParams } from "../types/studio";
+import type { GenerationParams, PromptMode } from "../types/studio";
+import { buildImagePrompt } from "./promptBuilder";
 
 type GenerateImageInput = {
   apiBaseUrl: string;
@@ -6,6 +7,7 @@ type GenerateImageInput = {
   apiKey: string;
   model: string;
   prompt: string;
+  promptMode?: PromptMode;
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   params: GenerationParams;
@@ -58,8 +60,12 @@ export function applyPromptRewriteGuard(
 
 export async function generateImage(input: GenerateImageInput) {
   const params = imageApiParams(input.model, input.params);
+  const modePrompt = buildImagePrompt({
+    prompt: input.prompt,
+    mode: input.promptMode ?? "default",
+  });
   const prompt = applyPromptRewriteGuard(
-    input.prompt,
+    modePrompt,
     input.promptRewriteGuardEnabled ?? false,
     input.promptRewriteGuardText,
   );
@@ -84,8 +90,12 @@ export async function generateImage(input: GenerateImageInput) {
 
 export async function editImage(input: EditImageInput) {
   const body = new FormData();
+  const modePrompt = buildImagePrompt({
+    prompt: input.prompt,
+    mode: input.promptMode ?? "default",
+  });
   const prompt = applyPromptRewriteGuard(
-    input.prompt,
+    modePrompt,
     input.promptRewriteGuardEnabled ?? false,
     input.promptRewriteGuardText,
   );
