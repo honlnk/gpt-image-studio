@@ -145,6 +145,7 @@ export function startManagedProcess(input: StartManagedProcessInput): ManagedPro
     input.channel,
     "--session-ttl-days",
     String(input.sessionTtlDays),
+    "--managed",
   ];
 
   input.allowOrigins.forEach((origin) => {

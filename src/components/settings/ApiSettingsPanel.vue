@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from "vue";
+import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 import type { ConnectionMode } from "../../types/studio";
 import {
   checkCompanionHealth,
@@ -38,6 +38,8 @@ const pairingCodeInput = ref("");
 const apiKeyVisible = ref(false);
 const apiKeyCopyStatus = ref<"idle" | "copied" | "failed">("idle");
 let apiKeyCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
+
+const isManagedCompanion = computed(() => companionHealth.value?.runMode !== "serve");
 
 async function checkStatus() {
   const health = await checkCompanionHealth(props.companionUrl);
@@ -420,7 +422,12 @@ watch(
           <!-- Not paired, not in progress -->
           <template v-else-if="!pairingInProgress">
             <p class="text-sm text-gray-500">
-              需要与本地 Companion 配对后才能使用。请先在终端运行 <span class="font-mono text-gray-700">gpt-image-studio pair</span>，再点击开始配对。
+              <template v-if="isManagedCompanion">
+                需要与本地 Companion 配对后才能使用。请先在终端运行 <span class="font-mono text-gray-700">gpt-image-studio pair</span>，再点击开始配对。
+              </template>
+              <template v-else>
+                需要与本地 Companion 配对后才能使用。点击开始配对后，请在当前 Companion 终端查看配对码。
+              </template>
             </p>
             <p v-if="!companionOnline" class="text-xs text-gray-500">
               请先在终端启动 <span class="font-mono text-gray-700">gpt-image-studio start</span>，然后点击刷新。
@@ -469,6 +476,9 @@ watch(
           <!-- Error -->
           <p v-if="pairingError" class="text-xs text-red-600">
             {{ pairingError }}
+            <template v-if="isManagedCompanion && pairingError.includes('gpt-image-studio pair')">
+              ；请确认 pair 命令仍在等待中，然后再点击开始配对。
+            </template>
           </p>
 
           <div v-if="companionPaired && companionOnline" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">

@@ -2,6 +2,7 @@ export type CompanionHealthResponse = {
   app: "gpt-image-studio-companion";
   version: string;
   paired: boolean;
+  runMode?: "serve" | "managed";
 };
 
 export type CompanionAuthStatus = {

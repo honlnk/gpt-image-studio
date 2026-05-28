@@ -11,6 +11,7 @@ import { startPairing, confirmPairing, clearSession, enterPairingMode } from "..
 
 type PairRoutesOptions = {
   sessionTtlMs: number;
+  allowDirectPairing: boolean;
 };
 
 export async function pairRoutes(app: FastifyInstance, opts: PairRoutesOptions) {
@@ -24,7 +25,7 @@ export async function pairRoutes(app: FastifyInstance, opts: PairRoutesOptions) 
   });
 
   app.post<{ Reply: PairStartResponse }>("/pair/start", async (_req, reply) => {
-    const result = startPairing();
+    const result = startPairing({ requirePairingMode: !opts.allowDirectPairing });
     if (!result) {
       return reply.status(409).send({ error: "请先在终端运行 gpt-image-studio pair" } as never);
     }
