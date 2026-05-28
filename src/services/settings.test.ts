@@ -45,6 +45,7 @@ const fullSettings: AppSettings = {
     background: "auto",
     outputFormat: "png",
   },
+  autoRetryOnNetworkError: false,
   storageMode: "indexeddb",
 };
 

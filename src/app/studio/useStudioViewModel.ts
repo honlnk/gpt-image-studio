@@ -11,6 +11,7 @@ import {
 } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
+import { withNetworkRetry } from "../../services/networkRetry";
 import {
   deleteConversationDraft,
   deleteConversationDrafts,
@@ -129,16 +130,16 @@ export function useStudioViewModel() {
   });
   const imageClient: ImageClient = {
     generate(input) {
-      if (settings.connectionMode.value === "localCompanion") {
-        return localCompanionImagesClient.generate(input);
-      }
-      return directImagesClient.generate(input);
+      const fn = () => settings.connectionMode.value === "localCompanion"
+        ? localCompanionImagesClient.generate(input)
+        : directImagesClient.generate(input);
+      return withNetworkRetry(fn, () => settings.autoRetryOnNetworkError.value);
     },
     edit(input) {
-      if (settings.connectionMode.value === "localCompanion") {
-        return localCompanionImagesClient.edit(input);
-      }
-      return directImagesClient.edit(input);
+      const fn = () => settings.connectionMode.value === "localCompanion"
+        ? localCompanionImagesClient.edit(input)
+        : directImagesClient.edit(input);
+      return withNetworkRetry(fn, () => settings.autoRetryOnNetworkError.value);
     },
   };
 
@@ -646,6 +647,7 @@ export function useStudioViewModel() {
     renameImage: requestRenameImage,
   });
   const settingsModal = proxyRefs({
+    autoRetryOnNetworkError: settings.autoRetryOnNetworkError,
     apiBaseUrl: settings.apiBaseUrl,
     apiBaseUrlMode: settings.apiBaseUrlMode,
     apiKey: settings.apiKey,

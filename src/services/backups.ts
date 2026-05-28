@@ -121,6 +121,8 @@ export async function restoreStudioBackup(file: File) {
             },
           ],
         defaults: normalizeGenerationParams(data.settings.defaults),
+        autoRetryOnNetworkError:
+          data.settings.autoRetryOnNetworkError ?? false,
       }
     : currentSettings;
 

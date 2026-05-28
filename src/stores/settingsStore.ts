@@ -72,6 +72,7 @@ export const useSettingsStore = defineStore("settings", () => {
   );
   const promptRewriteGuardEnabled = ref(true);
   const promptRewriteGuardText = ref(PROMPT_REWRITE_GUARD_PREFIX);
+  const autoRetryOnNetworkError = ref(false);
   const promptRewriteGuardHistory = ref<PromptRewriteGuardHistoryItem[]>([
     {
       id: "prompt-guard-default",
@@ -179,6 +180,7 @@ export const useSettingsStore = defineStore("settings", () => {
     promptRewriteGuardText.value = normalizePromptRewriteGuardText(
       settings.promptRewriteGuardText,
     );
+    autoRetryOnNetworkError.value = settings.autoRetryOnNetworkError ?? false;
     promptRewriteGuardHistory.value = normalizePromptRewriteGuardHistory(
       settings.promptRewriteGuardHistory,
       promptRewriteGuardText.value,
@@ -208,6 +210,7 @@ export const useSettingsStore = defineStore("settings", () => {
       promptRewriteGuardHistory: promptRewriteGuardHistory.value.map(
         toPlainPromptRewriteGuardHistoryItem,
       ),
+      autoRetryOnNetworkError: autoRetryOnNetworkError.value,
       defaults: currentGenerationParams(),
       storageMode: "indexeddb",
     };
@@ -286,6 +289,7 @@ export const useSettingsStore = defineStore("settings", () => {
     apiBaseUrl,
     apiBaseUrlMode,
     apiKey,
+    autoRetryOnNetworkError,
     companionPaired,
     companionSessionToken,
     companionUrl,

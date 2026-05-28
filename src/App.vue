@@ -39,6 +39,7 @@ const studio = useStudioViewModel();
       v-model:api-base-url-mode="studio.settingsModal.apiBaseUrlMode"
       v-model:api-key="studio.settingsModal.apiKey"
       v-model:connection-mode="studio.settingsModal.connectionMode"
+      :auto-retry-on-network-error="studio.settingsModal.autoRetryOnNetworkError"
       :companion-paired="studio.settingsModal.companionPaired"
       :companion-session-token="studio.settingsModal.companionSessionToken"
       :companion-url="studio.settingsModal.companionUrl"
@@ -67,6 +68,7 @@ const studio = useStudioViewModel();
       @save-prompt-wordbank="studio.settingsModal.savePromptWordbank"
       @set-prompt-rewrite-guard-enabled="studio.settingsModal.setPromptRewriteGuardEnabled"
       @update:companion-session-token="studio.settingsModal.companionSessionToken = $event"
+      @update:auto-retry-on-network-error="studio.settingsModal.autoRetryOnNetworkError = $event"
       @update:prompt-mode="studio.settingsModal.setPromptMode"
     />
 

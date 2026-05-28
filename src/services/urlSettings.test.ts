@@ -37,6 +37,7 @@ const currentSettings: AppSettings = {
     background: "auto",
     outputFormat: "png",
   },
+  autoRetryOnNetworkError: false,
   storageMode: "indexeddb",
 };
 

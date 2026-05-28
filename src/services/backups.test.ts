@@ -87,6 +87,7 @@ const settings: AppSettings = {
     background: "auto",
     outputFormat: "png",
   },
+  autoRetryOnNetworkError: false,
   storageMode: "indexeddb",
 };
 
@@ -130,6 +131,7 @@ describe("studio backups", () => {
       promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
       promptRewriteGuardText: settings.promptRewriteGuardText,
       promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
+      autoRetryOnNetworkError: settings.autoRetryOnNetworkError,
       defaults: settings.defaults,
       storageMode: settings.storageMode,
     });

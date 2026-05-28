@@ -13,17 +13,19 @@ import type {
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
+import GeneralSettingsPanel from "../settings/GeneralSettingsPanel.vue";
 import PromptGuardSettingsPanel from "../settings/PromptGuardSettingsPanel.vue";
 import PromptModeSettingsPanel from "../settings/PromptModeSettingsPanel.vue";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
 
-type SettingsTab = "api" | "promptMode" | "prompt" | "backup" | "batch";
+type SettingsTab = "general" | "api" | "promptMode" | "prompt" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 
 const props = defineProps<{
   isOpen: boolean;
   initialBatchPanel?: BatchPanel;
   initialTab?: SettingsTab;
+  autoRetryOnNetworkError: boolean;
   connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
@@ -48,6 +50,7 @@ const emit = defineEmits<{
   exportBackup: [];
   importBackup: [file: File];
   previewImage: [id: string];
+  "update:autoRetryOnNetworkError": [value: boolean];
   "update:connectionMode": [value: ConnectionMode];
   "update:apiKey": [value: string];
   "update:apiBaseUrl": [value: string];
@@ -64,11 +67,12 @@ const emit = defineEmits<{
   setPromptRewriteGuardEnabled: [value: boolean];
 }>();
 
-const activeTab = ref<SettingsTab>("api");
+const activeTab = ref<SettingsTab>("general");
 const pendingBackupFile = ref<File | null>(null);
 const isRestoreConfirmOpen = ref(false);
 
 const tabs: { key: SettingsTab; label: string }[] = [
+  { key: "general", label: "通用" },
   { key: "api", label: "接口" },
   { key: "promptMode", label: "提示词模式" },
   { key: "prompt", label: "提示词保护" },
@@ -80,7 +84,7 @@ watch(
   () => props.isOpen,
   (isOpen) => {
     if (!isOpen) return;
-    activeTab.value = props.initialTab ?? "api";
+    activeTab.value = props.initialTab ?? "general";
   },
 );
 
@@ -174,8 +178,14 @@ function forwardSavePromptWordbank(
           </nav>
 
           <div class="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
+            <GeneralSettingsPanel
+              v-if="activeTab === 'general'"
+              :auto-retry-on-network-error="autoRetryOnNetworkError"
+              @update:auto-retry-on-network-error="emit('update:autoRetryOnNetworkError', $event)"
+            />
+
             <ApiSettingsPanel
-              v-if="activeTab === 'api'"
+              v-else-if="activeTab === 'api'"
               :connection-mode="connectionMode"
               :api-base-url="apiBaseUrl"
               :api-base-url-mode="apiBaseUrlMode"

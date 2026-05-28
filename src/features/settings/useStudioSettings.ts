@@ -24,6 +24,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
       refs.promptRewriteGuardEnabled,
       refs.promptRewriteGuardText,
       refs.promptRewriteGuardHistory,
+      refs.autoRetryOnNetworkError,
       refs.activeSizePreset,
       refs.sizeResolution,
       refs.imageWidth,
