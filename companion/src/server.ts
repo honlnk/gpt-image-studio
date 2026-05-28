@@ -9,8 +9,15 @@ import { authMiddleware } from "./middleware/auth.js";
 import type { CompanionSecurityConfig } from "./securityConfig.js";
 import { isOriginAllowed } from "./securityConfig.js";
 
-export async function startServer(opts: { port: number; security: CompanionSecurityConfig }) {
+export type CompanionRunMode = "serve" | "managed";
+
+export async function startServer(opts: {
+  port: number;
+  security: CompanionSecurityConfig;
+  runMode?: CompanionRunMode;
+}) {
   loadSession();
+  const runMode = opts.runMode ?? "serve";
 
   const app = Fastify({
     bodyLimit: opts.security.maxJsonBodyBytes,
@@ -35,7 +42,10 @@ export async function startServer(opts: { port: number; security: CompanionSecur
   });
 
   await authMiddleware(app);
-  await app.register(pairRoutes, { sessionTtlMs: opts.security.sessionTtlMs });
+  await app.register(pairRoutes, {
+    sessionTtlMs: opts.security.sessionTtlMs,
+    allowDirectPairing: runMode === "serve",
+  });
   await app.register(authRoutes);
   await app.register(imagesRoutes, { security: opts.security });
 
@@ -44,6 +54,7 @@ export async function startServer(opts: { port: number; security: CompanionSecur
       app: "gpt-image-studio-companion",
       version: "0.3.0",
       paired: isPaired(),
+      runMode,
     };
   });
 
@@ -54,6 +65,10 @@ export async function startServer(opts: { port: number; security: CompanionSecur
   opts.security.allowedOrigins.forEach((origin) => console.log(`  - ${origin}`));
 
   if (!isPaired()) {
-    console.log("等待网页端发起配对...");
+    if (runMode === "serve") {
+      console.log("前台服务已就绪，可在网页端点击「开始配对」。");
+    } else {
+      console.log("需要配对时请运行：gpt-image-studio pair");
+    }
   }
 }

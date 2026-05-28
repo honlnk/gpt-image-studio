@@ -29,6 +29,7 @@ export type Message = {
   resultImageIds: string[];
   status: MessageStatus;
   createdAt: string;
+  generationStartedAt?: string;
   generationParams?: GenerationParams;
   errorMessage?: string;
   editSourceImageId?: string;
@@ -51,6 +52,7 @@ export type ImageAsset = {
   revisedPrompt?: string;
   referencedImageIds?: string[];
   editSourceImageId?: string;
+  generationDurationMs?: number;
   isEditMask?: boolean;
   isTransientMask?: boolean;
   transientBlob?: Blob;
@@ -75,6 +77,20 @@ export type GenerationParams = {
 export type ConnectionMode = "direct" | "localCompanion";
 export type ApiBaseUrlMode = "origin" | "full";
 export type PromptMode = "default" | "safe" | "creative" | "adult";
+export type PromptWordbankSectionKey =
+  | "pose.safe"
+  | "pose.creative"
+  | "pose.nsfw"
+  | "adultInspiration";
+
+export type PromptWordbanks = {
+  pose: {
+    safe: string[];
+    creative: string[];
+    nsfw: string[];
+  };
+  adultInspiration: string[];
+};
 
 export type PromptRewriteGuardHistoryItem = {
   id: string;
@@ -89,9 +105,11 @@ export type AppSettings = {
   apiBaseUrlMode: ApiBaseUrlMode;
   model: string;
   promptMode: PromptMode;
+  promptWordbanks: PromptWordbanks;
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
+  autoRetryOnNetworkError: boolean;
   defaults: GenerationParams;
   storageMode: "indexeddb";
 };

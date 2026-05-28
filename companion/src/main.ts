@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline";
 import { existsSync, statSync } from "node:fs";
-import { program } from "commander";
+import { Option, program } from "commander";
 import type { CompanionHealthResponse, PairWaitResponse } from "./types.js";
 import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials.js";
 import { clearSession, getSessionInfo, loadSession } from "./pairingState.js";
@@ -25,6 +25,7 @@ type ServeLikeOptions = {
   channel?: string;
   allowOrigin?: string[];
   sessionTtlDays: string;
+  managed?: boolean;
 };
 
 function addServeOptions(command: ReturnType<typeof program.command>) {
@@ -32,7 +33,8 @@ function addServeOptions(command: ReturnType<typeof program.command>) {
     .option("-p, --port <port>", "监听端口", DEFAULT_PORT)
     .option("--channel <channel>", "安全渠道：stable 或 dev", process.env.GPT_IMAGE_STUDIO_COMPANION_CHANNEL)
     .option("--allow-origin <origin...>", "额外允许的完整 origin，例如 http://localhost:5173")
-    .option("--session-ttl-days <days>", "配对 session 有效天数", DEFAULT_SESSION_TTL_DAYS);
+    .option("--session-ttl-days <days>", "配对 session 有效天数", DEFAULT_SESSION_TTL_DAYS)
+    .addOption(new Option("--managed", "由 start 命令托管的后台服务").hideHelp());
 }
 
 program
@@ -52,6 +54,7 @@ addServeOptions(program
         allowOrigins: opts.allowOrigin ?? [],
         sessionTtlDays: Number(opts.sessionTtlDays),
       }),
+      runMode: opts.managed ? "managed" : "serve",
     });
   });
 

@@ -1,4 +1,4 @@
-import type { GenerationParams, PromptMode } from "../types/studio";
+import type { GenerationParams, PromptMode, PromptWordbanks } from "../types/studio";
 import { buildImagePrompt } from "./promptBuilder";
 
 type GenerateImageInput = {
@@ -8,6 +8,7 @@ type GenerateImageInput = {
   model: string;
   prompt: string;
   promptMode?: PromptMode;
+  promptWordbanks?: PromptWordbanks;
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   params: GenerationParams;
@@ -63,24 +64,32 @@ export async function generateImage(input: GenerateImageInput) {
   const modePrompt = buildImagePrompt({
     prompt: input.prompt,
     mode: input.promptMode ?? "default",
+    wordbanks: input.promptWordbanks,
   });
   const prompt = applyPromptRewriteGuard(
     modePrompt,
     input.promptRewriteGuardEnabled ?? false,
     input.promptRewriteGuardText,
   );
-  const response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl, input.apiBaseUrlMode)}/generations`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${input.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: input.model,
-      prompt,
-      ...params,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl, input.apiBaseUrlMode)}/generations`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: input.model,
+        prompt,
+        ...params,
+      }),
+    });
+  } catch {
+    throw new Error(
+      "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。",
+    );
+  }
 
   const payload = await parseImageResponse(response);
   const imageData = extractImageResult(payload);
@@ -93,6 +102,7 @@ export async function editImage(input: EditImageInput) {
   const modePrompt = buildImagePrompt({
     prompt: input.prompt,
     mode: input.promptMode ?? "default",
+    wordbanks: input.promptWordbanks,
   });
   const prompt = applyPromptRewriteGuard(
     modePrompt,
@@ -137,7 +147,7 @@ export async function editImage(input: EditImageInput) {
       error: error instanceof Error ? error.message : String(error),
     }));
     throw new Error(
-      "网络请求失败：浏览器没有收到接口响应，可能是 CORS、代理中断或上传图片过大。",
+      "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。",
     );
   }
 
@@ -266,7 +276,9 @@ async function parseImageResponse(response: Response) {
   const payload = text ? (JSON.parse(text) as ImageApiResponse) : {};
 
   if (!response.ok) {
-    const message = payload.error?.message || `请求失败：HTTP ${response.status}`;
+    const statusMessage = `请求失败：HTTP ${response.status}`;
+    const detail = payload.error?.message;
+    const message = detail ? `${statusMessage}：${detail}` : statusMessage;
     throw new Error(message);
   }
 

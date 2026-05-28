@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from "vue";
+import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 import type { ConnectionMode } from "../../types/studio";
 import {
   checkCompanionHealth,
   getCompanionAuthStatus,
+  getCompanionAuthStatusResult,
   startPairing,
   confirmPairing,
   unpairCompanion,
@@ -38,13 +39,44 @@ const apiKeyVisible = ref(false);
 const apiKeyCopyStatus = ref<"idle" | "copied" | "failed">("idle");
 let apiKeyCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
+const isManagedCompanion = computed(() => companionHealth.value?.runMode !== "serve");
+
 async function checkStatus() {
   const health = await checkCompanionHealth(props.companionUrl);
   companionHealth.value = health;
   companionOnline.value = health !== null;
-  companionAuthStatus.value = health && props.companionSessionToken
-    ? await getCompanionAuthStatus(props.companionUrl, props.companionSessionToken)
-    : null;
+
+  if (!health || !props.companionSessionToken) {
+    companionAuthStatus.value = null;
+    return;
+  }
+
+  if (!health.paired) {
+    emit("update:companionSessionToken", "");
+    companionAuthStatus.value = null;
+    pairingInProgress.value = false;
+    pairingCodeInput.value = "";
+    pairingError.value = "检测到本地 Companion 配对已失效，已清除浏览器里的旧会话，请重新配对。";
+    return;
+  }
+
+  const authResult = await getCompanionAuthStatusResult(
+    props.companionUrl,
+    props.companionSessionToken,
+  );
+
+  if (authResult.ok) {
+    companionAuthStatus.value = authResult.status;
+    return;
+  }
+
+  companionAuthStatus.value = null;
+  if (authResult.invalidToken) {
+    emit("update:companionSessionToken", "");
+    pairingInProgress.value = false;
+    pairingCodeInput.value = "";
+    pairingError.value = "检测到本地 Companion 拒绝了旧 token，已清除浏览器会话，请重新配对。";
+  }
 }
 
 async function handleStartPairing() {
@@ -390,7 +422,12 @@ watch(
           <!-- Not paired, not in progress -->
           <template v-else-if="!pairingInProgress">
             <p class="text-sm text-gray-500">
-              需要与本地 Companion 配对后才能使用。请先在终端运行 <span class="font-mono text-gray-700">gpt-image-studio pair</span>，再点击开始配对。
+              <template v-if="isManagedCompanion">
+                需要与本地 Companion 配对后才能使用。请先在终端运行 <span class="font-mono text-gray-700">gpt-image-studio pair</span>，再点击开始配对。
+              </template>
+              <template v-else>
+                需要与本地 Companion 配对后才能使用。点击开始配对后，请在当前 Companion 终端查看配对码。
+              </template>
             </p>
             <p v-if="!companionOnline" class="text-xs text-gray-500">
               请先在终端启动 <span class="font-mono text-gray-700">gpt-image-studio start</span>，然后点击刷新。
@@ -439,6 +476,9 @@ watch(
           <!-- Error -->
           <p v-if="pairingError" class="text-xs text-red-600">
             {{ pairingError }}
+            <template v-if="isManagedCompanion && pairingError.includes('gpt-image-studio pair')">
+              ；请确认 pair 命令仍在等待中，然后再点击开始配对。
+            </template>
           </p>
 
           <div v-if="companionPaired && companionOnline" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">

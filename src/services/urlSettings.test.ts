@@ -9,6 +9,7 @@ import {
   hasUrlGenerationParams,
 } from "./urlSettings";
 import type { AppSettings } from "../types/studio";
+import { defaultPromptWordbanks } from "./promptWordbanks";
 
 const currentSettings: AppSettings = {
   connectionMode: "direct",
@@ -17,6 +18,7 @@ const currentSettings: AppSettings = {
   apiBaseUrlMode: "full",
   model: "gpt-image-2",
   promptMode: "default",
+  promptWordbanks: defaultPromptWordbanks,
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
   promptRewriteGuardHistory: [
@@ -35,6 +37,7 @@ const currentSettings: AppSettings = {
     background: "auto",
     outputFormat: "png",
   },
+  autoRetryOnNetworkError: false,
   storageMode: "indexeddb",
 };
 

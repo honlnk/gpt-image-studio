@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSy
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const CONFIG_DIR = join(homedir(), ".gpt-image-studio");
+const CONFIG_DIR = process.env.GPT_IMAGE_STUDIO_CONFIG_DIR ?? join(homedir(), ".gpt-image-studio");
 const SESSION_FILE = join(CONFIG_DIR, "session.json");
 const PAIRING_CODE_EXPIRY_MS = 5 * 60 * 1000;
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -76,13 +76,18 @@ export function getSessionInfo(): { paired: boolean; expiresAt: string | null } 
 
 export function enterPairingMode(timeoutMs = PAIRING_CODE_EXPIRY_MS): { waiting: true; expiresInSeconds: number } {
   clearSession();
-  activePairingCode = null;
-  pairingCodeExpiresAt = 0;
+  clearPairingMode();
   pairingWaitExpiresAt = Date.now() + timeoutMs;
   return {
     waiting: true,
     expiresInSeconds: Math.floor(timeoutMs / 1000),
   };
+}
+
+export function clearPairingMode() {
+  activePairingCode = null;
+  pairingCodeExpiresAt = 0;
+  pairingWaitExpiresAt = 0;
 }
 
 export function isPairingModeActive(): boolean {
@@ -91,8 +96,8 @@ export function isPairingModeActive(): boolean {
   return false;
 }
 
-export function startPairing(): { expiresInSeconds: number } | null {
-  if (!isPairingModeActive()) return null;
+export function startPairing(opts: { requirePairingMode?: boolean } = {}): { expiresInSeconds: number } | null {
+  if (opts.requirePairingMode !== false && !isPairingModeActive()) return null;
 
   clearSession();
   if (activePairingCode && Date.now() <= pairingCodeExpiresAt) {

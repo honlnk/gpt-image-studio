@@ -1,4 +1,5 @@
 import type {
+  CompanionAuthStatusResult,
   CompanionAuthStatus,
   CompanionHealthResponse,
   PairConfirmResponse,
@@ -22,16 +23,25 @@ export async function getCompanionAuthStatus(
   url: string,
   sessionToken: string,
 ): Promise<CompanionAuthStatus | null> {
-  if (!sessionToken) return null;
+  const result = await getCompanionAuthStatusResult(url, sessionToken);
+  return result.ok ? result.status : null;
+}
+
+export async function getCompanionAuthStatusResult(
+  url: string,
+  sessionToken: string,
+): Promise<CompanionAuthStatusResult> {
+  if (!sessionToken) return { ok: false, invalidToken: false };
   try {
     const res = await fetch(`${url}/auth/status`, {
       headers: { Authorization: `Bearer ${sessionToken}` },
       signal: AbortSignal.timeout(3000),
     });
-    if (!res.ok) return null;
-    return await res.json();
+    if (res.status === 401) return { ok: false, invalidToken: true };
+    if (!res.ok) return { ok: false, invalidToken: false };
+    return { ok: true, status: await res.json() };
   } catch {
-    return null;
+    return { ok: false, invalidToken: false };
   }
 }
 

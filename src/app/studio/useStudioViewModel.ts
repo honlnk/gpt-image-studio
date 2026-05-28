@@ -11,6 +11,7 @@ import {
 } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
+import { withNetworkRetry } from "../../services/networkRetry";
 import {
   deleteConversationDraft,
   deleteConversationDrafts,
@@ -25,14 +26,20 @@ import {
 } from "../../services/urlSettings";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import { useComposerStore } from "../../stores/composerStore";
-import type { ConversationDraft, GenerationParams, PromptMode } from "../../types/studio";
+import type {
+  ConversationDraft,
+  GenerationParams,
+  Message,
+  PromptMode,
+  PromptWordbankSectionKey,
+} from "../../types/studio";
 
 const STORAGE_KEYS = {
   draftComposerText: "gpt-image-studio:draft-composer-text",
   draftAttachments: "gpt-image-studio:draft-attachments",
 } as const;
 
-type SettingsTab = "api" | "prompt" | "backup" | "batch";
+type SettingsTab = "api" | "promptMode" | "prompt" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 type RenameDialogState = {
   isOpen: boolean;
@@ -108,6 +115,7 @@ export function useStudioViewModel() {
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
     getPromptMode: () => settings.promptMode.value,
+    getPromptWordbanks: () => settings.promptWordbanks.value,
     getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
     getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
@@ -116,21 +124,22 @@ export function useStudioViewModel() {
     getSessionToken: () => settings.companionSessionToken.value,
     getModel: () => settings.model.value,
     getPromptMode: () => settings.promptMode.value,
+    getPromptWordbanks: () => settings.promptWordbanks.value,
     getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
     getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
   const imageClient: ImageClient = {
     generate(input) {
-      if (settings.connectionMode.value === "localCompanion") {
-        return localCompanionImagesClient.generate(input);
-      }
-      return directImagesClient.generate(input);
+      const fn = () => settings.connectionMode.value === "localCompanion"
+        ? localCompanionImagesClient.generate(input)
+        : directImagesClient.generate(input);
+      return withNetworkRetry(fn, () => settings.autoRetryOnNetworkError.value);
     },
     edit(input) {
-      if (settings.connectionMode.value === "localCompanion") {
-        return localCompanionImagesClient.edit(input);
-      }
-      return directImagesClient.edit(input);
+      const fn = () => settings.connectionMode.value === "localCompanion"
+        ? localCompanionImagesClient.edit(input)
+        : directImagesClient.edit(input);
+      return withNetworkRetry(fn, () => settings.autoRetryOnNetworkError.value);
     },
   };
 
@@ -148,6 +157,7 @@ export function useStudioViewModel() {
     imageById: images.imageById,
     imageClient,
     messages,
+    onApiConfigurationError: openApiSettingsFromGenerationError,
     onStorageError: reportStorageError,
     conversationExists: (id: string) =>
       conversations.conversations.value.some((item) => item.id === id),
@@ -217,6 +227,13 @@ export function useStudioViewModel() {
     settingsInitialTab.value = "api";
     settingsInitialBatchPanel.value = "images";
     openSettings();
+  }
+
+  function openApiSettingsFromGenerationError() {
+    settingsInitialTab.value = "api";
+    settingsInitialBatchPanel.value = "images";
+    openSettings();
+    feedback.notifyError("图片接口认证失败，请检查 API key 和接口地址。");
   }
 
   onMounted(() => {
@@ -313,6 +330,41 @@ export function useStudioViewModel() {
     settings.quality.value = params.quality;
     settings.background.value = params.background;
     settings.outputFormat.value = params.outputFormat;
+  }
+
+  async function copyText(text: string) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        copyTextWithTextarea(text);
+      }
+      feedback.notifySuccess("文本已复制。");
+    } catch (error) {
+      feedback.notifyError("复制失败，请手动选择文本复制。");
+      reportStorageError(error);
+    }
+  }
+
+  function loadMessageConfig(message: Message) {
+    composerText.value = message.content;
+    images.attachedImages.value = message.referencedImageIds.filter((id) =>
+      Boolean(images.imageById(id)),
+    );
+    composerState.clearEditSelection();
+    editModeEnabled.value = false;
+
+    if (message.generationParams) {
+      applyGenerationParams(message.generationParams);
+    }
+
+    const conversationId = conversations.activeConversationId.value;
+    if (conversationId) {
+      void saveConversationDraft(currentConversationDraft(conversationId)).catch(
+        reportStorageError,
+      );
+    }
+    feedback.notifySuccess("已加载到输入面板。");
   }
 
   function applyUrlDraftOverrides(
@@ -457,6 +509,16 @@ export function useStudioViewModel() {
     persistSettingsChange();
   }
 
+  function savePromptWordbank(section: PromptWordbankSectionKey, terms: string[]) {
+    settings.savePromptWordbank(section, terms);
+    persistSettingsChange();
+  }
+
+  function restoreDefaultPromptWordbank(section: PromptWordbankSectionKey) {
+    settings.restoreDefaultPromptWordbank(section);
+    persistSettingsChange();
+  }
+
   function savePromptRewriteGuardText(text: string) {
     settings.savePromptRewriteGuardText(text);
     persistSettingsChange();
@@ -526,6 +588,9 @@ export function useStudioViewModel() {
   });
   const chatActions = {
     closeAllEditors: composerState.closeAllEditors,
+    copyText,
+    generateAnother: generation.generateAnother,
+    loadMessageConfig,
     openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,
     previewImage: previewImageById,
@@ -550,6 +615,7 @@ export function useStudioViewModel() {
       images.removeAttachment(id);
     },
     retryMessage: generation.retryMessage,
+    refreshImage: generation.refreshGeneratedImage,
     setEditModeEnabled: (value: boolean) => {
       if (!value) {
         if (activeEditMaskImageId.value) {
@@ -581,6 +647,7 @@ export function useStudioViewModel() {
     renameImage: requestRenameImage,
   });
   const settingsModal = proxyRefs({
+    autoRetryOnNetworkError: settings.autoRetryOnNetworkError,
     apiBaseUrl: settings.apiBaseUrl,
     apiBaseUrlMode: settings.apiBaseUrlMode,
     apiKey: settings.apiKey,
@@ -589,6 +656,7 @@ export function useStudioViewModel() {
     companionUrl: settings.companionUrl,
     connectionMode: settings.connectionMode,
     promptMode: settings.promptMode,
+    promptWordbanks: settings.promptWordbanks,
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
     promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
     promptRewriteGuardText: settings.promptRewriteGuardText,
@@ -608,8 +676,10 @@ export function useStudioViewModel() {
     restoreDefaultPromptRewriteGuardText,
     restorePromptRewriteGuardHistoryItem,
     savePromptRewriteGuardText,
+    savePromptWordbank,
     setPromptMode,
     setPromptRewriteGuardEnabled,
+    restoreDefaultPromptWordbank,
   });
   const preview = proxyRefs({
     close: closePreview,
@@ -663,4 +733,16 @@ export function useStudioViewModel() {
 
 function reportStorageError(error: unknown) {
   console.error("Failed to access local studio storage.", error);
+}
+
+function copyTextWithTextarea(text: string) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
 }

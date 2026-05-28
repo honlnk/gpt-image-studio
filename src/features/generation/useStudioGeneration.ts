@@ -29,6 +29,7 @@ type UseStudioGenerationInput = {
   imageById: (id: string) => ImageAsset | undefined;
   imageClient: ImageClient;
   messages: Ref<Message[]>;
+  onApiConfigurationError?: (error: unknown) => void;
   onStorageError: (error: unknown) => void;
   conversationExists: (id: string) => boolean;
   persistConversation: (conversation: Conversation) => Promise<void>;
@@ -49,6 +50,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
 
   return {
     ...refs,
+    generateAnother: generation.generateAnother,
+    refreshGeneratedImage: generation.refreshGeneratedImage,
     retryMessage: generation.retryMessage,
     submitMessage: generation.submitMessage,
   };

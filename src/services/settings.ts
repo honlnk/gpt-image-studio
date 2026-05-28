@@ -6,6 +6,7 @@ import {
   PROMPT_REWRITE_GUARD_PREFIX,
   normalizePromptRewriteGuardText,
 } from "./imagesApi";
+import { normalizePromptWordbanks } from "./promptWordbanks";
 import type {
   ApiBaseUrlMode,
   AppSettings,
@@ -45,6 +46,7 @@ type StoredAppSettings = Omit<
   | "connectionMode"
   | "apiBaseUrlMode"
   | "promptMode"
+  | "promptWordbanks"
   | "promptRewriteGuardEnabled"
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
@@ -55,6 +57,7 @@ type StoredAppSettings = Omit<
   promptRewriteGuardText?: string;
   promptRewriteGuardHistory?: PromptRewriteGuardHistoryItem[];
   promptMode?: PromptMode;
+  promptWordbanks?: unknown;
   defaults: StoredGenerationParams;
 };
 
@@ -67,6 +70,7 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
     connectionMode: settings.connectionMode ?? "direct",
     apiBaseUrlMode: settings.apiBaseUrlMode === "full" ? "full" : "origin",
     promptMode: normalizePromptMode(settings.promptMode),
+    promptWordbanks: normalizePromptWordbanks(settings.promptWordbanks),
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled ?? true,
     promptRewriteGuardText,
     promptRewriteGuardHistory:

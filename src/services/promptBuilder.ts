@@ -1,10 +1,11 @@
-import type { PromptMode } from "../types/studio";
-import { promptWordbanks } from "./promptWordbanks";
+import type { PromptMode, PromptWordbanks } from "../types/studio";
+import { promptWordbanks as defaultPromptWordbanks } from "./promptWordbanks";
 
 export type BuildPromptInput = {
   prompt: string;
   mode: PromptMode;
   seed?: string;
+  wordbanks?: PromptWordbanks;
 };
 
 const MODE_LABELS: Record<Exclude<PromptMode, "default">, string> = {
@@ -26,7 +27,11 @@ export function buildImagePrompt(input: BuildPromptInput) {
   if (input.mode === "default") return input.prompt;
 
   const mode = input.mode;
-  const inspirationTerms = selectInspirationTerms(mode, input.seed ?? input.prompt);
+  const inspirationTerms = selectInspirationTerms(
+    mode,
+    input.seed ?? input.prompt,
+    input.wordbanks,
+  );
   const inspirationBlock = inspirationTerms.length
     ? inspirationTerms.join(", ")
     : "无";
@@ -45,16 +50,20 @@ export function buildImagePrompt(input: BuildPromptInput) {
   ].join("\n");
 }
 
-export function selectInspirationTerms(mode: Exclude<PromptMode, "default">, seed: string) {
+export function selectInspirationTerms(
+  mode: Exclude<PromptMode, "default">,
+  seed: string,
+  wordbanks: PromptWordbanks = defaultPromptWordbanks,
+) {
   const poseTerms =
     mode === "safe"
-      ? promptWordbanks.pose.safe
+      ? wordbanks.pose.safe
       : mode === "creative"
-        ? [...promptWordbanks.pose.safe, ...promptWordbanks.pose.creative]
+        ? [...wordbanks.pose.safe, ...wordbanks.pose.creative]
         : [
-            ...promptWordbanks.pose.safe,
-            ...promptWordbanks.pose.creative,
-            ...promptWordbanks.pose.nsfw,
+            ...wordbanks.pose.safe,
+            ...wordbanks.pose.creative,
+            ...wordbanks.pose.nsfw,
           ];
   const selectedPoseTerms = pickDeterministic(poseTerms, mode === "safe" ? 2 : 3, `${seed}:pose`);
 
@@ -62,7 +71,7 @@ export function selectInspirationTerms(mode: Exclude<PromptMode, "default">, see
 
   return [
     ...selectedPoseTerms,
-    ...pickDeterministic(promptWordbanks.adultInspiration, 2, `${seed}:adult`),
+    ...pickDeterministic(wordbanks.adultInspiration, 2, `${seed}:adult`),
   ];
 }
 

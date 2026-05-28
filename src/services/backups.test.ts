@@ -4,6 +4,7 @@ import { PROMPT_REWRITE_GUARD_PREFIX } from "./imagesApi";
 import { createStudioBackup, restoreStudioBackup } from "./backups";
 import { STORE_NAMES } from "./db";
 import { createZipArchive } from "./zipArchive";
+import { defaultPromptWordbanks } from "./promptWordbanks";
 
 const mocks = vi.hoisted(() => ({
   clearStore: vi.fn(),
@@ -67,6 +68,7 @@ const settings: AppSettings = {
   apiBaseUrlMode: "full",
   model: "gpt-image-1",
   promptMode: "creative",
+  promptWordbanks: defaultPromptWordbanks,
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
   promptRewriteGuardHistory: [
@@ -85,6 +87,7 @@ const settings: AppSettings = {
     background: "auto",
     outputFormat: "png",
   },
+  autoRetryOnNetworkError: false,
   storageMode: "indexeddb",
 };
 
@@ -124,9 +127,11 @@ describe("studio backups", () => {
       apiBaseUrlMode: settings.apiBaseUrlMode,
       model: settings.model,
       promptMode: settings.promptMode,
+      promptWordbanks: settings.promptWordbanks,
       promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
       promptRewriteGuardText: settings.promptRewriteGuardText,
       promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
+      autoRetryOnNetworkError: settings.autoRetryOnNetworkError,
       defaults: settings.defaults,
       storageMode: settings.storageMode,
     });
@@ -183,6 +188,7 @@ describe("studio backups", () => {
           apiBaseUrlMode: settings.apiBaseUrlMode,
           model: settings.model,
           promptMode: settings.promptMode,
+          promptWordbanks: settings.promptWordbanks,
           defaults: settings.defaults,
           storageMode: settings.storageMode,
         },

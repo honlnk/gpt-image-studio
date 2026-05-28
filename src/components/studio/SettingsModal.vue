@@ -6,22 +6,26 @@ import type {
   ImageAsset,
   Message,
   PromptMode,
+  PromptWordbankSectionKey,
+  PromptWordbanks,
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
+import GeneralSettingsPanel from "../settings/GeneralSettingsPanel.vue";
 import PromptGuardSettingsPanel from "../settings/PromptGuardSettingsPanel.vue";
 import PromptModeSettingsPanel from "../settings/PromptModeSettingsPanel.vue";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
 
-type SettingsTab = "api" | "prompt" | "backup" | "batch";
+type SettingsTab = "general" | "api" | "promptMode" | "prompt" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 
 const props = defineProps<{
   isOpen: boolean;
   initialBatchPanel?: BatchPanel;
   initialTab?: SettingsTab;
+  autoRetryOnNetworkError: boolean;
   connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
@@ -30,6 +34,7 @@ const props = defineProps<{
   companionSessionToken: string;
   companionPaired: boolean;
   promptMode: PromptMode;
+  promptWordbanks: PromptWordbanks;
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
@@ -45,12 +50,15 @@ const emit = defineEmits<{
   exportBackup: [];
   importBackup: [file: File];
   previewImage: [id: string];
+  "update:autoRetryOnNetworkError": [value: boolean];
   "update:connectionMode": [value: ConnectionMode];
   "update:apiKey": [value: string];
   "update:apiBaseUrl": [value: string];
   "update:apiBaseUrlMode": [value: "origin" | "full"];
   "update:companionSessionToken": [value: string];
   "update:promptMode": [value: PromptMode];
+  savePromptWordbank: [section: PromptWordbankSectionKey, terms: string[]];
+  restoreDefaultPromptWordbank: [section: PromptWordbankSectionKey];
   "update:promptRewriteGuardEnabled": [value: boolean];
   savePromptRewriteGuardText: [value: string];
   restoreDefaultPromptRewriteGuardText: [];
@@ -59,12 +67,14 @@ const emit = defineEmits<{
   setPromptRewriteGuardEnabled: [value: boolean];
 }>();
 
-const activeTab = ref<SettingsTab>("api");
+const activeTab = ref<SettingsTab>("general");
 const pendingBackupFile = ref<File | null>(null);
 const isRestoreConfirmOpen = ref(false);
 
 const tabs: { key: SettingsTab; label: string }[] = [
+  { key: "general", label: "通用" },
   { key: "api", label: "接口" },
+  { key: "promptMode", label: "提示词模式" },
   { key: "prompt", label: "提示词保护" },
   { key: "backup", label: "数据备份" },
   { key: "batch", label: "批量操作" },
@@ -74,7 +84,7 @@ watch(
   () => props.isOpen,
   (isOpen) => {
     if (!isOpen) return;
-    activeTab.value = props.initialTab ?? "api";
+    activeTab.value = props.initialTab ?? "general";
   },
 );
 
@@ -95,6 +105,13 @@ function confirmPendingAction() {
 
   isRestoreConfirmOpen.value = false;
   pendingBackupFile.value = null;
+}
+
+function forwardSavePromptWordbank(
+  section: PromptWordbankSectionKey,
+  terms: string[],
+) {
+  emit("savePromptWordbank", section, terms);
 }
 </script>
 
@@ -161,8 +178,14 @@ function confirmPendingAction() {
           </nav>
 
           <div class="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
+            <GeneralSettingsPanel
+              v-if="activeTab === 'general'"
+              :auto-retry-on-network-error="autoRetryOnNetworkError"
+              @update:auto-retry-on-network-error="emit('update:autoRetryOnNetworkError', $event)"
+            />
+
             <ApiSettingsPanel
-              v-if="activeTab === 'api'"
+              v-else-if="activeTab === 'api'"
               :connection-mode="connectionMode"
               :api-base-url="apiBaseUrl"
               :api-base-url-mode="apiBaseUrlMode"
@@ -177,12 +200,16 @@ function confirmPendingAction() {
               @update:companion-session-token="emit('update:companionSessionToken', $event)"
             />
 
-            <div v-else-if="activeTab === 'prompt'" class="space-y-8">
-              <PromptModeSettingsPanel
-                :model-value="promptMode"
-                @update:model-value="emit('update:promptMode', $event)"
-              />
+            <PromptModeSettingsPanel
+              v-else-if="activeTab === 'promptMode'"
+              :model-value="promptMode"
+              :wordbanks="promptWordbanks"
+              @restore-default-wordbank="emit('restoreDefaultPromptWordbank', $event)"
+              @save-wordbank="forwardSavePromptWordbank"
+              @update:model-value="emit('update:promptMode', $event)"
+            />
 
+            <div v-else-if="activeTab === 'prompt'" class="space-y-8">
               <PromptGuardSettingsPanel
                 :enabled="promptRewriteGuardEnabled"
                 :history="promptRewriteGuardHistory"

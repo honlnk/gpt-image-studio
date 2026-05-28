@@ -31,7 +31,15 @@
     "dev": "tsx src/main.ts serve --channel dev",
     "prepack": "pnpm build",
     "build": "tsc",
-    "start": "node dist/main.js serve",
+    "serve": "node dist/main.js serve",
+    "serve:dev": "node dist/main.js serve --channel dev",
+    "start": "node dist/main.js start",
+    "start:dev": "node dist/main.js start --channel dev",
+    "stop": "node dist/main.js stop",
+    "restart": "node dist/main.js restart",
+    "pair": "node dist/main.js pair",
+    "logs": "node dist/main.js logs",
+    "status": "node dist/main.js status",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

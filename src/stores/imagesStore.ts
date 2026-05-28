@@ -342,6 +342,7 @@ function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
       ? [...imageAsset.referencedImageIds]
       : undefined,
     editSourceImageId: imageAsset.editSourceImageId,
+    generationDurationMs: imageAsset.generationDurationMs,
     isEditMask: imageAsset.isEditMask,
     createdAt: imageAsset.createdAt,
     updatedAt: imageAsset.updatedAt,
