@@ -11,6 +11,16 @@ export type CompanionAuthStatus = {
   accountLabel: string;
 };
 
+export type CompanionAuthStatusResult =
+  | {
+      ok: true;
+      status: CompanionAuthStatus;
+    }
+  | {
+      ok: false;
+      invalidToken: boolean;
+    };
+
 export type PairStartResponse = {
   expiresInSeconds: number;
 };

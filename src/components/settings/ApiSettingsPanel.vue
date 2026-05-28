@@ -4,6 +4,7 @@ import type { ConnectionMode } from "../../types/studio";
 import {
   checkCompanionHealth,
   getCompanionAuthStatus,
+  getCompanionAuthStatusResult,
   startPairing,
   confirmPairing,
   unpairCompanion,
@@ -42,9 +43,38 @@ async function checkStatus() {
   const health = await checkCompanionHealth(props.companionUrl);
   companionHealth.value = health;
   companionOnline.value = health !== null;
-  companionAuthStatus.value = health && props.companionSessionToken
-    ? await getCompanionAuthStatus(props.companionUrl, props.companionSessionToken)
-    : null;
+
+  if (!health || !props.companionSessionToken) {
+    companionAuthStatus.value = null;
+    return;
+  }
+
+  if (!health.paired) {
+    emit("update:companionSessionToken", "");
+    companionAuthStatus.value = null;
+    pairingInProgress.value = false;
+    pairingCodeInput.value = "";
+    pairingError.value = "检测到本地 Companion 配对已失效，已清除浏览器里的旧会话，请重新配对。";
+    return;
+  }
+
+  const authResult = await getCompanionAuthStatusResult(
+    props.companionUrl,
+    props.companionSessionToken,
+  );
+
+  if (authResult.ok) {
+    companionAuthStatus.value = authResult.status;
+    return;
+  }
+
+  companionAuthStatus.value = null;
+  if (authResult.invalidToken) {
+    emit("update:companionSessionToken", "");
+    pairingInProgress.value = false;
+    pairingCodeInput.value = "";
+    pairingError.value = "检测到本地 Companion 拒绝了旧 token，已清除浏览器会话，请重新配对。";
+  }
 }
 
 async function handleStartPairing() {
