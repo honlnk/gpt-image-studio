@@ -25,14 +25,21 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
 
     const apiUrl = `${creds.apiBaseUrl.replace(/\/+$/, "")}/generations`;
 
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${creds.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${creds.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      return reply.status(502).send({
+        error: "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。",
+      });
+    }
 
     const payload = await response.text();
     return reply.status(response.status).header("content-type", "application/json").send(payload);
@@ -63,14 +70,21 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
       return reply.status(400).send({ error: validationError });
     }
 
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${creds.apiKey}`,
-        "Content-Type": contentType,
-      },
-      body: new Uint8Array(rawBody),
-    });
+    let response: Response;
+    try {
+      response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${creds.apiKey}`,
+          "Content-Type": contentType,
+        },
+        body: new Uint8Array(rawBody),
+      });
+    } catch {
+      return reply.status(502).send({
+        error: "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。",
+      });
+    }
 
     const payload = await response.text();
     return reply.status(response.status).header("content-type", "application/json").send(payload);
