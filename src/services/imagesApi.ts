@@ -69,18 +69,25 @@ export async function generateImage(input: GenerateImageInput) {
     input.promptRewriteGuardEnabled ?? false,
     input.promptRewriteGuardText,
   );
-  const response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl, input.apiBaseUrlMode)}/generations`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${input.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: input.model,
-      prompt,
-      ...params,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${normalizeApiBaseUrl(input.apiBaseUrl, input.apiBaseUrlMode)}/generations`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: input.model,
+        prompt,
+        ...params,
+      }),
+    });
+  } catch {
+    throw new Error(
+      "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。",
+    );
+  }
 
   const payload = await parseImageResponse(response);
   const imageData = extractImageResult(payload);
@@ -137,7 +144,7 @@ export async function editImage(input: EditImageInput) {
       error: error instanceof Error ? error.message : String(error),
     }));
     throw new Error(
-      "网络请求失败：浏览器没有收到接口响应，可能是 CORS、代理中断或上传图片过大。",
+      "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。",
     );
   }
 
