@@ -139,7 +139,7 @@ function hideTooltip() {
       :class="[
         hoverable ? 'pointer-events-auto' : 'pointer-events-none',
         multiline
-          ? 'w-max max-w-80 whitespace-pre-wrap break-words'
+          ? 'w-max max-w-80 whitespace-pre-wrap wrap-break-word'
           : { 'whitespace-nowrap': placement.x === 'center' },
       ]"
       :style="tooltipStyle"

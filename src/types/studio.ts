@@ -29,6 +29,7 @@ export type Message = {
   resultImageIds: string[];
   status: MessageStatus;
   createdAt: string;
+  generationStartedAt?: string;
   generationParams?: GenerationParams;
   errorMessage?: string;
   editSourceImageId?: string;

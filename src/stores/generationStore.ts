@@ -161,6 +161,7 @@ export const useGenerationStore = defineStore("generation", () => {
       resultImageIds: [],
       status: "pending",
       createdAt: isoTimestamp(now + 1),
+      generationStartedAt: createdAt,
       generationParams: input.value.currentGenerationParams(),
       editSourceImageId,
       editMaskImageId,
@@ -202,10 +203,10 @@ export const useGenerationStore = defineStore("generation", () => {
 
   async function retryMessage(message: Message) {
     message.status = "pending";
+    message.generationStartedAt = isoTimestamp();
     message.content = message.referencedImageIds.length
       ? "正在基于引用图片生成编辑结果。"
       : "正在生成图片。";
-    message.resultImageIds = [];
     message.errorMessage = undefined;
     await saveMessage(toPlainMessage(message)).catch(
       input.value.onStorageError,
@@ -269,6 +270,7 @@ export const useGenerationStore = defineStore("generation", () => {
     if (!userMessage) return;
 
     message.status = "pending";
+    message.generationStartedAt = isoTimestamp();
     message.content = message.referencedImageIds.length
       ? options.replaceImageId
         ? "正在重新生成编辑结果。"
@@ -381,9 +383,8 @@ export const useGenerationStore = defineStore("generation", () => {
       const assistantMessage = findMessage(job.assistantMessageId);
       if (assistantMessage) {
         assistantMessage.status = "error";
-        assistantMessage.content = `生成失败：${message}`;
+        assistantMessage.content = "生成中断，请重试。";
         assistantMessage.errorMessage = message;
-        assistantMessage.resultImageIds = [];
         replaceMessage(assistantMessage);
         await saveMessage(toPlainMessage(assistantMessage)).catch(
           input.value.onStorageError,
@@ -629,6 +630,7 @@ function toPlainMessage(message: Message): Message {
     resultImageIds: [...message.resultImageIds],
     status: message.status,
     createdAt: message.createdAt,
+    generationStartedAt: message.generationStartedAt,
     generationParams: message.generationParams
       ? { ...message.generationParams }
       : undefined,
