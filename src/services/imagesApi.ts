@@ -273,7 +273,9 @@ async function parseImageResponse(response: Response) {
   const payload = text ? (JSON.parse(text) as ImageApiResponse) : {};
 
   if (!response.ok) {
-    const message = payload.error?.message || `请求失败：HTTP ${response.status}`;
+    const statusMessage = `请求失败：HTTP ${response.status}`;
+    const detail = payload.error?.message;
+    const message = detail ? `${statusMessage}：${detail}` : statusMessage;
     throw new Error(message);
   }
 

@@ -101,7 +101,11 @@ async function extractB64Json(response: Response): Promise<ImageClientResult> {
   const payload = text ? JSON.parse(text) : {};
 
   if (!response.ok) {
-    const message = payload.error?.message || payload.error || `请求失败：HTTP ${response.status}`;
+    const statusMessage = `请求失败：HTTP ${response.status}`;
+    const detail = payload.error?.message || payload.error;
+    const message = detail
+      ? `${statusMessage}：${typeof detail === "string" ? detail : JSON.stringify(detail)}`
+      : statusMessage;
     throw new Error(typeof message === "string" ? message : JSON.stringify(message));
   }
 

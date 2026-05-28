@@ -12,7 +12,7 @@ import { readImageDimensions } from "../services/imageMetadata";
 import { base64ToBlob } from "../services/imagesApi";
 import { saveMessage } from "../services/messages";
 import { isoTimestamp, timestampFromCreatedAt } from "../shared/dateTime";
-import { formatError } from "../shared/errors";
+import { formatError, isApiConfigurationError } from "../shared/errors";
 import { createId } from "../shared/id";
 import { createObjectUrl } from "../shared/objectUrls";
 import type {
@@ -44,6 +44,7 @@ type GenerationStoreContext = {
   imageById: (id: string) => ImageAsset | undefined;
   imageClient: ImageClient;
   messages: Ref<Message[]>;
+  onApiConfigurationError?: (error: unknown) => void;
   onStorageError: (error: unknown) => void;
   conversationExists: (id: string) => boolean;
   persistConversation: (conversation: Conversation) => Promise<void>;
@@ -307,6 +308,9 @@ export const useGenerationStore = defineStore("generation", () => {
       markJobSuccess(job.id);
     } catch (error) {
       const message = formatError(error);
+      if (isApiConfigurationError(error)) {
+        input.value.onApiConfigurationError?.(error);
+      }
       const assistantMessage = findMessage(job.assistantMessageId);
       if (assistantMessage) {
         assistantMessage.status = "error";

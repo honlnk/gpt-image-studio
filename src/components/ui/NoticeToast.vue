@@ -24,9 +24,9 @@ const emit = defineEmits<{
     "
     role="status"
   >
-    <div class="flex items-start gap-3">
+    <div class="flex items-center gap-3">
       <div
-        class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+        class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
         :class="
           notice.type === 'error'
             ? 'bg-red-100 text-red-600'

@@ -148,6 +148,7 @@ export function useStudioViewModel() {
     imageById: images.imageById,
     imageClient,
     messages,
+    onApiConfigurationError: openApiSettingsFromGenerationError,
     onStorageError: reportStorageError,
     conversationExists: (id: string) =>
       conversations.conversations.value.some((item) => item.id === id),
@@ -217,6 +218,13 @@ export function useStudioViewModel() {
     settingsInitialTab.value = "api";
     settingsInitialBatchPanel.value = "images";
     openSettings();
+  }
+
+  function openApiSettingsFromGenerationError() {
+    settingsInitialTab.value = "api";
+    settingsInitialBatchPanel.value = "images";
+    openSettings();
+    feedback.notifyError("图片接口认证失败，请检查 API key 和接口地址。");
   }
 
   onMounted(() => {

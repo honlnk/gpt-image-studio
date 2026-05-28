@@ -238,6 +238,28 @@ describe("images API requests", () => {
     const requestBody = fetchMock.mock.calls[0]?.[1]?.body as FormData;
     expect(requestBody.get("prompt")).toBe(`${PROMPT_REWRITE_GUARD_PREFIX}\n改一下图`);
   });
+
+  it("keeps the HTTP status in API error messages", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(
+        {
+          error: { message: "Invalid bearer token" },
+        },
+        401,
+      ),
+    );
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "画一张图",
+        params: generationParams,
+      }),
+    ).rejects.toThrow("请求失败：HTTP 401：Invalid bearer token");
+  });
 });
 
 describe("getCustomSizeError", () => {
@@ -278,9 +300,9 @@ describe("getCustomSizeError", () => {
   });
 });
 
-function jsonResponse(payload: unknown) {
+function jsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
-    status: 200,
+    status,
     headers: {
       "Content-Type": "application/json",
     },
