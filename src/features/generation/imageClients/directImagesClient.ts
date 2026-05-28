@@ -1,5 +1,5 @@
 import { editImage, generateImage } from "../../../services/imagesApi";
-import type { PromptMode } from "../../../types/studio";
+import type { PromptMode, PromptWordbanks } from "../../../types/studio";
 import type { ImageClient } from "./imageClient";
 
 type DirectClientConfig = {
@@ -8,6 +8,7 @@ type DirectClientConfig = {
   getApiKey: () => string;
   getModel: () => string;
   getPromptMode: () => PromptMode;
+  getPromptWordbanks: () => PromptWordbanks;
   getPromptRewriteGuardEnabled: () => boolean;
   getPromptRewriteGuardText: () => string;
 };
@@ -34,6 +35,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         model,
         prompt: input.prompt,
         promptMode: config.getPromptMode(),
+        promptWordbanks: config.getPromptWordbanks(),
         promptRewriteGuardEnabled: config.getPromptRewriteGuardEnabled(),
         promptRewriteGuardText: config.getPromptRewriteGuardText(),
         params: input.params,
@@ -59,6 +61,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         model,
         prompt: input.prompt,
         promptMode: config.getPromptMode(),
+        promptWordbanks: config.getPromptWordbanks(),
         promptRewriteGuardEnabled: config.getPromptRewriteGuardEnabled(),
         promptRewriteGuardText: config.getPromptRewriteGuardText(),
         params: input.params,

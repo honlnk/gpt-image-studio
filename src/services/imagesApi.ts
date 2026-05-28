@@ -1,4 +1,4 @@
-import type { GenerationParams, PromptMode } from "../types/studio";
+import type { GenerationParams, PromptMode, PromptWordbanks } from "../types/studio";
 import { buildImagePrompt } from "./promptBuilder";
 
 type GenerateImageInput = {
@@ -8,6 +8,7 @@ type GenerateImageInput = {
   model: string;
   prompt: string;
   promptMode?: PromptMode;
+  promptWordbanks?: PromptWordbanks;
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   params: GenerationParams;
@@ -63,6 +64,7 @@ export async function generateImage(input: GenerateImageInput) {
   const modePrompt = buildImagePrompt({
     prompt: input.prompt,
     mode: input.promptMode ?? "default",
+    wordbanks: input.promptWordbanks,
   });
   const prompt = applyPromptRewriteGuard(
     modePrompt,
@@ -100,6 +102,7 @@ export async function editImage(input: EditImageInput) {
   const modePrompt = buildImagePrompt({
     prompt: input.prompt,
     mode: input.promptMode ?? "default",
+    wordbanks: input.promptWordbanks,
   });
   const prompt = applyPromptRewriteGuard(
     modePrompt,

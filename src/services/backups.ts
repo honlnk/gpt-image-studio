@@ -6,6 +6,7 @@ import {
   PROMPT_REWRITE_GUARD_PREFIX,
   normalizePromptRewriteGuardText,
 } from "./imagesApi";
+import { normalizePromptWordbanks } from "./promptWordbanks";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
 import { clearStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
 import { saveSettings, loadSettings } from "./settings";
@@ -43,6 +44,7 @@ type StoredBackupSettings = Omit<
   | "apiKey"
   | "defaults"
   | "promptMode"
+  | "promptWordbanks"
   | "promptRewriteGuardEnabled"
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
@@ -51,6 +53,7 @@ type StoredBackupSettings = Omit<
   promptRewriteGuardText?: string;
   promptRewriteGuardHistory?: AppSettings["promptRewriteGuardHistory"];
   promptMode?: AppSettings["promptMode"];
+  promptWordbanks?: unknown;
   defaults: StoredGenerationParams;
 };
 
@@ -103,6 +106,7 @@ export async function restoreStudioBackup(file: File) {
         ...data.settings,
         apiKey: currentSettings?.apiKey ?? "",
         promptMode: data.settings.promptMode ?? "default",
+        promptWordbanks: normalizePromptWordbanks(data.settings.promptWordbanks),
         promptRewriteGuardEnabled:
           data.settings.promptRewriteGuardEnabled ?? true,
         promptRewriteGuardText: normalizePromptRewriteGuardText(

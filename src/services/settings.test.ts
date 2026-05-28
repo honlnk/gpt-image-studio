@@ -3,6 +3,7 @@ import type { AppSettings } from "../types/studio";
 import { loadSettings, saveSettings } from "./settings";
 import { STORE_NAMES } from "./db";
 import { PROMPT_REWRITE_GUARD_PREFIX } from "./imagesApi";
+import { defaultPromptWordbanks } from "./promptWordbanks";
 
 const mocks = vi.hoisted(() => ({
   getFromStore: vi.fn(),
@@ -25,6 +26,7 @@ const fullSettings: AppSettings = {
   apiBaseUrlMode: "full",
   model: "gpt-image-2",
   promptMode: "default",
+  promptWordbanks: defaultPromptWordbanks,
   promptRewriteGuardEnabled: true,
   promptRewriteGuardText: PROMPT_REWRITE_GUARD_PREFIX,
   promptRewriteGuardHistory: [
@@ -71,6 +73,7 @@ describe("settings service", () => {
       promptRewriteGuardText: _ignoredPromptRewriteGuardText,
       promptRewriteGuardHistory: _ignoredPromptRewriteGuardHistory,
       promptMode: _ignoredPromptMode,
+      promptWordbanks: _ignoredPromptWordbanks,
       ...legacySettings
     } = fullSettings;
     mocks.getFromStore.mockResolvedValue({
@@ -83,6 +86,7 @@ describe("settings service", () => {
     expect(result?.connectionMode).toBe("direct");
     expect(result?.apiBaseUrlMode).toBe("origin");
     expect(result?.promptMode).toBe("default");
+    expect(result?.promptWordbanks).toEqual(defaultPromptWordbanks);
     expect(result?.promptRewriteGuardEnabled).toBe(true);
     expect(result?.promptRewriteGuardText).toBe(PROMPT_REWRITE_GUARD_PREFIX);
     expect(result?.promptRewriteGuardHistory).toEqual([

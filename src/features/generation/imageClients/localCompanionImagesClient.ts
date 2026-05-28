@@ -1,6 +1,6 @@
 import { applyPromptRewriteGuard } from "../../../services/imagesApi";
 import { buildImagePrompt } from "../../../services/promptBuilder";
-import type { PromptMode } from "../../../types/studio";
+import type { PromptMode, PromptWordbanks } from "../../../types/studio";
 import type { ImageClient, ImageClientResult } from "./imageClient";
 
 type CompanionClientConfig = {
@@ -8,6 +8,7 @@ type CompanionClientConfig = {
   getSessionToken: () => string;
   getModel: () => string;
   getPromptMode: () => PromptMode;
+  getPromptWordbanks: () => PromptWordbanks;
   getPromptRewriteGuardEnabled: () => boolean;
   getPromptRewriteGuardText: () => string;
 };
@@ -25,7 +26,11 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
     async generate(input) {
       const url = `${config.getCompanionUrl()}/images/generations`;
       const model = config.getModel();
-      const modePrompt = applyPromptMode(input.prompt, config.getPromptMode());
+      const modePrompt = applyPromptMode(
+        input.prompt,
+        config.getPromptMode(),
+        config.getPromptWordbanks(),
+      );
       const prompt = applyPromptRewriteGuard(
         modePrompt,
         config.getPromptRewriteGuardEnabled(),
@@ -45,7 +50,11 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
     async edit(input) {
       const url = `${config.getCompanionUrl()}/images/edits`;
       const model = config.getModel();
-      const modePrompt = applyPromptMode(input.prompt, config.getPromptMode());
+      const modePrompt = applyPromptMode(
+        input.prompt,
+        config.getPromptMode(),
+        config.getPromptWordbanks(),
+      );
       const prompt = applyPromptRewriteGuard(
         modePrompt,
         config.getPromptRewriteGuardEnabled(),
@@ -77,8 +86,8 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
   };
 }
 
-function applyPromptMode(prompt: string, mode: PromptMode) {
-  return buildImagePrompt({ prompt, mode });
+function applyPromptMode(prompt: string, mode: PromptMode, wordbanks: PromptWordbanks) {
+  return buildImagePrompt({ prompt, mode, wordbanks });
 }
 
 function buildParams(params: { size: string; width: number; height: number; background: string; outputFormat: string }) {

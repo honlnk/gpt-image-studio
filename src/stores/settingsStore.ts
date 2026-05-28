@@ -11,6 +11,12 @@ import {
   getCustomSizeError,
   normalizePromptRewriteGuardText,
 } from "../services/imagesApi";
+import {
+  clonePromptWordbanks,
+  defaultPromptWordbanks,
+  normalizePromptWordbanks,
+  normalizeWordbankTerms,
+} from "../services/promptWordbanks";
 import { saveSettings } from "../services/settings";
 import { isoTimestamp } from "../shared/dateTime";
 import { createId } from "../shared/id";
@@ -21,6 +27,8 @@ import type {
   GenerationParams,
   PromptMode,
   PromptRewriteGuardHistoryItem,
+  PromptWordbankSectionKey,
+  PromptWordbanks,
   SizeRatio,
   SizeResolution,
 } from "../types/studio";
@@ -59,6 +67,9 @@ export const useSettingsStore = defineStore("settings", () => {
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
   const apiBaseUrlMode = ref<AppSettings["apiBaseUrlMode"]>("origin");
   const promptMode = ref<PromptMode>("default");
+  const promptWordbanks = ref<PromptWordbanks>(
+    clonePromptWordbanks(defaultPromptWordbanks),
+  );
   const promptRewriteGuardEnabled = ref(true);
   const promptRewriteGuardText = ref(PROMPT_REWRITE_GUARD_PREFIX);
   const promptRewriteGuardHistory = ref<PromptRewriteGuardHistoryItem[]>([
@@ -163,6 +174,7 @@ export const useSettingsStore = defineStore("settings", () => {
     apiBaseUrl.value = displayApiBaseUrl(settings.apiBaseUrl, settings.apiBaseUrlMode);
     model.value = settings.model;
     promptMode.value = settings.promptMode;
+    promptWordbanks.value = normalizePromptWordbanks(settings.promptWordbanks);
     promptRewriteGuardEnabled.value = settings.promptRewriteGuardEnabled;
     promptRewriteGuardText.value = normalizePromptRewriteGuardText(
       settings.promptRewriteGuardText,
@@ -190,6 +202,7 @@ export const useSettingsStore = defineStore("settings", () => {
       apiBaseUrlMode: apiBaseUrlMode.value,
       model: model.value,
       promptMode: promptMode.value,
+      promptWordbanks: clonePromptWordbanks(promptWordbanks.value),
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
       promptRewriteGuardText: promptRewriteGuardText.value,
       promptRewriteGuardHistory: promptRewriteGuardHistory.value.map(
@@ -222,6 +235,23 @@ export const useSettingsStore = defineStore("settings", () => {
     promptRewriteGuardHistory.value = addPromptGuardHistoryItem(
       promptRewriteGuardHistory.value,
       normalizedText,
+    );
+  }
+
+  function savePromptWordbank(section: PromptWordbankSectionKey, terms: string[]) {
+    const normalizedTerms = normalizeWordbankTerms(terms);
+    promptWordbanks.value = setPromptWordbankTerms(
+      promptWordbanks.value,
+      section,
+      normalizedTerms,
+    );
+  }
+
+  function restoreDefaultPromptWordbank(section: PromptWordbankSectionKey) {
+    promptWordbanks.value = setPromptWordbankTerms(
+      promptWordbanks.value,
+      section,
+      getPromptWordbankTerms(defaultPromptWordbanks, section),
     );
   }
 
@@ -277,6 +307,7 @@ export const useSettingsStore = defineStore("settings", () => {
     model,
     outputFormat,
     promptMode,
+    promptWordbanks,
     promptRewriteGuardEnabled,
     promptRewriteGuardHistory,
     promptRewriteGuardText,
@@ -290,10 +321,35 @@ export const useSettingsStore = defineStore("settings", () => {
     sizeResolutionOptions,
     deletePromptRewriteGuardHistoryItem,
     restoreDefaultPromptRewriteGuardText,
+    restoreDefaultPromptWordbank,
     restorePromptRewriteGuardHistoryItem,
     savePromptRewriteGuardText,
+    savePromptWordbank,
   };
 });
+
+function getPromptWordbankTerms(
+  wordbanks: PromptWordbanks,
+  section: PromptWordbankSectionKey,
+) {
+  if (section === "pose.safe") return wordbanks.pose.safe;
+  if (section === "pose.creative") return wordbanks.pose.creative;
+  if (section === "pose.nsfw") return wordbanks.pose.nsfw;
+  return wordbanks.adultInspiration;
+}
+
+function setPromptWordbankTerms(
+  wordbanks: PromptWordbanks,
+  section: PromptWordbankSectionKey,
+  terms: string[],
+) {
+  const next = clonePromptWordbanks(wordbanks);
+  if (section === "pose.safe") next.pose.safe = [...terms];
+  if (section === "pose.creative") next.pose.creative = [...terms];
+  if (section === "pose.nsfw") next.pose.nsfw = [...terms];
+  if (section === "adultInspiration") next.adultInspiration = [...terms];
+  return next;
+}
 
 function normalizePromptRewriteGuardHistory(
   history: PromptRewriteGuardHistoryItem[] | undefined,

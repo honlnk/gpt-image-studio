@@ -25,9 +25,13 @@ type ChatWorkspaceMessages = {
 type ChatWorkspaceActions = {
   applyEditSelection: (sourceImageId: string, maskImageId: string) => void;
   closeAllEditors: () => void;
+  copyText: (text: string) => void;
+  generateAnother: (message: Message) => void;
+  loadMessageConfig: (message: Message) => void;
   openConversations: () => void;
   openSettings: () => void;
   previewImage: (id: string) => void;
+  refreshImage: (message: Message, imageId: string) => void;
   removeAttachment: (id: string) => void;
   retryMessage: (message: Message) => void;
   setEditModeEnabled: (value: boolean) => void;
@@ -226,7 +230,11 @@ function imageFilesFromTransfer(
       :messages="messages.activeMessages"
       @attach-image="images.attachImage"
       @continue-edit="continueEdit"
+      @copy-text="actions.copyText"
+      @generate-another="actions.generateAnother"
+      @load-message-config="actions.loadMessageConfig"
       @preview-image="actions.previewImage"
+      @refresh-image="actions.refreshImage"
       @retry-message="actions.retryMessage"
     />
 

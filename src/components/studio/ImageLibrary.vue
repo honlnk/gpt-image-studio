@@ -149,7 +149,7 @@ function setImageTagColor(
       'flex w-[320px] shrink-0 flex-col border-l border-gray-200 bg-white max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:transition-transform max-lg:duration-200 max-lg:ease-out',
       composer.isLibraryOpen
         ? 'max-lg:translate-x-0'
-        : 'max-lg:-translate-x-full',
+        : 'max-lg:translate-x-full',
     ]"
     aria-label="图片库"
   >

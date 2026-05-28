@@ -13,7 +13,11 @@ const props = defineProps<{
 const emit = defineEmits<{
   attachImage: [id: string];
   continueEdit: [id: string];
+  copyText: [text: string];
+  generateAnother: [message: Message];
+  loadMessageConfig: [message: Message];
   previewImage: [id: string];
+  refreshImage: [message: Message, imageId: string];
   retryMessage: [message: Message];
 }>();
 
@@ -35,6 +39,18 @@ function imageDownloadName(image?: ImageAsset) {
 function isImageAttached(id: string) {
   return attachedImageIds.value.has(id);
 }
+
+function durationLabel(milliseconds?: number) {
+  if (milliseconds === undefined) return "耗时未知";
+  if (milliseconds < 1000) return `${milliseconds}ms`;
+
+  const seconds = milliseconds / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s`;
+}
 </script>
 
 <template>
@@ -55,6 +71,26 @@ function isImageAttached(id: string) {
     <p class="text-[15px] leading-relaxed text-gray-800">
       {{ message.content }}
     </p>
+
+    <div
+      v-if="message.role === 'user'"
+      class="mt-3 flex flex-wrap items-center gap-2"
+    >
+      <button
+        class="cursor-pointer rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+        type="button"
+        @click="emit('copyText', message.content)"
+      >
+        复制文本
+      </button>
+      <button
+        class="cursor-pointer rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+        type="button"
+        @click="emit('loadMessageConfig', message)"
+      >
+        加载到输入面板
+      </button>
+    </div>
 
     <div
       v-if="message.referencedImageIds.length"
@@ -139,6 +175,9 @@ function isImageAttached(id: string) {
             <div class="truncate text-xs text-gray-500">
               {{ imageById(imageId)?.prompt || "原图片资产已从图片库中删除" }}
             </div>
+            <div class="mt-1 text-xs text-gray-400">
+              生成耗时：{{ durationLabel(imageById(imageId)?.generationDurationMs) }}
+            </div>
           </div>
           <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
             <button
@@ -173,6 +212,22 @@ function isImageAttached(id: string) {
                       : "加入引用"
                     : "不可引用"
                 }}
+              </button>
+              <button
+                class="cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                type="button"
+                :disabled="!imageById(imageId) || message.status === 'pending'"
+                @click="emit('generateAnother', message)"
+              >
+                再次生成
+              </button>
+              <button
+                class="cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                type="button"
+                :disabled="!imageById(imageId) || message.status === 'pending'"
+                @click="emit('refreshImage', message, imageId)"
+              >
+                刷新
               </button>
               <a
                 v-if="imageById(imageId)?.previewUrl"

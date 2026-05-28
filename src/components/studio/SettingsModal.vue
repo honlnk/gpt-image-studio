@@ -6,6 +6,8 @@ import type {
   ImageAsset,
   Message,
   PromptMode,
+  PromptWordbankSectionKey,
+  PromptWordbanks,
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
@@ -15,7 +17,7 @@ import PromptGuardSettingsPanel from "../settings/PromptGuardSettingsPanel.vue";
 import PromptModeSettingsPanel from "../settings/PromptModeSettingsPanel.vue";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
 
-type SettingsTab = "api" | "prompt" | "backup" | "batch";
+type SettingsTab = "api" | "promptMode" | "prompt" | "backup" | "batch";
 type BatchPanel = "images" | "conversations";
 
 const props = defineProps<{
@@ -30,6 +32,7 @@ const props = defineProps<{
   companionSessionToken: string;
   companionPaired: boolean;
   promptMode: PromptMode;
+  promptWordbanks: PromptWordbanks;
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
@@ -51,6 +54,8 @@ const emit = defineEmits<{
   "update:apiBaseUrlMode": [value: "origin" | "full"];
   "update:companionSessionToken": [value: string];
   "update:promptMode": [value: PromptMode];
+  savePromptWordbank: [section: PromptWordbankSectionKey, terms: string[]];
+  restoreDefaultPromptWordbank: [section: PromptWordbankSectionKey];
   "update:promptRewriteGuardEnabled": [value: boolean];
   savePromptRewriteGuardText: [value: string];
   restoreDefaultPromptRewriteGuardText: [];
@@ -65,6 +70,7 @@ const isRestoreConfirmOpen = ref(false);
 
 const tabs: { key: SettingsTab; label: string }[] = [
   { key: "api", label: "接口" },
+  { key: "promptMode", label: "提示词模式" },
   { key: "prompt", label: "提示词保护" },
   { key: "backup", label: "数据备份" },
   { key: "batch", label: "批量操作" },
@@ -95,6 +101,13 @@ function confirmPendingAction() {
 
   isRestoreConfirmOpen.value = false;
   pendingBackupFile.value = null;
+}
+
+function forwardSavePromptWordbank(
+  section: PromptWordbankSectionKey,
+  terms: string[],
+) {
+  emit("savePromptWordbank", section, terms);
 }
 </script>
 
@@ -177,12 +190,16 @@ function confirmPendingAction() {
               @update:companion-session-token="emit('update:companionSessionToken', $event)"
             />
 
-            <div v-else-if="activeTab === 'prompt'" class="space-y-8">
-              <PromptModeSettingsPanel
-                :model-value="promptMode"
-                @update:model-value="emit('update:promptMode', $event)"
-              />
+            <PromptModeSettingsPanel
+              v-else-if="activeTab === 'promptMode'"
+              :model-value="promptMode"
+              :wordbanks="promptWordbanks"
+              @restore-default-wordbank="emit('restoreDefaultPromptWordbank', $event)"
+              @save-wordbank="forwardSavePromptWordbank"
+              @update:model-value="emit('update:promptMode', $event)"
+            />
 
+            <div v-else-if="activeTab === 'prompt'" class="space-y-8">
               <PromptGuardSettingsPanel
                 :enabled="promptRewriteGuardEnabled"
                 :history="promptRewriteGuardHistory"

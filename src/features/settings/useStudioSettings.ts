@@ -20,6 +20,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
       refs.apiBaseUrlMode,
       refs.model,
       refs.promptMode,
+      refs.promptWordbanks,
       refs.promptRewriteGuardEnabled,
       refs.promptRewriteGuardText,
       refs.promptRewriteGuardHistory,
@@ -50,7 +51,9 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
       settings.restoreDefaultPromptRewriteGuardText,
     restorePromptRewriteGuardHistoryItem:
       settings.restorePromptRewriteGuardHistoryItem,
+    restoreDefaultPromptWordbank: settings.restoreDefaultPromptWordbank,
     savePromptRewriteGuardText: settings.savePromptRewriteGuardText,
+    savePromptWordbank: settings.savePromptWordbank,
     saveCurrentSettings: settings.saveCurrentSettings,
   };
 }

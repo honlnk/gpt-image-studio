@@ -50,6 +50,8 @@ export function useStudioGeneration(input: UseStudioGenerationInput) {
 
   return {
     ...refs,
+    generateAnother: generation.generateAnother,
+    refreshGeneratedImage: generation.refreshGeneratedImage,
     retryMessage: generation.retryMessage,
     submitMessage: generation.submitMessage,
   };
