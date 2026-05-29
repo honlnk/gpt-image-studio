@@ -4,6 +4,7 @@ const BASE_DELAY_MS = 2000;
 export async function withNetworkRetry<T>(
   fn: () => Promise<T>,
   shouldRetry: () => boolean,
+  onRetry?: (retryAttempt: number) => void,
 ): Promise<T> {
   const maxAttempts = shouldRetry() ? MAX_RETRIES : 1;
 
@@ -15,6 +16,7 @@ export async function withNetworkRetry<T>(
         throw error;
       }
       const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+      onRetry?.(attempt + 1);
       console.info(`[networkRetry] attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
       await sleep(delay);
     }

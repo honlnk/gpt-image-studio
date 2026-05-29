@@ -13,6 +13,7 @@ defineProps<{
 
 const emit = defineEmits<{
   closeAllEditors: [];
+  openFavoritePromptSettings: [];
   previewImage: [id: string];
   removeAttachment: [id: string];
   "update:editModeEnabled": [value: boolean];
@@ -52,6 +53,7 @@ defineExpose({ focusComposer });
         :is-drag-active="isDragActive"
         :is-generating="generation.isGenerating"
         @import-images="images.importImages"
+        @open-favorite-prompt-settings="emit('openFavoritePromptSettings')"
         @submit-message="generation.submitMessage"
         @update:composer-text="composer.composerText = $event"
       >

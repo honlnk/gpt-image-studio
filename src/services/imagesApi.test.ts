@@ -12,6 +12,7 @@ const generationParams: GenerationParams = {
   resolution: "1k",
   width: 1024,
   height: 1024,
+  imageCount: 1,
   quality: "auto",
   background: "auto",
   outputFormat: "png",

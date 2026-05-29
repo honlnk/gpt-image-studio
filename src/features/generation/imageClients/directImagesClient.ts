@@ -1,5 +1,4 @@
 import { editImage, generateImage } from "../../../services/imagesApi";
-import type { PromptMode, PromptWordbanks } from "../../../types/studio";
 import type { ImageClient } from "./imageClient";
 
 type DirectClientConfig = {
@@ -7,10 +6,6 @@ type DirectClientConfig = {
   getApiBaseUrlMode: () => "origin" | "full";
   getApiKey: () => string;
   getModel: () => string;
-  getPromptMode: () => PromptMode;
-  getPromptWordbanks: () => PromptWordbanks;
-  getPromptRewriteGuardEnabled: () => boolean;
-  getPromptRewriteGuardText: () => string;
 };
 
 export function createDirectImagesClient(config: DirectClientConfig): ImageClient {
@@ -34,10 +29,12 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         apiKey,
         model,
         prompt: input.prompt,
-        promptMode: config.getPromptMode(),
-        promptWordbanks: config.getPromptWordbanks(),
-        promptRewriteGuardEnabled: config.getPromptRewriteGuardEnabled(),
-        promptRewriteGuardText: config.getPromptRewriteGuardText(),
+        promptMode: input.promptRequestSettings.promptMode,
+        promptWordbanks: input.promptRequestSettings.promptWordbanks,
+        promptRewriteGuardEnabled:
+          input.promptRequestSettings.promptRewriteGuardEnabled,
+        promptRewriteGuardText:
+          input.promptRequestSettings.promptRewriteGuardText,
         params: input.params,
       });
     },
@@ -60,10 +57,12 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         apiKey,
         model,
         prompt: input.prompt,
-        promptMode: config.getPromptMode(),
-        promptWordbanks: config.getPromptWordbanks(),
-        promptRewriteGuardEnabled: config.getPromptRewriteGuardEnabled(),
-        promptRewriteGuardText: config.getPromptRewriteGuardText(),
+        promptMode: input.promptRequestSettings.promptMode,
+        promptWordbanks: input.promptRequestSettings.promptWordbanks,
+        promptRewriteGuardEnabled:
+          input.promptRequestSettings.promptRewriteGuardEnabled,
+        promptRewriteGuardText:
+          input.promptRequestSettings.promptRewriteGuardText,
         params: input.params,
         images: input.images,
         mask: input.mask,

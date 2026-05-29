@@ -1,4 +1,4 @@
-import type { GenerationParams } from "../../types/studio";
+import type { GenerationParams, PromptRequestSettings } from "../../types/studio";
 
 export type GenerationJobStatus = "pending" | "success" | "error";
 
@@ -12,6 +12,7 @@ export type GenerationJob = {
   editSourceImageId?: string;
   editMaskImageId?: string;
   generationParams: GenerationParams;
+  promptRequestSettings: PromptRequestSettings;
   status: GenerationJobStatus;
   startedAtMs: number;
   finishedAtMs?: number;

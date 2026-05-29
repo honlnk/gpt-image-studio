@@ -31,6 +31,8 @@ export type Message = {
   createdAt: string;
   generationStartedAt?: string;
   generationParams?: GenerationParams;
+  promptRequestSettings?: PromptRequestSettings;
+  networkRetryAttempt?: number;
   errorMessage?: string;
   editSourceImageId?: string;
   editMaskImageId?: string;
@@ -69,6 +71,7 @@ export type GenerationParams = {
   resolution: SizeResolution;
   width: number;
   height: number;
+  imageCount: number;
   quality: "auto" | "high" | "medium" | "low";
   background: "auto" | "opaque" | "transparent";
   outputFormat: "png" | "webp" | "jpeg";
@@ -98,6 +101,21 @@ export type PromptRewriteGuardHistoryItem = {
   createdAt: string;
 };
 
+export type FavoritePrompt = {
+  id: string;
+  title: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PromptRequestSettings = {
+  promptMode: PromptMode;
+  promptWordbanks: PromptWordbanks;
+  promptRewriteGuardEnabled: boolean;
+  promptRewriteGuardText: string;
+};
+
 export type AppSettings = {
   connectionMode: ConnectionMode;
   apiKey: string;
@@ -109,12 +127,13 @@ export type AppSettings = {
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
+  favoritePrompts: FavoritePrompt[];
   autoRetryOnNetworkError: boolean;
   defaults: GenerationParams;
   storageMode: "indexeddb";
 };
 
-export type EditorKey = "size" | "background" | "format";
+export type EditorKey = "size" | "count" | "background" | "format";
 
 export type ConversationDraft = {
   conversationId: string;

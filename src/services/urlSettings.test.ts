@@ -28,11 +28,13 @@ const currentSettings: AppSettings = {
       createdAt: "1970-01-01T00:00:00.000Z",
     },
   ],
+  favoritePrompts: [],
   defaults: {
     size: "1:1",
     resolution: "1k",
     width: 1024,
     height: 1024,
+    imageCount: 1,
     quality: "auto",
     background: "auto",
     outputFormat: "png",

@@ -1,14 +1,18 @@
 import type { GenerationParams, SizeRatio, SizeResolution } from "../types/studio";
 
 export type LegacySizePreset = "1024x1024" | "1536x1024" | "1024x1536";
-export type StoredGenerationParams = Omit<GenerationParams, "resolution" | "size"> & {
+export type StoredGenerationParams = Omit<GenerationParams, "imageCount" | "resolution" | "size"> & {
+  imageCount?: number;
   resolution?: SizeResolution;
   size: GenerationParams["size"] | LegacySizePreset;
 };
 
+export const MIN_IMAGE_COUNT = 1;
+
 export function normalizeGenerationParams(params: StoredGenerationParams): GenerationParams {
   return {
     ...params,
+    imageCount: normalizeImageCount(params.imageCount),
     resolution: params.resolution ?? inferSizeResolution(params),
     size: normalizeSizePreset(params.size),
   };
@@ -24,6 +28,13 @@ export function normalizeSizePreset(size: StoredGenerationParams["size"]): Gener
 
 export function isSizeRatio(size: GenerationParams["size"]): size is SizeRatio {
   return size.includes(":");
+}
+
+export function normalizeImageCount(count: unknown) {
+  const numericCount = typeof count === "number" ? count : Number(count);
+  if (!Number.isFinite(numericCount)) return MIN_IMAGE_COUNT;
+
+  return Math.max(MIN_IMAGE_COUNT, Math.round(numericCount));
 }
 
 function inferSizeResolution(params: Pick<GenerationParams, "height" | "width">): SizeResolution {

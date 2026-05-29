@@ -12,6 +12,7 @@ import {
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
 import { withNetworkRetry } from "../../services/networkRetry";
+import { clonePromptWordbanks } from "../../services/promptWordbanks";
 import {
   deleteConversationDraft,
   deleteConversationDrafts,
@@ -31,6 +32,7 @@ import type {
   GenerationParams,
   Message,
   PromptMode,
+  PromptRequestSettings,
   PromptWordbankSectionKey,
 } from "../../types/studio";
 
@@ -39,7 +41,14 @@ const STORAGE_KEYS = {
   draftAttachments: "gpt-image-studio:draft-attachments",
 } as const;
 
-type SettingsTab = "api" | "promptMode" | "prompt" | "backup" | "batch";
+type SettingsTab =
+  | "general"
+  | "api"
+  | "promptMode"
+  | "favoritePrompts"
+  | "prompt"
+  | "backup"
+  | "batch";
 type BatchPanel = "images" | "conversations";
 type RenameDialogState = {
   isOpen: boolean;
@@ -74,7 +83,7 @@ export function useStudioViewModel() {
   let draftSwitchQueue = Promise.resolve();
 
   const previewImageId = ref("");
-  const settingsInitialTab = ref<SettingsTab>("api");
+  const settingsInitialTab = ref<SettingsTab | undefined>(undefined);
   const settingsInitialBatchPanel = ref<BatchPanel>("images");
   const renameDialog = ref<RenameDialogState>({
     isOpen: false,
@@ -114,32 +123,32 @@ export function useStudioViewModel() {
     getApiBaseUrlMode: () => settings.apiBaseUrlMode.value,
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
-    getPromptMode: () => settings.promptMode.value,
-    getPromptWordbanks: () => settings.promptWordbanks.value,
-    getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
-    getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,
     getSessionToken: () => settings.companionSessionToken.value,
     getModel: () => settings.model.value,
-    getPromptMode: () => settings.promptMode.value,
-    getPromptWordbanks: () => settings.promptWordbanks.value,
-    getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
-    getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
   const imageClient: ImageClient = {
     generate(input) {
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.generate(input)
         : directImagesClient.generate(input);
-      return withNetworkRetry(fn, () => settings.autoRetryOnNetworkError.value);
+      return withNetworkRetry(
+        fn,
+        () => settings.autoRetryOnNetworkError.value,
+        input.onNetworkRetry,
+      );
     },
     edit(input) {
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.edit(input)
         : directImagesClient.edit(input);
-      return withNetworkRetry(fn, () => settings.autoRetryOnNetworkError.value);
+      return withNetworkRetry(
+        fn,
+        () => settings.autoRetryOnNetworkError.value,
+        input.onNetworkRetry,
+      );
     },
   };
 
@@ -152,6 +161,7 @@ export function useStudioViewModel() {
     composerText,
     createConversationRecord: conversations.createConversationRecord,
     currentGenerationParams: settings.currentGenerationParams,
+    currentPromptRequestSettings,
     customSizeError: settings.customSizeError,
     imageAssets: images.imageAssets,
     imageById: images.imageById,
@@ -165,6 +175,15 @@ export function useStudioViewModel() {
     refreshStorageUsage: images.refreshStorageUsage,
     updateConversationSummary: conversations.updateConversationSummary,
   });
+
+  function currentPromptRequestSettings(): PromptRequestSettings {
+    return {
+      promptMode: settings.promptMode.value,
+      promptWordbanks: clonePromptWordbanks(settings.promptWordbanks.value),
+      promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled.value,
+      promptRewriteGuardText: settings.promptRewriteGuardText.value,
+    };
+  }
   const { restoreFromStorage } = useStudioRestore({
     activeConversationId: conversations.activeConversationId,
     applySettings: settings.applySettings,
@@ -224,7 +243,13 @@ export function useStudioViewModel() {
   }
 
   function openSettingsDefault() {
-    settingsInitialTab.value = "api";
+    settingsInitialTab.value = undefined;
+    settingsInitialBatchPanel.value = "images";
+    openSettings();
+  }
+
+  function openFavoritePromptSettings() {
+    settingsInitialTab.value = "favoritePrompts";
     settingsInitialBatchPanel.value = "images";
     openSettings();
   }
@@ -539,6 +564,26 @@ export function useStudioViewModel() {
     persistSettingsChange();
   }
 
+  function addFavoritePrompt(input: { title?: string; text?: string }) {
+    const didAdd = settings.addFavoritePrompt(input);
+    if (didAdd) persistSettingsChange();
+    return didAdd;
+  }
+
+  function updateFavoritePrompt(
+    id: string,
+    input: { title?: string; text?: string },
+  ) {
+    const didUpdate = settings.updateFavoritePrompt(id, input);
+    if (didUpdate) persistSettingsChange();
+    return didUpdate;
+  }
+
+  function deleteFavoritePrompt(id: string) {
+    settings.deleteFavoritePrompt(id);
+    persistSettingsChange();
+  }
+
   async function deleteConversationWithDraft(id: string) {
     await conversations.deleteConversation(id);
     await deleteConversationDraft(id).catch(reportStorageError);
@@ -593,6 +638,7 @@ export function useStudioViewModel() {
     loadMessageConfig,
     openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,
+    openFavoritePromptSettings,
     previewImage: previewImageById,
     removeAttachment: (id: string) => {
       if (
@@ -655,6 +701,7 @@ export function useStudioViewModel() {
     companionSessionToken: settings.companionSessionToken,
     companionUrl: settings.companionUrl,
     connectionMode: settings.connectionMode,
+    favoritePrompts: settings.favoritePrompts,
     promptMode: settings.promptMode,
     promptWordbanks: settings.promptWordbanks,
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
@@ -679,6 +726,9 @@ export function useStudioViewModel() {
     savePromptWordbank,
     setPromptMode,
     setPromptRewriteGuardEnabled,
+    addFavoritePrompt,
+    updateFavoritePrompt,
+    deleteFavoritePrompt,
     restoreDefaultPromptWordbank,
   });
   const preview = proxyRefs({

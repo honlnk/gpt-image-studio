@@ -6,6 +6,7 @@ import {
   PROMPT_REWRITE_GUARD_PREFIX,
   normalizePromptRewriteGuardText,
 } from "./imagesApi";
+import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
 import { clearStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
@@ -48,10 +49,12 @@ type StoredBackupSettings = Omit<
   | "promptRewriteGuardEnabled"
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
+  | "favoritePrompts"
 > & {
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   promptRewriteGuardHistory?: AppSettings["promptRewriteGuardHistory"];
+  favoritePrompts?: unknown;
   promptMode?: AppSettings["promptMode"];
   promptWordbanks?: unknown;
   defaults: StoredGenerationParams;
@@ -120,6 +123,7 @@ export async function restoreStudioBackup(file: File) {
               createdAt: new Date(0).toISOString(),
             },
           ],
+        favoritePrompts: normalizeFavoritePrompts(data.settings.favoritePrompts),
         defaults: normalizeGenerationParams(data.settings.defaults),
         autoRetryOnNetworkError:
           data.settings.autoRetryOnNetworkError ?? false,

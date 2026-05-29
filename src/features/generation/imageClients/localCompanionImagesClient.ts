@@ -7,10 +7,6 @@ type CompanionClientConfig = {
   getCompanionUrl: () => string;
   getSessionToken: () => string;
   getModel: () => string;
-  getPromptMode: () => PromptMode;
-  getPromptWordbanks: () => PromptWordbanks;
-  getPromptRewriteGuardEnabled: () => boolean;
-  getPromptRewriteGuardText: () => string;
 };
 
 export function createLocalCompanionImagesClient(config: CompanionClientConfig): ImageClient {
@@ -28,13 +24,13 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
       const model = config.getModel();
       const modePrompt = applyPromptMode(
         input.prompt,
-        config.getPromptMode(),
-        config.getPromptWordbanks(),
+        input.promptRequestSettings.promptMode,
+        input.promptRequestSettings.promptWordbanks,
       );
       const prompt = applyPromptRewriteGuard(
         modePrompt,
-        config.getPromptRewriteGuardEnabled(),
-        config.getPromptRewriteGuardText(),
+        input.promptRequestSettings.promptRewriteGuardEnabled,
+        input.promptRequestSettings.promptRewriteGuardText,
       );
 
       const params = buildParams(input.params);
@@ -52,13 +48,13 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
       const model = config.getModel();
       const modePrompt = applyPromptMode(
         input.prompt,
-        config.getPromptMode(),
-        config.getPromptWordbanks(),
+        input.promptRequestSettings.promptMode,
+        input.promptRequestSettings.promptWordbanks,
       );
       const prompt = applyPromptRewriteGuard(
         modePrompt,
-        config.getPromptRewriteGuardEnabled(),
-        config.getPromptRewriteGuardText(),
+        input.promptRequestSettings.promptRewriteGuardEnabled,
+        input.promptRequestSettings.promptRewriteGuardText,
       );
 
       const body = new FormData();

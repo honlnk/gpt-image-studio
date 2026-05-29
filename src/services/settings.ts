@@ -6,6 +6,7 @@ import {
   PROMPT_REWRITE_GUARD_PREFIX,
   normalizePromptRewriteGuardText,
 } from "./imagesApi";
+import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
 import type {
   ApiBaseUrlMode,
@@ -50,12 +51,14 @@ type StoredAppSettings = Omit<
   | "promptRewriteGuardEnabled"
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
+  | "favoritePrompts"
 > & {
   connectionMode?: ConnectionMode;
   apiBaseUrlMode?: ApiBaseUrlMode;
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   promptRewriteGuardHistory?: PromptRewriteGuardHistoryItem[];
+  favoritePrompts?: unknown;
   promptMode?: PromptMode;
   promptWordbanks?: unknown;
   defaults: StoredGenerationParams;
@@ -81,6 +84,7 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
           createdAt: new Date(0).toISOString(),
         },
       ],
+    favoritePrompts: normalizeFavoritePrompts(settings.favoritePrompts),
     defaults: normalizeGenerationParams(settings.defaults),
   };
 }
