@@ -12,6 +12,7 @@ import {
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
 import { withNetworkRetry } from "../../services/networkRetry";
+import { clonePromptWordbanks } from "../../services/promptWordbanks";
 import {
   deleteConversationDraft,
   deleteConversationDrafts,
@@ -31,6 +32,7 @@ import type {
   GenerationParams,
   Message,
   PromptMode,
+  PromptRequestSettings,
   PromptWordbankSectionKey,
 } from "../../types/studio";
 
@@ -114,19 +116,11 @@ export function useStudioViewModel() {
     getApiBaseUrlMode: () => settings.apiBaseUrlMode.value,
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
-    getPromptMode: () => settings.promptMode.value,
-    getPromptWordbanks: () => settings.promptWordbanks.value,
-    getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
-    getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,
     getSessionToken: () => settings.companionSessionToken.value,
     getModel: () => settings.model.value,
-    getPromptMode: () => settings.promptMode.value,
-    getPromptWordbanks: () => settings.promptWordbanks.value,
-    getPromptRewriteGuardEnabled: () => settings.promptRewriteGuardEnabled.value,
-    getPromptRewriteGuardText: () => settings.promptRewriteGuardText.value,
   });
   const imageClient: ImageClient = {
     generate(input) {
@@ -160,6 +154,7 @@ export function useStudioViewModel() {
     composerText,
     createConversationRecord: conversations.createConversationRecord,
     currentGenerationParams: settings.currentGenerationParams,
+    currentPromptRequestSettings,
     customSizeError: settings.customSizeError,
     imageAssets: images.imageAssets,
     imageById: images.imageById,
@@ -173,6 +168,15 @@ export function useStudioViewModel() {
     refreshStorageUsage: images.refreshStorageUsage,
     updateConversationSummary: conversations.updateConversationSummary,
   });
+
+  function currentPromptRequestSettings(): PromptRequestSettings {
+    return {
+      promptMode: settings.promptMode.value,
+      promptWordbanks: clonePromptWordbanks(settings.promptWordbanks.value),
+      promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled.value,
+      promptRewriteGuardText: settings.promptRewriteGuardText.value,
+    };
+  }
   const { restoreFromStorage } = useStudioRestore({
     activeConversationId: conversations.activeConversationId,
     applySettings: settings.applySettings,

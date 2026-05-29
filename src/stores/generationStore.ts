@@ -13,6 +13,7 @@ import {
 import { readImageDimensions } from "../services/imageMetadata";
 import { base64ToBlob } from "../services/imagesApi";
 import { saveMessage } from "../services/messages";
+import { clonePromptWordbanks } from "../services/promptWordbanks";
 import { isoTimestamp, timestampFromCreatedAt } from "../shared/dateTime";
 import { formatError, isApiConfigurationError } from "../shared/errors";
 import { createId } from "../shared/id";
@@ -22,6 +23,7 @@ import type {
   GenerationParams,
   ImageAsset,
   Message,
+  PromptRequestSettings,
 } from "../types/studio";
 
 type CreateConversationRecordInput = {
@@ -41,6 +43,7 @@ type GenerationStoreContext = {
     input: CreateConversationRecordInput,
   ) => Promise<Conversation>;
   currentGenerationParams: () => GenerationParams;
+  currentPromptRequestSettings: () => PromptRequestSettings;
   customSizeError: ComputedRef<string>;
   imageAssets: Ref<ImageAsset[]>;
   imageById: (id: string) => ImageAsset | undefined;
@@ -139,6 +142,8 @@ export const useGenerationStore = defineStore("generation", () => {
     );
     const editSourceImageId =
       input.value.activeEditSourceImageId.value || undefined;
+    const generationParams = input.value.currentGenerationParams();
+    const promptRequestSettings = input.value.currentPromptRequestSettings();
     const userMessage: Message = {
       id: createId("m"),
       conversationId,
@@ -148,7 +153,8 @@ export const useGenerationStore = defineStore("generation", () => {
       resultImageIds: [],
       status: "success",
       createdAt,
-      generationParams: input.value.currentGenerationParams(),
+      generationParams,
+      promptRequestSettings,
     };
     const assistantMessage: Message = {
       id: createId("m"),
@@ -162,7 +168,8 @@ export const useGenerationStore = defineStore("generation", () => {
       status: "pending",
       createdAt: isoTimestamp(now + 1),
       generationStartedAt: createdAt,
-      generationParams: input.value.currentGenerationParams(),
+      generationParams,
+      promptRequestSettings,
       editSourceImageId,
       editMaskImageId,
     };
@@ -190,8 +197,10 @@ export const useGenerationStore = defineStore("generation", () => {
       assistantMessageId: assistantMessage.id,
       conversationId,
       generationParams:
-        assistantMessage.generationParams ??
-        input.value.currentGenerationParams(),
+        assistantMessage.generationParams ?? input.value.currentGenerationParams(),
+      promptRequestSettings:
+        assistantMessage.promptRequestSettings ??
+        input.value.currentPromptRequestSettings(),
       prompt: text,
       referencedImageIds: references,
       editSourceImageId,
@@ -228,6 +237,9 @@ export const useGenerationStore = defineStore("generation", () => {
           conversationId: message.conversationId,
           generationParams:
             message.generationParams ?? input.value.currentGenerationParams(),
+          promptRequestSettings:
+            message.promptRequestSettings ??
+            input.value.currentPromptRequestSettings(),
           prompt: userMessage.content,
           referencedImageIds: message.referencedImageIds,
           editSourceImageId: message.editSourceImageId,
@@ -290,6 +302,9 @@ export const useGenerationStore = defineStore("generation", () => {
         conversationId: message.conversationId,
         generationParams:
           message.generationParams ?? input.value.currentGenerationParams(),
+        promptRequestSettings:
+          message.promptRequestSettings ??
+          input.value.currentPromptRequestSettings(),
         prompt: userMessage.content,
         referencedImageIds: message.referencedImageIds,
         editSourceImageId: message.editSourceImageId,
@@ -307,6 +322,7 @@ export const useGenerationStore = defineStore("generation", () => {
             job.prompt,
             job.referencedImageIds,
             params,
+            job.promptRequestSettings,
             job.editSourceImageId,
             job.editMaskImageId,
             (retryAttempt) => updateMessageNetworkRetry(job.assistantMessageId, retryAttempt),
@@ -314,6 +330,7 @@ export const useGenerationStore = defineStore("generation", () => {
         : await input.value.imageClient.generate({
             prompt: job.prompt,
             params,
+            promptRequestSettings: job.promptRequestSettings,
             onNetworkRetry: (retryAttempt) =>
               updateMessageNetworkRetry(job.assistantMessageId, retryAttempt),
           });
@@ -404,6 +421,7 @@ export const useGenerationStore = defineStore("generation", () => {
     prompt: string,
     references: string[],
     params: GenerationParams,
+    promptRequestSettings: PromptRequestSettings,
     editSourceImageId?: string,
     editMaskImageId?: string,
     onNetworkRetry?: (retryAttempt: number) => void,
@@ -501,6 +519,7 @@ export const useGenerationStore = defineStore("generation", () => {
     return input.value.imageClient.edit({
       prompt,
       params,
+      promptRequestSettings,
       images: (editImages.length ? editImages : imageSources).map((item) => ({
         blob: item.blob,
         name: item.name,
@@ -648,6 +667,18 @@ function toPlainMessage(message: Message): Message {
     generationStartedAt: message.generationStartedAt,
     generationParams: message.generationParams
       ? { ...message.generationParams }
+      : undefined,
+    promptRequestSettings: message.promptRequestSettings
+      ? {
+          promptMode: message.promptRequestSettings.promptMode,
+          promptWordbanks: clonePromptWordbanks(
+            message.promptRequestSettings.promptWordbanks,
+          ),
+          promptRewriteGuardEnabled:
+            message.promptRequestSettings.promptRewriteGuardEnabled,
+          promptRewriteGuardText:
+            message.promptRequestSettings.promptRewriteGuardText,
+        }
       : undefined,
     networkRetryAttempt: message.networkRetryAttempt,
     errorMessage: message.errorMessage,

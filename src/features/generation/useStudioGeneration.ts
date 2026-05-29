@@ -6,6 +6,7 @@ import type {
   GenerationParams,
   ImageAsset,
   Message,
+  PromptRequestSettings,
 } from "../../types/studio";
 import type { ComputedRef, Ref } from "vue";
 
@@ -24,6 +25,7 @@ type UseStudioGenerationInput = {
   composerText: Ref<string>;
   createConversationRecord: (input: CreateConversationRecordInput) => Promise<Conversation>;
   currentGenerationParams: () => GenerationParams;
+  currentPromptRequestSettings: () => PromptRequestSettings;
   customSizeError: ComputedRef<string>;
   imageAssets: Ref<ImageAsset[]>;
   imageById: (id: string) => ImageAsset | undefined;
