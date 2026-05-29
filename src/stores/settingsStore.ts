@@ -2,7 +2,9 @@ import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import {
   isSizeRatio,
+  MIN_IMAGE_COUNT,
   normalizeGenerationParams,
+  normalizeImageCount,
   normalizeSizePreset,
   type StoredGenerationParams,
 } from "../services/generationParams";
@@ -59,6 +61,8 @@ const MAX_CUSTOM_DIMENSION = 3840;
 const MAX_CUSTOM_PIXELS = 8294400;
 const SIZE_STEP = 16;
 const MAX_PROMPT_REWRITE_GUARD_HISTORY = 20;
+const IMAGE_COUNT_PRESETS = [1, 2, 3, 4, 6, 8, 10, 12] as const;
+type ImageCountMode = "preset" | "custom";
 
 export const useSettingsStore = defineStore("settings", () => {
   const connectionMode = ref<ConnectionMode>("direct");
@@ -89,6 +93,9 @@ export const useSettingsStore = defineStore("settings", () => {
   const companionPaired = computed(() => companionSessionToken.value !== "");
   const imageWidth = ref(1024);
   const imageHeight = ref(1024);
+  const imageCount = ref(1);
+  const imageCountMode = ref<ImageCountMode>("preset");
+  const imageCountPresets = IMAGE_COUNT_PRESETS;
   const activeSizePreset = ref<GenerationParams["size"]>("auto");
   const sizeResolution = ref<SizeResolution>("1k");
   const sizeRatioOptions = SIZE_RATIO_OPTIONS;
@@ -191,6 +198,12 @@ export const useSettingsStore = defineStore("settings", () => {
       imageWidth.value = defaults.width;
       imageHeight.value = defaults.height;
     }
+    imageCount.value = normalizeImageCount(defaults.imageCount);
+    imageCountMode.value = imageCountPresets.includes(
+      imageCount.value as (typeof IMAGE_COUNT_PRESETS)[number],
+    )
+      ? "preset"
+      : "custom";
     quality.value = defaults.quality;
     background.value = normalizeBackground(defaults.background);
     outputFormat.value = defaults.outputFormat;
@@ -222,10 +235,28 @@ export const useSettingsStore = defineStore("settings", () => {
       resolution: sizeResolution.value,
       width: imageWidth.value,
       height: imageHeight.value,
+      imageCount: normalizeImageCount(imageCount.value),
       quality: quality.value,
       background: background.value,
       outputFormat: outputFormat.value,
     };
+  }
+
+  function applyImageCountMode(mode: ImageCountMode) {
+    imageCountMode.value = mode;
+    if (
+      mode === "preset" &&
+      !imageCountPresets.includes(
+        imageCount.value as (typeof IMAGE_COUNT_PRESETS)[number],
+      )
+    ) {
+      imageCount.value = imageCountPresets[0];
+    }
+  }
+
+  function applyImageCount(count: unknown, mode = imageCountMode.value) {
+    imageCount.value = normalizeImageCount(count);
+    imageCountMode.value = mode;
   }
 
   function saveCurrentSettings() {
@@ -295,6 +326,8 @@ export const useSettingsStore = defineStore("settings", () => {
     companionUrl,
     connectionMode,
     applySettings,
+    applyImageCount,
+    applyImageCountMode,
     applySizePreset,
     applySizeResolution,
     background,
@@ -306,6 +339,10 @@ export const useSettingsStore = defineStore("settings", () => {
     customSizeError,
     formatLabel,
     formatOptions,
+    imageCount,
+    imageCountMode,
+    imageCountPresets,
+    minImageCount: MIN_IMAGE_COUNT,
     imageHeight,
     imageWidth,
     model,

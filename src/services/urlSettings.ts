@@ -20,6 +20,7 @@ const URL_SETTING_KEYS = [
   "resolution",
   "width",
   "height",
+  "imageCount",
   "background",
   "outputFormat",
 ] as const;
@@ -226,6 +227,7 @@ function getGenerationPatchFromRecord(source: SettingsPayload | null): SettingsP
   const resolution = normalizeResolution(readString(source, "resolution"));
   const width = normalizeDimension(readUnknown(source, "width"));
   const height = normalizeDimension(readUnknown(source, "height"));
+  const imageCount = normalizeImageCount(readUnknown(source, "imageCount"));
   const background = normalizeBackground(readString(source, "background"));
   const outputFormat = normalizeOutputFormat(readString(source, "outputFormat"));
 
@@ -233,6 +235,7 @@ function getGenerationPatchFromRecord(source: SettingsPayload | null): SettingsP
   if (resolution) defaults.resolution = resolution;
   if (width !== undefined) defaults.width = width;
   if (height !== undefined) defaults.height = height;
+  if (imageCount !== undefined) defaults.imageCount = imageCount;
   if (background) defaults.background = background;
   if (outputFormat) defaults.outputFormat = outputFormat;
 
@@ -333,6 +336,13 @@ function normalizeDimension(value: unknown) {
   if (typeof number !== "number" || !Number.isFinite(number)) return undefined;
   const dimension = Math.trunc(number);
   return dimension > 0 ? dimension : undefined;
+}
+
+function normalizeImageCount(value: unknown) {
+  const number = typeof value === "string" ? Number(value) : value;
+  if (typeof number !== "number" || !Number.isFinite(number)) return undefined;
+  const count = Math.round(number);
+  return Math.max(1, count);
 }
 
 function stripImagesApiPath(apiBaseUrl: string) {

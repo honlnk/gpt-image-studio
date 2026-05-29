@@ -3,6 +3,7 @@ import type { ComputedRef, Ref } from "vue";
 import { computed, ref, watch } from "vue";
 import type { GenerationJob } from "../features/generation/generationJobTypes";
 import type { ImageClient } from "../features/generation/imageClients/imageClient";
+import { normalizeImageCount } from "../services/generationParams";
 import {
   deleteImageAsset,
   deleteImageBlob,
@@ -65,6 +66,7 @@ type GenerationStoreContext = {
 export const useGenerationStore = defineStore("generation", () => {
   const jobs = ref<GenerationJob[]>([]);
   let context: GenerationStoreContext | null = null;
+  const messageSaveQueues = new Map<string, Promise<unknown>>();
 
   const input = computed(() => getContext());
   const pendingJobCount = computed(
@@ -143,6 +145,7 @@ export const useGenerationStore = defineStore("generation", () => {
     const editSourceImageId =
       input.value.activeEditSourceImageId.value || undefined;
     const generationParams = input.value.currentGenerationParams();
+    const imageCount = normalizeImageCount(generationParams.imageCount);
     const promptRequestSettings = input.value.currentPromptRequestSettings();
     const userMessage: Message = {
       id: createId("m"),
@@ -160,9 +163,7 @@ export const useGenerationStore = defineStore("generation", () => {
       id: createId("m"),
       conversationId,
       role: "assistant",
-      content: references.length
-        ? "正在基于引用图片生成编辑结果。"
-        : "正在生成图片。",
+      content: pendingGenerationLabel(references.length > 0, imageCount),
       referencedImageIds: references,
       resultImageIds: [],
       status: "pending",
@@ -193,29 +194,36 @@ export const useGenerationStore = defineStore("generation", () => {
         ? input.value.persistConversation(updatedConversation)
         : Promise.resolve(),
     ]).catch(input.value.onStorageError);
-    const job = createJob({
-      assistantMessageId: assistantMessage.id,
-      conversationId,
-      generationParams:
-        assistantMessage.generationParams ?? input.value.currentGenerationParams(),
-      promptRequestSettings:
-        assistantMessage.promptRequestSettings ??
-        input.value.currentPromptRequestSettings(),
-      prompt: text,
-      referencedImageIds: references,
-      editSourceImageId,
-      editMaskImageId,
-      userMessageId: userMessage.id,
-    });
-    void runImageRequest(job);
+    const createdJobs = createJobs(
+      {
+        assistantMessageId: assistantMessage.id,
+        conversationId,
+        generationParams:
+          assistantMessage.generationParams ?? input.value.currentGenerationParams(),
+        promptRequestSettings:
+          assistantMessage.promptRequestSettings ??
+          input.value.currentPromptRequestSettings(),
+        prompt: text,
+        referencedImageIds: references,
+        editSourceImageId,
+        editMaskImageId,
+        userMessageId: userMessage.id,
+      },
+      imageCount,
+    );
+    runImageRequests(createdJobs);
   }
 
   async function retryMessage(message: Message) {
+    const generationParams =
+      message.generationParams ?? input.value.currentGenerationParams();
+    const imageCount = normalizeImageCount(generationParams.imageCount);
     message.status = "pending";
     message.generationStartedAt = isoTimestamp();
-    message.content = message.referencedImageIds.length
-      ? "正在基于引用图片生成编辑结果。"
-      : "正在生成图片。";
+    message.content = pendingGenerationLabel(
+      message.referencedImageIds.length > 0,
+      imageCount,
+    );
     message.errorMessage = undefined;
     await saveMessage(toPlainMessage(message)).catch(
       input.value.onStorageError,
@@ -231,27 +239,32 @@ export const useGenerationStore = defineStore("generation", () => {
       );
 
     if (userMessage) {
-      await runImageRequest(
-        createJob({
-          assistantMessageId: message.id,
-          conversationId: message.conversationId,
-          generationParams:
-            message.generationParams ?? input.value.currentGenerationParams(),
-          promptRequestSettings:
-            message.promptRequestSettings ??
-            input.value.currentPromptRequestSettings(),
-          prompt: userMessage.content,
-          referencedImageIds: message.referencedImageIds,
-          editSourceImageId: message.editSourceImageId,
-          editMaskImageId: message.editMaskImageId,
-          userMessageId: userMessage.id,
-        }),
+      await Promise.all(
+        createJobs(
+          {
+            assistantMessageId: message.id,
+            conversationId: message.conversationId,
+            generationParams,
+            promptRequestSettings:
+              message.promptRequestSettings ??
+              input.value.currentPromptRequestSettings(),
+            prompt: userMessage.content,
+            referencedImageIds: message.referencedImageIds,
+            editSourceImageId: message.editSourceImageId,
+            editMaskImageId: message.editMaskImageId,
+            userMessageId: userMessage.id,
+          },
+          imageCount,
+        ).map(runImageRequest),
       );
     }
   }
 
   async function generateAnother(message: Message) {
-    await rerunMessageGeneration(message, { replaceImageId: undefined });
+    await rerunMessageGeneration(message, {
+      imageCount: 1,
+      replaceImageId: undefined,
+    });
   }
 
   async function refreshGeneratedImage(message: Message, imageId: string) {
@@ -267,7 +280,7 @@ export const useGenerationStore = defineStore("generation", () => {
     await Promise.all([
       image ? deleteImageAsset(image.id) : Promise.resolve(),
       image?.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
-      saveMessage(toPlainMessage(message)),
+      enqueueMessageSave(message),
     ]).catch(input.value.onStorageError);
     await input.value.refreshStorageUsage();
 
@@ -276,41 +289,45 @@ export const useGenerationStore = defineStore("generation", () => {
 
   async function rerunMessageGeneration(
     message: Message,
-    options: { replaceImageId?: string | undefined },
+    options: { imageCount?: number; replaceImageId?: string | undefined },
   ) {
     const userMessage = findSourceUserMessage(message);
     if (!userMessage) return;
 
+    const generationParams =
+      message.generationParams ?? input.value.currentGenerationParams();
+    const imageCount = options.replaceImageId
+      ? 1
+      : normalizeImageCount(options.imageCount ?? generationParams.imageCount);
+
     message.status = "pending";
     message.generationStartedAt = isoTimestamp();
-    message.content = message.referencedImageIds.length
-      ? options.replaceImageId
-        ? "正在重新生成编辑结果。"
-        : "正在继续生成编辑结果。"
-      : options.replaceImageId
-        ? "正在重新生成图片。"
-        : "正在继续生成图片。";
+    message.content = continuedGenerationLabel(
+      message.referencedImageIds.length > 0,
+      Boolean(options.replaceImageId),
+      imageCount,
+    );
     message.errorMessage = undefined;
     replaceMessage(message);
-    await saveMessage(toPlainMessage(message)).catch(
-      input.value.onStorageError,
-    );
+    await enqueueMessageSave(message).catch(input.value.onStorageError);
 
-    await runImageRequest(
-      createJob({
-        assistantMessageId: message.id,
-        conversationId: message.conversationId,
-        generationParams:
-          message.generationParams ?? input.value.currentGenerationParams(),
-        promptRequestSettings:
-          message.promptRequestSettings ??
-          input.value.currentPromptRequestSettings(),
-        prompt: userMessage.content,
-        referencedImageIds: message.referencedImageIds,
-        editSourceImageId: message.editSourceImageId,
-        editMaskImageId: message.editMaskImageId,
-        userMessageId: userMessage.id,
-      }),
+    await Promise.all(
+      createJobs(
+        {
+          assistantMessageId: message.id,
+          conversationId: message.conversationId,
+          generationParams,
+          promptRequestSettings:
+            message.promptRequestSettings ??
+            input.value.currentPromptRequestSettings(),
+          prompt: userMessage.content,
+          referencedImageIds: message.referencedImageIds,
+          editSourceImageId: message.editSourceImageId,
+          editMaskImageId: message.editMaskImageId,
+          userMessageId: userMessage.id,
+        },
+        imageCount,
+      ).map(runImageRequest),
     );
   }
 
@@ -367,53 +384,39 @@ export const useGenerationStore = defineStore("generation", () => {
         previewUrl: createObjectUrl(blob),
       };
 
-      const assistantMessage = findMessage(job.assistantMessageId);
-      if (assistantMessage) {
-        assistantMessage.status = "success";
-        assistantMessage.content = job.referencedImageIds.length
-          ? resultCountLabel("已基于引用图生成", assistantMessage.resultImageIds.length + 1)
-          : resultCountLabel("已生成", assistantMessage.resultImageIds.length + 1);
-        assistantMessage.resultImageIds = [
-          ...assistantMessage.resultImageIds,
-          imageId,
-        ];
-        assistantMessage.errorMessage = undefined;
-        assistantMessage.networkRetryAttempt = undefined;
-        replaceMessage(assistantMessage);
-      }
       input.value.imageAssets.value = [
         imageAsset,
         ...input.value.imageAssets.value,
       ];
+      markJobSuccess(job.id);
+      const assistantMessage = applyJobAggregateToMessage(job, {
+        imageId,
+      });
 
       const saveTasks: Promise<unknown>[] = [
         saveImageBlob(blobKey, blob),
         saveImageAsset(toPlainImageAsset(imageAsset)),
       ];
       if (assistantMessage) {
-        saveTasks.push(saveMessage(toPlainMessage(assistantMessage)));
+        saveTasks.push(enqueueMessageSave(assistantMessage));
       }
       await Promise.all(saveTasks);
       await input.value.refreshStorageUsage();
-      markJobSuccess(job.id);
     } catch (error) {
       const message = formatError(error);
       if (isApiConfigurationError(error)) {
         input.value.onApiConfigurationError?.(error);
       }
-      const assistantMessage = findMessage(job.assistantMessageId);
+      markJobError(job.id, message);
+      const assistantMessage = applyJobAggregateToMessage(job, {
+        errorMessage: message,
+      });
       if (assistantMessage) {
-        assistantMessage.status = "error";
-        assistantMessage.content = "生成中断，请重试。";
-        assistantMessage.errorMessage = message;
-        assistantMessage.networkRetryAttempt = undefined;
-        replaceMessage(assistantMessage);
-        await saveMessage(toPlainMessage(assistantMessage)).catch(
+        await enqueueMessageSave(assistantMessage).catch(
           input.value.onStorageError,
         );
       }
       await input.value.refreshStorageUsage();
-      markJobError(job.id, message);
     }
   }
 
@@ -591,6 +594,21 @@ export const useGenerationStore = defineStore("generation", () => {
     return job;
   }
 
+  function createJobs(
+    jobInput: Omit<GenerationJob, "id" | "status" | "startedAtMs">,
+    count: number,
+  ) {
+    return Array.from({ length: normalizeImageCount(count) }, () =>
+      createJob(jobInput),
+    );
+  }
+
+  function runImageRequests(createdJobs: GenerationJob[]) {
+    createdJobs.forEach((job) => {
+      void runImageRequest(job);
+    });
+  }
+
   function markJobSuccess(jobId: string) {
     const job = jobs.value.find((item) => item.id === jobId);
     if (!job) return;
@@ -605,6 +623,76 @@ export const useGenerationStore = defineStore("generation", () => {
     job.status = "error";
     job.finishedAtMs = Date.now();
     job.errorMessage = errorMessage;
+  }
+
+  function applyJobAggregateToMessage(
+    job: GenerationJob,
+    update: { imageId?: string; errorMessage?: string },
+  ) {
+    const assistantMessage = findMessage(job.assistantMessageId);
+    if (!assistantMessage) return undefined;
+
+    if (update.imageId && !assistantMessage.resultImageIds.includes(update.imageId)) {
+      assistantMessage.resultImageIds = [
+        ...assistantMessage.resultImageIds,
+        update.imageId,
+      ];
+    }
+
+    const siblingJobs = jobs.value.filter(
+      (item) => item.assistantMessageId === job.assistantMessageId,
+    );
+    const pendingCount = siblingJobs.filter((item) => item.status === "pending").length;
+    const hasGeneratedImages = assistantMessage.resultImageIds.length > 0;
+    const failedCount = siblingJobs.filter((item) => item.status === "error").length;
+
+    assistantMessage.networkRetryAttempt = undefined;
+    if (pendingCount > 0) {
+      assistantMessage.status = "pending";
+      assistantMessage.content = pendingResultLabel(
+        job.referencedImageIds.length > 0,
+        assistantMessage.resultImageIds.length,
+        pendingCount,
+      );
+      assistantMessage.errorMessage =
+        failedCount > 0
+          ? `${failedCount} 张生成失败，其余仍在继续。`
+          : undefined;
+    } else if (hasGeneratedImages) {
+      assistantMessage.status = "success";
+      assistantMessage.content = job.referencedImageIds.length
+        ? resultCountLabel("已基于引用图生成", assistantMessage.resultImageIds.length)
+        : resultCountLabel("已生成", assistantMessage.resultImageIds.length);
+      assistantMessage.errorMessage =
+        failedCount > 0
+          ? `${failedCount} 张生成失败，已保留成功结果。`
+          : undefined;
+    } else {
+      assistantMessage.status = "error";
+      assistantMessage.content = "生成中断，请重试。";
+      assistantMessage.errorMessage = update.errorMessage ?? "生成失败，请重试。";
+    }
+
+    replaceMessage(assistantMessage);
+    return assistantMessage;
+  }
+
+  function enqueueMessageSave(message: Message) {
+    const previousSave =
+      messageSaveQueues.get(message.id)?.catch(() => undefined) ??
+      Promise.resolve();
+    const saveTask = previousSave.then(() => {
+      const latestMessage = findMessage(message.id) ?? message;
+      return saveMessage(toPlainMessage(latestMessage));
+    });
+    messageSaveQueues.set(message.id, saveTask);
+    void saveTask.finally(() => {
+      if (messageSaveQueues.get(message.id) === saveTask) {
+        messageSaveQueues.delete(message.id);
+      }
+    }).catch(() => undefined);
+
+    return saveTask;
   }
 
   function getContext() {
@@ -652,6 +740,43 @@ function filenameFromAsset(asset: ImageAsset) {
 
 function resultCountLabel(prefix: string, count: number) {
   return count > 1 ? `${prefix} ${count} 张图片。` : `${prefix}一张图片。`;
+}
+
+function pendingGenerationLabel(isEdit: boolean, count: number) {
+  if (isEdit) {
+    return count > 1
+      ? `正在基于引用图片生成 ${count} 张编辑结果。`
+      : "正在基于引用图片生成编辑结果。";
+  }
+
+  return count > 1 ? `正在生成 ${count} 张图片。` : "正在生成图片。";
+}
+
+function continuedGenerationLabel(
+  isEdit: boolean,
+  isReplacing: boolean,
+  count: number,
+) {
+  if (isEdit) {
+    if (isReplacing) return "正在重新生成编辑结果。";
+    return count > 1
+      ? `正在继续生成 ${count} 张编辑结果。`
+      : "正在继续生成编辑结果。";
+  }
+
+  if (isReplacing) return "正在重新生成图片。";
+  return count > 1 ? `正在继续生成 ${count} 张图片。` : "正在继续生成图片。";
+}
+
+function pendingResultLabel(
+  isEdit: boolean,
+  generatedCount: number,
+  pendingCount: number,
+) {
+  const generatedPart =
+    generatedCount > 0 ? `已生成 ${generatedCount} 张，` : "";
+  const noun = isEdit ? "编辑结果" : "图片";
+  return `${generatedPart}还有 ${pendingCount} 张${noun}正在生成。`;
 }
 
 function toPlainMessage(message: Message): Message {

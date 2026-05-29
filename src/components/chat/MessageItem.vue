@@ -345,7 +345,7 @@ function messageErrorText(message: Message) {
                   <button
                     class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
                     type="button"
-                    :disabled="!imageById(imageId) || message.status === 'pending'"
+                    :disabled="!imageById(imageId)"
                     aria-label="再次生成"
                     @click="emit('generateAnother', message)"
                   >
@@ -368,7 +368,7 @@ function messageErrorText(message: Message) {
                   <button
                     class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
                     type="button"
-                    :disabled="!imageById(imageId) || message.status === 'pending'"
+                    :disabled="!imageById(imageId)"
                     aria-label="刷新"
                     @click="emit('refreshImage', message, imageId)"
                   >

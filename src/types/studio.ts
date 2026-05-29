@@ -71,6 +71,7 @@ export type GenerationParams = {
   resolution: SizeResolution;
   width: number;
   height: number;
+  imageCount: number;
   quality: "auto" | "high" | "medium" | "low";
   background: "auto" | "opaque" | "transparent";
   outputFormat: "png" | "webp" | "jpeg";
@@ -123,7 +124,7 @@ export type AppSettings = {
   storageMode: "indexeddb";
 };
 
-export type EditorKey = "size" | "background" | "format";
+export type EditorKey = "size" | "count" | "background" | "format";
 
 export type ConversationDraft = {
   conversationId: string;
