@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { FavoritePrompt } from "../../types/studio";
 
@@ -19,12 +19,17 @@ const emit = defineEmits<{
 }>();
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const promptMenuRef = ref<HTMLDivElement | null>(null);
+const promptMenuListRef = ref<HTMLDivElement | null>(null);
+const promptOptionRefs = ref<HTMLElement[]>([]);
 const settings = useSettingsStore();
 const isPromptMenuOpen = ref(false);
 const activePromptIndex = ref(0);
 const promptQuery = ref("");
 const promptTriggerStart = ref(-1);
 const promptMenuStyle = ref<Record<string, string>>({});
+const ignoreNextTextareaClick = ref(false);
+const PROMPT_MENU_MAX_HEIGHT = 256;
 
 const composerPlaceholder = computed(() =>
   props.activeAttachmentCount
@@ -41,6 +46,18 @@ const filteredFavoritePrompts = computed(() => {
     const text = prompt.text.toLocaleLowerCase();
     return title.includes(query) || text.includes(query);
   });
+});
+
+watch(isPromptMenuOpen, (isOpen) => {
+  if (isOpen) {
+    document.addEventListener("pointerdown", handleDocumentPointerDown, true);
+  } else {
+    document.removeEventListener("pointerdown", handleDocumentPointerDown, true);
+  }
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", handleDocumentPointerDown, true);
 });
 
 function focusComposer() {
@@ -89,9 +106,18 @@ function handleComposerKeydown(event: KeyboardEvent) {
 
 function handleComposerInput(event: Event) {
   const el = event.target as HTMLTextAreaElement;
+  ignoreNextTextareaClick.value = false;
   autoResize(event);
   emit("update:composerText", el.value);
   updatePromptMenuFromTextarea(el);
+}
+
+function handleComposerClick() {
+  if (ignoreNextTextareaClick.value) {
+    ignoreNextTextareaClick.value = false;
+    return;
+  }
+  updatePromptMenuFromTextarea();
 }
 
 function updatePromptMenuFromTextarea(el = textareaRef.value) {
@@ -108,8 +134,19 @@ function updatePromptMenuFromTextarea(el = textareaRef.value) {
   activePromptIndex.value = 0;
   isPromptMenuOpen.value = filteredFavoritePrompts.value.length > 0;
   if (isPromptMenuOpen.value) {
-    promptMenuStyle.value = getCaretMenuStyle(el);
+    positionPromptMenu(el);
   }
+}
+
+function positionPromptMenu(el: HTMLTextAreaElement) {
+  const rect = getCaretRect(el);
+  promptMenuStyle.value = getCaretMenuStyle(rect);
+
+  void nextTick(() => {
+    const menuHeight = promptMenuRef.value?.offsetHeight;
+    if (!menuHeight) return;
+    promptMenuStyle.value = getCaretMenuStyle(rect, menuHeight);
+  });
 }
 
 function closePromptMenu() {
@@ -118,12 +155,42 @@ function closePromptMenu() {
   promptTriggerStart.value = -1;
 }
 
+function handleDocumentPointerDown(event: PointerEvent) {
+  const target = event.target;
+  if (!(target instanceof Node)) return;
+  if (promptMenuRef.value?.contains(target)) return;
+  ignoreNextTextareaClick.value = Boolean(textareaRef.value?.contains(target));
+  closePromptMenu();
+}
+
 function moveActivePrompt(delta: number) {
   const prompts = filteredFavoritePrompts.value;
   if (!prompts.length) return;
 
   activePromptIndex.value =
     (activePromptIndex.value + delta + prompts.length) % prompts.length;
+  void nextTick(scrollActivePromptIntoView);
+}
+
+function scrollActivePromptIntoView() {
+  const listEl = promptMenuListRef.value;
+  const optionEl = promptOptionRefs.value[activePromptIndex.value];
+  if (!listEl || !optionEl) return;
+
+  const targetScrollTop =
+    optionEl.offsetTop - (listEl.clientHeight - optionEl.offsetHeight) / 2;
+  listEl.scrollTo({
+    top: Math.max(0, targetScrollTop),
+    behavior: "smooth",
+  });
+}
+
+function setPromptOptionRef(el: unknown, index: number) {
+  if (el instanceof HTMLElement) {
+    promptOptionRefs.value[index] = el;
+  } else {
+    promptOptionRefs.value.splice(index, 1);
+  }
 }
 
 function selectActivePrompt() {
@@ -171,9 +238,9 @@ function findPromptMention(value: string, caretIndex: number) {
   return { start: atIndex, query };
 }
 
-function getCaretMenuStyle(el: HTMLTextAreaElement) {
-  const rect = getCaretRect(el);
-  const top = Math.min(rect.top + rect.height + 6, window.innerHeight - 220);
+function getCaretMenuStyle(rect: DOMRect, menuHeight = PROMPT_MENU_MAX_HEIGHT) {
+  const anchorY = rect.top + rect.height;
+  const top = anchorY - menuHeight;
   const left = Math.min(rect.left, window.innerWidth - 288);
 
   return {
@@ -269,7 +336,7 @@ defineExpose({ focusComposer });
         handleComposerInput($event);
       "
       @keydown="handleComposerKeydown"
-      @click="updatePromptMenuFromTextarea()"
+      @click="handleComposerClick"
       @paste="importFromPaste"
     />
     <div class="flex items-end justify-between">
@@ -314,7 +381,8 @@ defineExpose({ focusComposer });
     <Teleport to="body">
       <div
         v-if="isPromptMenuOpen"
-        class="fixed z-70 max-h-64 w-72 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl"
+        ref="promptMenuRef"
+        class="fixed z-70 w-72 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl"
         :style="promptMenuStyle"
       >
         <div
@@ -345,10 +413,14 @@ defineExpose({ focusComposer });
             </svg>
           </button>
         </div>
-        <div class="max-h-56 overflow-y-auto py-1">
+        <div
+          ref="promptMenuListRef"
+          class="max-h-56 overflow-y-auto py-1"
+        >
           <button
             v-for="(prompt, index) in filteredFavoritePrompts"
             :key="prompt.id"
+            :ref="(el) => setPromptOptionRef(el, index)"
             class="block w-full cursor-pointer px-3 py-2 text-left transition-colors"
             :class="index === activePromptIndex ? 'bg-gray-100' : 'hover:bg-gray-50'"
             type="button"
