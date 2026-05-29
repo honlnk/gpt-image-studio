@@ -98,7 +98,9 @@ watch(
   () => props.isOpen,
   (isOpen) => {
     if (!isOpen) return;
-    activeTab.value = props.initialTab ?? "general";
+    if (props.initialTab) {
+      activeTab.value = props.initialTab;
+    }
   },
 );
 

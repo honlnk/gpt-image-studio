@@ -42,6 +42,7 @@ const STORAGE_KEYS = {
 } as const;
 
 type SettingsTab =
+  | "general"
   | "api"
   | "promptMode"
   | "favoritePrompts"
@@ -82,7 +83,7 @@ export function useStudioViewModel() {
   let draftSwitchQueue = Promise.resolve();
 
   const previewImageId = ref("");
-  const settingsInitialTab = ref<SettingsTab>("api");
+  const settingsInitialTab = ref<SettingsTab | undefined>(undefined);
   const settingsInitialBatchPanel = ref<BatchPanel>("images");
   const renameDialog = ref<RenameDialogState>({
     isOpen: false,
@@ -242,7 +243,7 @@ export function useStudioViewModel() {
   }
 
   function openSettingsDefault() {
-    settingsInitialTab.value = "api";
+    settingsInitialTab.value = undefined;
     settingsInitialBatchPanel.value = "images";
     openSettings();
   }
