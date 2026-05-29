@@ -1,4 +1,7 @@
-import type { GenerationParams } from "../../../types/studio";
+import type {
+  GenerationParams,
+  PromptRequestSettings,
+} from "../../../types/studio";
 
 export type ImageEditSource = {
   blob: Blob;
@@ -8,6 +11,8 @@ export type ImageEditSource = {
 export type GenerateImageInput = {
   prompt: string;
   params: GenerationParams;
+  promptRequestSettings: PromptRequestSettings;
+  onNetworkRetry?: (retryAttempt: number) => void;
 };
 
 export type EditImageInput = GenerateImageInput & {

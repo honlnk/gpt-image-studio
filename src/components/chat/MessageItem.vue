@@ -436,6 +436,12 @@ function messageErrorText(message: Message) {
             >
               正在生成：{{ pendingDurationLabel() }}
             </div>
+            <div
+              v-if="message.networkRetryAttempt"
+              class="absolute right-3 top-3 z-[1] rounded-lg border border-blue-200 bg-white/95 px-2.5 py-1 text-xs font-medium text-blue-600 shadow-sm backdrop-blur"
+            >
+              正在重试第 {{ message.networkRetryAttempt }} 次
+            </div>
           </div>
           <figcaption class="px-3 py-2">
             <div class="flex items-center justify-between gap-3">

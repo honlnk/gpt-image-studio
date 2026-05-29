@@ -133,13 +133,21 @@ export function useStudioViewModel() {
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.generate(input)
         : directImagesClient.generate(input);
-      return withNetworkRetry(fn, () => settings.autoRetryOnNetworkError.value);
+      return withNetworkRetry(
+        fn,
+        () => settings.autoRetryOnNetworkError.value,
+        input.onNetworkRetry,
+      );
     },
     edit(input) {
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.edit(input)
         : directImagesClient.edit(input);
-      return withNetworkRetry(fn, () => settings.autoRetryOnNetworkError.value);
+      return withNetworkRetry(
+        fn,
+        () => settings.autoRetryOnNetworkError.value,
+        input.onNetworkRetry,
+      );
     },
   };
 

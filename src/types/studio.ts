@@ -31,6 +31,8 @@ export type Message = {
   createdAt: string;
   generationStartedAt?: string;
   generationParams?: GenerationParams;
+  promptRequestSettings?: PromptRequestSettings;
+  networkRetryAttempt?: number;
   errorMessage?: string;
   editSourceImageId?: string;
   editMaskImageId?: string;
@@ -96,6 +98,13 @@ export type PromptRewriteGuardHistoryItem = {
   id: string;
   text: string;
   createdAt: string;
+};
+
+export type PromptRequestSettings = {
+  promptMode: PromptMode;
+  promptWordbanks: PromptWordbanks;
+  promptRewriteGuardEnabled: boolean;
+  promptRewriteGuardText: string;
 };
 
 export type AppSettings = {

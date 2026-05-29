@@ -309,10 +309,13 @@ export const useGenerationStore = defineStore("generation", () => {
             params,
             job.editSourceImageId,
             job.editMaskImageId,
+            (retryAttempt) => updateMessageNetworkRetry(job.assistantMessageId, retryAttempt),
           )
         : await input.value.imageClient.generate({
             prompt: job.prompt,
             params,
+            onNetworkRetry: (retryAttempt) =>
+              updateMessageNetworkRetry(job.assistantMessageId, retryAttempt),
           });
       const now = Date.now();
       const createdAt = isoTimestamp(now);
@@ -358,6 +361,7 @@ export const useGenerationStore = defineStore("generation", () => {
           imageId,
         ];
         assistantMessage.errorMessage = undefined;
+        assistantMessage.networkRetryAttempt = undefined;
         replaceMessage(assistantMessage);
       }
       input.value.imageAssets.value = [
@@ -385,6 +389,7 @@ export const useGenerationStore = defineStore("generation", () => {
         assistantMessage.status = "error";
         assistantMessage.content = "生成中断，请重试。";
         assistantMessage.errorMessage = message;
+        assistantMessage.networkRetryAttempt = undefined;
         replaceMessage(assistantMessage);
         await saveMessage(toPlainMessage(assistantMessage)).catch(
           input.value.onStorageError,
@@ -401,6 +406,7 @@ export const useGenerationStore = defineStore("generation", () => {
     params: GenerationParams,
     editSourceImageId?: string,
     editMaskImageId?: string,
+    onNetworkRetry?: (retryAttempt: number) => void,
   ) {
     const imageSources = await Promise.all(
       references.map(async (id) => {
@@ -505,7 +511,16 @@ export const useGenerationStore = defineStore("generation", () => {
             name: "mask.png",
           }
         : undefined,
+      onNetworkRetry,
     });
+  }
+
+  function updateMessageNetworkRetry(messageId: string, retryAttempt: number) {
+    const assistantMessage = findMessage(messageId);
+    if (!assistantMessage || assistantMessage.status !== "pending") return;
+
+    assistantMessage.networkRetryAttempt = retryAttempt;
+    replaceMessage(assistantMessage);
   }
 
   function replaceMessage(message: Message) {
@@ -634,6 +649,7 @@ function toPlainMessage(message: Message): Message {
     generationParams: message.generationParams
       ? { ...message.generationParams }
       : undefined,
+    networkRetryAttempt: message.networkRetryAttempt,
     errorMessage: message.errorMessage,
     editSourceImageId: message.editSourceImageId,
     editMaskImageId: message.editMaskImageId,
