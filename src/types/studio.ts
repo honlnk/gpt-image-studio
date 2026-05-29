@@ -101,6 +101,14 @@ export type PromptRewriteGuardHistoryItem = {
   createdAt: string;
 };
 
+export type FavoritePrompt = {
+  id: string;
+  title: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PromptRequestSettings = {
   promptMode: PromptMode;
   promptWordbanks: PromptWordbanks;
@@ -119,6 +127,7 @@ export type AppSettings = {
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
+  favoritePrompts: FavoritePrompt[];
   autoRetryOnNetworkError: boolean;
   defaults: GenerationParams;
   storageMode: "indexeddb";

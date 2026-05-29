@@ -14,6 +14,11 @@ import {
   normalizePromptRewriteGuardText,
 } from "../services/imagesApi";
 import {
+  createFavoritePrompt,
+  normalizeFavoritePromptUpdate,
+  normalizeFavoritePrompts,
+} from "../services/favoritePrompts";
+import {
   clonePromptWordbanks,
   defaultPromptWordbanks,
   normalizePromptWordbanks,
@@ -26,6 +31,7 @@ import { readStorage, writeStorage } from "../shared/localStorage";
 import type {
   AppSettings,
   ConnectionMode,
+  FavoritePrompt,
   GenerationParams,
   PromptMode,
   PromptRewriteGuardHistoryItem,
@@ -77,6 +83,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const promptRewriteGuardEnabled = ref(true);
   const promptRewriteGuardText = ref(PROMPT_REWRITE_GUARD_PREFIX);
   const autoRetryOnNetworkError = ref(false);
+  const favoritePrompts = ref<FavoritePrompt[]>([]);
   const promptRewriteGuardHistory = ref<PromptRewriteGuardHistoryItem[]>([
     {
       id: "prompt-guard-default",
@@ -192,6 +199,7 @@ export const useSettingsStore = defineStore("settings", () => {
       settings.promptRewriteGuardHistory,
       promptRewriteGuardText.value,
     );
+    favoritePrompts.value = normalizeFavoritePrompts(settings.favoritePrompts);
     sizeResolution.value = defaults.resolution;
     applySizePreset(defaults.size);
     if (defaults.size === "custom" || isSizeRatio(defaults.size)) {
@@ -223,6 +231,7 @@ export const useSettingsStore = defineStore("settings", () => {
       promptRewriteGuardHistory: promptRewriteGuardHistory.value.map(
         toPlainPromptRewriteGuardHistoryItem,
       ),
+      favoritePrompts: favoritePrompts.value.map(toPlainFavoritePrompt),
       autoRetryOnNetworkError: autoRetryOnNetworkError.value,
       defaults: currentGenerationParams(),
       storageMode: "indexeddb",
@@ -293,6 +302,39 @@ export const useSettingsStore = defineStore("settings", () => {
     savePromptRewriteGuardText(PROMPT_REWRITE_GUARD_PREFIX);
   }
 
+  function addFavoritePrompt(input: { title?: string; text?: string }) {
+    const prompt = createFavoritePrompt(input);
+    if (!prompt.text) return false;
+    favoritePrompts.value = [prompt, ...favoritePrompts.value];
+    return true;
+  }
+
+  function updateFavoritePrompt(
+    id: string,
+    input: { title?: string; text?: string },
+  ) {
+    const update = normalizeFavoritePromptUpdate(input);
+    if (!update.text) return false;
+
+    let didUpdate = false;
+    favoritePrompts.value = favoritePrompts.value.map((item) => {
+      if (item.id !== id) return item;
+      didUpdate = true;
+      return {
+        ...item,
+        ...update,
+        updatedAt: isoTimestamp(),
+      };
+    });
+    return didUpdate;
+  }
+
+  function deleteFavoritePrompt(id: string) {
+    favoritePrompts.value = favoritePrompts.value.filter(
+      (item) => item.id !== id,
+    );
+  }
+
   function restorePromptRewriteGuardHistoryItem(id: string) {
     const item = promptRewriteGuardHistory.value.find(
       (entry) => entry.id === id,
@@ -339,6 +381,7 @@ export const useSettingsStore = defineStore("settings", () => {
     customSizeError,
     formatLabel,
     formatOptions,
+    favoritePrompts,
     imageCount,
     imageCountMode,
     imageCountPresets,
@@ -366,6 +409,9 @@ export const useSettingsStore = defineStore("settings", () => {
     restorePromptRewriteGuardHistoryItem,
     savePromptRewriteGuardText,
     savePromptWordbank,
+    addFavoritePrompt,
+    updateFavoritePrompt,
+    deleteFavoritePrompt,
   };
 });
 
@@ -443,6 +489,16 @@ function toPlainPromptRewriteGuardHistoryItem(
     id: item.id,
     text: item.text,
     createdAt: item.createdAt,
+  };
+}
+
+function toPlainFavoritePrompt(item: FavoritePrompt): FavoritePrompt {
+  return {
+    id: item.id,
+    title: item.title,
+    text: item.text,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
   };
 }
 

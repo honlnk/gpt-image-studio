@@ -3,6 +3,7 @@ import { ref, watch } from "vue";
 import type {
   ConnectionMode,
   Conversation,
+  FavoritePrompt,
   ImageAsset,
   Message,
   PromptMode,
@@ -13,12 +14,20 @@ import type {
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
+import FavoritePromptsPanel from "../settings/FavoritePromptsPanel.vue";
 import GeneralSettingsPanel from "../settings/GeneralSettingsPanel.vue";
 import PromptGuardSettingsPanel from "../settings/PromptGuardSettingsPanel.vue";
 import PromptModeSettingsPanel from "../settings/PromptModeSettingsPanel.vue";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
 
-type SettingsTab = "general" | "api" | "promptMode" | "prompt" | "backup" | "batch";
+type SettingsTab =
+  | "general"
+  | "api"
+  | "promptMode"
+  | "favoritePrompts"
+  | "prompt"
+  | "backup"
+  | "batch";
 type BatchPanel = "images" | "conversations";
 
 const props = defineProps<{
@@ -35,6 +44,7 @@ const props = defineProps<{
   companionPaired: boolean;
   promptMode: PromptMode;
   promptWordbanks: PromptWordbanks;
+  favoritePrompts: FavoritePrompt[];
   promptRewriteGuardEnabled: boolean;
   promptRewriteGuardText: string;
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
@@ -59,6 +69,9 @@ const emit = defineEmits<{
   "update:promptMode": [value: PromptMode];
   savePromptWordbank: [section: PromptWordbankSectionKey, terms: string[]];
   restoreDefaultPromptWordbank: [section: PromptWordbankSectionKey];
+  addFavoritePrompt: [value: { title: string; text: string }];
+  updateFavoritePrompt: [id: string, value: { title: string; text: string }];
+  deleteFavoritePrompt: [id: string];
   "update:promptRewriteGuardEnabled": [value: boolean];
   savePromptRewriteGuardText: [value: string];
   restoreDefaultPromptRewriteGuardText: [];
@@ -75,6 +88,7 @@ const tabs: { key: SettingsTab; label: string }[] = [
   { key: "general", label: "通用" },
   { key: "api", label: "接口" },
   { key: "promptMode", label: "提示词模式" },
+  { key: "favoritePrompts", label: "常用提示词" },
   { key: "prompt", label: "提示词保护" },
   { key: "backup", label: "数据备份" },
   { key: "batch", label: "批量操作" },
@@ -177,7 +191,10 @@ function forwardSavePromptWordbank(
             </button>
           </nav>
 
-          <div class="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
+          <div
+            class="flex min-h-0 flex-1 flex-col p-5"
+            :class="activeTab === 'favoritePrompts' ? 'overflow-hidden' : 'overflow-y-auto'"
+          >
             <GeneralSettingsPanel
               v-if="activeTab === 'general'"
               :auto-retry-on-network-error="autoRetryOnNetworkError"
@@ -207,6 +224,14 @@ function forwardSavePromptWordbank(
               @restore-default-wordbank="emit('restoreDefaultPromptWordbank', $event)"
               @save-wordbank="forwardSavePromptWordbank"
               @update:model-value="emit('update:promptMode', $event)"
+            />
+
+            <FavoritePromptsPanel
+              v-else-if="activeTab === 'favoritePrompts'"
+              :prompts="favoritePrompts"
+              @add-prompt="emit('addFavoritePrompt', $event)"
+              @delete-prompt="emit('deleteFavoritePrompt', $event)"
+              @update-prompt="(id, value) => emit('updateFavoritePrompt', id, value)"
             />
 
             <div v-else-if="activeTab === 'prompt'" class="space-y-8">

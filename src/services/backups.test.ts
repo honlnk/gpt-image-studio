@@ -78,6 +78,7 @@ const settings: AppSettings = {
       createdAt: "1970-01-01T00:00:00.000Z",
     },
   ],
+  favoritePrompts: [],
   defaults: {
     size: "1:1",
     resolution: "1k",
@@ -132,6 +133,7 @@ describe("studio backups", () => {
       promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
       promptRewriteGuardText: settings.promptRewriteGuardText,
       promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
+      favoritePrompts: settings.favoritePrompts,
       autoRetryOnNetworkError: settings.autoRetryOnNetworkError,
       defaults: settings.defaults,
       storageMode: settings.storageMode,

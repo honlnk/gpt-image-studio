@@ -41,7 +41,13 @@ const STORAGE_KEYS = {
   draftAttachments: "gpt-image-studio:draft-attachments",
 } as const;
 
-type SettingsTab = "api" | "promptMode" | "prompt" | "backup" | "batch";
+type SettingsTab =
+  | "api"
+  | "promptMode"
+  | "favoritePrompts"
+  | "prompt"
+  | "backup"
+  | "batch";
 type BatchPanel = "images" | "conversations";
 type RenameDialogState = {
   isOpen: boolean;
@@ -237,6 +243,12 @@ export function useStudioViewModel() {
 
   function openSettingsDefault() {
     settingsInitialTab.value = "api";
+    settingsInitialBatchPanel.value = "images";
+    openSettings();
+  }
+
+  function openFavoritePromptSettings() {
+    settingsInitialTab.value = "favoritePrompts";
     settingsInitialBatchPanel.value = "images";
     openSettings();
   }
@@ -551,6 +563,26 @@ export function useStudioViewModel() {
     persistSettingsChange();
   }
 
+  function addFavoritePrompt(input: { title?: string; text?: string }) {
+    const didAdd = settings.addFavoritePrompt(input);
+    if (didAdd) persistSettingsChange();
+    return didAdd;
+  }
+
+  function updateFavoritePrompt(
+    id: string,
+    input: { title?: string; text?: string },
+  ) {
+    const didUpdate = settings.updateFavoritePrompt(id, input);
+    if (didUpdate) persistSettingsChange();
+    return didUpdate;
+  }
+
+  function deleteFavoritePrompt(id: string) {
+    settings.deleteFavoritePrompt(id);
+    persistSettingsChange();
+  }
+
   async function deleteConversationWithDraft(id: string) {
     await conversations.deleteConversation(id);
     await deleteConversationDraft(id).catch(reportStorageError);
@@ -605,6 +637,7 @@ export function useStudioViewModel() {
     loadMessageConfig,
     openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,
+    openFavoritePromptSettings,
     previewImage: previewImageById,
     removeAttachment: (id: string) => {
       if (
@@ -667,6 +700,7 @@ export function useStudioViewModel() {
     companionSessionToken: settings.companionSessionToken,
     companionUrl: settings.companionUrl,
     connectionMode: settings.connectionMode,
+    favoritePrompts: settings.favoritePrompts,
     promptMode: settings.promptMode,
     promptWordbanks: settings.promptWordbanks,
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled,
@@ -691,6 +725,9 @@ export function useStudioViewModel() {
     savePromptWordbank,
     setPromptMode,
     setPromptRewriteGuardEnabled,
+    addFavoritePrompt,
+    updateFavoritePrompt,
+    deleteFavoritePrompt,
     restoreDefaultPromptWordbank,
   });
   const preview = proxyRefs({

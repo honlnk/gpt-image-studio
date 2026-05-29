@@ -24,6 +24,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
       refs.promptRewriteGuardEnabled,
       refs.promptRewriteGuardText,
       refs.promptRewriteGuardHistory,
+      refs.favoritePrompts,
       refs.autoRetryOnNetworkError,
       refs.activeSizePreset,
       refs.sizeResolution,
@@ -48,6 +49,9 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
     currentSettings: settings.currentSettings,
     deletePromptRewriteGuardHistoryItem:
       settings.deletePromptRewriteGuardHistoryItem,
+    addFavoritePrompt: settings.addFavoritePrompt,
+    updateFavoritePrompt: settings.updateFavoritePrompt,
+    deleteFavoritePrompt: settings.deleteFavoritePrompt,
     restoreDefaultPromptRewriteGuardText:
       settings.restoreDefaultPromptRewriteGuardText,
     restorePromptRewriteGuardHistoryItem:

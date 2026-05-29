@@ -29,6 +29,7 @@ type ChatWorkspaceActions = {
   generateAnother: (message: Message) => void;
   loadMessageConfig: (message: Message) => void;
   openConversations: () => void;
+  openFavoritePromptSettings: () => void;
   openSettings: () => void;
   previewImage: (id: string) => void;
   refreshImage: (message: Message, imageId: string) => void;
@@ -242,6 +243,7 @@ function imageFilesFromTransfer(
       ref="composerRef"
       :is-drag-active="isDragActive"
       @close-all-editors="actions.closeAllEditors"
+      @open-favorite-prompt-settings="actions.openFavoritePromptSettings"
       @preview-image="actions.previewImage"
       @remove-attachment="actions.removeAttachment"
       @update:edit-mode-enabled="actions.setEditModeEnabled"
