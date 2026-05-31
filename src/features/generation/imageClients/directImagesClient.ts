@@ -1,11 +1,15 @@
+import type { ApiMode } from "../../../types/studio";
 import { editImage, generateImage } from "../../../services/imagesApi";
 import type { ImageClient } from "./imageClient";
 
 type DirectClientConfig = {
   getApiBaseUrl: () => string;
   getApiBaseUrlMode: () => "origin" | "full";
+  getApiMode: () => ApiMode;
   getApiKey: () => string;
   getModel: () => string;
+  getStreamImages: () => boolean;
+  getStreamPartialImages: () => 0 | 1 | 2 | 3;
 };
 
 export function createDirectImagesClient(config: DirectClientConfig): ImageClient {
@@ -26,6 +30,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
       return generateImage({
         apiBaseUrl,
         apiBaseUrlMode: config.getApiBaseUrlMode(),
+        apiMode: config.getApiMode(),
         apiKey,
         model,
         prompt: input.prompt,
@@ -35,6 +40,9 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
           input.promptRequestSettings.promptRewriteGuardEnabled,
         promptRewriteGuardText:
           input.promptRequestSettings.promptRewriteGuardText,
+        streamImages: config.getStreamImages(),
+        streamPartialImages: config.getStreamPartialImages(),
+        onPartialImage: input.onPartialImage,
         params: input.params,
       });
     },
@@ -54,6 +62,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
       return editImage({
         apiBaseUrl,
         apiBaseUrlMode: config.getApiBaseUrlMode(),
+        apiMode: config.getApiMode(),
         apiKey,
         model,
         prompt: input.prompt,
@@ -63,6 +72,9 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
           input.promptRequestSettings.promptRewriteGuardEnabled,
         promptRewriteGuardText:
           input.promptRequestSettings.promptRewriteGuardText,
+        streamImages: config.getStreamImages(),
+        streamPartialImages: config.getStreamPartialImages(),
+        onPartialImage: input.onPartialImage,
         params: input.params,
         images: input.images,
         mask: input.mask,

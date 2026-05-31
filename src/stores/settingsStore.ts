@@ -29,6 +29,7 @@ import { isoTimestamp } from "../shared/dateTime";
 import { createId } from "../shared/id";
 import { readStorage, writeStorage } from "../shared/localStorage";
 import type {
+  ApiMode,
   AppSettings,
   ConnectionMode,
   FavoritePrompt,
@@ -72,10 +73,13 @@ type ImageCountMode = "preset" | "custom";
 
 export const useSettingsStore = defineStore("settings", () => {
   const connectionMode = ref<ConnectionMode>("direct");
+  const apiMode = ref<ApiMode>("images");
   const model = ref("gpt-image-2");
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
   const apiBaseUrlMode = ref<AppSettings["apiBaseUrlMode"]>("origin");
+  const streamImages = ref(false);
+  const streamPartialImages = ref<0 | 1 | 2 | 3>(1);
   const promptMode = ref<PromptMode>("default");
   const promptWordbanks = ref<PromptWordbanks>(
     clonePromptWordbanks(defaultPromptWordbanks),
@@ -187,6 +191,9 @@ export const useSettingsStore = defineStore("settings", () => {
     apiKey.value = settings.apiKey;
     apiBaseUrlMode.value = settings.apiBaseUrlMode;
     apiBaseUrl.value = displayApiBaseUrl(settings.apiBaseUrl, settings.apiBaseUrlMode);
+    apiMode.value = settings.apiMode;
+    streamImages.value = settings.streamImages;
+    streamPartialImages.value = settings.streamPartialImages;
     model.value = settings.model;
     promptMode.value = settings.promptMode;
     promptWordbanks.value = normalizePromptWordbanks(settings.promptWordbanks);
@@ -223,6 +230,9 @@ export const useSettingsStore = defineStore("settings", () => {
       apiKey: apiKey.value.trim(),
       apiBaseUrl: apiBaseUrl.value.trim(),
       apiBaseUrlMode: apiBaseUrlMode.value,
+      apiMode: apiMode.value,
+      streamImages: streamImages.value,
+      streamPartialImages: streamPartialImages.value,
       model: model.value,
       promptMode: promptMode.value,
       promptWordbanks: clonePromptWordbanks(promptWordbanks.value),
@@ -359,6 +369,7 @@ export const useSettingsStore = defineStore("settings", () => {
 
   return {
     activeSizePreset,
+    apiMode,
     apiBaseUrl,
     apiBaseUrlMode,
     apiKey,
@@ -390,6 +401,8 @@ export const useSettingsStore = defineStore("settings", () => {
     imageWidth,
     model,
     outputFormat,
+    streamImages,
+    streamPartialImages,
     promptMode,
     promptWordbanks,
     promptRewriteGuardEnabled,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch } from "vue";
-import type { ConnectionMode } from "../../types/studio";
+import type { ApiMode, ConnectionMode } from "../../types/studio";
 import {
   checkCompanionHealth,
   getCompanionAuthStatus,
@@ -15,7 +15,11 @@ const props = defineProps<{
   connectionMode: ConnectionMode;
   apiBaseUrl: string;
   apiBaseUrlMode: "origin" | "full";
+  apiMode: ApiMode;
   apiKey: string;
+  model: string;
+  streamImages: boolean;
+  streamPartialImages: 0 | 1 | 2 | 3;
   companionUrl: string;
   companionSessionToken: string;
   companionPaired: boolean;
@@ -25,7 +29,11 @@ const emit = defineEmits<{
   "update:connectionMode": [value: ConnectionMode];
   "update:apiBaseUrl": [value: string];
   "update:apiBaseUrlMode": [value: "origin" | "full"];
+  "update:apiMode": [value: ApiMode];
   "update:apiKey": [value: string];
+  "update:model": [value: string];
+  "update:streamImages": [value: boolean];
+  "update:streamPartialImages": [value: 0 | 1 | 2 | 3];
   "update:companionSessionToken": [value: string];
 }>();
 
@@ -40,6 +48,21 @@ const apiKeyCopyStatus = ref<"idle" | "copied" | "failed">("idle");
 let apiKeyCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
 const isManagedCompanion = computed(() => companionHealth.value?.runMode !== "serve");
+const apiModeOptions: Array<{ value: ApiMode; label: string; description: string }> = [
+  { value: "images", label: "Images API", description: "直接调用 /v1/images，兼容传统图片接口。" },
+  { value: "responses", label: "Responses API", description: "通过 /v1/responses 调用 image_generation 工具。" },
+];
+const partialImageOptions = [0, 1, 2, 3] as const;
+const apiBaseUrlHint = computed(() =>
+  props.apiBaseUrlMode === "full"
+    ? props.apiMode === "responses"
+      ? "https://api.example.com/v1"
+      : "https://api.example.com/v1/images"
+    : "https://api.example.com",
+);
+const apiSuffixLabel = computed(() =>
+  props.apiMode === "responses" ? "/v1" : "/v1/images",
+);
 
 async function checkStatus() {
   const health = await checkCompanionHealth(props.companionUrl);
@@ -237,6 +260,32 @@ watch(
         </div>
 
         <div>
+          <p class="mb-2 block text-sm font-medium text-gray-700">接口模式</p>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <button
+              v-for="option in apiModeOptions"
+              :key="option.value"
+              class="cursor-pointer rounded-xl border px-3 py-3 text-left transition-colors"
+              :class="
+                apiMode === option.value
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+              "
+              type="button"
+              @click="emit('update:apiMode', option.value)"
+            >
+              <div class="text-sm font-semibold">{{ option.label }}</div>
+              <div
+                class="mt-1 text-xs"
+                :class="apiMode === option.value ? 'text-gray-200' : 'text-gray-500'"
+              >
+                {{ option.description }}
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div>
           <label
             class="mb-1 block text-sm font-medium text-gray-700"
             for="apiKey"
@@ -314,6 +363,34 @@ watch(
         </div>
 
         <div>
+          <label
+            class="mb-1 block text-sm font-medium text-gray-700"
+            for="apiModel"
+          >
+            模型
+          </label>
+          <input
+            id="apiModel"
+            :value="model"
+            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-500"
+            :placeholder="apiMode === 'responses' ? 'gpt-5.5' : 'gpt-image-2'"
+            spellcheck="false"
+            type="text"
+            @input="
+              emit('update:model', ($event.target as HTMLInputElement).value)
+            "
+          />
+          <p class="mt-1.5 text-xs text-gray-500">
+            <template v-if="apiMode === 'responses'">
+              Responses API 模式下这里应填写响应模型，例如 <span class="font-mono">gpt-5.5</span>。
+            </template>
+            <template v-else>
+              Images API 模式下这里通常填写图片模型，例如 <span class="font-mono">gpt-image-2</span>。
+            </template>
+          </p>
+        </div>
+
+        <div>
           <div class="mb-1 flex items-center justify-between gap-3">
             <label
               class="block text-sm font-medium text-gray-700"
@@ -341,7 +418,7 @@ watch(
               id="apiBaseUrl"
               :value="apiBaseUrl"
               class="min-w-0 flex-1 rounded-l-lg bg-transparent px-3 py-2 text-sm text-gray-900 outline-none"
-              :placeholder="apiBaseUrlMode === 'full' ? 'https://api.packyapi.com/v1/images' : 'https://api.packyapi.com'"
+              :placeholder="apiBaseUrlHint"
               type="url"
               @input="
                 emit(
@@ -360,17 +437,67 @@ watch(
               v-if="apiBaseUrlMode === 'origin'"
               class="flex shrink-0 items-center border-l border-gray-200 px-3 text-sm font-medium text-red-500"
             >
-              /v1/images
+              {{ apiSuffixLabel }}
             </span>
           </div>
-          <a
-            href="https://www.packyapi.com/register?aff=mUWS"
-            class="mt-1.5 inline-block cursor-pointer text-xs text-gray-400 transition-colors hover:text-gray-600"
-            target="_blank"
-            rel="noopener"
-          >
-            没有API Key？
-          </a>
+          <p class="mt-1.5 text-xs text-gray-500">
+            <template v-if="apiBaseUrlMode === 'origin'">
+              输入站点根地址即可，应用会自动补上 {{ apiSuffixLabel }}。
+            </template>
+            <template v-else>
+              已按完整 API Base URL 处理，不会自动补路径。
+            </template>
+          </p>
+        </div>
+
+        <div class="rounded-xl border border-gray-200 p-4">
+          <label class="flex cursor-pointer items-start gap-3">
+            <input
+              class="mt-0.5 h-4 w-4 cursor-pointer accent-gray-900"
+              type="checkbox"
+              :checked="streamImages"
+              @change="
+                emit(
+                  'update:streamImages',
+                  ($event.target as HTMLInputElement).checked,
+                )
+              "
+            />
+            <span class="min-w-0">
+              <span class="block text-sm font-medium text-gray-700">流式预览</span>
+              <span class="mt-1 block text-xs text-gray-500">
+                生成过程中接收中间图像，优先用于减少长时间等待时的空白状态。
+              </span>
+            </span>
+          </label>
+
+          <div class="mt-4">
+            <label
+              class="mb-1 block text-sm font-medium text-gray-700"
+              for="streamPartialImages"
+            >
+              中间图数量
+            </label>
+            <select
+              id="streamPartialImages"
+              :value="streamPartialImages"
+              class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+              :disabled="!streamImages"
+              @change="
+                emit(
+                  'update:streamPartialImages',
+                  Number(($event.target as HTMLSelectElement).value) as 0 | 1 | 2 | 3,
+                )
+              "
+            >
+              <option v-for="count in partialImageOptions" :key="count" :value="count">
+                {{ count }}
+              </option>
+            </select>
+            <p class="mt-1.5 text-xs text-gray-500">
+              建议保留默认值 1。设置为 0 时仍可开启流式，但不会请求中间图。
+            </p>
+          </div>
         </div>
       </template>
 
@@ -382,6 +509,10 @@ watch(
             <div class="mt-1 font-mono text-gray-800">gpt-image-studio login</div>
             <div class="mt-1 font-mono text-gray-800">gpt-image-studio start</div>
             <div class="mt-1 font-mono text-gray-800">gpt-image-studio pair</div>
+          </div>
+
+          <div class="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+            本地 Companion 当前仅支持 Images API。若要使用 Responses API 或流式预览，请先切回浏览器直连模式。
           </div>
 
           <!-- Status -->

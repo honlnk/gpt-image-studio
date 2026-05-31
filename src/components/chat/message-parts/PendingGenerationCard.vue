@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineProps<{
   durationLabel: string;
+  previewUrl?: string;
   retryAttempt?: number;
 }>();
 </script>
@@ -11,17 +12,32 @@ defineProps<{
     aria-label="图片生成中"
   >
     <div
-      class="generation-skeleton-media flex h-48 items-center justify-center bg-gray-50 text-gray-300"
+      :class="[
+        'generation-skeleton-media flex h-48 items-center justify-center text-gray-300',
+        previewUrl ? 'generation-skeleton-media--preview bg-gray-900' : 'bg-gray-50',
+      ]"
     >
+      <img
+        v-if="previewUrl"
+        :src="previewUrl"
+        alt=""
+        class="h-full w-full object-cover"
+      />
       <div
+        v-if="!previewUrl"
         class="generation-orbit flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm"
       >
         <span class="h-2 w-2 rounded-full bg-gray-300"></span>
       </div>
       <div
-        class="generation-duration-badge absolute left-1/2 top-[66%] z-1 -translate-x-1/2 rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-xs font-medium text-gray-500 shadow-sm backdrop-blur"
+        :class="[
+          'generation-duration-badge absolute left-1/2 top-[66%] z-1 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-medium shadow-sm backdrop-blur',
+          previewUrl
+            ? 'border border-black/10 bg-white/92 text-gray-700'
+            : 'border border-gray-200 bg-white/90 text-gray-500',
+        ]"
       >
-        正在生成：{{ durationLabel }}
+        {{ previewUrl ? "预览更新中" : "正在生成" }}：{{ durationLabel }}
       </div>
       <div
         v-if="retryAttempt"
@@ -57,6 +73,11 @@ defineProps<{
 .generation-skeleton-media {
   position: relative;
   overflow: hidden;
+}
+
+.generation-skeleton-media--preview::before,
+.generation-skeleton-media--preview::after {
+  display: none;
 }
 
 .generation-skeleton-media::before,

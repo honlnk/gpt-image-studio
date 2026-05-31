@@ -9,6 +9,7 @@ export type ImageTagColor =
   | "cyan"
   | "blue"
   | "purple";
+export type ApiMode = "images" | "responses";
 
 export type Conversation = {
   id: string;
@@ -121,6 +122,9 @@ export type AppSettings = {
   apiKey: string;
   apiBaseUrl: string;
   apiBaseUrlMode: ApiBaseUrlMode;
+  apiMode: ApiMode;
+  streamImages: boolean;
+  streamPartialImages: 0 | 1 | 2 | 3;
   model: string;
   promptMode: PromptMode;
   promptWordbanks: PromptWordbanks;

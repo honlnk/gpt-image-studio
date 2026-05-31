@@ -9,6 +9,7 @@ import {
 import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
 import type {
+  ApiMode,
   ApiBaseUrlMode,
   AppSettings,
   ConnectionMode,
@@ -46,6 +47,9 @@ type StoredAppSettings = Omit<
   AppSettings,
   | "connectionMode"
   | "apiBaseUrlMode"
+  | "apiMode"
+  | "streamImages"
+  | "streamPartialImages"
   | "promptMode"
   | "promptWordbanks"
   | "promptRewriteGuardEnabled"
@@ -55,6 +59,9 @@ type StoredAppSettings = Omit<
 > & {
   connectionMode?: ConnectionMode;
   apiBaseUrlMode?: ApiBaseUrlMode;
+  apiMode?: ApiMode;
+  streamImages?: boolean;
+  streamPartialImages?: number;
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
   promptRewriteGuardHistory?: PromptRewriteGuardHistoryItem[];
@@ -72,6 +79,11 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
     ...settings,
     connectionMode: settings.connectionMode ?? "direct",
     apiBaseUrlMode: settings.apiBaseUrlMode === "full" ? "full" : "origin",
+    apiMode: settings.apiMode === "responses" ? "responses" : "images",
+    streamImages: settings.streamImages ?? false,
+    streamPartialImages: normalizeStreamPartialImages(
+      settings.streamPartialImages,
+    ),
     promptMode: normalizePromptMode(settings.promptMode),
     promptWordbanks: normalizePromptWordbanks(settings.promptWordbanks),
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled ?? true,
@@ -87,6 +99,12 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
     favoritePrompts: normalizeFavoritePrompts(settings.favoritePrompts),
     defaults: normalizeGenerationParams(settings.defaults),
   };
+}
+
+function normalizeStreamPartialImages(value: unknown): 0 | 1 | 2 | 3 {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(3, Math.max(0, Math.trunc(numeric))) as 0 | 1 | 2 | 3;
 }
 
 function normalizePromptMode(mode: PromptMode | undefined): PromptMode {

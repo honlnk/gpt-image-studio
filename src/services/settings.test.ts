@@ -24,6 +24,9 @@ const fullSettings: AppSettings = {
   apiKey: "sk-test",
   apiBaseUrl: "https://api.packyapi.com/v1/images",
   apiBaseUrlMode: "full",
+  apiMode: "images",
+  streamImages: false,
+  streamPartialImages: 1,
   model: "gpt-image-2",
   promptMode: "default",
   promptWordbanks: defaultPromptWordbanks,
@@ -72,6 +75,9 @@ describe("settings service", () => {
     const {
       connectionMode: _ignoredConnectionMode,
       apiBaseUrlMode: _ignoredApiBaseUrlMode,
+      apiMode: _ignoredApiMode,
+      streamImages: _ignoredStreamImages,
+      streamPartialImages: _ignoredStreamPartialImages,
       promptRewriteGuardEnabled: _ignoredPromptRewriteGuardEnabled,
       promptRewriteGuardText: _ignoredPromptRewriteGuardText,
       promptRewriteGuardHistory: _ignoredPromptRewriteGuardHistory,
@@ -89,6 +95,9 @@ describe("settings service", () => {
 
     expect(result?.connectionMode).toBe("direct");
     expect(result?.apiBaseUrlMode).toBe("origin");
+    expect(result?.apiMode).toBe("images");
+    expect(result?.streamImages).toBe(false);
+    expect(result?.streamPartialImages).toBe(1);
     expect(result?.promptMode).toBe("default");
     expect(result?.promptWordbanks).toEqual(defaultPromptWordbanks);
     expect(result?.promptRewriteGuardEnabled).toBe(true);
