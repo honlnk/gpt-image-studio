@@ -64,12 +64,30 @@ function focusComposer() {
   textareaRef.value?.focus();
 }
 
-function autoResize(event: Event) {
-  const el = event.target as HTMLTextAreaElement;
+function resizeTextarea(el: HTMLTextAreaElement) {
   el.style.height = "auto";
   el.style.height = el.scrollHeight + "px";
+}
+
+function autoResize(event: Event) {
+  const el = event.target as HTMLTextAreaElement;
+  resizeTextarea(el);
   if (isPromptMenuOpen.value) updatePromptMenuFromTextarea(el);
 }
+
+watch(
+  () => props.composerText,
+  () => {
+    void nextTick(() => {
+      const el = textareaRef.value;
+      if (!el) return;
+
+      resizeTextarea(el);
+      updatePromptMenuFromTextarea(el);
+    });
+  },
+  { flush: "post" },
+);
 
 function handleComposerKeydown(event: KeyboardEvent) {
   if (isPromptMenuOpen.value) {

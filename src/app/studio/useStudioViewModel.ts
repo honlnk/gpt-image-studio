@@ -121,8 +121,11 @@ export function useStudioViewModel() {
   const directImagesClient = createDirectImagesClient({
     getApiBaseUrl: () => settings.apiBaseUrl.value,
     getApiBaseUrlMode: () => settings.apiBaseUrlMode.value,
+    getApiMode: () => settings.apiMode.value,
     getApiKey: () => settings.apiKey.value,
     getModel: () => settings.model.value,
+    getStreamImages: () => settings.streamImages.value,
+    getStreamPartialImages: () => settings.streamPartialImages.value,
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,
@@ -131,6 +134,12 @@ export function useStudioViewModel() {
   });
   const imageClient: ImageClient = {
     generate(input) {
+      if (
+        settings.connectionMode.value === "localCompanion" &&
+        settings.apiMode.value !== "images"
+      ) {
+        throw new Error("本地 Companion 当前仅支持 Images API。");
+      }
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.generate(input)
         : directImagesClient.generate(input);
@@ -141,6 +150,12 @@ export function useStudioViewModel() {
       );
     },
     edit(input) {
+      if (
+        settings.connectionMode.value === "localCompanion" &&
+        settings.apiMode.value !== "images"
+      ) {
+        throw new Error("本地 Companion 当前仅支持 Images API。");
+      }
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.edit(input)
         : directImagesClient.edit(input);
@@ -694,6 +709,7 @@ export function useStudioViewModel() {
   });
   const settingsModal = proxyRefs({
     autoRetryOnNetworkError: settings.autoRetryOnNetworkError,
+    apiMode: settings.apiMode,
     apiBaseUrl: settings.apiBaseUrl,
     apiBaseUrlMode: settings.apiBaseUrlMode,
     apiKey: settings.apiKey,
@@ -718,6 +734,7 @@ export function useStudioViewModel() {
     initialTab: settingsInitialTab,
     isOpen: isSettingsOpen,
     messages,
+    model: settings.model,
     previewImage: previewImageById,
     deletePromptRewriteGuardHistoryItem,
     restoreDefaultPromptRewriteGuardText,
@@ -726,6 +743,8 @@ export function useStudioViewModel() {
     savePromptWordbank,
     setPromptMode,
     setPromptRewriteGuardEnabled,
+    streamImages: settings.streamImages,
+    streamPartialImages: settings.streamPartialImages,
     addFavoritePrompt,
     updateFavoritePrompt,
     deleteFavoritePrompt,

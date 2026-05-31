@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import type {
+  ApiMode,
   ConnectionMode,
   Conversation,
   FavoritePrompt,
@@ -39,6 +40,10 @@ const props = defineProps<{
   apiKey: string;
   apiBaseUrl: string;
   apiBaseUrlMode: "origin" | "full";
+  apiMode: ApiMode;
+  streamImages: boolean;
+  streamPartialImages: 0 | 1 | 2 | 3;
+  model: string;
   companionUrl: string;
   companionSessionToken: string;
   companionPaired: boolean;
@@ -65,6 +70,10 @@ const emit = defineEmits<{
   "update:apiKey": [value: string];
   "update:apiBaseUrl": [value: string];
   "update:apiBaseUrlMode": [value: "origin" | "full"];
+  "update:apiMode": [value: ApiMode];
+  "update:streamImages": [value: boolean];
+  "update:streamPartialImages": [value: 0 | 1 | 2 | 3];
+  "update:model": [value: string];
   "update:companionSessionToken": [value: string];
   "update:promptMode": [value: PromptMode];
   savePromptWordbank: [section: PromptWordbankSectionKey, terms: string[]];
@@ -208,14 +217,22 @@ function forwardSavePromptWordbank(
               :connection-mode="connectionMode"
               :api-base-url="apiBaseUrl"
               :api-base-url-mode="apiBaseUrlMode"
+              :api-mode="apiMode"
               :api-key="apiKey"
+              :model="model"
+              :stream-images="streamImages"
+              :stream-partial-images="streamPartialImages"
               :companion-url="companionUrl"
               :companion-session-token="companionSessionToken"
               :companion-paired="companionPaired"
               @update:connection-mode="emit('update:connectionMode', $event)"
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
               @update:api-base-url-mode="emit('update:apiBaseUrlMode', $event)"
+              @update:api-mode="emit('update:apiMode', $event)"
               @update:api-key="emit('update:apiKey', $event)"
+              @update:model="emit('update:model', $event)"
+              @update:stream-images="emit('update:streamImages', $event)"
+              @update:stream-partial-images="emit('update:streamPartialImages', $event)"
               @update:companion-session-token="emit('update:companionSessionToken', $event)"
             />
 

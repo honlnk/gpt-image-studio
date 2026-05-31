@@ -18,7 +18,7 @@ import { clonePromptWordbanks } from "../services/promptWordbanks";
 import { isoTimestamp, timestampFromCreatedAt } from "../shared/dateTime";
 import { formatError, isApiConfigurationError } from "../shared/errors";
 import { createId } from "../shared/id";
-import { createObjectUrl } from "../shared/objectUrls";
+import { createObjectUrl, revokeObjectUrl } from "../shared/objectUrls";
 import type {
   Conversation,
   GenerationParams,
@@ -65,6 +65,7 @@ type GenerationStoreContext = {
 
 export const useGenerationStore = defineStore("generation", () => {
   const jobs = ref<GenerationJob[]>([]);
+  const partialPreviewUrls = ref<Record<string, string>>({});
   let context: GenerationStoreContext | null = null;
   const messageSaveQueues = new Map<string, Promise<unknown>>();
 
@@ -175,6 +176,7 @@ export const useGenerationStore = defineStore("generation", () => {
       editMaskImageId,
     };
 
+    clearPartialPreview(assistantMessage.id);
     input.value.messages.value.push(userMessage, assistantMessage);
     const updatedConversation = input.value.updateConversationSummary(
       conversationId,
@@ -225,6 +227,7 @@ export const useGenerationStore = defineStore("generation", () => {
       imageCount,
     );
     message.errorMessage = undefined;
+    clearPartialPreview(message.id);
     await saveMessage(toPlainMessage(message)).catch(
       input.value.onStorageError,
     );
@@ -308,6 +311,7 @@ export const useGenerationStore = defineStore("generation", () => {
       imageCount,
     );
     message.errorMessage = undefined;
+    clearPartialPreview(message.id);
     replaceMessage(message);
     await enqueueMessageSave(message).catch(input.value.onStorageError);
 
@@ -334,6 +338,15 @@ export const useGenerationStore = defineStore("generation", () => {
   async function runImageRequest(job: GenerationJob) {
     try {
       const params = job.generationParams;
+      const onPartialImage = (event: { b64Json: string }) => {
+        const assistantMessage = findMessage(job.assistantMessageId);
+        if (!assistantMessage || assistantMessage.status !== "pending") return;
+
+        updatePartialPreview(
+          job.assistantMessageId,
+          base64ToBlob(event.b64Json, outputFormatToMimeType(params.outputFormat)),
+        );
+      };
       const imageResult = job.referencedImageIds.length
         ? await requestImageEdit(
             job.prompt,
@@ -343,6 +356,7 @@ export const useGenerationStore = defineStore("generation", () => {
             job.editSourceImageId,
             job.editMaskImageId,
             (retryAttempt) => updateMessageNetworkRetry(job.assistantMessageId, retryAttempt),
+            onPartialImage,
           )
         : await input.value.imageClient.generate({
             prompt: job.prompt,
@@ -350,11 +364,12 @@ export const useGenerationStore = defineStore("generation", () => {
             promptRequestSettings: job.promptRequestSettings,
             onNetworkRetry: (retryAttempt) =>
               updateMessageNetworkRetry(job.assistantMessageId, retryAttempt),
+            onPartialImage,
           });
       const now = Date.now();
       const createdAt = isoTimestamp(now);
       const generationDurationMs = Math.max(0, now - job.startedAtMs);
-      const mimeType = `image/${params.outputFormat}`;
+      const mimeType = outputFormatToMimeType(params.outputFormat);
       const blob = base64ToBlob(imageResult.b64Json, mimeType);
       const dimensions = await readImageDimensions(blob);
       const imageId = createId("img");
@@ -428,6 +443,7 @@ export const useGenerationStore = defineStore("generation", () => {
     editSourceImageId?: string,
     editMaskImageId?: string,
     onNetworkRetry?: (retryAttempt: number) => void,
+    onPartialImage?: (event: { b64Json: string }) => void,
   ) {
     const imageSources = await Promise.all(
       references.map(async (id) => {
@@ -534,6 +550,7 @@ export const useGenerationStore = defineStore("generation", () => {
           }
         : undefined,
       onNetworkRetry,
+      onPartialImage,
     });
   }
 
@@ -579,6 +596,31 @@ export const useGenerationStore = defineStore("generation", () => {
 
   function configureGenerationStore(nextContext: GenerationStoreContext) {
     context = nextContext;
+  }
+
+  function updatePartialPreview(messageId: string, blob: Blob) {
+    const nextUrl = createObjectUrl(blob);
+    const previousUrl = partialPreviewUrls.value[messageId];
+    if (previousUrl) {
+      revokeObjectUrl(previousUrl);
+    }
+    partialPreviewUrls.value = {
+      ...partialPreviewUrls.value,
+      [messageId]: nextUrl,
+    };
+  }
+
+  function clearPartialPreview(messageId: string) {
+    const previousUrl = partialPreviewUrls.value[messageId];
+    if (!previousUrl) return;
+
+    revokeObjectUrl(previousUrl);
+    const { [messageId]: _removed, ...rest } = partialPreviewUrls.value;
+    partialPreviewUrls.value = rest;
+  }
+
+  function getPartialPreviewUrl(messageId: string) {
+    return partialPreviewUrls.value[messageId];
   }
 
   function createJob(
@@ -673,6 +715,10 @@ export const useGenerationStore = defineStore("generation", () => {
       assistantMessage.errorMessage = update.errorMessage ?? "生成失败，请重试。";
     }
 
+    if (pendingCount === 0) {
+      clearPartialPreview(job.assistantMessageId);
+    }
+
     replaceMessage(assistantMessage);
     return assistantMessage;
   }
@@ -712,6 +758,7 @@ export const useGenerationStore = defineStore("generation", () => {
     pendingJobCountByConversation,
     pendingJobCount,
     generateAnother,
+    getPartialPreviewUrl,
     refreshGeneratedImage,
     retryMessage,
     submitMessage,
@@ -736,6 +783,10 @@ function filenameFromAsset(asset: ImageAsset) {
         : "png";
 
   return `${asset.name || asset.id}.${extension}`;
+}
+
+function outputFormatToMimeType(outputFormat: GenerationParams["outputFormat"]) {
+  return outputFormat === "jpeg" ? "image/jpeg" : `image/${outputFormat}`;
 }
 
 function resultCountLabel(prefix: string, count: number) {

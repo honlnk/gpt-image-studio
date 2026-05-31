@@ -28,7 +28,9 @@ import { saveSettings } from "../services/settings";
 import { isoTimestamp } from "../shared/dateTime";
 import { createId } from "../shared/id";
 import { readStorage, writeStorage } from "../shared/localStorage";
+import { FIXED_IMAGE_MODEL } from "../shared/models";
 import type {
+  ApiMode,
   AppSettings,
   ConnectionMode,
   FavoritePrompt,
@@ -72,10 +74,13 @@ type ImageCountMode = "preset" | "custom";
 
 export const useSettingsStore = defineStore("settings", () => {
   const connectionMode = ref<ConnectionMode>("direct");
-  const model = ref("gpt-image-2");
+  const apiMode = ref<ApiMode>("images");
+  const model = ref(FIXED_IMAGE_MODEL);
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
   const apiBaseUrlMode = ref<AppSettings["apiBaseUrlMode"]>("origin");
+  const streamImages = ref(false);
+  const streamPartialImages = ref<0 | 1 | 2 | 3>(1);
   const promptMode = ref<PromptMode>("default");
   const promptWordbanks = ref<PromptWordbanks>(
     clonePromptWordbanks(defaultPromptWordbanks),
@@ -149,7 +154,7 @@ export const useSettingsStore = defineStore("settings", () => {
       backgroundOptions.find((o) => o.value === background.value)?.label ??
       background.value,
   );
-  const transparentDisabled = computed(() => model.value === "gpt-image-2");
+  const transparentDisabled = computed(() => model.value === FIXED_IMAGE_MODEL);
   const formatLabel = computed(
     () =>
       formatOptions.find((o) => o.value === outputFormat.value)?.label ??
@@ -187,7 +192,10 @@ export const useSettingsStore = defineStore("settings", () => {
     apiKey.value = settings.apiKey;
     apiBaseUrlMode.value = settings.apiBaseUrlMode;
     apiBaseUrl.value = displayApiBaseUrl(settings.apiBaseUrl, settings.apiBaseUrlMode);
-    model.value = settings.model;
+    apiMode.value = settings.apiMode;
+    streamImages.value = settings.streamImages;
+    streamPartialImages.value = settings.streamPartialImages;
+    model.value = FIXED_IMAGE_MODEL;
     promptMode.value = settings.promptMode;
     promptWordbanks.value = normalizePromptWordbanks(settings.promptWordbanks);
     promptRewriteGuardEnabled.value = settings.promptRewriteGuardEnabled;
@@ -223,7 +231,10 @@ export const useSettingsStore = defineStore("settings", () => {
       apiKey: apiKey.value.trim(),
       apiBaseUrl: apiBaseUrl.value.trim(),
       apiBaseUrlMode: apiBaseUrlMode.value,
-      model: model.value,
+      apiMode: apiMode.value,
+      streamImages: streamImages.value,
+      streamPartialImages: streamPartialImages.value,
+      model: FIXED_IMAGE_MODEL,
       promptMode: promptMode.value,
       promptWordbanks: clonePromptWordbanks(promptWordbanks.value),
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
@@ -359,6 +370,7 @@ export const useSettingsStore = defineStore("settings", () => {
 
   return {
     activeSizePreset,
+    apiMode,
     apiBaseUrl,
     apiBaseUrlMode,
     apiKey,
@@ -390,6 +402,8 @@ export const useSettingsStore = defineStore("settings", () => {
     imageWidth,
     model,
     outputFormat,
+    streamImages,
+    streamPartialImages,
     promptMode,
     promptWordbanks,
     promptRewriteGuardEnabled,

@@ -16,6 +16,9 @@ const currentSettings: AppSettings = {
   apiKey: "sk-current",
   apiBaseUrl: "https://api.packyapi.com/v1/images",
   apiBaseUrlMode: "full",
+  apiMode: "images",
+  streamImages: false,
+  streamPartialImages: 1,
   model: "gpt-image-2",
   promptMode: "default",
   promptWordbanks: defaultPromptWordbanks,
@@ -59,6 +62,22 @@ describe("URL settings", () => {
       connectionMode: "direct",
     });
     expect(next?.defaults).toEqual(currentSettings.defaults);
+  });
+
+  it("normalizes a /v1 responses base URL back to the origin in origin mode", () => {
+    const params = new URLSearchParams(
+      "apiUrl=https://proxy.example.com/v1&apiMode=responses&streamImages=true&streamPartialImages=2",
+    );
+
+    const next = buildSettingsFromUrlParams(currentSettings, params);
+
+    expect(next).toMatchObject({
+      apiBaseUrl: "https://proxy.example.com",
+      apiBaseUrlMode: "origin",
+      apiMode: "responses",
+      streamImages: true,
+      streamPartialImages: 2,
+    });
   });
 
   it("normalizes URL API origins with extra trailing slashes", () => {

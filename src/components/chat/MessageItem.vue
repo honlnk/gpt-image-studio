@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import { formatRelativeTime } from "../../shared/dateTime";
+import { useGenerationStore } from "../../stores/generationStore";
 import type { ImageAsset, Message } from "../../types/studio";
 import ErrorGenerationCard from "./message-parts/ErrorGenerationCard.vue";
 import PendingGenerationCard from "./message-parts/PendingGenerationCard.vue";
@@ -27,8 +28,12 @@ const emit = defineEmits<{
 }>();
 
 const attachedImageIds = computed(() => new Set(props.attachedImageIds));
+const generation = useGenerationStore();
 const createdAtLabel = computed(() =>
   formatRelativeTime(props.message.createdAt, props.nowMs),
+);
+const pendingPreviewUrl = computed(() =>
+  generation.getPartialPreviewUrl(props.message.id),
 );
 const hasImagePanel = computed(
   () =>
@@ -151,6 +156,7 @@ function stopPendingTimer() {
         <PendingGenerationCard
           v-if="message.status === 'pending'"
           :duration-label="pendingDurationLabel()"
+          :preview-url="pendingPreviewUrl"
           :retry-attempt="message.networkRetryAttempt"
         />
 

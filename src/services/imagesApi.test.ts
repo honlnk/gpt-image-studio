@@ -213,6 +213,139 @@ describe("images API requests", () => {
     expect((requestBody as FormData).has("quality")).toBe(false);
   });
 
+  it("calls the Responses API with the image_generation tool", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        output: [
+          {
+            type: "image_generation_call",
+            result: { b64_json: "responses-image" },
+            revised_prompt: "responses rewrite",
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1",
+        apiBaseUrlMode: "full",
+        apiMode: "responses",
+        apiKey: "sk-test",
+        model: "gpt-5.5",
+        prompt: "画一张图",
+        params: generationParams,
+      }),
+    ).resolves.toEqual({
+      b64Json: "responses-image",
+      revisedPrompt: "responses rewrite",
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.example.test/v1/responses");
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(requestBody).toMatchObject({
+      model: "gpt-5.5",
+      input: "画一张图",
+      tool_choice: "required",
+    });
+    expect(requestBody.tools).toEqual([
+      expect.objectContaining({
+        type: "image_generation",
+        action: "generate",
+        size: "1024x1024",
+        quality: "auto",
+        background: "auto",
+        output_format: "png",
+      }),
+    ]);
+  });
+
+  it("parses Images API streaming responses and emits partial previews", async () => {
+    const onPartialImage = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      eventStreamResponse([
+        {
+          type: "image_generation.partial_image",
+          b64_json: "partial-image",
+          partial_image_index: 1,
+        },
+        {
+          type: "image_generation.completed",
+          b64_json: "final-image",
+          revised_prompt: "stream rewrite",
+        },
+      ]),
+    );
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "画一张图",
+        streamImages: true,
+        streamPartialImages: 2,
+        onPartialImage,
+        params: generationParams,
+      }),
+    ).resolves.toEqual({
+      b64Json: "final-image",
+      revisedPrompt: "stream rewrite",
+    });
+
+    expect(onPartialImage).toHaveBeenCalledWith({
+      b64Json: "partial-image",
+      partialImageIndex: 1,
+    });
+  });
+
+  it("parses Responses API streaming responses and emits partial previews", async () => {
+    const onPartialImage = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      eventStreamResponse([
+        {
+          type: "response.image_generation_call.partial_image",
+          partial_image_b64: "partial-image",
+          partial_image_index: 2,
+        },
+        {
+          type: "response.output_item.done",
+          item: {
+            type: "image_generation_call",
+            result: { b64_json: "final-image" },
+            revised_prompt: "responses stream rewrite",
+          },
+        },
+      ]),
+    );
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test",
+        apiBaseUrlMode: "origin",
+        apiMode: "responses",
+        apiKey: "sk-test",
+        model: "gpt-5.5",
+        prompt: "画一张图",
+        streamImages: true,
+        streamPartialImages: 2,
+        onPartialImage,
+        params: generationParams,
+      }),
+    ).resolves.toEqual({
+      b64Json: "final-image",
+      revisedPrompt: "responses stream rewrite",
+    });
+
+    expect(onPartialImage).toHaveBeenCalledWith({
+      b64Json: "partial-image",
+      partialImageIndex: 2,
+    });
+  });
+
   it("adds the prompt rewrite guard when enabled for image edits", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
@@ -306,6 +439,28 @@ function jsonResponse(payload: unknown, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json",
+    },
+  });
+}
+
+function eventStreamResponse(events: unknown[]) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+        );
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
     },
   });
 }

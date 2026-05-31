@@ -12,6 +12,9 @@ const URL_SETTING_KEYS = [
   "apiKey",
   "model",
   "apiBaseUrlMode",
+  "apiMode",
+  "streamImages",
+  "streamPartialImages",
   "prompt",
   "promptRewriteGuard",
   "promptRewriteGuardEnabled",
@@ -132,6 +135,11 @@ function getApiSettingsPatchFromPayload(payload: SettingsPayload | null): Settin
   const patch: SettingsPatch = {};
   const apiBaseUrl = readString(payload, "apiBaseUrl", "apiUrl");
   const apiBaseUrlMode = normalizeApiBaseUrlMode(readString(payload, "apiBaseUrlMode"));
+  const apiMode = normalizeApiMode(readString(payload, "apiMode"));
+  const streamImages = normalizeBoolean(readUnknown(payload, "streamImages"));
+  const streamPartialImages = normalizeStreamPartialImages(
+    readUnknown(payload, "streamPartialImages"),
+  );
   const apiKey = readString(payload, "apiKey");
   const model = readString(payload, "model");
 
@@ -143,6 +151,9 @@ function getApiSettingsPatchFromPayload(payload: SettingsPayload | null): Settin
   } else if (apiBaseUrlMode) {
     patch.apiBaseUrlMode = apiBaseUrlMode;
   }
+  if (apiMode) patch.apiMode = apiMode;
+  if (streamImages !== undefined) patch.streamImages = streamImages;
+  if (streamPartialImages !== undefined) patch.streamPartialImages = streamPartialImages;
   if (apiKey !== undefined) patch.apiKey = apiKey.trim();
   if (model?.trim()) patch.model = model.trim();
 
@@ -185,6 +196,11 @@ function getApiSettingsPatchFromSearchParams(searchParams: URLSearchParams): Set
   const patch: SettingsPatch = {};
   const apiBaseUrl = searchParams.get("apiBaseUrl") ?? searchParams.get("apiUrl");
   const apiBaseUrlMode = normalizeApiBaseUrlMode(searchParams.get("apiBaseUrlMode"));
+  const apiMode = normalizeApiMode(searchParams.get("apiMode"));
+  const streamImages = normalizeBoolean(searchParams.get("streamImages"));
+  const streamPartialImages = normalizeStreamPartialImages(
+    searchParams.get("streamPartialImages"),
+  );
   const apiKey = searchParams.get("apiKey");
   const model = searchParams.get("model");
 
@@ -196,6 +212,9 @@ function getApiSettingsPatchFromSearchParams(searchParams: URLSearchParams): Set
   } else if (apiBaseUrlMode) {
     patch.apiBaseUrlMode = apiBaseUrlMode;
   }
+  if (apiMode) patch.apiMode = apiMode;
+  if (streamImages !== undefined) patch.streamImages = streamImages;
+  if (streamPartialImages !== undefined) patch.streamPartialImages = streamPartialImages;
   if (apiKey !== null) patch.apiKey = apiKey.trim();
   if (model !== null && model.trim()) patch.model = model.trim();
 
@@ -297,6 +316,10 @@ function normalizeApiBaseUrlMode(value: unknown): ApiBaseUrlMode | undefined {
   return value === "origin" || value === "full" ? value : undefined;
 }
 
+function normalizeApiMode(value: unknown): AppSettings["apiMode"] | undefined {
+  return value === "images" || value === "responses" ? value : undefined;
+}
+
 function normalizeBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   if (typeof value !== "string") return undefined;
@@ -345,8 +368,18 @@ function normalizeImageCount(value: unknown) {
   return Math.max(1, count);
 }
 
+function normalizeStreamPartialImages(value: unknown) {
+  const number = typeof value === "string" ? Number(value) : value;
+  if (typeof number !== "number" || !Number.isFinite(number)) return undefined;
+  return Math.min(3, Math.max(0, Math.trunc(number))) as 0 | 1 | 2 | 3;
+}
+
 function stripImagesApiPath(apiBaseUrl: string) {
-  return apiBaseUrl.trim().replace(/\/+$/, "").replace(/\/v1\/images$/i, "");
+  return apiBaseUrl
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/v1\/images$/i, "")
+    .replace(/\/v1$/i, "");
 }
 
 export type { UrlSettingKey };
