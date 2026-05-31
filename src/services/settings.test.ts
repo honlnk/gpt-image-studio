@@ -112,6 +112,20 @@ describe("settings service", () => {
     expect(result?.favoritePrompts).toEqual([]);
   });
 
+  it("normalizes any stored custom model back to gpt-image-2", async () => {
+    mocks.getFromStore.mockResolvedValue({
+      key: "app",
+      value: {
+        ...fullSettings,
+        model: "custom-model",
+      },
+    });
+
+    const result = await loadSettings();
+
+    expect(result?.model).toBe("gpt-image-2");
+  });
+
   it("saves settings record", async () => {
     mocks.putInStore.mockResolvedValue(undefined);
 

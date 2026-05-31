@@ -28,6 +28,7 @@ import { saveSettings } from "../services/settings";
 import { isoTimestamp } from "../shared/dateTime";
 import { createId } from "../shared/id";
 import { readStorage, writeStorage } from "../shared/localStorage";
+import { FIXED_IMAGE_MODEL } from "../shared/models";
 import type {
   ApiMode,
   AppSettings,
@@ -74,7 +75,7 @@ type ImageCountMode = "preset" | "custom";
 export const useSettingsStore = defineStore("settings", () => {
   const connectionMode = ref<ConnectionMode>("direct");
   const apiMode = ref<ApiMode>("images");
-  const model = ref("gpt-image-2");
+  const model = ref(FIXED_IMAGE_MODEL);
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
   const apiBaseUrlMode = ref<AppSettings["apiBaseUrlMode"]>("origin");
@@ -153,7 +154,7 @@ export const useSettingsStore = defineStore("settings", () => {
       backgroundOptions.find((o) => o.value === background.value)?.label ??
       background.value,
   );
-  const transparentDisabled = computed(() => model.value === "gpt-image-2");
+  const transparentDisabled = computed(() => model.value === FIXED_IMAGE_MODEL);
   const formatLabel = computed(
     () =>
       formatOptions.find((o) => o.value === outputFormat.value)?.label ??
@@ -194,7 +195,7 @@ export const useSettingsStore = defineStore("settings", () => {
     apiMode.value = settings.apiMode;
     streamImages.value = settings.streamImages;
     streamPartialImages.value = settings.streamPartialImages;
-    model.value = settings.model;
+    model.value = FIXED_IMAGE_MODEL;
     promptMode.value = settings.promptMode;
     promptWordbanks.value = normalizePromptWordbanks(settings.promptWordbanks);
     promptRewriteGuardEnabled.value = settings.promptRewriteGuardEnabled;
@@ -233,7 +234,7 @@ export const useSettingsStore = defineStore("settings", () => {
       apiMode: apiMode.value,
       streamImages: streamImages.value,
       streamPartialImages: streamPartialImages.value,
-      model: model.value,
+      model: FIXED_IMAGE_MODEL,
       promptMode: promptMode.value,
       promptWordbanks: clonePromptWordbanks(promptWordbanks.value),
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,

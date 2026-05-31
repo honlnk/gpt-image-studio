@@ -8,6 +8,7 @@ import {
 } from "./imagesApi";
 import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
+import { FIXED_IMAGE_MODEL } from "../shared/models";
 import type {
   ApiMode,
   ApiBaseUrlMode,
@@ -39,7 +40,10 @@ export async function loadSettings() {
 export function saveSettings(settings: AppSettings) {
   return putInStore<SettingsRecord>(STORE_NAMES.settings, {
     key: SETTINGS_KEY,
-    value: settings,
+    value: {
+      ...settings,
+      model: FIXED_IMAGE_MODEL,
+    },
   });
 }
 
@@ -84,6 +88,7 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
     streamPartialImages: normalizeStreamPartialImages(
       settings.streamPartialImages,
     ),
+    model: FIXED_IMAGE_MODEL,
     promptMode: normalizePromptMode(settings.promptMode),
     promptWordbanks: normalizePromptWordbanks(settings.promptWordbanks),
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled ?? true,

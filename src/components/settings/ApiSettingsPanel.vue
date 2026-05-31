@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 import type { ApiMode, ConnectionMode } from "../../types/studio";
+import { FIXED_IMAGE_MODEL } from "../../shared/models";
 import {
   checkCompanionHealth,
   getCompanionAuthStatus,
@@ -372,21 +373,15 @@ watch(
           <input
             id="apiModel"
             :value="model"
-            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-500"
-            :placeholder="apiMode === 'responses' ? 'gpt-5.5' : 'gpt-image-2'"
+            class="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500 outline-none"
+            :placeholder="FIXED_IMAGE_MODEL"
+            disabled
+            readonly
             spellcheck="false"
             type="text"
-            @input="
-              emit('update:model', ($event.target as HTMLInputElement).value)
-            "
           />
           <p class="mt-1.5 text-xs text-gray-500">
-            <template v-if="apiMode === 'responses'">
-              Responses API 模式下这里应填写响应模型，例如 <span class="font-mono">gpt-5.5</span>。
-            </template>
-            <template v-else>
-              Images API 模式下这里通常填写图片模型，例如 <span class="font-mono">gpt-image-2</span>。
-            </template>
+            当前阶段固定使用 <span class="font-mono">{{ FIXED_IMAGE_MODEL }}</span>，先不开放自定义模型输入。
           </p>
         </div>
 

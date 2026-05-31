@@ -78,7 +78,9 @@
   const settings = {
     apiUrl: "https://api.example.com",
     apiKey: "sk-xxx",
-    model: "gpt-image-2",
+    apiMode: "images",
+    streamImages: false,
+    streamPartialImages: 1,
     prompt: "生成一张白底商品主图",
     size: "1:1",
     background: "opaque",
@@ -94,7 +96,7 @@
 
 ```html
 <iframe
-  src="https://image.honlnk.com?apiUrl=https://api.example.com&apiKey=sk-xxx&model=gpt-image-2&prompt=生成一张白底商品主图&size=1:1&background=opaque&outputFormat=png"
+  src="https://image.honlnk.com?apiUrl=https://api.example.com&apiKey=sk-xxx&apiMode=images&streamImages=false&streamPartialImages=1&prompt=生成一张白底商品主图&size=1:1&background=opaque&outputFormat=png"
   allow="clipboard-read; clipboard-write"
 ></iframe>
 ```
@@ -106,8 +108,10 @@
 - `settings`：URL 编码后的 JSON 配置。可包含下方所有参数；如果 `settings` 与独立参数同时存在，以独立参数为准
 - `apiUrl` 或 `apiBaseUrl`：API Base URL
 - `apiKey`：API key
-- `model`：模型 ID
 - `apiBaseUrlMode=full`：将 `apiUrl` / `apiBaseUrl` 视为完整 API Base URL；默认会将其视为站点根地址并自动追加 `/v1/images`
+- `apiMode`：接口模式，支持 `images`、`responses`
+- `streamImages`：是否开启流式预览，支持 `1` / `0`、`true` / `false`
+- `streamPartialImages`：请求的中间图数量，支持 `0`、`1`、`2`、`3`
 - `prompt`：预填输入框内容，不会自动提交
 - `size`：默认尺寸，支持 `auto`、`1:1`、`16:9`、`9:16`、`custom` 等
 - `resolution`：默认分辨率，支持 `1k`、`2k`、`4k`
@@ -117,6 +121,8 @@
 - `promptRewriteGuard` 或 `promptRewriteGuardEnabled`：是否启用提示词防改写，支持 `1` / `0`、`true` / `false`
 - `promptRewriteGuardText`：自定义提示词防改写前缀
 
+当前版本固定使用 `gpt-image-2`，不开放通过 iframe URL 自定义模型。即使外部传入 `model` 参数，运行时也会被忽略。
+
 页面读取这些参数后会保存设置类配置，并从地址栏清除已识别的配置参数，保留其他查询参数。`prompt` 只会写入当前输入框草稿。
 
 本仓库提供了一个本地测试页，可用于验证 iframe 嵌入效果：
@@ -125,7 +131,7 @@
 pnpm dev
 ```
 
-然后在浏览器打开 `http://127.0.0.1:8888/embed-test.html`。测试页左侧会显示平台地址、API URL、API Key、Model 等输入框；右侧 iframe 默认加载 `http://127.0.0.1:8888/`。如果需要测试线上站点，可以在测试页左侧把平台地址改成 `https://image.honlnk.com`，并确认线上版本已经部署了 URL 参数支持。
+然后在浏览器打开 `http://127.0.0.1:8888/embed-test.html`。测试页左侧会显示平台地址、API URL、API Key、接口模式、流式预览等输入项；右侧 iframe 默认加载 `http://127.0.0.1:8888/`。如果需要测试线上站点，可以在测试页左侧把平台地址改成 `https://image.honlnk.com`，并确认线上版本已经部署了 URL 参数支持。
 
 跨站 iframe 中的 IndexedDB 可能被浏览器按顶层站点分区，因此测试页里看到的会话和图片数据可能不同于直接打开平台时的数据。
 

@@ -190,13 +190,44 @@
           </label>
 
           <label>
+            API Base URL 模式
+            <select id="apiBaseUrlMode">
+              <option value="origin">origin</option>
+              <option value="full" selected>full</option>
+            </select>
+          </label>
+
+          <label>
             API Key
             <input id="apiKey" value="sk-test" />
           </label>
 
           <label>
-            Model
-            <input id="model" value="gpt-image-2" />
+            接口模式
+            <select id="apiMode">
+              <option value="images" selected>images</option>
+              <option value="responses">responses</option>
+            </select>
+          </label>
+
+          <label class="inline-label">
+            <input id="streamImages" type="checkbox" />
+            开启流式预览
+          </label>
+
+          <label>
+            中间图数量
+            <select id="streamPartialImages">
+              <option value="0">0</option>
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+          </label>
+
+          <label>
+            模型
+            <input id="model" value="gpt-image-2" disabled />
           </label>
 
           <label>
@@ -273,7 +304,11 @@
       const iframeSrc = document.querySelector("#iframeSrc");
       const studioUrl = document.querySelector("#studioUrl");
       const apiUrl = document.querySelector("#apiUrl");
+      const apiBaseUrlMode = document.querySelector("#apiBaseUrlMode");
       const apiKey = document.querySelector("#apiKey");
+      const apiMode = document.querySelector("#apiMode");
+      const streamImages = document.querySelector("#streamImages");
+      const streamPartialImages = document.querySelector("#streamPartialImages");
       const model = document.querySelector("#model");
       const prompt = document.querySelector("#prompt");
       const size = document.querySelector("#size");
@@ -288,7 +323,11 @@
         if (useSettingsParam.checked) {
           url.searchParams.set("settings", JSON.stringify({
             apiUrl: apiUrl.value,
+            apiBaseUrlMode: apiBaseUrlMode.value,
             apiKey: apiKey.value,
+            apiMode: apiMode.value,
+            streamImages: streamImages.checked,
+            streamPartialImages: Number(streamPartialImages.value),
             model: model.value,
             prompt: prompt.value,
             size: size.value,
@@ -298,7 +337,11 @@
           }));
         } else {
           url.searchParams.set("apiUrl", apiUrl.value);
+          url.searchParams.set("apiBaseUrlMode", apiBaseUrlMode.value);
           url.searchParams.set("apiKey", apiKey.value);
+          url.searchParams.set("apiMode", apiMode.value);
+          url.searchParams.set("streamImages", String(streamImages.checked));
+          url.searchParams.set("streamPartialImages", streamPartialImages.value);
           url.searchParams.set("model", model.value);
           url.searchParams.set("prompt", prompt.value);
           url.searchParams.set("size", size.value);
