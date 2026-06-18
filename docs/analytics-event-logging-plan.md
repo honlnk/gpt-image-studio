@@ -7,12 +7,17 @@
   - 覆盖 §8.1 的 V1.0 事件清单（chat / generation / image / conversation / settings / backup）。
   - 导出采用 JSONL 单文件（§6.3 的 Markdown 分片报告留待 V1.1）。
   - 事件不纳入备份导出/恢复（设备本地运行记录）。
-- **V1.1 待开发**：§8.2 高频控件事件 + §6.3 / §11.3 Markdown 时间线分片导出 + `manifest.json`。
+- **V1.1 已完成**（2026-06）：§8.2 高频控件事件 + §6.3 / §11.3 Markdown 时间线分片导出 + `manifest.json`。
+  - 补齐 §8.2 的 11 个高频事件（chat.attach_image / chat.remove_attachment / generation.edit_mode_toggled / generation.apply_mask / library.filter_changed / library.sort_changed / library.search_used / batch.images_downloaded / batch.images_deleted / batch.conversations_deleted / settings.tab_changed）。
+  - 新增 `src/services/analyticsExport.ts`：导出由单 JSONL 升级为 ZIP 包（manifest.json + README.md + events/raw/events.jsonl + reports/summary.md + reports/timeline/*.md）。
+  - 分片算法：先按 7 天时间窗口分组，再按 1000 events / 2 MB 兜底切 part；每片带 YAML frontmatter（§11.3 默认值，V1.1 硬编码不进设置）。
 - **V1.2 待开发**：§8.3 颜色分组专项事件（`image.tag_color_*`）+ 会话级分片报告。
 
-> 实施过程中相对原计划的两处偏差，已固化在代码中：
+> 实施过程中相对原计划的偏差，已固化在代码中：
 > 1. tracker 采用「模块级单例 + `analyticsStore` 包装」而非纯 store；`v-track` 指令直接 import 模块级 `track()`，不依赖 Pinia 实例。
 > 2. `analyticsStore.eventCount` 暴露给面板时必须经 `storeToRefs` 解构（直接访问 store 实例属性会被解包成静态值，导致计数不更新）。
+> 3. `library.sort_changed` / `library.search_used` 的实际控件位于「设置 → 批量操作」面板（`ImageLibrary.vue` 仅有 scope 过滤），按控件实际位置埋点，保留 `library.*` 事件名以对齐事件字典。
+> 4. V1.1 分片阈值（7 天 / 1000 events / 2 MB）硬编码在 `analyticsExport.ts` 顶部常量，未暴露为设置项。
 
 ## 1. 背景与目标
 

@@ -226,6 +226,7 @@ type GenerationParams = {
 - 已完成：Per-conversation Drafts。每个会话独立保存草稿文本和生成参数（`src/services/conversationDrafts.ts`）。
 - 已完成：遮罩局部编辑。支持画笔、橡皮、矩形、圆形多工具绘制 mask，支持多选区叠加、撤销重做、软边、缩放平移（`docs/mask-editing.md`）。
 - 已完成：用户行为日志系统 V1.0。本地优先的事件采集，覆盖 V1.0 核心事件闭环（chat / generation / image / conversation / settings / backup）。模块级 tracker 单例 + `v-track` 指令 + `analyticsStore`，prompt 四档脱敏（默认 `length_only`），节流批量落库，JSONL 导出，不纳入备份（`docs/analytics-event-logging-plan.md`）。V1.1（高频控件）与 V1.2（颜色分组专项）待后续迭代。
+- 已完成：用户行为日志系统 V1.1。补齐 11 个高频控件事件（附件增删、区域编辑开关、应用 mask、库筛选/排序/搜索、批量下载/删除、设置 tab 切换）；导出由单 JSONL 升级为 ZIP 包（`manifest.json` + `README.md` + `events/raw/events.jsonl` + `reports/summary.md` + `reports/timeline/*.md`），Markdown 时间线按 7 天窗口 + 1000 events / 2 MB 兜底分片（`src/services/analyticsExport.ts`）。V1.2（颜色分组专项）待后续迭代。
 - 后置：更细的图片库筛选，例如来源、格式、时间等。
 - 无限期后置：File System Access API 本地目录导出。
 - 后置：Tauri / Electron 桌面端打包评估。
@@ -236,4 +237,4 @@ type GenerationParams = {
 2. 增加更细的图片库筛选，例如来源、格式、时间等。
 3. 在 Web App 工作流继续稳定后，再评估 Tauri / Electron 桌面端打包。
 4. 本地 CLI Companion（`companion.md`）— 后台服务管理已完成：`start` / `stop` / `restart` / `logs`；系统 keychain 后置。
-5. 用户行为日志系统（`analytics-event-logging-plan.md`）— V1.0 核心闭环已完成；后续可扩展 V1.1（高频控件 + Markdown 分片导出）与 V1.2（颜色分组专项事件）。
+5. 用户行为日志系统（`analytics-event-logging-plan.md`）— V1.0 核心闭环与 V1.1（高频控件 + Markdown 分片导出）已完成；后续可扩展 V1.2（颜色分组专项事件 + 会话级分片报告）。
