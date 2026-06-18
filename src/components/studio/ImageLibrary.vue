@@ -202,6 +202,7 @@ function setImageTagColor(
               : 'text-gray-500 hover:text-gray-800',
           ]"
           type="button"
+          v-track="{ name: 'library.filter_changed', payload: { scope: 'current' } }"
           @click="activeFilter = 'current'"
         >
           当前会话
@@ -214,6 +215,7 @@ function setImageTagColor(
               : 'text-gray-500 hover:text-gray-800',
           ]"
           type="button"
+          v-track="{ name: 'library.filter_changed', payload: { scope: 'all' } }"
           @click="activeFilter = 'all'"
         >
           全部图片

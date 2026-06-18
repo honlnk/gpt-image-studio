@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { FavoritePrompt } from "../../types/studio";
 
@@ -299,7 +300,11 @@ function getCaretRect(el: HTMLTextAreaElement) {
 
 function importFromInput(event: Event) {
   const input = event.target as HTMLInputElement;
-  emit("importImages", Array.from(input.files ?? []));
+  const files = Array.from(input.files ?? []);
+  if (files.length) {
+    track("chat.attach_image", { source: "select", count: files.length }, "ui_input");
+  }
+  emit("importImages", files);
   input.value = "";
 }
 
@@ -311,6 +316,7 @@ function importFromPaste(event: ClipboardEvent) {
 
   if (!files.length) return;
   event.preventDefault();
+  track("chat.attach_image", { source: "paste", count: files.length }, "ui_input");
   emit("importImages", files);
 }
 

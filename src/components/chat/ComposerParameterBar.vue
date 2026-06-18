@@ -41,6 +41,7 @@ const promptModeLabel = computed(() => {
           : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
       ]"
       type="button"
+      v-track="{ name: 'generation.edit_mode_toggled', payload: { enabled: !composer.editModeEnabled } }"
       @click="emit('update:editModeEnabled', !composer.editModeEnabled)"
     >
       区域编辑: {{ composer.editModeEnabled ? "开" : "关" }}

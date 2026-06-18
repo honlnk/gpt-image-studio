@@ -207,6 +207,7 @@ function forwardSavePromptWordbank(
                   : 'text-gray-500 hover:bg-white hover:text-gray-800'
               "
               type="button"
+              v-track="{ name: 'settings.tab_changed', payload: { tab: tab.key } }"
               @click="activeTab = tab.key"
             >
               {{ tab.label }}

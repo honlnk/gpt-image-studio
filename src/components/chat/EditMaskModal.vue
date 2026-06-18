@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { track } from "../../features/analytics/useAnalyticsTracker";
 import type { ImageAsset } from "../../types/studio";
 import Tooltip from "../ui/Tooltip.vue";
 
@@ -237,6 +238,12 @@ function pointerPosition(event: PointerEvent) {
 
 async function applyMask() {
   if (!props.image?.previewUrl || !imageRef.value || !canApply.value) return;
+
+  track(
+    "generation.apply_mask",
+    { selectionCount: allSelections.value.length },
+    "ui_click",
+  );
 
   const displayRect = imageRef.value.getBoundingClientRect();
   const naturalWidth = imageRef.value.naturalWidth;

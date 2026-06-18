@@ -145,6 +145,7 @@ const totalSizeLabel = computed(() => {
           class="absolute right-0.5 top-0.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
           type="button"
           aria-label="移除引用图片"
+          v-track="{ name: 'chat.remove_attachment', payload: { attachmentId: item.id } }"
           @click="handleRemove($event, item)"
         >
           <svg

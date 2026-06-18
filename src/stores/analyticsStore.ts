@@ -8,9 +8,9 @@ import {
 } from "../features/analytics/useAnalyticsTracker";
 import {
   clearAnalyticsEvents,
-  exportAnalyticsEventsJson,
   listAnalyticsEvents,
 } from "../services/analyticsEvents";
+import { createAnalyticsExportArchive } from "../services/analyticsExport";
 import { createObjectUrl, revokeObjectUrl } from "../shared/objectUrls";
 import { createId } from "../shared/id";
 
@@ -66,12 +66,11 @@ export const useAnalyticsStore = defineStore("analytics", () => {
   }
 
   async function exportEvents() {
-    const json = await exportAnalyticsEventsJson();
-    const blob = new Blob([json], { type: "application/x-ndjson" });
+    const blob = await createAnalyticsExportArchive();
     const url = createObjectUrl(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `analytics-events-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`;
+    anchor.download = `analytics-export-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
     anchor.click();
     revokeObjectUrl(url);
   }
