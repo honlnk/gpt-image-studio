@@ -232,6 +232,7 @@ function setImageTagColor(
           ]"
           style="background-color: #ffffff"
           type="button"
+          v-track="{ name: 'library.filter_by_tag_color', payload: { color: 'all' } }"
           @click="toggleColorFilter('all')"
         />
         <button
@@ -246,6 +247,7 @@ function setImageTagColor(
           ]"
           :style="{ backgroundColor: imageTagDotColor(color) }"
           type="button"
+          v-track="{ name: 'library.filter_by_tag_color', payload: { color } }"
           @click="toggleColorFilter(color)"
         />
       </div>
