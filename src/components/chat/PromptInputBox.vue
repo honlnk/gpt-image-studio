@@ -388,6 +388,7 @@ defineExpose({ focusComposer });
         <slot />
       </div>
       <button
+        v-track="'chat.submit'"
         class="ml-1.5 shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
         :disabled="!canSend"
         type="submit"

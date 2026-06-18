@@ -1,5 +1,5 @@
 const DB_NAME = "gpt-image-studio";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export const STORE_NAMES = {
   conversations: "conversations",
@@ -8,6 +8,7 @@ export const STORE_NAMES = {
   imageBlobs: "imageBlobs",
   settings: "settings",
   conversationDrafts: "conversationDrafts",
+  analyticsEvents: "analyticsEvents",
 } as const;
 
 type StoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES];
@@ -63,6 +64,15 @@ export function getStudioDb() {
             keyPath: "conversationId",
           });
           store.createIndex("updatedAtMs", "updatedAtMs");
+        }
+
+        if (!db.objectStoreNames.contains(STORE_NAMES.analyticsEvents)) {
+          const store = db.createObjectStore(STORE_NAMES.analyticsEvents, {
+            keyPath: "id",
+          });
+          store.createIndex("occurredAt", "occurredAt");
+          store.createIndex("eventName", "eventName");
+          store.createIndex("conversationId", "conversationId");
         }
 
         if (event.oldVersion < 2) {

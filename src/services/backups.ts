@@ -50,6 +50,8 @@ type StoredBackupSettings = Omit<
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
   | "favoritePrompts"
+  | "analyticsEnabled"
+  | "analyticsPromptCapture"
 > & {
   promptRewriteGuardEnabled?: boolean;
   promptRewriteGuardText?: string;
@@ -57,6 +59,8 @@ type StoredBackupSettings = Omit<
   favoritePrompts?: unknown;
   promptMode?: AppSettings["promptMode"];
   promptWordbanks?: unknown;
+  analyticsEnabled?: boolean;
+  analyticsPromptCapture?: AppSettings["analyticsPromptCapture"];
   defaults: StoredGenerationParams;
 };
 
@@ -127,6 +131,9 @@ export async function restoreStudioBackup(file: File) {
         defaults: normalizeGenerationParams(data.settings.defaults),
         autoRetryOnNetworkError:
           data.settings.autoRetryOnNetworkError ?? false,
+        analyticsEnabled: data.settings.analyticsEnabled ?? true,
+        analyticsPromptCapture:
+          data.settings.analyticsPromptCapture ?? "length_only",
       }
     : currentSettings;
 

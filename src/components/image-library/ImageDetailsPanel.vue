@@ -53,6 +53,7 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
       <div class="flex shrink-0 items-center gap-1">
         <a
           v-if="image.previewUrl"
+          v-track="{ name: 'image.downloaded', payload: { imageId: image.id, location: 'details' } }"
           class="rounded-lg px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-100"
           :download="imageDownloadName(image)"
           :href="image.previewUrl"
@@ -67,6 +68,7 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
           重命名
         </button>
         <button
+          v-track="{ name: 'image.deleted', payload: { imageId: image.id, location: 'details' } }"
           class="cursor-pointer rounded-lg px-2 py-1 text-xs text-red-500 transition-colors hover:bg-red-50"
           type="button"
           @click="emit('deleteImage', image.id)"

@@ -29,6 +29,8 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
       refs.promptRewriteGuardHistory,
       refs.favoritePrompts,
       refs.autoRetryOnNetworkError,
+      refs.analyticsEnabled,
+      refs.analyticsPromptCapture,
       refs.activeSizePreset,
       refs.sizeResolution,
       refs.imageWidth,

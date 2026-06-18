@@ -10,6 +10,8 @@ export type ImageTagColor =
   | "blue"
   | "purple";
 export type ApiMode = "images" | "responses";
+export type AnalyticsEventSource = "ui_click" | "ui_input" | "system";
+export type AnalyticsPromptCapture = "none" | "length_only" | "masked" | "raw";
 
 export type Conversation = {
   id: string;
@@ -133,6 +135,8 @@ export type AppSettings = {
   promptRewriteGuardHistory: PromptRewriteGuardHistoryItem[];
   favoritePrompts: FavoritePrompt[];
   autoRetryOnNetworkError: boolean;
+  analyticsEnabled: boolean;
+  analyticsPromptCapture: AnalyticsPromptCapture;
   defaults: GenerationParams;
   storageMode: "indexeddb";
 };
@@ -148,4 +152,16 @@ export type ConversationDraft = {
   editMaskImageId?: string;
   generationParams: GenerationParams;
   updatedAtMs: number;
+};
+
+export type AnalyticsEvent = {
+  id: string;
+  eventName: string;
+  occurredAt: string;
+  sessionId: string;
+  conversationId?: string;
+  messageId?: string;
+  imageId?: string;
+  source: AnalyticsEventSource;
+  payload?: Record<string, unknown>;
 };

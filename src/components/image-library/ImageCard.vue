@@ -89,6 +89,7 @@ const titleStyle = computed(() => {
     <div class="flex shrink-0 items-center gap-1">
       <a
         v-if="image.previewUrl"
+        v-track="{ name: 'image.downloaded', payload: { imageId: image.id, location: 'card' } }"
         class="rounded-lg px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
         :download="imageDownloadName(image)"
         :href="image.previewUrl"

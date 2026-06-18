@@ -70,6 +70,7 @@ const emit = defineEmits<{
           </Tooltip>
         </div>
         <button
+          v-track="{ name: 'chat.retry', payload: { messageId: props.message.id } }"
           class="shrink-0 cursor-pointer rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
           type="button"
           @click="emit('retryMessage', props.message)"
