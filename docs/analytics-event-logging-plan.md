@@ -1,5 +1,19 @@
 # 用户行为日志系统（V1）开发计划
 
+## 实施状态
+
+- **V1.0 已完成**（2026-06）：基础设施 + 核心事件闭环已落地。
+  - IndexedDB `analyticsEvents` store、`analyticsEvents` service、模块级 tracker 单例（`src/features/analytics/useAnalyticsTracker.ts`）、`v-track` 指令、`analyticsStore`、设置页「行为日志」面板。
+  - 覆盖 §8.1 的 V1.0 事件清单（chat / generation / image / conversation / settings / backup）。
+  - 导出采用 JSONL 单文件（§6.3 的 Markdown 分片报告留待 V1.1）。
+  - 事件不纳入备份导出/恢复（设备本地运行记录）。
+- **V1.1 待开发**：§8.2 高频控件事件 + §6.3 / §11.3 Markdown 时间线分片导出 + `manifest.json`。
+- **V1.2 待开发**：§8.3 颜色分组专项事件（`image.tag_color_*`）+ 会话级分片报告。
+
+> 实施过程中相对原计划的两处偏差，已固化在代码中：
+> 1. tracker 采用「模块级单例 + `analyticsStore` 包装」而非纯 store；`v-track` 指令直接 import 模块级 `track()`，不依赖 Pinia 实例。
+> 2. `analyticsStore.eventCount` 暴露给面板时必须经 `storeToRefs` 解构（直接访问 store 实例属性会被解包成静态值，导致计数不更新）。
+
 ## 1. 背景与目标
 
 本项目当前只有少量 `console` 调试输出，不具备可持续分析能力。V1 目标是建设一个本地优先的用户行为日志系统，用于记录用户在产品中的客观操作轨迹，为后续可用性分析与提示词偏好研究提供数据基础。

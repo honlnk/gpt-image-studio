@@ -27,7 +27,7 @@ See `docs/README.md` for the maintained documentation map and `docs/architecture
 
 ### State Management
 
-Pinia stores in `src/stores/` manage cross-component shared state by domain (`settingsStore`, `composerStore`, `imagesStore`, `conversationsStore`, `generationStore`, `feedbackStore`).
+Pinia stores in `src/stores/` manage cross-component shared state by domain (`settingsStore`, `composerStore`, `imagesStore`, `conversationsStore`, `generationStore`, `feedbackStore`, `analyticsStore`).
 
 `src/app/studio/useStudioViewModel.ts` is the page-level orchestration layer: it coordinates across stores for workflows like draft switching, backup/restore, and preview. `App.vue` calls it once and distributes state/methods to children via props and events.
 
@@ -71,6 +71,7 @@ All IndexedDB access goes through `db.ts` (generic CRUD: `getAllFromStore`, `get
 | `imageMetadata.ts` | Read image dimensions via `createImageBitmap` / `HTMLImageElement` |
 | `storageUsage.ts` | Estimate IndexedDB usage via `navigator.storage.estimate()` |
 | `backups.ts` | Full project export/import as ZIP |
+| `analyticsEvents.ts` | Analytics event persistence + JSONL export (excluded from backups) |
 | `zipArchive.ts` | Hand-written ZIP file creator (CRC32 + binary format) |
 
 ### Generation / Image Client
@@ -89,6 +90,7 @@ All business types in `src/types/studio.ts`: `Conversation`, `Message`, `ImageAs
 - **Generation job flow**: `generationStore` manages the full lifecycle: create user + assistant messages → persist → dispatch to `ImageClient.generate` or `ImageClient.edit` based on whether reference images are attached → on success create `ImageAsset` + blob → on failure mark assistant message as `error`.
 - **Conversation write queue**: A promise chain serializes conversation writes to prevent race conditions from rapid sequential operations.
 - **Parameter editors**: Collapsible inline editors in ChatWorkspace using `grid-template-rows` CSS transition for animation. Scoped `<style>` is only used for this animation.
+- **Analytics tracking**: A module-level singleton (`src/features/analytics/useAnalyticsTracker.ts`) holds the in-memory event queue and config. Both the `v-track` directive (click events) and business methods import the module-level `track()` directly, avoiding any Pinia dependency. `analyticsStore` wraps the singleton: it registers a flush listener so the reactive `eventCount` updates after each successful batch persist (use `storeToRefs` when exposing the count to keep reactivity intact). `track()` swallows all errors. Prompt-like payload fields are sanitized per `analyticsPromptCapture` (default `length_only`). Analytics events are device-local and excluded from backup export/restore.
 
 ### Styling
 
@@ -106,7 +108,7 @@ See `docs/roadmap.md` for the full roadmap. Current status:
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
 - Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/mask-editing.md`)
 - Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with first-pairing wait flow; system keychain is deferred
-- Upcoming: analytics event logging (`docs/analytics-event-logging-plan.md`)
+- Done: Analytics event logging V1.0 (`docs/analytics-event-logging-plan.md`) — local-first event tracking with `analyticsStore`, `v-track` directive, prompt sanitization, and JSONL export. V1.1 (high-frequency controls) and V1.2 (tag color analytics) remain.
 
 ## Conventions
 
