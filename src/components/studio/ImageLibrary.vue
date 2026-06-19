@@ -202,6 +202,7 @@ function setImageTagColor(
               : 'text-gray-500 hover:text-gray-800',
           ]"
           type="button"
+          v-track="{ name: 'library.filter_changed', payload: { scope: 'current' } }"
           @click="activeFilter = 'current'"
         >
           当前会话
@@ -214,6 +215,7 @@ function setImageTagColor(
               : 'text-gray-500 hover:text-gray-800',
           ]"
           type="button"
+          v-track="{ name: 'library.filter_changed', payload: { scope: 'all' } }"
           @click="activeFilter = 'all'"
         >
           全部图片
@@ -230,6 +232,7 @@ function setImageTagColor(
           ]"
           style="background-color: #ffffff"
           type="button"
+          v-track="{ name: 'library.filter_by_tag_color', payload: { color: 'all' } }"
           @click="toggleColorFilter('all')"
         />
         <button
@@ -244,6 +247,7 @@ function setImageTagColor(
           ]"
           :style="{ backgroundColor: imageTagDotColor(color) }"
           type="button"
+          v-track="{ name: 'library.filter_by_tag_color', payload: { color } }"
           @click="toggleColorFilter(color)"
         />
       </div>

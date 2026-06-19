@@ -228,6 +228,7 @@ watch(
         <p class="mb-2 block text-sm font-medium text-gray-700">连接模式</p>
         <div class="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
           <button
+            v-track="{ name: 'settings.connection_mode_changed', payload: { mode: 'direct' } }"
             class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors"
             :class="
               connectionMode === 'direct'
@@ -240,6 +241,7 @@ watch(
             浏览器直连
           </button>
           <button
+            v-track="{ name: 'settings.connection_mode_changed', payload: { mode: 'localCompanion' } }"
             class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors"
             :class="
               connectionMode === 'localCompanion'

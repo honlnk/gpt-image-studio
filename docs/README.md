@@ -11,6 +11,7 @@
 - [提示词模式开发计划](prompt-modes.md)：安全、创意、成人三级提示词模式的设计和实现计划。
 - [Responses API 与流式图片预览开发方案](responses-streaming-plan.md)：浏览器直连模式下接入 `Responses API` 与流式图片预览的设计和实施计划。
 - [备份格式](backup-format.md)：当前备份 ZIP 结构和恢复行为。
+- [桌面端打包方案](desktop-packaging.md)：Tauri v2 集成、构建命令和后续路线。
 - [用户行为日志计划](analytics-event-logging-plan.md)：后续本地行为日志系统方案。
 
 ## 架构决策

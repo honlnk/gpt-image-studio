@@ -93,6 +93,8 @@ const settings: AppSettings = {
     outputFormat: "png",
   },
   autoRetryOnNetworkError: false,
+  analyticsEnabled: true,
+  analyticsPromptCapture: "length_only",
   storageMode: "indexeddb",
 };
 
@@ -141,6 +143,8 @@ describe("studio backups", () => {
       promptRewriteGuardHistory: settings.promptRewriteGuardHistory,
       favoritePrompts: settings.favoritePrompts,
       autoRetryOnNetworkError: settings.autoRetryOnNetworkError,
+      analyticsEnabled: settings.analyticsEnabled,
+      analyticsPromptCapture: settings.analyticsPromptCapture,
       defaults: settings.defaults,
       storageMode: settings.storageMode,
     });

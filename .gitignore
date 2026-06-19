@@ -25,3 +25,9 @@ private-folder-alias.json
 *.njsproj
 *.sln
 *.sw?
+
+# Tauri (desktop shell) build artifacts
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/src-tauri/app-icon.png
+desktop/src-tauri/WixTools/

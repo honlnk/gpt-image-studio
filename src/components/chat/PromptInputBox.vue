@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { FavoritePrompt } from "../../types/studio";
 
@@ -299,7 +300,11 @@ function getCaretRect(el: HTMLTextAreaElement) {
 
 function importFromInput(event: Event) {
   const input = event.target as HTMLInputElement;
-  emit("importImages", Array.from(input.files ?? []));
+  const files = Array.from(input.files ?? []);
+  if (files.length) {
+    track("chat.attach_image", { source: "select", count: files.length }, "ui_input");
+  }
+  emit("importImages", files);
   input.value = "";
 }
 
@@ -311,6 +316,7 @@ function importFromPaste(event: ClipboardEvent) {
 
   if (!files.length) return;
   event.preventDefault();
+  track("chat.attach_image", { source: "paste", count: files.length }, "ui_input");
   emit("importImages", files);
 }
 
@@ -388,6 +394,7 @@ defineExpose({ focusComposer });
         <slot />
       </div>
       <button
+        v-track="'chat.submit'"
         class="ml-1.5 shrink-0 cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
         :disabled="!canSend"
         type="submit"

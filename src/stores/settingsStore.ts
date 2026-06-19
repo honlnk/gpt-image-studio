@@ -30,6 +30,7 @@ import { createId } from "../shared/id";
 import { readStorage, writeStorage } from "../shared/localStorage";
 import { FIXED_IMAGE_MODEL } from "../shared/models";
 import type {
+  AnalyticsPromptCapture,
   ApiMode,
   AppSettings,
   ConnectionMode,
@@ -88,6 +89,8 @@ export const useSettingsStore = defineStore("settings", () => {
   const promptRewriteGuardEnabled = ref(true);
   const promptRewriteGuardText = ref(PROMPT_REWRITE_GUARD_PREFIX);
   const autoRetryOnNetworkError = ref(false);
+  const analyticsEnabled = ref(true);
+  const analyticsPromptCapture = ref<AnalyticsPromptCapture>("length_only");
   const favoritePrompts = ref<FavoritePrompt[]>([]);
   const promptRewriteGuardHistory = ref<PromptRewriteGuardHistoryItem[]>([
     {
@@ -203,6 +206,9 @@ export const useSettingsStore = defineStore("settings", () => {
       settings.promptRewriteGuardText,
     );
     autoRetryOnNetworkError.value = settings.autoRetryOnNetworkError ?? false;
+    analyticsEnabled.value = settings.analyticsEnabled ?? true;
+    analyticsPromptCapture.value =
+      settings.analyticsPromptCapture ?? "length_only";
     promptRewriteGuardHistory.value = normalizePromptRewriteGuardHistory(
       settings.promptRewriteGuardHistory,
       promptRewriteGuardText.value,
@@ -244,6 +250,8 @@ export const useSettingsStore = defineStore("settings", () => {
       ),
       favoritePrompts: favoritePrompts.value.map(toPlainFavoritePrompt),
       autoRetryOnNetworkError: autoRetryOnNetworkError.value,
+      analyticsEnabled: analyticsEnabled.value,
+      analyticsPromptCapture: analyticsPromptCapture.value,
       defaults: currentGenerationParams(),
       storageMode: "indexeddb",
     };
@@ -375,6 +383,8 @@ export const useSettingsStore = defineStore("settings", () => {
     apiBaseUrlMode,
     apiKey,
     autoRetryOnNetworkError,
+    analyticsEnabled,
+    analyticsPromptCapture,
     companionPaired,
     companionSessionToken,
     companionUrl,

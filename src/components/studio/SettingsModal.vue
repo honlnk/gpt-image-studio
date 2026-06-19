@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import type {
+  AnalyticsPromptCapture,
   ApiMode,
   ConnectionMode,
   Conversation,
@@ -12,6 +13,8 @@ import type {
   PromptWordbanks,
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
+import AboutPanel from "../settings/AboutPanel.vue";
+import AnalyticsPanel from "../settings/AnalyticsPanel.vue";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
@@ -28,7 +31,9 @@ type SettingsTab =
   | "favoritePrompts"
   | "prompt"
   | "backup"
-  | "batch";
+  | "batch"
+  | "analytics"
+  | "about";
 type BatchPanel = "images" | "conversations";
 
 const props = defineProps<{
@@ -56,6 +61,9 @@ const props = defineProps<{
   conversations: Conversation[];
   images: ImageAsset[];
   messages: Message[];
+  analyticsEnabled: boolean;
+  analyticsPromptCapture: AnalyticsPromptCapture;
+  analyticsEventCount: number;
 }>();
 
 const emit = defineEmits<{
@@ -87,6 +95,10 @@ const emit = defineEmits<{
   restorePromptRewriteGuardHistoryItem: [id: string];
   deletePromptRewriteGuardHistoryItem: [id: string];
   setPromptRewriteGuardEnabled: [value: boolean];
+  "update:analyticsEnabled": [value: boolean];
+  "update:analyticsPromptCapture": [value: AnalyticsPromptCapture];
+  exportAnalyticsEvents: [];
+  clearAnalyticsEvents: [];
 }>();
 
 const activeTab = ref<SettingsTab>("general");
@@ -101,6 +113,8 @@ const tabs: { key: SettingsTab; label: string }[] = [
   { key: "prompt", label: "提示词保护" },
   { key: "backup", label: "数据备份" },
   { key: "batch", label: "批量操作" },
+  { key: "analytics", label: "行为日志" },
+  { key: "about", label: "关于" },
 ];
 
 watch(
@@ -196,6 +210,7 @@ function forwardSavePromptWordbank(
                   : 'text-gray-500 hover:bg-white hover:text-gray-800'
               "
               type="button"
+              v-track="{ name: 'settings.tab_changed', payload: { tab: tab.key } }"
               @click="activeTab = tab.key"
             >
               {{ tab.label }}
@@ -271,6 +286,19 @@ function forwardSavePromptWordbank(
               @export-backup="emit('exportBackup')"
               @import-backup-request="requestBackupImport"
             />
+
+            <AnalyticsPanel
+              v-else-if="activeTab === 'analytics'"
+              :enabled="analyticsEnabled"
+              :prompt-capture="analyticsPromptCapture"
+              :event-count="analyticsEventCount"
+              @update:enabled="emit('update:analyticsEnabled', $event)"
+              @update:prompt-capture="emit('update:analyticsPromptCapture', $event)"
+              @export-events="emit('exportAnalyticsEvents')"
+              @clear-events="emit('clearAnalyticsEvents')"
+            />
+
+            <AboutPanel v-else-if="activeTab === 'about'" />
 
             <BatchOperationsPanel
               v-else

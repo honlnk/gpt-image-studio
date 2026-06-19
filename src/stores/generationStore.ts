@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import type { ComputedRef, Ref } from "vue";
 import { computed, ref, watch } from "vue";
+import { track } from "../features/analytics/useAnalyticsTracker";
 import type { GenerationJob } from "../features/generation/generationJobTypes";
 import type { ImageClient } from "../features/generation/imageClients/imageClient";
 import { normalizeImageCount } from "../services/generationParams";
@@ -213,6 +214,16 @@ export const useGenerationStore = defineStore("generation", () => {
       },
       imageCount,
     );
+    track(
+      "generation.requested",
+      {
+        imageCount,
+        hasReferences: references.length > 0,
+        hasMask: Boolean(editMaskImageId),
+        size: generationParams.size,
+      },
+      "system",
+    );
     runImageRequests(createdJobs);
   }
 
@@ -264,6 +275,16 @@ export const useGenerationStore = defineStore("generation", () => {
   }
 
   async function generateAnother(message: Message) {
+    track(
+      "generation.requested",
+      {
+        imageCount: 1,
+        hasReferences: message.referencedImageIds.length > 0,
+        hasMask: Boolean(message.editMaskImageId),
+        trigger: "generate_another",
+      },
+      "system",
+    );
     await rerunMessageGeneration(message, {
       imageCount: 1,
       replaceImageId: undefined,
@@ -408,6 +429,12 @@ export const useGenerationStore = defineStore("generation", () => {
         imageId,
       });
 
+      track(
+        "generation.succeeded",
+        { imageId, generationDurationMs, messageId: job.assistantMessageId },
+        "system",
+      );
+
       const saveTasks: Promise<unknown>[] = [
         saveImageBlob(blobKey, blob),
         saveImageAsset(toPlainImageAsset(imageAsset)),
@@ -426,6 +453,14 @@ export const useGenerationStore = defineStore("generation", () => {
       const assistantMessage = applyJobAggregateToMessage(job, {
         errorMessage: message,
       });
+      track(
+        "generation.failed",
+        {
+          errorMessage: message,
+          messageId: job.assistantMessageId,
+        },
+        "system",
+      );
       if (assistantMessage) {
         await enqueueMessageSave(assistantMessage).catch(
           input.value.onStorageError,

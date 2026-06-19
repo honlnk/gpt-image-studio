@@ -46,7 +46,7 @@ describe("images API requests", () => {
 
     const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.example.test/v1/images/generations");
-    expect(requestBody.response_format).toBe("b64_json");
+    expect(requestBody.response_format).toBeUndefined();
     expect(requestBody.quality).toBeUndefined();
   });
 
@@ -209,7 +209,7 @@ describe("images API requests", () => {
 
     const requestBody = fetchMock.mock.calls[0]?.[1]?.body;
     expect(requestBody).toBeInstanceOf(FormData);
-    expect((requestBody as FormData).get("response_format")).toBe("b64_json");
+    expect((requestBody as FormData).has("response_format")).toBe(false);
     expect((requestBody as FormData).has("quality")).toBe(false);
   });
 

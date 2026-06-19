@@ -11,6 +11,7 @@ import type {
 import ChatComposer from "../chat/ChatComposer.vue";
 import EditMaskModal from "../chat/EditMaskModal.vue";
 import MessageList from "../chat/MessageList.vue";
+import { DESKTOP_APP_DOWNLOAD_URL } from "../../shared/downloads";
 
 type ChatWorkspaceHeader = {
   activeConversation?: Conversation;
@@ -186,6 +187,28 @@ function imageFilesFromTransfer(
         >
           正在生成 {{ generation.pendingJobCount }} 张
         </span>
+        <a
+          :href="DESKTOP_APP_DOWNLOAD_URL"
+          download
+          class="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          title="下载 macOS 桌面版（Apple Silicon，约 2 MB）"
+        >
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span class="hidden sm:inline">桌面版</span>
+        </a>
         <a
           href="https://github.com/honlnk/gpt-image-studio"
           target="_blank"

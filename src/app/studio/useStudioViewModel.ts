@@ -26,8 +26,11 @@ import {
   hasUrlGenerationParams,
 } from "../../services/urlSettings";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
+import { useAnalyticsStore } from "../../stores/analyticsStore";
+import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useComposerStore } from "../../stores/composerStore";
 import type {
+  AnalyticsPromptCapture,
   ConversationDraft,
   GenerationParams,
   Message,
@@ -48,7 +51,8 @@ type SettingsTab =
   | "favoritePrompts"
   | "prompt"
   | "backup"
-  | "batch";
+  | "batch"
+  | "analytics";
 type BatchPanel = "images" | "conversations";
 type RenameDialogState = {
   isOpen: boolean;
@@ -96,6 +100,8 @@ export function useStudioViewModel() {
     initialName: "",
   });
   const feedback = useStudioFeedback();
+  const analytics = useAnalyticsStore();
+  const { eventCount: analyticsEventCount } = storeToRefs(analytics);
   const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
     onStorageError: reportStorageError,
@@ -237,6 +243,8 @@ export function useStudioViewModel() {
 
   function previewImageById(id: string) {
     previewImageId.value = id;
+    analytics.setContext({ imageId: id });
+    track("image.preview_opened", undefined, "system");
   }
 
   function closePreview() {
@@ -245,6 +253,7 @@ export function useStudioViewModel() {
 
   function openSettings() {
     isSettingsOpen.value = true;
+    track("settings.opened", undefined, "system");
   }
 
   function closeSettings() {
@@ -288,6 +297,9 @@ export function useStudioViewModel() {
         settings.applySettings,
       ).catch(reportStorageError);
 
+      analytics.configure(settings.currentSettings());
+      void analytics.refreshEventCount();
+
       const activeConversationId = conversations.activeConversationId.value;
       if (!activeConversationId) return;
 
@@ -306,6 +318,14 @@ export function useStudioViewModel() {
       applyUrlDraftOverrides(urlPrompt, shouldApplyUrlGenerationParams);
     });
   });
+
+  watch(
+    [settings.analyticsEnabled, settings.analyticsPromptCapture],
+    () => {
+      if (!isHydrated.value) return;
+      analytics.configure(settings.currentSettings());
+    },
+  );
 
   watch(
     [
@@ -454,6 +474,8 @@ export function useStudioViewModel() {
   }
 
   function selectConversationWithDraft(id: string) {
+    analytics.setContext({ conversationId: id, imageId: undefined });
+    track("conversation.selected", { conversationId: id }, "system");
     draftSwitchQueue = draftSwitchQueue
       .catch(reportStorageError)
       .then(async () => {
@@ -503,6 +525,8 @@ export function useStudioViewModel() {
     cancelRenameConversation();
     if (nextTitle === previousTitle) return;
     await conversations.renameConversation(conversationId, nextTitle);
+    analytics.setContext({ conversationId });
+    track("conversation.renamed", { conversationId }, "system");
     feedback.notifySuccess("会话已重命名。");
   }
 
@@ -532,6 +556,8 @@ export function useStudioViewModel() {
     cancelRenameImage();
     if (nextName === previousName) return;
     await images.renameImage(imageId, nextName);
+    analytics.setContext({ imageId });
+    track("image.renamed", { imageId }, "system");
     feedback.notifySuccess("图片已重命名。");
   }
 
@@ -547,6 +573,35 @@ export function useStudioViewModel() {
   function setPromptMode(value: PromptMode) {
     settings.promptMode.value = value;
     persistSettingsChange();
+  }
+
+  function setAnalyticsEnabled(value: boolean) {
+    settings.analyticsEnabled.value = value;
+    persistSettingsChange();
+    analytics.configure(settings.currentSettings());
+  }
+
+  function setAnalyticsPromptCapture(value: AnalyticsPromptCapture) {
+    settings.analyticsPromptCapture.value = value;
+    persistSettingsChange();
+    analytics.configure(settings.currentSettings());
+  }
+
+  async function exportAnalyticsEvents() {
+    track("backup.export_requested", { kind: "analytics" }, "system");
+    try {
+      await analytics.exportEvents();
+      track("backup.export_succeeded", { kind: "analytics" }, "system");
+      feedback.notifySuccess("行为日志已开始下载。");
+    } catch {
+      track("backup.export_failed", { kind: "analytics" }, "system");
+      feedback.notifyError("导出行为日志失败。");
+    }
+  }
+
+  async function clearAnalyticsEvents() {
+    await analytics.clearEvents();
+    feedback.notifySuccess("行为日志已清空。");
   }
 
   function savePromptWordbank(section: PromptWordbankSectionKey, terms: string[]) {
@@ -749,6 +804,13 @@ export function useStudioViewModel() {
     updateFavoritePrompt,
     deleteFavoritePrompt,
     restoreDefaultPromptWordbank,
+    analyticsEnabled: settings.analyticsEnabled,
+    analyticsPromptCapture: settings.analyticsPromptCapture,
+    analyticsEventCount,
+    setAnalyticsEnabled,
+    setAnalyticsPromptCapture,
+    exportAnalyticsEvents,
+    clearAnalyticsEvents,
   });
   const preview = proxyRefs({
     close: closePreview,

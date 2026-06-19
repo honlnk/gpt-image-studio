@@ -12,6 +12,7 @@ import { FIXED_IMAGE_MODEL } from "../shared/models";
 import type {
   ApiMode,
   ApiBaseUrlMode,
+  AnalyticsPromptCapture,
   AppSettings,
   ConnectionMode,
   PromptMode,
@@ -60,6 +61,8 @@ type StoredAppSettings = Omit<
   | "promptRewriteGuardText"
   | "promptRewriteGuardHistory"
   | "favoritePrompts"
+  | "analyticsEnabled"
+  | "analyticsPromptCapture"
 > & {
   connectionMode?: ConnectionMode;
   apiBaseUrlMode?: ApiBaseUrlMode;
@@ -72,6 +75,8 @@ type StoredAppSettings = Omit<
   favoritePrompts?: unknown;
   promptMode?: PromptMode;
   promptWordbanks?: unknown;
+  analyticsEnabled?: boolean;
+  analyticsPromptCapture?: AnalyticsPromptCapture;
   defaults: StoredGenerationParams;
 };
 
@@ -103,7 +108,25 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
       ],
     favoritePrompts: normalizeFavoritePrompts(settings.favoritePrompts),
     defaults: normalizeGenerationParams(settings.defaults),
+    analyticsEnabled: settings.analyticsEnabled ?? true,
+    analyticsPromptCapture: normalizeAnalyticsPromptCapture(
+      settings.analyticsPromptCapture,
+    ),
   };
+}
+
+function normalizeAnalyticsPromptCapture(
+  value: unknown,
+): AnalyticsPromptCapture {
+  if (
+    value === "none" ||
+    value === "length_only" ||
+    value === "masked" ||
+    value === "raw"
+  ) {
+    return value;
+  }
+  return "length_only";
 }
 
 function normalizeStreamPartialImages(value: unknown): 0 | 1 | 2 | 3 {

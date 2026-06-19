@@ -1,5 +1,28 @@
 # 用户行为日志系统（V1）开发计划
 
+## 实施状态
+
+- **V1.0 已完成**（2026-06）：基础设施 + 核心事件闭环已落地。
+  - IndexedDB `analyticsEvents` store、`analyticsEvents` service、模块级 tracker 单例（`src/features/analytics/useAnalyticsTracker.ts`）、`v-track` 指令、`analyticsStore`、设置页「行为日志」面板。
+  - 覆盖 §8.1 的 V1.0 事件清单（chat / generation / image / conversation / settings / backup）。
+  - 导出采用 JSONL 单文件（§6.3 的 Markdown 分片报告留待 V1.1）。
+  - 事件不纳入备份导出/恢复（设备本地运行记录）。
+- **V1.1 已完成**（2026-06）：§8.2 高频控件事件 + §6.3 / §11.3 Markdown 时间线分片导出 + `manifest.json`。
+  - 补齐 §8.2 的 11 个高频事件（chat.attach_image / chat.remove_attachment / generation.edit_mode_toggled / generation.apply_mask / library.filter_changed / library.sort_changed / library.search_used / batch.images_downloaded / batch.images_deleted / batch.conversations_deleted / settings.tab_changed）。
+  - 新增 `src/services/analyticsExport.ts`：导出由单 JSONL 升级为 ZIP 包（manifest.json + README.md + events/raw/events.jsonl + reports/summary.md + reports/timeline/*.md）。
+  - 分片算法：先按 7 天时间窗口分组，再按 1000 events / 2 MB 兜底切 part；每片带 YAML frontmatter（§11.3 默认值，V1.1 硬编码不进设置）。
+- **V1.2 已完成**（2026-06）：§8.3 颜色分组专项事件 + 会话级分片报告 + 颜色专题视图。
+  - 补齐 §8.3 的 4 个颜色事件（`image.tag_color_set` / `image.tag_color_changed` / `image.tag_color_cleared` / `library.filter_by_tag_color`）。颜色三事件在 `imagesStore.setImageTagColor` 单点埋点，按 `previousColor` 与 `nextColor` 的对比区分 set/changed/cleared；`library.filter_by_tag_color` 用 `v-track` 标记颜色过滤按钮（含"全部"）。
+  - 导出新增 `reports/conversations/*.md` 会话级分片：按 `conversationId` 分组，标题从 `listConversations()` 解析（已删除会话用占位符）。`summary.md` 新增「颜色分组行为」专题段（操作分布 + 涉及颜色分布）。manifest.json 增加 `conversationShards` 索引。
+
+> 实施过程中相对原计划的偏差，已固化在代码中：
+> 1. tracker 采用「模块级单例 + `analyticsStore` 包装」而非纯 store；`v-track` 指令直接 import 模块级 `track()`，不依赖 Pinia 实例。
+> 2. `analyticsStore.eventCount` 暴露给面板时必须经 `storeToRefs` 解构（直接访问 store 实例属性会被解包成静态值，导致计数不更新）。
+> 3. `library.sort_changed` / `library.search_used` 的实际控件位于「设置 → 批量操作」面板（`ImageLibrary.vue` 仅有 scope 过滤），按控件实际位置埋点，保留 `library.*` 事件名以对齐事件字典。
+> 4. V1.1 分片阈值（7 天 / 1000 events / 2 MB）硬编码在 `analyticsExport.ts` 顶部常量，未暴露为设置项。
+> 5. 颜色三事件（set/changed/cleared）集中在 `imagesStore.setImageTagColor` 埋点而非 UI 层，因为该方法是所有颜色操作的唯一汇聚点，且分类所需的 `previousColor` 只有在此处才能可靠获取。
+> 6. 颜色专题视图并入 `summary.md`（操作分布 + 颜色分布），未单独成文件，保持导出包结构精简。
+
 ## 1. 背景与目标
 
 本项目当前只有少量 `console` 调试输出，不具备可持续分析能力。V1 目标是建设一个本地优先的用户行为日志系统，用于记录用户在产品中的客观操作轨迹，为后续可用性分析与提示词偏好研究提供数据基础。

@@ -51,6 +51,8 @@ const fullSettings: AppSettings = {
     outputFormat: "png",
   },
   autoRetryOnNetworkError: false,
+  analyticsEnabled: true,
+  analyticsPromptCapture: "length_only",
   storageMode: "indexeddb",
 };
 

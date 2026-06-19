@@ -175,12 +175,22 @@ pnpm build            # 生产构建到 dist/
 pnpm preview          # 预览生产构建
 ```
 
+桌面端（Tauri v2，需要 [Rust toolchain](docs/desktop-packaging.md#前置依赖)）：
+
+```bash
+pnpm dev:desktop      # 开发模式：启动 webview + 热重载
+pnpm build:desktop    # 生产构建：产出 .app / .dmg（macOS）
+```
+
+桌面端目前只打包 Web App 本身，Companion 仍为外部独立服务，详见 [桌面端打包方案](docs/desktop-packaging.md)。
+
 ## 项目结构
 
 ```
 gpt-image-studio/
 ├── src/                    # Web App 源码
 ├── companion/              # 本地 CLI Companion (Fastify + Commander)
+├── desktop/                # Tauri v2 桌面壳 (仅 Rust 工程骨架，消费现有 dist/)
 └── docs/                   # 项目文档
 ```
 
@@ -188,6 +198,7 @@ gpt-image-studio/
 
 - [架构说明](docs/architecture.md)
 - [产品路线图](docs/roadmap.md)
+- [桌面端打包方案](docs/desktop-packaging.md)
 - [本地 Companion 方案](docs/companion.md)
 - [遮罩编辑](docs/mask-editing.md)
 - [提示词模式开发计划](docs/prompt-modes.md)

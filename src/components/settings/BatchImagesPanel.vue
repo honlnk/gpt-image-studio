@@ -86,6 +86,7 @@ const createdAtLabels = computed(() =>
               : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
           "
           type="button"
+          v-track="{ name: 'library.sort_changed', payload: { target: 'images', key: option.key, direction: imageSortDirection } }"
           @click="emit('setSort', option.key)"
         >
           {{ option.label }}

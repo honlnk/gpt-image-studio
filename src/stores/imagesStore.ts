@@ -13,6 +13,7 @@ import { isoTimestamp } from "../shared/dateTime";
 import { formatError } from "../shared/errors";
 import { createId } from "../shared/id";
 import { createObjectUrl, revokeObjectUrls } from "../shared/objectUrls";
+import { track } from "../features/analytics/useAnalyticsTracker";
 import { useFeedbackStore } from "./feedbackStore";
 import type { ImageAsset, Message } from "../types/studio";
 import type { Ref } from "vue";
@@ -154,6 +155,7 @@ export const useImagesStore = defineStore("images", () => {
     const image = imageById(id);
     if (!image) return false;
 
+    const previousColor = image.tagColor;
     const input = getContext();
     image.tagColor = nextColor;
     image.updatedAt = isoTimestamp();
@@ -162,6 +164,27 @@ export const useImagesStore = defineStore("images", () => {
       ...imageAssets.value.filter((item) => item.id !== id),
     ];
     await saveImageAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+
+    // 颜色分组事件分类：set（无→有）/ changed（有→不同）/ cleared（有→无）。
+    const hadColor = Boolean(previousColor);
+    const hasColor = Boolean(nextColor);
+    if (hadColor !== hasColor || previousColor !== nextColor) {
+      const eventName = !hadColor && hasColor
+        ? "image.tag_color_set"
+        : hadColor && !hasColor
+          ? "image.tag_color_cleared"
+          : "image.tag_color_changed";
+      track(
+        eventName,
+        {
+          imageId: id,
+          previousColor: previousColor ?? null,
+          newColor: nextColor ?? null,
+          entry: "details",
+        },
+        "ui_click",
+      );
+    }
     return true;
   }
 

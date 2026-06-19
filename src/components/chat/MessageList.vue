@@ -2,6 +2,7 @@
 import { nextTick, onMounted, ref, watch } from "vue";
 import { useNow } from "../../composables/useNow";
 import type { ImageAsset, Message } from "../../types/studio";
+import ChatEmptyState from "./ChatEmptyState.vue";
 import MessageItem from "./MessageItem.vue";
 
 const props = defineProps<{
@@ -48,7 +49,11 @@ watch(
 
 <template>
   <div ref="scrollContainer" class="flex-1 overflow-y-auto">
-    <div class="mx-auto max-w-3xl px-4 py-6">
+    <ChatEmptyState
+      v-if="messages.length === 0"
+    />
+
+    <div v-else class="mx-auto max-w-3xl px-4 py-6">
       <MessageItem
         v-for="message in messages"
         :key="message.id"

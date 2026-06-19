@@ -7,6 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm dev                  # Start Vite dev server (127.0.0.1:8888)
 pnpm dev:companion        # Start Companion CLI server (127.0.0.1:19750)
+pnpm dev:desktop          # Start Tauri dev shell (webview + hot reload; needs Rust)
+pnpm build:desktop        # Build desktop app to .app/.dmg (needs Rust)
 pnpm build                # Production build to dist/
 pnpm preview              # Preview production build
 pnpm typecheck            # Type-check web app with vue-tsc --noEmit
@@ -27,7 +29,7 @@ See `docs/README.md` for the maintained documentation map and `docs/architecture
 
 ### State Management
 
-Pinia stores in `src/stores/` manage cross-component shared state by domain (`settingsStore`, `composerStore`, `imagesStore`, `conversationsStore`, `generationStore`, `feedbackStore`).
+Pinia stores in `src/stores/` manage cross-component shared state by domain (`settingsStore`, `composerStore`, `imagesStore`, `conversationsStore`, `generationStore`, `feedbackStore`, `analyticsStore`).
 
 `src/app/studio/useStudioViewModel.ts` is the page-level orchestration layer: it coordinates across stores for workflows like draft switching, backup/restore, and preview. `App.vue` calls it once and distributes state/methods to children via props and events.
 
@@ -71,6 +73,8 @@ All IndexedDB access goes through `db.ts` (generic CRUD: `getAllFromStore`, `get
 | `imageMetadata.ts` | Read image dimensions via `createImageBitmap` / `HTMLImageElement` |
 | `storageUsage.ts` | Estimate IndexedDB usage via `navigator.storage.estimate()` |
 | `backups.ts` | Full project export/import as ZIP |
+| `analyticsEvents.ts` | Analytics event persistence + JSONL export (excluded from backups) |
+| `analyticsExport.ts` | Analytics ZIP export (manifest + JSONL + Markdown timeline shards) |
 | `zipArchive.ts` | Hand-written ZIP file creator (CRC32 + binary format) |
 
 ### Generation / Image Client
@@ -89,6 +93,7 @@ All business types in `src/types/studio.ts`: `Conversation`, `Message`, `ImageAs
 - **Generation job flow**: `generationStore` manages the full lifecycle: create user + assistant messages → persist → dispatch to `ImageClient.generate` or `ImageClient.edit` based on whether reference images are attached → on success create `ImageAsset` + blob → on failure mark assistant message as `error`.
 - **Conversation write queue**: A promise chain serializes conversation writes to prevent race conditions from rapid sequential operations.
 - **Parameter editors**: Collapsible inline editors in ChatWorkspace using `grid-template-rows` CSS transition for animation. Scoped `<style>` is only used for this animation.
+- **Analytics tracking**: A module-level singleton (`src/features/analytics/useAnalyticsTracker.ts`) holds the in-memory event queue and config. Both the `v-track` directive (click events) and business methods import the module-level `track()` directly, avoiding any Pinia dependency. `analyticsStore` wraps the singleton: it registers a flush listener so the reactive `eventCount` updates after each successful batch persist (use `storeToRefs` when exposing the count to keep reactivity intact). `track()` swallows all errors. Prompt-like payload fields are sanitized per `analyticsPromptCapture` (default `length_only`). Analytics events are device-local and excluded from backup export/restore. Export produces a ZIP (`src/services/analyticsExport.ts`): `manifest.json` + `events/raw/events.jsonl` + `reports/summary.md` (incl. color-tagging section) + `reports/timeline/*.md` (7-day window / 1000 events / 2 MB shards) + `reports/conversations/*.md` (per-conversation shards). Note: `library.sort_changed` / `library.search_used` fire from the batch-operations panel (the actual home of those controls), not `ImageLibrary.vue`. Color-tag events (`image.tag_color_set` / `_changed` / `_cleared`) are instrumented at the single convergence point `imagesStore.setImageTagColor`, classifying set/changed/cleared by comparing previous vs next color.
 
 ### Styling
 
@@ -106,7 +111,10 @@ See `docs/roadmap.md` for the full roadmap. Current status:
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
 - Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/mask-editing.md`)
 - Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with first-pairing wait flow; system keychain is deferred
-- Upcoming: analytics event logging (`docs/analytics-event-logging-plan.md`)
+- Done: Analytics event logging V1.0 + V1.1 + V1.2 (`docs/analytics-event-logging-plan.md`) — local-first event tracking with `analyticsStore`, `v-track` directive, prompt sanitization. V1.0 core events + V1.1 high-frequency controls (attachments, mask apply, library filter/sort/search, batch ops, settings tabs) + V1.2 color-tag analytics (`image.tag_color_set`/`_changed`/`_cleared` at the store convergence point, `library.filter_by_tag_color`). ZIP export with Markdown timeline sharding, conversation-level shards, and a color-tagging summary section. Analytics V1 complete.
+- Done: Prompt modes (`docs/prompt-modes.md`) — four `PromptMode` values (default/safe/creative/adult); `src/services/promptBuilder.ts` injects mode instructions + wordbank inspiration before the rewrite guard; wordbanks live in `src/services/promptWordbanks.ts`; only the request prompt is wrapped, the stored message keeps the user's original.
+- Done: Responses API + streaming partial-image preview (`docs/responses-streaming-plan.md`) — `apiMode` switches the direct client between Images API and Responses API; when `streamImages` is on, SSE partial images surface in `PendingGenerationCard` via a runtime-only state (not persisted); companion mode stays Images-API-only.
+- Done: Desktop packaging v1 (Tauri v2) (`docs/desktop-packaging.md`) — `desktop/src-tauri` embeds the existing `dist/` unchanged; `pnpm dev:desktop` / `pnpm build:desktop`; companion stays external (reached over 127.0.0.1); macOS arm64 produces a ~3 MB `.app` / ~2 MB `.dmg`. Code signing, cross-platform, and bundling the companion as a sidecar are deferred.
 
 ## Conventions
 

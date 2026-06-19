@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { track } from "../../features/analytics/useAnalyticsTracker";
 import { timestampFromCreatedAt, timestampFromUpdatedAt } from "../../shared/dateTime";
 import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
 import { createZipArchive } from "../../services/zipArchive";
@@ -138,6 +139,17 @@ watch(activeBatchPanel, () => {
   searchText.value = "";
 });
 
+// 记录搜索行为：仅在文本从空变为非空时记一次，避免每次按键都记。
+watch(searchText, (next, prev) => {
+  if (next && !prev) {
+    track(
+      "library.search_used",
+      { target: activeBatchPanel.value, length: next.length },
+      "ui_input",
+    );
+  }
+});
+
 watch(
   () => props.images,
   () => {
@@ -262,6 +274,11 @@ function cancelConfirm() {
 
 function confirmPendingAction() {
   if (confirmAction.value === "deleteImages") {
+    track(
+      "batch.images_deleted",
+      { count: selectedImages.value.length },
+      "ui_click",
+    );
     emit(
       "deleteImages",
       selectedImages.value.map((image) => image.id),
@@ -270,6 +287,11 @@ function confirmPendingAction() {
   }
 
   if (confirmAction.value === "deleteConversations") {
+    track(
+      "batch.conversations_deleted",
+      { count: selectedConversations.value.length },
+      "ui_click",
+    );
     emit(
       "deleteConversations",
       selectedConversations.value.map((conversation) => conversation.id),
@@ -282,6 +304,12 @@ function confirmPendingAction() {
 
 async function downloadSelectedImages() {
   if (!selectedImages.value.length) return;
+
+  track(
+    "batch.images_downloaded",
+    { count: selectedImages.value.length },
+    "ui_click",
+  );
 
   const entries = await Promise.all(
     selectedImages.value.map(async (image, index) => {

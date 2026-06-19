@@ -59,6 +59,9 @@ const studio = useStudioViewModel();
       :initial-tab="studio.settingsModal.initialTab"
       :is-open="studio.settingsModal.isOpen"
       :messages="studio.settingsModal.messages"
+      :analytics-enabled="studio.settingsModal.analyticsEnabled"
+      :analytics-prompt-capture="studio.settingsModal.analyticsPromptCapture"
+      :analytics-event-count="studio.settingsModal.analyticsEventCount"
       @close="studio.settingsModal.close"
       @delete-conversations="studio.settingsModal.deleteConversations"
       @delete-images="studio.settingsModal.deleteImages"
@@ -78,6 +81,10 @@ const studio = useStudioViewModel();
       @update:companion-session-token="studio.settingsModal.companionSessionToken = $event"
       @update:auto-retry-on-network-error="studio.settingsModal.autoRetryOnNetworkError = $event"
       @update:prompt-mode="studio.settingsModal.setPromptMode"
+      @update:analytics-enabled="studio.settingsModal.setAnalyticsEnabled"
+      @update:analytics-prompt-capture="studio.settingsModal.setAnalyticsPromptCapture"
+      @export-analytics-events="studio.settingsModal.exportAnalyticsEvents"
+      @clear-analytics-events="studio.settingsModal.clearAnalyticsEvents"
     />
 
     <ImagePreviewModal

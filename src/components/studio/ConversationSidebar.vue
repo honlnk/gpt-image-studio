@@ -87,6 +87,7 @@ function closeSidebar() {
 
     <div class="px-3 pt-2 pb-1">
       <button
+        v-track="'conversation.created'"
         class="flex w-full cursor-pointer items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/20"
         type="button"
         @click="
@@ -185,6 +186,7 @@ function closeSidebar() {
           重命名
         </button>
         <button
+          v-track="{ name: 'conversation.deleted', payload: { conversationId: conversation.id } }"
           class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-red-300 group-hover:block focus:block"
           type="button"
           aria-label="删除会话"
