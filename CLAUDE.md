@@ -7,6 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm dev                  # Start Vite dev server (127.0.0.1:8888)
 pnpm dev:companion        # Start Companion CLI server (127.0.0.1:19750)
+pnpm dev:desktop          # Start Tauri dev shell (webview + hot reload; needs Rust)
+pnpm build:desktop        # Build desktop app to .app/.dmg (needs Rust)
 pnpm build                # Production build to dist/
 pnpm preview              # Preview production build
 pnpm typecheck            # Type-check web app with vue-tsc --noEmit
@@ -110,6 +112,9 @@ See `docs/roadmap.md` for the full roadmap. Current status:
 - Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/mask-editing.md`)
 - Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with first-pairing wait flow; system keychain is deferred
 - Done: Analytics event logging V1.0 + V1.1 + V1.2 (`docs/analytics-event-logging-plan.md`) — local-first event tracking with `analyticsStore`, `v-track` directive, prompt sanitization. V1.0 core events + V1.1 high-frequency controls (attachments, mask apply, library filter/sort/search, batch ops, settings tabs) + V1.2 color-tag analytics (`image.tag_color_set`/`_changed`/`_cleared` at the store convergence point, `library.filter_by_tag_color`). ZIP export with Markdown timeline sharding, conversation-level shards, and a color-tagging summary section. Analytics V1 complete.
+- Done: Prompt modes (`docs/prompt-modes.md`) — four `PromptMode` values (default/safe/creative/adult); `src/services/promptBuilder.ts` injects mode instructions + wordbank inspiration before the rewrite guard; wordbanks live in `src/services/promptWordbanks.ts`; only the request prompt is wrapped, the stored message keeps the user's original.
+- Done: Responses API + streaming partial-image preview (`docs/responses-streaming-plan.md`) — `apiMode` switches the direct client between Images API and Responses API; when `streamImages` is on, SSE partial images surface in `PendingGenerationCard` via a runtime-only state (not persisted); companion mode stays Images-API-only.
+- Done: Desktop packaging v1 (Tauri v2) (`docs/desktop-packaging.md`) — `desktop/src-tauri` embeds the existing `dist/` unchanged; `pnpm dev:desktop` / `pnpm build:desktop`; companion stays external (reached over 127.0.0.1); macOS arm64 produces a ~3 MB `.app` / ~2 MB `.dmg`. Code signing, cross-platform, and bundling the companion as a sidecar are deferred.
 
 ## Conventions
 

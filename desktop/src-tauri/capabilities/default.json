@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capability for the GPT Image Studio desktop shell. Only grants the core window permissions needed to display the web app. No shell, filesystem, http, or process access is exposed — the companion (if used) is reached via the webview's native fetch to 127.0.0.1, not through Tauri plugins.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}
