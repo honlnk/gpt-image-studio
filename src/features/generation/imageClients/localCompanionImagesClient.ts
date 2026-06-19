@@ -97,7 +97,6 @@ function buildParams(params: { size: string; width: number; height: number; back
     size,
     background: params.background,
     output_format: params.outputFormat,
-    response_format: "b64_json",
   };
 }
 

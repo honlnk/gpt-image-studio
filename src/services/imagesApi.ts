@@ -435,7 +435,6 @@ function imageApiParams(model: string, params: GenerationParams, apiMode: ApiMod
     size: apiSize(params),
     background: params.background,
     output_format: params.outputFormat,
-    response_format: "b64_json",
   };
 }
 
