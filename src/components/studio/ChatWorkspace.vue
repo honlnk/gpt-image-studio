@@ -239,7 +239,7 @@ function imageFilesFromTransfer(
           </svg>
         </button>
         <button
-          class="cursor-pointer rounded-lg px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
+          class="cursor-pointer rounded-lg px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 lg:hidden"
           type="button"
           @click="actions.setLibraryOpen(!header.isLibraryOpen)"
         >
