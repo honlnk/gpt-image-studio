@@ -13,6 +13,7 @@ import type {
   PromptWordbanks,
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
+import AboutPanel from "../settings/AboutPanel.vue";
 import AnalyticsPanel from "../settings/AnalyticsPanel.vue";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
@@ -31,7 +32,8 @@ type SettingsTab =
   | "prompt"
   | "backup"
   | "batch"
-  | "analytics";
+  | "analytics"
+  | "about";
 type BatchPanel = "images" | "conversations";
 
 const props = defineProps<{
@@ -112,6 +114,7 @@ const tabs: { key: SettingsTab; label: string }[] = [
   { key: "backup", label: "数据备份" },
   { key: "batch", label: "批量操作" },
   { key: "analytics", label: "行为日志" },
+  { key: "about", label: "关于" },
 ];
 
 watch(
@@ -294,6 +297,8 @@ function forwardSavePromptWordbank(
               @export-events="emit('exportAnalyticsEvents')"
               @clear-events="emit('clearAnalyticsEvents')"
             />
+
+            <AboutPanel v-else-if="activeTab === 'about'" />
 
             <BatchOperationsPanel
               v-else
