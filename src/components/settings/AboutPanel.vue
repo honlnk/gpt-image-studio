@@ -1,21 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { useRepoStars } from "../../composables/useRepoStars";
 
-const REPO_API = "https://api.github.com/repos/honlnk/gpt-image-studio";
-
-const starCount = ref<number | null>(null);
-const starFailed = ref(false);
-
-onMounted(async () => {
-  try {
-    const res = await fetch(REPO_API);
-    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-    const data = (await res.json()) as { stargazers_count?: number };
-    starCount.value = data.stargazers_count ?? 0;
-  } catch {
-    starFailed.value = true;
-  }
-});
+const { stars: starCount, failed: starFailed } = useRepoStars();
 
 const appLinks = [
   {
@@ -130,9 +116,9 @@ const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
         class="mt-4 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-100"
       >
         <svg
-          class="h-4 w-4 text-gray-500"
+          class="h-4 w-4"
           viewBox="0 0 16 16"
-          fill="currentColor"
+          fill="#facc15"
           aria-hidden="true"
         >
           <path
