@@ -1,6 +1,31 @@
 import type { ApiMode, GenerationParams, PromptMode, PromptWordbanks } from "../types/studio";
 import { buildImagePrompt } from "./promptBuilder";
 
+/**
+ * 尺寸软约束。与 companion 的 SizeConstraints 结构一致（本地定义，
+ * 避免 imagesApi 反向依赖 companion 类型）。getCustomSizeError 据此动态校验。
+ */
+export type SizeConstraints = {
+  step: number;
+  min: number;
+  max: number;
+  maxPixels: number;
+  minPixels: number;
+  maxAspectRatio: number | null;
+  defaultSize: string;
+};
+
+/** OpenAI/gpt-image-2 默认尺寸约束。调用方未传 sizeConstraints 时兜底。 */
+const DEFAULT_SIZE_CONSTRAINTS: SizeConstraints = {
+  step: 16,
+  min: 16,
+  max: 3840,
+  maxPixels: 8294400,
+  minPixels: 655360,
+  maxAspectRatio: 3,
+  defaultSize: "1024x1024",
+};
+
 type PartialImageEvent = {
   b64Json: string;
   partialImageIndex?: number;
@@ -21,6 +46,10 @@ type GenerateImageInput = {
   streamPartialImages?: number;
   onPartialImage?: (event: PartialImageEvent) => void;
   params: GenerationParams;
+  /** 当前 provider 是否支持透明背景（来自 capability，未传则按 false 兜底）。 */
+  supportsTransparent?: boolean;
+  /** 当前 provider 的尺寸软约束（来自 sizeConstraints，未传则用 OpenAI 默认）。 */
+  sizeConstraints?: SizeConstraints;
 };
 
 type EditImageInput = GenerateImageInput & {
@@ -87,7 +116,13 @@ export function applyPromptRewriteGuard(
 }
 
 export async function generateImage(input: GenerateImageInput) {
-  const params = imageApiParams(input.model, input.params, input.apiMode);
+  const params = imageApiParams(
+    input.model,
+    input.params,
+    input.apiMode,
+    input.supportsTransparent ?? false,
+    input.sizeConstraints ?? DEFAULT_SIZE_CONSTRAINTS,
+  );
   const modePrompt = buildImagePrompt({
     prompt: input.prompt,
     mode: input.promptMode ?? "default",
@@ -136,7 +171,13 @@ export async function editImage(input: EditImageInput) {
   return editImageViaImagesApi({
     ...input,
     prompt,
-    requestParams: imageApiParams(input.model, input.params, input.apiMode),
+    requestParams: imageApiParams(
+      input.model,
+      input.params,
+      input.apiMode,
+      input.supportsTransparent ?? false,
+      input.sizeConstraints ?? DEFAULT_SIZE_CONSTRAINTS,
+    ),
   });
 }
 
@@ -254,7 +295,7 @@ async function generateImageViaResponses(input: GenerateImageInput & { prompt: s
       body: JSON.stringify({
         model: input.model,
         input: input.prompt,
-        tools: [createResponsesImageTool(input.params, false, input.streamImages, input.streamPartialImages)],
+        tools: [createResponsesImageTool(input.params, false, input.streamImages, input.streamPartialImages, undefined, input.sizeConstraints ?? DEFAULT_SIZE_CONSTRAINTS)],
         tool_choice: "required",
         ...(input.streamImages ? { stream: true } : {}),
       }),
@@ -301,6 +342,7 @@ async function editImageViaResponses(input: EditImageInput & { prompt: string })
             input.streamImages,
             input.streamPartialImages,
             maskDataUrl,
+            input.sizeConstraints ?? DEFAULT_SIZE_CONSTRAINTS,
           ),
         ],
         tool_choice: "required",
@@ -331,11 +373,12 @@ function createResponsesImageTool(
   streamImages = false,
   streamPartialImages = 1,
   maskDataUrl?: string,
+  sizeConstraints: SizeConstraints = DEFAULT_SIZE_CONSTRAINTS,
 ) {
   return {
     type: "image_generation",
     action: isEdit ? "edit" : "generate",
-    size: apiSize(params),
+    size: apiSize(params, sizeConstraints),
     quality: params.quality,
     background: params.background,
     output_format: params.outputFormat,
@@ -428,33 +471,47 @@ function buildApiEndpoint(
   return `${normalizeApiBaseUrl(apiBaseUrl, apiBaseUrlMode, apiMode)}/${path}`;
 }
 
-function imageApiParams(model: string, params: GenerationParams, apiMode: ApiMode = "images") {
-  validateBackground(model, params.background, apiMode);
+function imageApiParams(
+  model: string,
+  params: GenerationParams,
+  apiMode: ApiMode | undefined,
+  supportsTransparent: boolean,
+  sizeConstraints: SizeConstraints,
+) {
+  validateBackground(model, params.background, apiMode, supportsTransparent);
 
   return {
-    size: apiSize(params),
+    size: apiSize(params, sizeConstraints),
     background: params.background,
     output_format: params.outputFormat,
   };
 }
 
+/**
+ * 请求路径兜底：provider 不支持透明背景时，禁止发 transparent。
+ * 以 capability（supportsTransparent）为准，而非 model 名字——model 跟随 companion
+ * 后不再固定，capability 才是「该 provider 能不能」的真实来源。
+ */
 function validateBackground(
   model: string,
   background: GenerationParams["background"],
-  apiMode: ApiMode = "images",
+  apiMode: ApiMode | undefined,
+  supportsTransparent: boolean,
 ) {
-  if (apiMode === "images" && model === "gpt-image-2" && background === "transparent") {
-    throw new Error("gpt-image-2 当前不支持透明背景，请选择自动或不透明背景。");
+  if ((apiMode ?? "images") === "images" && !supportsTransparent && background === "transparent") {
+    throw new Error(
+      `${model} 当前不支持透明背景，请选择自动或不透明背景。`,
+    );
   }
 }
 
-function apiSize(params: GenerationParams) {
+function apiSize(params: GenerationParams, c: SizeConstraints) {
   if (params.size === "auto") {
     return "auto";
   }
 
   if (params.size.includes(":") || params.size === "custom") {
-    validateCustomSize(params.width, params.height);
+    validateCustomSize(params.width, params.height, c);
     return `${params.width}x${params.height}`;
   }
 
@@ -780,14 +837,14 @@ function normalizeStreamPartialImages(value: unknown) {
   return Math.min(3, Math.max(0, Math.trunc(numeric))) as 0 | 1 | 2 | 3;
 }
 
-function validateCustomSize(width: number, height: number) {
-  const error = getCustomSizeError(width, height);
+function validateCustomSize(width: number, height: number, c: SizeConstraints) {
+  const error = getCustomSizeError(width, height, c);
   if (error) {
     throw new Error(error);
   }
 }
 
-export function getCustomSizeError(width: number, height: number) {
+export function getCustomSizeError(width: number, height: number, c: SizeConstraints) {
   const normalizedWidth = Math.trunc(width);
   const normalizedHeight = Math.trunc(height);
 
@@ -801,25 +858,27 @@ export function getCustomSizeError(width: number, height: number) {
   }
 
   if (
-    normalizedWidth < 16 ||
-    normalizedHeight < 16 ||
-    normalizedWidth > 3840 ||
-    normalizedHeight > 3840 ||
-    normalizedWidth % 16 !== 0 ||
-    normalizedHeight % 16 !== 0
+    normalizedWidth < c.min ||
+    normalizedHeight < c.min ||
+    normalizedWidth > c.max ||
+    normalizedHeight > c.max ||
+    normalizedWidth % c.step !== 0 ||
+    normalizedHeight % c.step !== 0
   ) {
-    return "自定义尺寸的宽高必须是 16 到 3840 之间的 16 的倍数。";
+    return `自定义尺寸的宽高必须是 ${c.min} 到 ${c.max} 之间的 ${c.step} 的倍数。`;
   }
 
   const pixels = normalizedWidth * normalizedHeight;
-  if (pixels < 655360 || pixels > 8294400) {
-    return "自定义尺寸的总像素必须在 655,360 到 8,294,400 之间。";
+  if (pixels < c.minPixels || pixels > c.maxPixels) {
+    return `自定义尺寸的总像素必须在 ${c.minPixels.toLocaleString()} 到 ${c.maxPixels.toLocaleString()} 之间。`;
   }
 
-  const longSide = Math.max(normalizedWidth, normalizedHeight);
-  const shortSide = Math.min(normalizedWidth, normalizedHeight);
-  if (longSide / shortSide > 3) {
-    return "自定义尺寸的长边与短边比例不能超过 3:1。";
+  if (c.maxAspectRatio !== null) {
+    const longSide = Math.max(normalizedWidth, normalizedHeight);
+    const shortSide = Math.min(normalizedWidth, normalizedHeight);
+    if (longSide / shortSide > c.maxAspectRatio) {
+      return `自定义尺寸的长边与短边比例不能超过 ${c.maxAspectRatio}:1。`;
+    }
   }
 
   return "";

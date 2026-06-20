@@ -1,15 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch } from "vue";
+import { computed, ref, onUnmounted } from "vue";
 import type { ApiMode, ConnectionMode } from "../../types/studio";
 import { FIXED_IMAGE_MODEL } from "../../shared/models";
-import {
-  checkCompanionHealth,
-  getCompanionAuthStatus,
-  getCompanionAuthStatusResult,
-  startPairing,
-  confirmPairing,
-  unpairCompanion,
-} from "../../services/companionApi";
 import type { CompanionAuthStatus, CompanionHealthResponse } from "../../types/companion";
 
 const props = defineProps<{
@@ -24,6 +16,14 @@ const props = defineProps<{
   companionUrl: string;
   companionSessionToken: string;
   companionPaired: boolean;
+  // Companion 连接状态：由 useCompanionConnection（全局唯一来源）透传，本面板只做展示。
+  companionOnline: boolean;
+  companionHealth: CompanionHealthResponse | null;
+  companionAuthStatus: CompanionAuthStatus | null;
+  companionPairingInProgress: boolean;
+  companionPairingError: string;
+  // v-model:companionPairingCodeInput —— 配对码输入框双向绑定。
+  companionPairingCodeInput: string;
 }>();
 
 const emit = defineEmits<{
@@ -36,19 +36,20 @@ const emit = defineEmits<{
   "update:streamImages": [value: boolean];
   "update:streamPartialImages": [value: 0 | 1 | 2 | 3];
   "update:companionSessionToken": [value: string];
+  "update:companionPairingCodeInput": [value: string];
+  // 连接操作委托给 view model 调用 useCompanionConnection。
+  "check-status": [];
+  "start-pairing": [];
+  "confirm-pairing": [];
+  "disconnect-companion": [];
+  "cancel-pairing": [];
 }>();
 
-const companionOnline = ref(false);
-const companionHealth = ref<CompanionHealthResponse | null>(null);
-const companionAuthStatus = ref<CompanionAuthStatus | null>(null);
-const pairingInProgress = ref(false);
-const pairingError = ref("");
-const pairingCodeInput = ref("");
 const apiKeyVisible = ref(false);
 const apiKeyCopyStatus = ref<"idle" | "copied" | "failed">("idle");
 let apiKeyCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
-const isManagedCompanion = computed(() => companionHealth.value?.runMode !== "serve");
+const isManagedCompanion = computed(() => props.companionHealth?.runMode !== "serve");
 const apiModeOptions: Array<{ value: ApiMode; label: string; description: string }> = [
   { value: "images", label: "Images API", description: "直接调用 /v1/images，兼容传统图片接口。" },
   { value: "responses", label: "Responses API", description: "通过 /v1/responses 调用 image_generation 工具。" },
@@ -64,97 +65,6 @@ const apiBaseUrlHint = computed(() =>
 const apiSuffixLabel = computed(() =>
   props.apiMode === "responses" ? "/v1" : "/v1/images",
 );
-
-async function checkStatus() {
-  const health = await checkCompanionHealth(props.companionUrl);
-  companionHealth.value = health;
-  companionOnline.value = health !== null;
-
-  if (!health || !props.companionSessionToken) {
-    companionAuthStatus.value = null;
-    return;
-  }
-
-  if (!health.paired) {
-    emit("update:companionSessionToken", "");
-    companionAuthStatus.value = null;
-    pairingInProgress.value = false;
-    pairingCodeInput.value = "";
-    pairingError.value = "检测到本地 Companion 配对已失效，已清除浏览器里的旧会话，请重新配对。";
-    return;
-  }
-
-  const authResult = await getCompanionAuthStatusResult(
-    props.companionUrl,
-    props.companionSessionToken,
-  );
-
-  if (authResult.ok) {
-    companionAuthStatus.value = authResult.status;
-    return;
-  }
-
-  companionAuthStatus.value = null;
-  if (authResult.invalidToken) {
-    emit("update:companionSessionToken", "");
-    pairingInProgress.value = false;
-    pairingCodeInput.value = "";
-    pairingError.value = "检测到本地 Companion 拒绝了旧 token，已清除浏览器会话，请重新配对。";
-  }
-}
-
-async function handleStartPairing() {
-  pairingError.value = "";
-  pairingCodeInput.value = "";
-  try {
-    await startPairing(props.companionUrl);
-    pairingInProgress.value = true;
-  } catch (error) {
-    pairingError.value = error instanceof Error
-      ? error.message
-      : "无法连接 Companion 服务";
-  }
-}
-
-async function handleConfirmPairing() {
-  pairingError.value = "";
-  try {
-    const result = await confirmPairing(props.companionUrl, pairingCodeInput.value);
-    emit("update:companionSessionToken", result.sessionToken);
-    pairingInProgress.value = false;
-    companionAuthStatus.value = await getCompanionAuthStatus(props.companionUrl, result.sessionToken);
-  } catch {
-    pairingError.value = "配对码无效或已过期";
-  }
-}
-
-async function handleDisconnect() {
-  pairingError.value = "";
-  const health = await checkCompanionHealth(props.companionUrl);
-  companionHealth.value = health;
-  companionOnline.value = health !== null;
-  if (!health) {
-    pairingError.value = "Companion 离线，无法确认断开连接。请先启动 Companion 后再断开。";
-    return;
-  }
-
-  try {
-    await unpairCompanion(props.companionUrl, props.companionSessionToken);
-  } catch {
-    pairingError.value = "断开失败，Companion 未确认清除本地 session。";
-    return;
-  }
-
-  emit("update:companionSessionToken", "");
-  companionAuthStatus.value = null;
-  await checkStatus();
-}
-
-function cancelPairing() {
-  pairingInProgress.value = false;
-  pairingCodeInput.value = "";
-  pairingError.value = "";
-}
 
 function normalizeApiBaseUrlInput(value: string) {
   return value.trim().replace(/\/+$/, "");
@@ -187,31 +97,11 @@ async function copyApiKey() {
   resetApiKeyCopyStatusSoon();
 }
 
-onMounted(() => {
-  if (props.connectionMode === "localCompanion") {
-    checkStatus();
-  }
-});
-
 onUnmounted(() => {
   if (apiKeyCopyStatusTimer) {
     clearTimeout(apiKeyCopyStatusTimer);
   }
 });
-
-watch(
-  () => props.connectionMode,
-  (mode) => {
-    if (mode === "localCompanion") checkStatus();
-  },
-);
-
-watch(
-  () => props.companionSessionToken,
-  () => {
-    if (props.connectionMode === "localCompanion") checkStatus();
-  },
-);
 </script>
 
 <template>
@@ -527,20 +417,20 @@ watch(
             <button
               class="ml-auto text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
               type="button"
-              @click="checkStatus"
+              @click="emit('check-status')"
             >
               刷新
             </button>
           </div>
 
           <!-- Paired state -->
-          <template v-if="companionPaired && !pairingInProgress">
+          <template v-if="companionPaired && !companionPairingInProgress">
             <div class="flex items-center justify-between">
               <span class="text-sm text-green-700">已配对</span>
               <button
                 class="text-xs text-red-500 hover:text-red-700 cursor-pointer"
                 type="button"
-                @click="handleDisconnect"
+                @click="emit('disconnect-companion')"
               >
                 断开连接
               </button>
@@ -548,7 +438,7 @@ watch(
           </template>
 
           <!-- Not paired, not in progress -->
-          <template v-else-if="!pairingInProgress">
+          <template v-else-if="!companionPairingInProgress">
             <p class="text-sm text-gray-500">
               <template v-if="isManagedCompanion">
                 需要与本地 Companion 配对后才能使用。请先在终端运行 <span class="font-mono text-gray-700">gpt-image-studio pair</span>，再点击开始配对。
@@ -564,37 +454,38 @@ watch(
               class="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50 cursor-pointer"
               type="button"
               :disabled="!companionOnline"
-              @click="handleStartPairing"
+              @click="emit('start-pairing')"
             >
               开始配对
             </button>
           </template>
 
           <!-- Pairing in progress -->
-          <template v-if="pairingInProgress">
+          <template v-if="companionPairingInProgress">
             <p class="text-sm text-gray-600">
               请在 Companion 终端查看配对码，然后在下方输入。
             </p>
             <div class="flex gap-2">
               <input
-                v-model="pairingCodeInput"
+                :value="companionPairingCodeInput"
                 class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-center tracking-widest text-gray-900 outline-none focus:border-gray-500"
                 placeholder="输入 6 位配对码"
                 maxlength="6"
                 inputmode="numeric"
+                @input="emit('update:companionPairingCodeInput', ($event.target as HTMLInputElement).value)"
               />
               <button
                 class="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50 cursor-pointer"
                 type="button"
-                :disabled="pairingCodeInput.length !== 6"
-                @click="handleConfirmPairing"
+                :disabled="companionPairingCodeInput.length !== 6"
+                @click="emit('confirm-pairing')"
               >
                 确认
               </button>
               <button
                 class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer"
                 type="button"
-                @click="cancelPairing"
+                @click="emit('cancel-pairing')"
               >
                 取消
               </button>
@@ -602,9 +493,9 @@ watch(
           </template>
 
           <!-- Error -->
-          <p v-if="pairingError" class="text-xs text-red-600">
-            {{ pairingError }}
-            <template v-if="isManagedCompanion && pairingError.includes('gpt-image-studio pair')">
+          <p v-if="companionPairingError" class="text-xs text-red-600">
+            {{ companionPairingError }}
+            <template v-if="isManagedCompanion && companionPairingError.includes('gpt-image-studio pair')">
               ；请确认 pair 命令仍在等待中，然后再点击开始配对。
             </template>
           </p>

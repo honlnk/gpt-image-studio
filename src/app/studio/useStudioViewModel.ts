@@ -10,6 +10,7 @@ import {
   useStudioGeneration,
 } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
+import { useCompanionConnection } from "../../features/companion";
 import { useStudioSettings } from "../../features/settings";
 import { withNetworkRetry } from "../../services/networkRetry";
 import { clonePromptWordbanks } from "../../services/promptWordbanks";
@@ -102,6 +103,20 @@ export function useStudioViewModel() {
   const feedback = useStudioFeedback();
   const analytics = useAnalyticsStore();
   const { eventCount: analyticsEventCount } = storeToRefs(analytics);
+  // Companion 连接状态是全局唯一来源：探测/配对/断开都收拢在这里，
+  // 启动时（onMounted）即探测，不再依赖「设置 → 接口」面板挂载。
+  const companion = useCompanionConnection({
+    connectionMode: settings.connectionMode,
+    companionUrl: settings.companionUrl,
+    companionSessionToken: settings.companionSessionToken,
+    onClearSessionToken: () => {
+      settings.companionSessionToken.value = "";
+    },
+    onApplyProviderInfo: settings.applyProviderInfo,
+    onSessionTokenAcquired: (token) => {
+      settings.companionSessionToken.value = token;
+    },
+  });
   const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
     onStorageError: reportStorageError,
@@ -132,12 +147,25 @@ export function useStudioViewModel() {
     getModel: () => settings.model.value,
     getStreamImages: () => settings.streamImages.value,
     getStreamPartialImages: () => settings.streamPartialImages.value,
+    getSupportsTransparent: () =>
+      settings.providerCapability.value.backgrounds.includes("transparent"),
+    getSizeConstraints: () => settings.currentSizeConstraints.value,
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,
     getSessionToken: () => settings.companionSessionToken.value,
     getModel: () => settings.model.value,
   });
+  // provider 不支持 mask（区域编辑）时，强制关闭区域编辑模式，
+  // 避免按钮被隐藏后仍停留在「开」状态。
+  watch(
+    () => settings.providerCapability.value.mask,
+    (supportsMask) => {
+      if (!supportsMask && editModeEnabled.value) {
+        editModeEnabled.value = false;
+      }
+    },
+  );
   const imageClient: ImageClient = {
     generate(input) {
       if (
@@ -188,6 +216,11 @@ export function useStudioViewModel() {
     imageById: images.imageById,
     imageClient,
     messages,
+    supportsEdit: computed(() => settings.providerCapability.value.edit),
+    notifyUnsupportedEdit: () =>
+      feedback.notifyError(
+        "当前模型不支持图生图编辑，请移除参考图，或切换到支持图片编辑的模型。",
+      ),
     onApiConfigurationError: openApiSettingsFromGenerationError,
     onStorageError: reportStorageError,
     conversationExists: (id: string) =>
@@ -696,6 +729,11 @@ export function useStudioViewModel() {
   const chatHeader = proxyRefs({
     activeConversation: conversations.activeConversation,
     isLibraryOpen,
+    companionStatus: computed(() => ({
+      show: settings.connectionMode.value === "localCompanion",
+      online: companion.companionOnline.value,
+      version: companion.companionHealth.value?.version,
+    })),
   });
   const chatMessages = proxyRefs({
     activeAttachmentIds: attachedImageIds,
@@ -771,6 +809,17 @@ export function useStudioViewModel() {
     companionPaired: settings.companionPaired,
     companionSessionToken: settings.companionSessionToken,
     companionUrl: settings.companionUrl,
+    companionOnline: companion.companionOnline,
+    companionHealth: companion.companionHealth,
+    companionAuthStatus: companion.companionAuthStatus,
+    companionPairingInProgress: companion.pairingInProgress,
+    companionPairingError: companion.pairingError,
+    companionPairingCodeInput: companion.pairingCodeInput,
+    checkCompanionStatus: companion.checkStatus,
+    startCompanionPairing: companion.startPairing,
+    confirmCompanionPairing: companion.confirmPairing,
+    disconnectCompanion: companion.disconnect,
+    cancelCompanionPairing: companion.cancelPairing,
     connectionMode: settings.connectionMode,
     favoritePrompts: settings.favoritePrompts,
     promptMode: settings.promptMode,

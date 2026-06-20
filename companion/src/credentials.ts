@@ -6,8 +6,12 @@ const CONFIG_DIR = join(homedir(), ".gpt-image-studio");
 const CREDENTIALS_FILE = join(CONFIG_DIR, "credentials.json");
 
 type Credentials = {
+  /** provider id（openai/glm/...），缺省视为 openai（兼容老 credentials.json）。 */
+  provider?: string;
   apiBaseUrl: string;
   apiKey: string;
+  /** provider 专属 model id，login 时填，不写死在 adapter。 */
+  model?: string;
   savedAt: string;
 };
 
@@ -22,11 +26,21 @@ export function loadCredentials(): Credentials | null {
   }
 }
 
-export function saveCredentials(apiBaseUrl: string, apiKey: string): void {
+export function saveCredentials(
+  apiBaseUrl: string,
+  apiKey: string,
+  options?: { provider?: string; model?: string },
+): void {
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   }
-  const data: Credentials = { apiBaseUrl, apiKey, savedAt: new Date().toISOString() };
+  const data: Credentials = {
+    apiBaseUrl,
+    apiKey,
+    savedAt: new Date().toISOString(),
+  };
+  if (options?.provider) data.provider = options.provider;
+  if (options?.model) data.model = options.model;
   writeFileSync(CREDENTIALS_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
   chmodSync(CREDENTIALS_FILE, 0o600);
 }

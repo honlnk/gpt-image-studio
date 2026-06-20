@@ -12,6 +12,7 @@ import {
   PROMPT_REWRITE_GUARD_PREFIX,
   getCustomSizeError,
   normalizePromptRewriteGuardText,
+  type SizeConstraints,
 } from "../services/imagesApi";
 import {
   createFavoritePrompt,
@@ -29,6 +30,7 @@ import { isoTimestamp } from "../shared/dateTime";
 import { createId } from "../shared/id";
 import { readStorage, writeStorage } from "../shared/localStorage";
 import { FIXED_IMAGE_MODEL } from "../shared/models";
+import type { CompanionAuthStatus, CompanionProviderCapability } from "../types/companion";
 import type {
   AnalyticsPromptCapture,
   ApiMode,
@@ -66,9 +68,29 @@ const SIZE_RESOLUTION_OPTIONS = [
   { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
   { value: "4k", label: "4K", targetPixels: 3840 * 2160 },
 ] as const;
-const MAX_CUSTOM_DIMENSION = 3840;
-const MAX_CUSTOM_PIXELS = 8294400;
-const SIZE_STEP = 16;
+
+/** 返回 maxPixels 约束下可用的分辨率档 value 列表（升序）。供 applyProviderInfo 校正用。 */
+function availableResolutionValues(maxPixels: number): SizeResolution[] {
+  return SIZE_RESOLUTION_OPTIONS.filter((opt) => opt.targetPixels <= maxPixels)
+    .map((opt) => opt.value);
+}
+// OpenAI/gpt-image-2 的默认尺寸约束。companion 在线时被 providerCapability/sizeConstraints
+// 覆盖；离线或未回流时回退到这些值，保持现状行为。
+const DEFAULT_SIZE_STEP = 16;
+const DEFAULT_MIN_CUSTOM_DIMENSION = 16;
+const DEFAULT_MAX_CUSTOM_DIMENSION = 3840;
+const DEFAULT_MAX_CUSTOM_PIXELS = 8294400;
+const DEFAULT_MIN_CUSTOM_PIXELS = 655360;
+const DEFAULT_MAX_ASPECT_RATIO = 3;
+// OpenAI（gpt-image-2）全能力默认值——companion 未回流时的 UI 行为。
+// backgrounds 不含 transparent，与 gpt-image-2 现状一致。
+const DEFAULT_PROVIDER_CAPABILITY: CompanionProviderCapability = {
+  generate: true,
+  edit: true,
+  mask: true,
+  backgrounds: ["auto", "opaque"],
+  outputFormats: ["png", "webp", "jpeg"],
+};
 const MAX_PROMPT_REWRITE_GUARD_HISTORY = 20;
 const IMAGE_COUNT_PRESETS = [1, 2, 3, 4, 6, 8, 10, 12] as const;
 type ImageCountMode = "preset" | "custom";
@@ -114,38 +136,82 @@ export const useSettingsStore = defineStore("settings", () => {
   const activeSizePreset = ref<GenerationParams["size"]>("auto");
   const sizeResolution = ref<SizeResolution>("1k");
   const sizeRatioOptions = SIZE_RATIO_OPTIONS;
-  const sizeResolutionOptions = SIZE_RESOLUTION_OPTIONS.map(
-    ({ value, label }) => ({ value, label }),
+  // 分辨率档按 provider maxPixels 过滤：某档 targetPixels 超过 maxPixels 则不显示。
+  // GLM maxPixels=4194304 → 4K(8294400) 被隐藏；OpenAI maxPixels=8294400 → 4K 保留。
+  const sizeResolutionOptions = computed(() =>
+    SIZE_RESOLUTION_OPTIONS.filter(
+      (opt) => opt.targetPixels <= maxCustomPixels.value,
+    ).map(({ value, label }) => ({ value, label })),
   );
   const quality = ref<GenerationParams["quality"]>("auto");
   const background = ref<GenerationParams["background"]>("auto");
   const outputFormat = ref<GenerationParams["outputFormat"]>("png");
+  // provider 元信息（companion /auth/status 回流）。未回流时用 OpenAI 默认值，
+  // 保证离线/未配对时 UI 行为与现状一致。
+  const providerCapability = ref<CompanionProviderCapability>({
+    ...DEFAULT_PROVIDER_CAPABILITY,
+    backgrounds: [...DEFAULT_PROVIDER_CAPABILITY.backgrounds],
+    outputFormats: [...DEFAULT_PROVIDER_CAPABILITY.outputFormats],
+  });
+  // 尺寸软约束（companion 回流，未回流时 OpenAI 默认）。
+  const sizeStep = ref(DEFAULT_SIZE_STEP);
+  const minCustomDimension = ref(DEFAULT_MIN_CUSTOM_DIMENSION);
+  const maxCustomDimension = ref(DEFAULT_MAX_CUSTOM_DIMENSION);
+  const maxCustomPixels = ref(DEFAULT_MAX_CUSTOM_PIXELS);
+  const minCustomPixels = ref(DEFAULT_MIN_CUSTOM_PIXELS);
+  const maxAspectRatio = ref<number | null>(DEFAULT_MAX_ASPECT_RATIO);
   const qualityOptions = [
     { value: "auto", label: "自动" },
     { value: "high", label: "高" },
     { value: "medium", label: "中" },
     { value: "low", label: "低" },
   ] as const;
-  const backgroundOptions = [
+  // 全量选项（capability 过滤的数据源）
+  const allBackgroundOptions = [
     { value: "auto", label: "自动" },
     { value: "opaque", label: "不透明" },
     { value: "transparent", label: "透明" },
   ] as const;
-  const formatOptions = [
+  const allFormatOptions = [
     { value: "png", label: "PNG" },
     { value: "webp", label: "WebP" },
     { value: "jpeg", label: "JPEG" },
   ] as const;
+  // 按 capability 过滤后的可见选项。provider 不支持的值不会出现。
+  const backgroundOptions = computed(() =>
+    allBackgroundOptions.filter((o) =>
+      providerCapability.value.backgrounds.includes(o.value),
+    ),
+  );
+  const formatOptions = computed(() =>
+    allFormatOptions.filter((o) =>
+      providerCapability.value.outputFormats.includes(o.value),
+    ),
+  );
   const sizeLabel = computed(() => {
     if (activeSizePreset.value === "auto") return "自动";
     if (activeSizePreset.value === "custom")
       return `${imageWidth.value} x ${imageHeight.value}`;
     return `${imageWidth.value} x ${imageHeight.value}`;
   });
+  // 聚合当前生效的尺寸约束（供 customSizeError 校验 + imagesApi 请求路径校验共用）。
+  const currentSizeConstraints = computed<SizeConstraints>(() => ({
+    step: sizeStep.value,
+    min: minCustomDimension.value,
+    max: maxCustomDimension.value,
+    maxPixels: maxCustomPixels.value,
+    minPixels: minCustomPixels.value,
+    maxAspectRatio: maxAspectRatio.value,
+    defaultSize: "1024x1024",
+  }));
   const customSizeError = computed(() => {
     if (activeSizePreset.value !== "custom") return "";
 
-    return getCustomSizeError(imageWidth.value, imageHeight.value);
+    return getCustomSizeError(
+      imageWidth.value,
+      imageHeight.value,
+      currentSizeConstraints.value,
+    );
   });
   const qualityLabel = computed(
     () =>
@@ -154,15 +220,68 @@ export const useSettingsStore = defineStore("settings", () => {
   );
   const backgroundLabel = computed(
     () =>
-      backgroundOptions.find((o) => o.value === background.value)?.label ??
+      backgroundOptions.value.find((o) => o.value === background.value)?.label ??
       background.value,
   );
-  const transparentDisabled = computed(() => model.value === FIXED_IMAGE_MODEL);
+  // transparent 是否被禁用：以 capability 为准（provider 不支持 transparent 时禁用）。
+  // 兜底逻辑：UI 已通过 backgroundOptions 过滤掉不支持的值，这里保留作为双保险。
+  const transparentDisabled = computed(
+    () => !providerCapability.value.backgrounds.includes("transparent"),
+  );
   const formatLabel = computed(
     () =>
-      formatOptions.find((o) => o.value === outputFormat.value)?.label ??
+      formatOptions.value.find((o) => o.value === outputFormat.value)?.label ??
       outputFormat.value,
   );
+
+  // 尺寸计算（读 sizeConstraints ref，受 companion 回流驱动）
+  function dimensionsForRatio(ratio: SizeRatio, resolution: SizeResolution) {
+    const ratioOption =
+      SIZE_RATIO_OPTIONS.find((option) => option.value === ratio) ??
+      SIZE_RATIO_OPTIONS[4];
+    const resolutionOption =
+      SIZE_RESOLUTION_OPTIONS.find((option) => option.value === resolution) ??
+      SIZE_RESOLUTION_OPTIONS[0];
+    const aspect = ratioOption.widthRatio / ratioOption.heightRatio;
+    let width = Math.sqrt(resolutionOption.targetPixels * aspect);
+    let height = width / aspect;
+    const maxSide = Math.max(width, height);
+
+    if (maxSide > maxCustomDimension.value) {
+      const scale = maxCustomDimension.value / maxSide;
+      width *= scale;
+      height *= scale;
+    }
+
+    let normalizedWidth = roundToStep(width);
+    let normalizedHeight = roundToStep(height);
+
+    while (normalizedWidth * normalizedHeight > maxCustomPixels.value) {
+      if (normalizedWidth >= normalizedHeight) {
+        normalizedWidth -= sizeStep.value;
+        normalizedHeight = roundToStep(normalizedWidth / aspect);
+      } else {
+        normalizedHeight -= sizeStep.value;
+        normalizedWidth = roundToStep(normalizedHeight * aspect);
+      }
+    }
+
+    return {
+      width: clampDimension(normalizedWidth),
+      height: clampDimension(normalizedHeight),
+    };
+  }
+
+  function roundToStep(value: number) {
+    return clampDimension(Math.round(value / sizeStep.value) * sizeStep.value);
+  }
+
+  function clampDimension(value: number) {
+    return Math.min(
+      maxCustomDimension.value,
+      Math.max(sizeStep.value, value),
+    );
+  }
 
   function applyRatioDimensions(ratio: SizeRatio, resolution: SizeResolution) {
     const dimensions = dimensionsForRatio(ratio, resolution);
@@ -189,6 +308,59 @@ export const useSettingsStore = defineStore("settings", () => {
     applyRatioDimensions(ratio, resolution);
   }
 
+  /**
+   * 写入 companion /auth/status 回流的 provider 元信息。
+   * status 为 null（离线/未配对/失配）时重置为 OpenAI 默认 capability + 约束，
+   * 保证 UI 行为回到 gpt-image-2 默认。
+   */
+  function applyProviderInfo(status: CompanionAuthStatus | null) {
+    if (!status || !status.ready) {
+      providerCapability.value = {
+        ...DEFAULT_PROVIDER_CAPABILITY,
+        backgrounds: [...DEFAULT_PROVIDER_CAPABILITY.backgrounds],
+        outputFormats: [...DEFAULT_PROVIDER_CAPABILITY.outputFormats],
+      };
+      sizeStep.value = DEFAULT_SIZE_STEP;
+      minCustomDimension.value = DEFAULT_MIN_CUSTOM_DIMENSION;
+      maxCustomDimension.value = DEFAULT_MAX_CUSTOM_DIMENSION;
+      maxCustomPixels.value = DEFAULT_MAX_CUSTOM_PIXELS;
+      minCustomPixels.value = DEFAULT_MIN_CUSTOM_PIXELS;
+      maxAspectRatio.value = DEFAULT_MAX_ASPECT_RATIO;
+      // 离线时 model 不回退——保留用户上次生效的 model，避免 UI 闪烁
+      return;
+    }
+
+    providerCapability.value = {
+      ...status.capability,
+      backgrounds: [...status.capability.backgrounds],
+      outputFormats: [...status.capability.outputFormats],
+    };
+    const sc = status.sizeConstraints;
+    sizeStep.value = sc.step;
+    minCustomDimension.value = sc.min;
+    maxCustomDimension.value = sc.max;
+    maxCustomPixels.value = sc.maxPixels;
+    minCustomPixels.value = sc.minPixels;
+    maxAspectRatio.value = sc.maxAspectRatio;
+    if (status.model) model.value = status.model;
+    // 当前选中的背景/格式若已不在新 provider 支持列表，立即回退到第一个可用值。
+    // 放在这里（同步）而非 watch，避免 UI 短暂停留在失效值上。
+    if (!status.capability.backgrounds.includes(background.value)) {
+      background.value = status.capability.backgrounds[0] ?? "auto";
+    }
+    if (!status.capability.outputFormats.includes(outputFormat.value)) {
+      outputFormat.value = status.capability.outputFormats[0] ?? "png";
+    }
+    // 当前分辨率档若超过新 provider 的 maxPixels（如 GLM 下 4K 不可达），回退到第一个可用档。
+    const availableRes = availableResolutionValues(sc.maxPixels);
+    if (!availableRes.includes(sizeResolution.value)) {
+      sizeResolution.value = availableRes[0] ?? "1k";
+      // 尺寸变了，若当前是比例模式需重算尺寸
+      const ratio = normalizeSizePreset(activeSizePreset.value);
+      if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
+    }
+  }
+
   function applySettings(settings: AppSettings) {
     const defaults = normalizeGenerationParams(settings.defaults);
     connectionMode.value = settings.connectionMode;
@@ -198,7 +370,9 @@ export const useSettingsStore = defineStore("settings", () => {
     apiMode.value = settings.apiMode;
     streamImages.value = settings.streamImages;
     streamPartialImages.value = settings.streamPartialImages;
-    model.value = FIXED_IMAGE_MODEL;
+    // model 不再强制写死：优先用持久化的值，companion 回流时会覆盖。
+    // 兜底 FIXED_IMAGE_MODEL（兼容旧持久化数据无 model 字段的情况）。
+    model.value = settings.model || FIXED_IMAGE_MODEL;
     promptMode.value = settings.promptMode;
     promptWordbanks.value = normalizePromptWordbanks(settings.promptWordbanks);
     promptRewriteGuardEnabled.value = settings.promptRewriteGuardEnabled;
@@ -240,7 +414,7 @@ export const useSettingsStore = defineStore("settings", () => {
       apiMode: apiMode.value,
       streamImages: streamImages.value,
       streamPartialImages: streamPartialImages.value,
-      model: FIXED_IMAGE_MODEL,
+      model: model.value,
       promptMode: promptMode.value,
       promptWordbanks: clonePromptWordbanks(promptWordbanks.value),
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
@@ -375,6 +549,14 @@ export const useSettingsStore = defineStore("settings", () => {
   watch(companionSessionToken, (v) =>
     writeStorage(SETTINGS_STORAGE_KEYS.companionSessionToken, v),
   );
+  // Companion 模式只支持 Images API。切到 companion 时若残留 responses，
+  // 强制校正为 images，避免发出注定抛「仅支持 Images API」的请求。
+  // （apiMode 选择器 UI 仅在 direct 模式可见，切走后该值不会自动重置。）
+  watch(connectionMode, (mode) => {
+    if (mode === "localCompanion" && apiMode.value !== "images") {
+      apiMode.value = "images";
+    }
+  });
 
   return {
     activeSizePreset,
@@ -382,6 +564,8 @@ export const useSettingsStore = defineStore("settings", () => {
     apiBaseUrl,
     apiBaseUrlMode,
     apiKey,
+    applyProviderInfo,
+    providerCapability,
     autoRetryOnNetworkError,
     analyticsEnabled,
     analyticsPromptCapture,
@@ -400,6 +584,7 @@ export const useSettingsStore = defineStore("settings", () => {
     transparentDisabled,
     currentGenerationParams,
     currentSettings,
+    currentSizeConstraints,
     customSizeError,
     formatLabel,
     formatOptions,
@@ -410,6 +595,9 @@ export const useSettingsStore = defineStore("settings", () => {
     minImageCount: MIN_IMAGE_COUNT,
     imageHeight,
     imageWidth,
+    minCustomDimension,
+    maxCustomDimension,
+    sizeStep,
     model,
     outputFormat,
     streamImages,
@@ -539,49 +727,4 @@ function displayApiBaseUrl(apiBaseUrl: string, mode: AppSettings["apiBaseUrlMode
 
 function stripImagesApiPath(apiBaseUrl: string) {
   return apiBaseUrl.trim().replace(/\/+$/, "").replace(/\/v1\/images$/i, "");
-}
-
-function dimensionsForRatio(ratio: SizeRatio, resolution: SizeResolution) {
-  const ratioOption =
-    SIZE_RATIO_OPTIONS.find((option) => option.value === ratio) ??
-    SIZE_RATIO_OPTIONS[4];
-  const resolutionOption =
-    SIZE_RESOLUTION_OPTIONS.find((option) => option.value === resolution) ??
-    SIZE_RESOLUTION_OPTIONS[0];
-  const aspect = ratioOption.widthRatio / ratioOption.heightRatio;
-  let width = Math.sqrt(resolutionOption.targetPixels * aspect);
-  let height = width / aspect;
-  const maxSide = Math.max(width, height);
-
-  if (maxSide > MAX_CUSTOM_DIMENSION) {
-    const scale = MAX_CUSTOM_DIMENSION / maxSide;
-    width *= scale;
-    height *= scale;
-  }
-
-  let normalizedWidth = roundToStep(width);
-  let normalizedHeight = roundToStep(height);
-
-  while (normalizedWidth * normalizedHeight > MAX_CUSTOM_PIXELS) {
-    if (normalizedWidth >= normalizedHeight) {
-      normalizedWidth -= SIZE_STEP;
-      normalizedHeight = roundToStep(normalizedWidth / aspect);
-    } else {
-      normalizedHeight -= SIZE_STEP;
-      normalizedWidth = roundToStep(normalizedHeight * aspect);
-    }
-  }
-
-  return {
-    width: clampDimension(normalizedWidth),
-    height: clampDimension(normalizedHeight),
-  };
-}
-
-function roundToStep(value: number) {
-  return clampDimension(Math.round(value / SIZE_STEP) * SIZE_STEP);
-}
-
-function clampDimension(value: number) {
-  return Math.min(MAX_CUSTOM_DIMENSION, Math.max(SIZE_STEP, value));
 }

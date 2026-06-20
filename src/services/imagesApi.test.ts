@@ -5,7 +5,28 @@ import {
   generateImage,
   getCustomSizeError,
 } from "./imagesApi";
+import type { SizeConstraints } from "./imagesApi";
 import type { GenerationParams } from "../types/studio";
+
+const OPENAI_CONSTRAINTS: SizeConstraints = {
+  step: 16,
+  min: 16,
+  max: 3840,
+  maxPixels: 8294400,
+  minPixels: 655360,
+  maxAspectRatio: 3,
+  defaultSize: "1024x1024",
+};
+
+const GLM_CONSTRAINTS: SizeConstraints = {
+  step: 32,
+  min: 512,
+  max: 2048,
+  maxPixels: 4194304,
+  minPixels: 0,
+  maxAspectRatio: null,
+  defaultSize: "1280x1280",
+};
 
 const generationParams: GenerationParams = {
   size: "1:1",
@@ -398,39 +419,68 @@ describe("images API requests", () => {
 
 describe("getCustomSizeError", () => {
   it("requires integer dimensions", () => {
-    expect(getCustomSizeError(1024.5, 1024)).toBe("自定义尺寸的宽高必须是整数。");
-    expect(getCustomSizeError(Number.NaN, 1024)).toBe("自定义尺寸的宽高必须是整数。");
+    expect(getCustomSizeError(1024.5, 1024, OPENAI_CONSTRAINTS)).toBe("自定义尺寸的宽高必须是整数。");
+    expect(getCustomSizeError(Number.NaN, 1024, OPENAI_CONSTRAINTS)).toBe("自定义尺寸的宽高必须是整数。");
   });
 
-  it("requires dimensions between 16 and 3840 in 16px increments", () => {
-    expect(getCustomSizeError(15, 1024)).toBe(
+  it("requires dimensions between 16 and 3840 in 16px increments (OpenAI)", () => {
+    expect(getCustomSizeError(15, 1024, OPENAI_CONSTRAINTS)).toBe(
       "自定义尺寸的宽高必须是 16 到 3840 之间的 16 的倍数。",
     );
-    expect(getCustomSizeError(3856, 1024)).toBe(
+    expect(getCustomSizeError(3856, 1024, OPENAI_CONSTRAINTS)).toBe(
       "自定义尺寸的宽高必须是 16 到 3840 之间的 16 的倍数。",
     );
-    expect(getCustomSizeError(1025, 1024)).toBe(
+    expect(getCustomSizeError(1025, 1024, OPENAI_CONSTRAINTS)).toBe(
       "自定义尺寸的宽高必须是 16 到 3840 之间的 16 的倍数。",
     );
   });
 
-  it("requires total pixels within the supported range", () => {
-    expect(getCustomSizeError(256, 256)).toBe(
+  it("requires total pixels within the supported range (OpenAI)", () => {
+    expect(getCustomSizeError(256, 256, OPENAI_CONSTRAINTS)).toBe(
       "自定义尺寸的总像素必须在 655,360 到 8,294,400 之间。",
     );
-    expect(getCustomSizeError(3840, 3840)).toBe(
+    expect(getCustomSizeError(3840, 3840, OPENAI_CONSTRAINTS)).toBe(
       "自定义尺寸的总像素必须在 655,360 到 8,294,400 之间。",
     );
   });
 
-  it("rejects dimensions with an aspect ratio greater than 3:1", () => {
-    expect(getCustomSizeError(2048, 512)).toBe("自定义尺寸的长边与短边比例不能超过 3:1。");
+  it("rejects dimensions with an aspect ratio greater than 3:1 (OpenAI)", () => {
+    expect(getCustomSizeError(2048, 512, OPENAI_CONSTRAINTS)).toBe("自定义尺寸的长边与短边比例不能超过 3:1。");
   });
 
-  it("allows valid dimensions", () => {
-    expect(getCustomSizeError(1024, 1024)).toBe("");
-    expect(getCustomSizeError(1536, 1024)).toBe("");
-    expect(getCustomSizeError(1920, 1088)).toBe("");
+  it("allows valid dimensions (OpenAI)", () => {
+    expect(getCustomSizeError(1024, 1024, OPENAI_CONSTRAINTS)).toBe("");
+    expect(getCustomSizeError(1536, 1024, OPENAI_CONSTRAINTS)).toBe("");
+    expect(getCustomSizeError(1920, 1088, OPENAI_CONSTRAINTS)).toBe("");
+  });
+
+  it("enforces GLM constraints: 512-2048, step 32", () => {
+    expect(getCustomSizeError(256, 1024, GLM_CONSTRAINTS)).toBe(
+      "自定义尺寸的宽高必须是 512 到 2048 之间的 32 的倍数。",
+    );
+    expect(getCustomSizeError(4096, 1024, GLM_CONSTRAINTS)).toBe(
+      "自定义尺寸的宽高必须是 512 到 2048 之间的 32 的倍数。",
+    );
+    // 1000 不是 32 倍数（1000 / 32 = 31.25）
+    expect(getCustomSizeError(1000, 1000, GLM_CONSTRAINTS)).toBe(
+      "自定义尺寸的宽高必须是 512 到 2048 之间的 32 的倍数。",
+    );
+  });
+
+  it("GLM has no aspect ratio limit (maxAspectRatio=null)", () => {
+    // 2048x512 = 4:1，OpenAI 会拒绝，GLM 只检查像素和范围
+    // 2048x512 = 1048576 像素 < 4194304，且都在 512-2048、step32 → 合法
+    expect(getCustomSizeError(2048, 512, GLM_CONSTRAINTS)).toBe("");
+  });
+
+  it("GLM enforces maxPixels 4194304", () => {
+    // 2048x2048 = 4194304 正好等于上限，合法
+    expect(getCustomSizeError(2048, 2048, GLM_CONSTRAINTS)).toBe("");
+  });
+
+  it("GLM allows valid dimensions", () => {
+    expect(getCustomSizeError(1280, 1280, GLM_CONSTRAINTS)).toBe("");
+    expect(getCustomSizeError(1024, 576, GLM_CONSTRAINTS)).toBe("");
   });
 });
 
