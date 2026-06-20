@@ -201,6 +201,11 @@ export function useStudioViewModel() {
     imageById: images.imageById,
     imageClient,
     messages,
+    supportsEdit: computed(() => settings.providerCapability.value.edit),
+    notifyUnsupportedEdit: () =>
+      feedback.notifyError(
+        "当前模型不支持图生图编辑，请移除参考图，或切换到支持图片编辑的模型。",
+      ),
     onApiConfigurationError: openApiSettingsFromGenerationError,
     onStorageError: reportStorageError,
     conversationExists: (id: string) =>

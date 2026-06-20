@@ -51,6 +51,10 @@ type GenerationStoreContext = {
   imageById: (id: string) => ImageAsset | undefined;
   imageClient: ImageClient;
   messages: Ref<Message[]>;
+  /** 当前 provider 是否支持图生图（带参考图编辑）。GLM-Image 无 edits 端点，为 false。 */
+  supportsEdit: ComputedRef<boolean>;
+  /** provider 不支持图生图、但用户带了参考图时，提交前的提示回调。 */
+  notifyUnsupportedEdit: () => void;
   onApiConfigurationError?: (error: unknown) => void;
   onStorageError: (error: unknown) => void;
   conversationExists: (id: string) => boolean;
@@ -126,6 +130,16 @@ export const useGenerationStore = defineStore("generation", () => {
 
   async function submitMessage() {
     if (!canSend.value) return;
+
+    // 前置拦截：当前 provider 不支持图生图（如 GLM-Image 无 edits 端点），
+    // 但用户带了参考图 → 提示并中止，避免发出注定 501 的请求。
+    if (
+      !input.value.supportsEdit.value &&
+      input.value.attachedImages.value.length > 0
+    ) {
+      input.value.notifyUnsupportedEdit();
+      return;
+    }
 
     const now = Date.now();
     const createdAt = isoTimestamp(now);
