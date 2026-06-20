@@ -549,6 +549,14 @@ export const useSettingsStore = defineStore("settings", () => {
   watch(companionSessionToken, (v) =>
     writeStorage(SETTINGS_STORAGE_KEYS.companionSessionToken, v),
   );
+  // Companion 模式只支持 Images API。切到 companion 时若残留 responses，
+  // 强制校正为 images，避免发出注定抛「仅支持 Images API」的请求。
+  // （apiMode 选择器 UI 仅在 direct 模式可见，切走后该值不会自动重置。）
+  watch(connectionMode, (mode) => {
+    if (mode === "localCompanion" && apiMode.value !== "images") {
+      apiMode.value = "images";
+    }
+  });
 
   return {
     activeSizePreset,

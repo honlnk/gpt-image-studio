@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { nextTick } from "vue";
 import { useSettingsStore } from "./settingsStore";
 import type { CompanionAuthStatus } from "../types/companion";
 
@@ -253,5 +254,48 @@ describe("settingsStore capability-driven UI", () => {
     s.imageWidth = 2048;
     s.imageHeight = 512;
     expect(s.customSizeError).toBe("");
+  });
+});
+
+describe("settingsStore connectionMode → apiMode 校正", () => {
+  it("切到 companion 模式时，残留的 responses 被校正为 images", async () => {
+    const s = useSettingsStore();
+    // direct 模式下用户选了 responses
+    s.connectionMode = "direct";
+    s.apiMode = "responses";
+    expect(s.apiMode).toBe("responses");
+
+    // 切到 companion —— 校正应触发
+    s.connectionMode = "localCompanion";
+    await nextTick();
+
+    expect(s.apiMode).toBe("images");
+  });
+
+  it("切到 companion 时若已是 images，保持不变", async () => {
+    const s = useSettingsStore();
+    s.connectionMode = "direct";
+    s.apiMode = "images";
+
+    s.connectionMode = "localCompanion";
+    await nextTick();
+
+    expect(s.apiMode).toBe("images");
+  });
+
+  it("切回 direct 模式时，apiMode 不被强制改写（保留用户选择）", async () => {
+    const s = useSettingsStore();
+    s.connectionMode = "localCompanion";
+    // companion 模式下被校正为 images
+    await nextTick();
+    expect(s.apiMode).toBe("images");
+
+    // 用户在 direct 模式重新选 responses
+    s.connectionMode = "direct";
+    s.apiMode = "responses";
+    await nextTick();
+
+    // 切回 direct 不应被改写
+    expect(s.apiMode).toBe("responses");
   });
 });
