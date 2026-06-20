@@ -134,6 +134,7 @@ export function useStudioViewModel() {
     getStreamPartialImages: () => settings.streamPartialImages.value,
     getSupportsTransparent: () =>
       settings.providerCapability.value.backgrounds.includes("transparent"),
+    getSizeConstraints: () => settings.currentSizeConstraints.value,
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,

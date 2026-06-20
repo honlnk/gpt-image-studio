@@ -84,8 +84,75 @@ const OPENAI_CAPABILITY: ProviderCapability = {
 
 ---
 
+## 阶段二：GLM 文生图真实联调（需智谱 API Key）
+
+> 这部分需要真实智谱 API Key，由用户侧完成。代码已就位、单测全绿，只差端到端跑一次。
+
+### 配置 GLM 凭据
+
+> **⚠️ 必须用源码版 companion，不能用全局 `gpt-image-studio` 命令**：全局装的是已发布旧版（0.3.0），不含阶段二的 login provider 选择和 GLM adapter。所有命令都在 `companion/` 目录下用 `npx tsx src/main.ts` 直跑源码。
+
+```bash
+cd companion
+
+# 1. 停掉正在跑的 companion 服务（占用 19750 端口的那个终端 Ctrl+C）
+# 2. 用源码版 login（不是全局 gpt-image-studio login！）
+npx tsx src/main.ts login
+#   选 2 (GLM-Image)
+#   Base URL 回车用默认 (https://open.bigmodel.cn/api/paas/v4/images)
+#   Model 回车用默认 (glm-image)
+#   粘贴智谱 API Key
+npx tsx src/main.ts status   # 确认 Provider=GLM-Image, Model=glm-image
+
+# 3. 重启 companion 服务（源码版）
+pnpm dev:companion
+```
+
+**跳过 login 的替代方案**（更快，直接写凭据文件）：
+
+```bash
+cat > ~/.gpt-image-studio/credentials.json <<'EOF'
+{
+  "provider": "glm",
+  "apiBaseUrl": "https://open.bigmodel.cn/api/paas/v4/images",
+  "apiKey": "你的智谱API Key",
+  "model": "glm-image",
+  "savedAt": "2026-06-20T00:00:00.000Z"
+}
+EOF
+# 然后 pnpm dev:companion 重启服务
+```
+
+> 注意：credentials.json 和 session.json（配对状态）都在 `~/.gpt-image-studio/`。换 provider 不影响配对，session token 复用，web 端不用重新配对。
+
+### 联调清单
+
+| # | 操作 | 预期 |
+|---|------|------|
+| C1 | web 打开设置面板触发 checkStatus | Companion 在线、显示 GLM accountLabel |
+| C2 | 看参数栏「模型」tag | 显示 `glm-image`（companion 回流） |
+| C3 | 「区域编辑」tag | **消失**（GLM mask=false） |
+| C4 | 「背景」展开 | 只有 自动/不透明（无透明） |
+| C5 | 「格式」展开 | 只有 PNG/JPEG（无 WebP） |
+| C6 | 文生图：随便一个 prompt + 1:1 | 正常生成图片（GLM URL→b64 翻译跑通） |
+| C7 | 文生图：选 16:9 | 正常生成（比例→尺寸规整跑通） |
+| C8 | 区域编辑（带 mask）→ 生成 | 报「当前 provider 不支持图片编辑」(501) |
+
+**C6 是核心**——验证 GLM 完整链路（请求翻译 + URL→b64）。如果 C6 失败，看 companion 终端日志和返回的错误信息。
+
+### 联调后回切 OpenAI
+
+```bash
+cd companion
+npx tsx src/main.ts login   # 选 1 (OpenAI)，填回原凭据
+pnpm dev:companion          # 重启（回到 companion/ 目录或项目根都行）
+```
+
+---
+
 ## 已知测试结果（2026-06-20）
 
 - 第一层（A1–A8）：通过
 - 第二层（B1–B6）：通过（需重启 companion 才生效）
-- 单测：web 141 通过 / companion 47 通过 / vue-tsc + tsc 干净
+- 阶段二联调（C1–C8）：待用户侧（需智谱 API Key）
+- 单测：web 141 通过 / companion 70 通过 / vue-tsc + tsc + build 干净

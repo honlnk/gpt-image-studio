@@ -77,4 +77,34 @@ describe("/auth/status provider info backflow", () => {
     expect(body.provider).toBe("openai");
     await app.close();
   });
+
+  it("returns GLM capability + constraints when provider=glm (drives UI to hide unsupported options)", async () => {
+    const app = await makeApp({
+      provider: "glm",
+      apiBaseUrl: "https://open.bigmodel.cn/api/paas/v4/images",
+      apiKey: "glm-abc123",
+      model: "glm-image",
+      savedAt: "2026-06-20T00:00:00.000Z",
+    });
+    const res = await app.inject({ method: "GET", url: "/auth/status" });
+    const body = res.json();
+    expect(body.provider).toBe("glm");
+    expect(body.model).toBe("glm-image");
+    // GLM 能力：不支持编辑/mask、无透明背景、无 webp
+    expect(body.capability).toEqual({
+      generate: true,
+      edit: false,
+      mask: false,
+      backgrounds: ["auto", "opaque"],
+      outputFormats: ["png", "jpeg"],
+    });
+    // GLM size 约束：step=32, 512-2048, maxPixels=4194304
+    expect(body.sizeConstraints).toMatchObject({
+      step: 32,
+      min: 512,
+      max: 2048,
+      maxPixels: 4194304,
+    });
+    await app.close();
+  });
 });

@@ -12,6 +12,7 @@ import {
   PROMPT_REWRITE_GUARD_PREFIX,
   getCustomSizeError,
   normalizePromptRewriteGuardText,
+  type SizeConstraints,
 } from "../services/imagesApi";
 import {
   createFavoritePrompt,
@@ -67,11 +68,20 @@ const SIZE_RESOLUTION_OPTIONS = [
   { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
   { value: "4k", label: "4K", targetPixels: 3840 * 2160 },
 ] as const;
+
+/** 返回 maxPixels 约束下可用的分辨率档 value 列表（升序）。供 applyProviderInfo 校正用。 */
+function availableResolutionValues(maxPixels: number): SizeResolution[] {
+  return SIZE_RESOLUTION_OPTIONS.filter((opt) => opt.targetPixels <= maxPixels)
+    .map((opt) => opt.value);
+}
 // OpenAI/gpt-image-2 的默认尺寸约束。companion 在线时被 providerCapability/sizeConstraints
 // 覆盖；离线或未回流时回退到这些值，保持现状行为。
 const DEFAULT_SIZE_STEP = 16;
+const DEFAULT_MIN_CUSTOM_DIMENSION = 16;
 const DEFAULT_MAX_CUSTOM_DIMENSION = 3840;
 const DEFAULT_MAX_CUSTOM_PIXELS = 8294400;
+const DEFAULT_MIN_CUSTOM_PIXELS = 655360;
+const DEFAULT_MAX_ASPECT_RATIO = 3;
 // OpenAI（gpt-image-2）全能力默认值——companion 未回流时的 UI 行为。
 // backgrounds 不含 transparent，与 gpt-image-2 现状一致。
 const DEFAULT_PROVIDER_CAPABILITY: CompanionProviderCapability = {
@@ -126,8 +136,12 @@ export const useSettingsStore = defineStore("settings", () => {
   const activeSizePreset = ref<GenerationParams["size"]>("auto");
   const sizeResolution = ref<SizeResolution>("1k");
   const sizeRatioOptions = SIZE_RATIO_OPTIONS;
-  const sizeResolutionOptions = SIZE_RESOLUTION_OPTIONS.map(
-    ({ value, label }) => ({ value, label }),
+  // 分辨率档按 provider maxPixels 过滤：某档 targetPixels 超过 maxPixels 则不显示。
+  // GLM maxPixels=4194304 → 4K(8294400) 被隐藏；OpenAI maxPixels=8294400 → 4K 保留。
+  const sizeResolutionOptions = computed(() =>
+    SIZE_RESOLUTION_OPTIONS.filter(
+      (opt) => opt.targetPixels <= maxCustomPixels.value,
+    ).map(({ value, label }) => ({ value, label })),
   );
   const quality = ref<GenerationParams["quality"]>("auto");
   const background = ref<GenerationParams["background"]>("auto");
@@ -141,8 +155,11 @@ export const useSettingsStore = defineStore("settings", () => {
   });
   // 尺寸软约束（companion 回流，未回流时 OpenAI 默认）。
   const sizeStep = ref(DEFAULT_SIZE_STEP);
+  const minCustomDimension = ref(DEFAULT_MIN_CUSTOM_DIMENSION);
   const maxCustomDimension = ref(DEFAULT_MAX_CUSTOM_DIMENSION);
   const maxCustomPixels = ref(DEFAULT_MAX_CUSTOM_PIXELS);
+  const minCustomPixels = ref(DEFAULT_MIN_CUSTOM_PIXELS);
+  const maxAspectRatio = ref<number | null>(DEFAULT_MAX_ASPECT_RATIO);
   const qualityOptions = [
     { value: "auto", label: "自动" },
     { value: "high", label: "高" },
@@ -177,10 +194,24 @@ export const useSettingsStore = defineStore("settings", () => {
       return `${imageWidth.value} x ${imageHeight.value}`;
     return `${imageWidth.value} x ${imageHeight.value}`;
   });
+  // 聚合当前生效的尺寸约束（供 customSizeError 校验 + imagesApi 请求路径校验共用）。
+  const currentSizeConstraints = computed<SizeConstraints>(() => ({
+    step: sizeStep.value,
+    min: minCustomDimension.value,
+    max: maxCustomDimension.value,
+    maxPixels: maxCustomPixels.value,
+    minPixels: minCustomPixels.value,
+    maxAspectRatio: maxAspectRatio.value,
+    defaultSize: "1024x1024",
+  }));
   const customSizeError = computed(() => {
     if (activeSizePreset.value !== "custom") return "";
 
-    return getCustomSizeError(imageWidth.value, imageHeight.value);
+    return getCustomSizeError(
+      imageWidth.value,
+      imageHeight.value,
+      currentSizeConstraints.value,
+    );
   });
   const qualityLabel = computed(
     () =>
@@ -290,8 +321,11 @@ export const useSettingsStore = defineStore("settings", () => {
         outputFormats: [...DEFAULT_PROVIDER_CAPABILITY.outputFormats],
       };
       sizeStep.value = DEFAULT_SIZE_STEP;
+      minCustomDimension.value = DEFAULT_MIN_CUSTOM_DIMENSION;
       maxCustomDimension.value = DEFAULT_MAX_CUSTOM_DIMENSION;
       maxCustomPixels.value = DEFAULT_MAX_CUSTOM_PIXELS;
+      minCustomPixels.value = DEFAULT_MIN_CUSTOM_PIXELS;
+      maxAspectRatio.value = DEFAULT_MAX_ASPECT_RATIO;
       // 离线时 model 不回退——保留用户上次生效的 model，避免 UI 闪烁
       return;
     }
@@ -301,9 +335,13 @@ export const useSettingsStore = defineStore("settings", () => {
       backgrounds: [...status.capability.backgrounds],
       outputFormats: [...status.capability.outputFormats],
     };
-    sizeStep.value = status.sizeConstraints.step;
-    maxCustomDimension.value = status.sizeConstraints.max;
-    maxCustomPixels.value = status.sizeConstraints.maxPixels;
+    const sc = status.sizeConstraints;
+    sizeStep.value = sc.step;
+    minCustomDimension.value = sc.min;
+    maxCustomDimension.value = sc.max;
+    maxCustomPixels.value = sc.maxPixels;
+    minCustomPixels.value = sc.minPixels;
+    maxAspectRatio.value = sc.maxAspectRatio;
     if (status.model) model.value = status.model;
     // 当前选中的背景/格式若已不在新 provider 支持列表，立即回退到第一个可用值。
     // 放在这里（同步）而非 watch，避免 UI 短暂停留在失效值上。
@@ -312,6 +350,14 @@ export const useSettingsStore = defineStore("settings", () => {
     }
     if (!status.capability.outputFormats.includes(outputFormat.value)) {
       outputFormat.value = status.capability.outputFormats[0] ?? "png";
+    }
+    // 当前分辨率档若超过新 provider 的 maxPixels（如 GLM 下 4K 不可达），回退到第一个可用档。
+    const availableRes = availableResolutionValues(sc.maxPixels);
+    if (!availableRes.includes(sizeResolution.value)) {
+      sizeResolution.value = availableRes[0] ?? "1k";
+      // 尺寸变了，若当前是比例模式需重算尺寸
+      const ratio = normalizeSizePreset(activeSizePreset.value);
+      if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
     }
   }
 
@@ -530,6 +576,7 @@ export const useSettingsStore = defineStore("settings", () => {
     transparentDisabled,
     currentGenerationParams,
     currentSettings,
+    currentSizeConstraints,
     customSizeError,
     formatLabel,
     formatOptions,
@@ -540,6 +587,9 @@ export const useSettingsStore = defineStore("settings", () => {
     minImageCount: MIN_IMAGE_COUNT,
     imageHeight,
     imageWidth,
+    minCustomDimension,
+    maxCustomDimension,
+    sizeStep,
     model,
     outputFormat,
     streamImages,

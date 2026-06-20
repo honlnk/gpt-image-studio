@@ -266,7 +266,9 @@ capability 只覆盖 GLM 明确有差异的维度（mask / backgrounds / outputF
 | `companion/src/routes/images.ts` | 改为调 `resolveAdapter().generate/edit`，validate 留 route 层 | ✅ 阶段一 |
 | `companion/src/routes/auth.ts` | `/auth/status` 返回当前 adapter 的 `model`、`sizeConstraints`、`capability`；`provider` 读真实 `creds.provider` | ✅ 阶段一 |
 | `companion/src/credentials.ts` | `Credentials` 加 `provider`/`model`，读时缺省兼容 | ✅ 阶段一 |
-| `companion/src/providers/glm.ts` | 声明 GLM 的 sizeConstraints + 能力（backgrounds 去掉 transparent，outputFormats 去掉 webp，mask=false） | ⏳ 阶段二 |
+| `companion/src/providers/glm.ts` | GLM-Image adapter：generate（裁剪参数 + size 规整 + URL→b64）；声明 sizeConstraints + 能力（mask=false, backgrounds 去 transparent, outputFormats 去 webp）；edit 不实现 | ✅ 阶段二 |
+| `companion/src/providers/urlToB64.ts` | 通用 URL→b64（带超时 + 指数退避重试） | ✅ 阶段二 |
+| `companion/src/main.ts` | login 命令支持选 provider（openai/glm 预设）+ 填 model；status 显示 provider/model | ✅ 阶段二 |
 | `src/types/companion.ts` | `CompanionAuthStatus` 新增 `model`、`sizeConstraints`、`capability` 字段 | ✅ 阶段一 web |
 | `src/stores/settingsStore.ts` | `SIZE_STEP` / `MAX_CUSTOM_*` 改为 ref；`backgroundOptions` / `formatOptions` 按 capability 过滤的 computed；`applyProviderInfo` 回流；model 跟随 companion；`transparentDisabled` 改读 capability | ✅ 阶段一 web |
 | `src/services/imagesApi.ts` | `validateBackground` 改 `supportsTransparent` 参数（capability 驱动，不再按 model 名字） | ✅ 阶段一 web |
@@ -634,22 +636,24 @@ companion/src/providers/
 
 **验收**：现有 OpenAI 中转站用户完全无感（模型 tag 显示 gpt-image-2、transparent 仍禁用、区域编辑仍可见、尺寸选项不变），companion + web 全链路 capability 驱动 UI 已打通。
 
-### 阶段二：GLM 文生图 adapter
+### 阶段二：GLM 文生图 adapter —— ✅ 代码完成（联调待用户侧）
 
 接入 GLM-Image 文生图，打通第一条非 OpenAI 链路。
 
-- [ ] 新增 `companion/src/providers/glm.ts`
-- [ ] 新增 `companion/src/providers/urlToB64.ts`（通用 URL→b64 工具）
-- [ ] 实现 generate：OpenAI 形状 → GLM `/images/generations` 请求体（裁剪 `background`/`output_format`）
-- [ ] 声明 GLM 的 `sizeConstraints`（step=32, 512–2048, maxPixels=4194304, defaultSize=1280x1280）
-- [ ] 声明 GLM 的 `capability`（mask=false, backgrounds 去 transparent, outputFormats 去 webp）—— UI 据此隐藏选项，companion 仅保留兜底校验
-- [ ] 实现响应翻译：GLM `data[0].url` → fetch → b64 → `{ b64Json, revisedPrompt? }`
-- [ ] `login` 命令支持选 glm，写入 `provider` + `model` 字段
-- [ ] `status` 显示 provider 信息
-- [ ] 单元测试：翻译纯函数 + 参数兜底校验 + urlToB64
-- [ ] 手动联调：真实智谱 API Key 文生图跑通
+- [x] 新增 `companion/src/providers/glm.ts`
+- [x] 新增 `companion/src/providers/urlToB64.ts`（通用 URL→b64，带超时 + 指数退避重试）
+- [x] 实现 generate：OpenAI 形状 → GLM `/images/generations` 请求体（裁剪 `background`/`output_format`/`extra`）
+- [x] 声明 GLM 的 `sizeConstraints`（step=32, 512–2048, maxPixels=4194304, minPixels=0, maxAspectRatio=null, defaultSize=1280x1280）
+- [x] 声明 GLM 的 `capability`（edit=false, mask=false, backgrounds=[auto,opaque], outputFormats=[png,jpeg]）
+- [x] 实现响应翻译：GLM `data[0].url` → urlToB64 → `{ b64Json }`
+- [x] `normalizeGlmSize` 纯函数：auto→默认 / WxH 规整 / 比例(16:9)→尺寸 / 对齐32 / 钳范围 / 压像素 / 小写x
+- [x] `login` 命令支持选 provider（openai/glm 预设）+ 填 model，写入 `provider` + `model` 字段
+- [x] `status` 显示 provider + model 信息
+- [x] registry 注册 glm adapter
+- [x] 单元测试：glm(18) 含 normalizeGlmSize 全路径 + generate 翻译/裁剪/错误；urlToB64(4)；/auth/status GLM 回流(1)
+- [ ] 手动联调：真实智谱 API Key 文生图跑通（待用户侧，需真实 Key）
 
-**验收**：用户配置 GLM 凭据后，参数栏自动隐藏 GLM 不支持的选项（区域编辑/透明背景/webp），文生图与 OpenAI 体验一致。编辑图此时报「不支持」（因为 `capability.edit=false`）。
+**验收**：companion 侧 70 测试通过、tsc + build 干净。用户配置 GLM 凭据后，参数栏自动隐藏 GLM 不支持的选项（区域编辑/透明背景/webp），文生图与 OpenAI 体验一致。编辑图此时报「不支持」（因为 `capability.edit=false`，route 层返回 501）。真实联调由用户用智谱 API Key 完成。
 
 ### 阶段三：GLM 全图编辑 adapter（可选，视优先级）
 
@@ -695,7 +699,7 @@ companion/src/providers/
 |------|------|------|
 | 阶段一（companion 侧）✅ | adapter 骨架 + openai 抽取 + multipart 解析 + provider 元信息回流 + taskPoller 基础设施（零行为变化） | 2.5-3 人天 |
 | 阶段一（web 侧消费）✅ | `CompanionAuthStatus` 类型 + settingsStore 常量→ref + capability 驱动 UI + ApiSettingsPanel 回写 + validateBackground 改 capability | 1-1.5 人天 |
-| 阶段二 | GLM 文生图 adapter + login/status 改造 + urlToB64 + 测试 + 联调 | 3-4 人天 |
+| 阶段二 ✅ | GLM 文生图 adapter + login/status 改造 + urlToB64 + 测试（联调待用户侧） | 3-4 人天 |
 | 阶段三 | GLM 全图编辑 adapter（可选，经 GLM-4V chat 翻译） | 2-3 人天（不做则 0） |
 | **合计（本轮 MVP）** | **GLM generate 打通，edit 视情况** | **7-10 人天** |
 

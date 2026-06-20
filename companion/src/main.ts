@@ -20,6 +20,31 @@ const VERSION = "0.3.0";
 const DEFAULT_PORT = "19750";
 const DEFAULT_SESSION_TTL_DAYS = "30";
 
+/**
+ * login 命令的 provider 预设：每个 provider 的默认 base url + 默认 model + 简介。
+ * 新增 provider 时在这里加一项即可（adapter 在 registry 注册后，login 这里就能选）。
+ */
+type ProviderPreset = {
+  id: string;
+  label: string;
+  defaultBaseUrl: string;
+  defaultModel: string;
+};
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    id: "openai",
+    label: "OpenAI 兼容（gpt-image-2 / 中转站）",
+    defaultBaseUrl: "https://api.packyapi.com/v1/images",
+    defaultModel: "gpt-image-2",
+  },
+  {
+    id: "glm",
+    label: "GLM-Image（智谱 Zhipu）",
+    defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4/images",
+    defaultModel: "glm-image",
+  },
+];
+
 type ServeLikeOptions = {
   port: string;
   channel?: string;
@@ -186,9 +211,26 @@ program
     const ask = (q: string): Promise<string> =>
       new Promise((resolve) => rl.question(q, resolve));
 
-    const apiBaseUrl = (await ask("API Base URL (默认 https://api.packyapi.com/v1/images): ")).trim()
-      || "https://api.packyapi.com/v1/images";
+    // 1. 选 provider
+    console.log("选择 Provider：");
+    PROVIDER_PRESETS.forEach((p, i) => console.log(`  ${i + 1}. ${p.label}`));
+    const providerChoice = (await ask(`输入序号（默认 1）: `)).trim();
+    const providerIndex =
+      Number(providerChoice) >= 1 && Number(providerChoice) <= PROVIDER_PRESETS.length
+        ? Number(providerChoice) - 1
+        : 0;
+    const preset = PROVIDER_PRESETS[providerIndex];
 
+    // 2. base url（带 provider 默认值）
+    const apiBaseUrl =
+      (await ask(`API Base URL（默认 ${preset.defaultBaseUrl}）: `)).trim() ||
+      preset.defaultBaseUrl;
+
+    // 3. model（带 provider 默认值；模型 ID 会漂移，让用户可改）
+    const model =
+      (await ask(`Model（默认 ${preset.defaultModel}）: `)).trim() || preset.defaultModel;
+
+    // 4. api key（隐藏输入）
     const apiKey = await new Promise<string>((resolve) => {
       process.stdout.write("API Key: ");
       const stdin = process.stdin;
@@ -202,11 +244,15 @@ program
           if (stdin.isTTY) stdin.setRawMode(wasRaw ?? false);
           process.stdout.write("\n");
           resolve(input);
-        } else if (c === "" || c === "\b") {
+        } else if (c === "\b" || c === "\x7f") {
+          // 退格：\b (0x08) 和 DEL (0x7f) 都要识别——多数终端退格键发 0x7f。
+          // 之前漏了 0x7f，导致按退格时 DEL 字符被当普通字符存进 key（污染凭据）。
           input = input.slice(0, -1);
-        } else if (c === "") {
+        } else if (c === "\x03") {
+          // Ctrl-C
           process.exit(1);
-        } else {
+        } else if (c >= " " && c !== "\x7f") {
+          // 只接受可打印字符（0x20 起），跳过其他控制字符
           input += c;
         }
       };
@@ -221,10 +267,12 @@ program
       return;
     }
 
-    saveCredentials(apiBaseUrl, apiKey.trim());
+    saveCredentials(apiBaseUrl, apiKey.trim(), { provider: preset.id, model });
     console.log("");
     console.log("凭据已保存。");
+    console.log(`  Provider:     ${preset.label}`);
     console.log(`  API Base URL: ${apiBaseUrl}`);
+    console.log(`  Model:        ${model}`);
     console.log(`  API Key:      ${maskApiKey(apiKey.trim())}`);
   });
 
@@ -242,7 +290,11 @@ program
     console.log("");
 
     if (creds) {
+      const providerId = creds.provider ?? "openai";
+      const preset = PROVIDER_PRESETS.find((p) => p.id === providerId);
       console.log(`凭据:    已配置`);
+      console.log(`  Provider: ${preset ? preset.label : providerId}`);
+      console.log(`  Model:    ${creds.model ?? "(未设置)"}`);
       console.log(`  Base URL: ${creds.apiBaseUrl}`);
       console.log(`  API Key:  ${maskApiKey(creds.apiKey)}`);
       console.log(`  保存时间: ${creds.savedAt}`);

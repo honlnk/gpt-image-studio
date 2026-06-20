@@ -149,4 +149,109 @@ describe("settingsStore capability-driven UI", () => {
     s.applyProviderInfo(null);
     expect(s.model).toBe("glm-image");
   });
+
+  it("defaults to OpenAI size constraints (16-3840, step 16, 4K visible)", () => {
+    const s = useSettingsStore();
+    expect(s.sizeStep).toBe(16);
+    expect(s.minCustomDimension).toBe(16);
+    expect(s.maxCustomDimension).toBe(3840);
+    // OpenAI maxPixels=8294400，4K(targetPixels=8294400) 刚好保留
+    expect(s.sizeResolutionOptions.map((o) => o.value)).toEqual(["1k", "2k", "4k"]);
+  });
+
+  it("applies GLM size constraints: hides 4K, custom 512-2048 step 32", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(
+      makeStatus({
+        sizeConstraints: {
+          step: 32,
+          min: 512,
+          max: 2048,
+          maxPixels: 4194304,
+          minPixels: 0,
+          maxAspectRatio: null,
+          defaultSize: "1280x1280",
+        },
+      }),
+    );
+
+    // GLM maxPixels=4194304，4K(8294400) 被隐藏，只剩 1K/2K
+    expect(s.sizeResolutionOptions.map((o) => o.value)).toEqual(["1k", "2k"]);
+    expect(s.sizeStep).toBe(32);
+    expect(s.minCustomDimension).toBe(512);
+    expect(s.maxCustomDimension).toBe(2048);
+    expect(s.currentSizeConstraints.maxAspectRatio).toBeNull();
+  });
+
+  it("falls back resolution when provider drops it (GLM hides 4K, current 4K resets)", () => {
+    const s = useSettingsStore();
+    // OpenAI 模式下选 4K
+    s.applySizeResolution("4k");
+    expect(s.sizeResolution).toBe("4k");
+
+    // 切 GLM → 4K 不可用，自动回退
+    s.applyProviderInfo(
+      makeStatus({
+        sizeConstraints: {
+          step: 32,
+          min: 512,
+          max: 2048,
+          maxPixels: 4194304,
+          minPixels: 0,
+          maxAspectRatio: null,
+          defaultSize: "1280x1280",
+        },
+      }),
+    );
+    expect(s.sizeResolution).toBe("1k");
+  });
+
+  it("customSizeError reflects provider constraints (GLM rejects 3840)", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(
+      makeStatus({
+        sizeConstraints: {
+          step: 32,
+          min: 512,
+          max: 2048,
+          maxPixels: 4194304,
+          minPixels: 0,
+          maxAspectRatio: null,
+          defaultSize: "1280x1280",
+        },
+      }),
+    );
+    s.applySizePreset("custom");
+    s.imageWidth = 3840;
+    s.imageHeight = 3840;
+    // 3840 超 GLM 的 max=2048
+    expect(s.customSizeError).toContain("512 到 2048");
+
+    // 合法值无报错
+    s.imageWidth = 1280;
+    s.imageHeight = 1280;
+    expect(s.customSizeError).toBe("");
+  });
+
+  it("GLM has no aspect ratio error (maxAspectRatio=null)", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(
+      makeStatus({
+        sizeConstraints: {
+          step: 32,
+          min: 512,
+          max: 2048,
+          maxPixels: 4194304,
+          minPixels: 0,
+          maxAspectRatio: null,
+          defaultSize: "1280x1280",
+        },
+      }),
+    );
+    s.applySizePreset("custom");
+    // 2048x512 = 4:1，GLM 不限制长宽比，只看范围/像素
+    s.imageWidth = 2048;
+    s.imageHeight = 512;
+    expect(s.customSizeError).toBe("");
+  });
 });

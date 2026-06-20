@@ -1,5 +1,6 @@
 import type { ApiMode } from "../../../types/studio";
 import { editImage, generateImage } from "../../../services/imagesApi";
+import type { SizeConstraints } from "../../../services/imagesApi";
 import type { ImageClient } from "./imageClient";
 
 type DirectClientConfig = {
@@ -11,6 +12,7 @@ type DirectClientConfig = {
   getStreamImages: () => boolean;
   getStreamPartialImages: () => 0 | 1 | 2 | 3;
   getSupportsTransparent: () => boolean;
+  getSizeConstraints: () => SizeConstraints;
 };
 
 export function createDirectImagesClient(config: DirectClientConfig): ImageClient {
@@ -46,6 +48,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         onPartialImage: input.onPartialImage,
         params: input.params,
         supportsTransparent: config.getSupportsTransparent(),
+        sizeConstraints: config.getSizeConstraints(),
       });
     },
     async edit(input) {
@@ -81,6 +84,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         images: input.images,
         mask: input.mask,
         supportsTransparent: config.getSupportsTransparent(),
+        sizeConstraints: config.getSizeConstraints(),
       });
     },
   };
