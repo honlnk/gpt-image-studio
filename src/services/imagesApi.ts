@@ -21,6 +21,8 @@ type GenerateImageInput = {
   streamPartialImages?: number;
   onPartialImage?: (event: PartialImageEvent) => void;
   params: GenerationParams;
+  /** 当前 provider 是否支持透明背景（来自 capability，未传则按 false 兜底）。 */
+  supportsTransparent?: boolean;
 };
 
 type EditImageInput = GenerateImageInput & {
@@ -87,7 +89,12 @@ export function applyPromptRewriteGuard(
 }
 
 export async function generateImage(input: GenerateImageInput) {
-  const params = imageApiParams(input.model, input.params, input.apiMode);
+  const params = imageApiParams(
+    input.model,
+    input.params,
+    input.apiMode,
+    input.supportsTransparent ?? false,
+  );
   const modePrompt = buildImagePrompt({
     prompt: input.prompt,
     mode: input.promptMode ?? "default",
@@ -136,7 +143,12 @@ export async function editImage(input: EditImageInput) {
   return editImageViaImagesApi({
     ...input,
     prompt,
-    requestParams: imageApiParams(input.model, input.params, input.apiMode),
+    requestParams: imageApiParams(
+      input.model,
+      input.params,
+      input.apiMode,
+      input.supportsTransparent ?? false,
+    ),
   });
 }
 
@@ -428,8 +440,13 @@ function buildApiEndpoint(
   return `${normalizeApiBaseUrl(apiBaseUrl, apiBaseUrlMode, apiMode)}/${path}`;
 }
 
-function imageApiParams(model: string, params: GenerationParams, apiMode: ApiMode = "images") {
-  validateBackground(model, params.background, apiMode);
+function imageApiParams(
+  model: string,
+  params: GenerationParams,
+  apiMode: ApiMode | undefined,
+  supportsTransparent: boolean,
+) {
+  validateBackground(model, params.background, apiMode, supportsTransparent);
 
   return {
     size: apiSize(params),
@@ -438,13 +455,21 @@ function imageApiParams(model: string, params: GenerationParams, apiMode: ApiMod
   };
 }
 
+/**
+ * 请求路径兜底：provider 不支持透明背景时，禁止发 transparent。
+ * 以 capability（supportsTransparent）为准，而非 model 名字——model 跟随 companion
+ * 后不再固定，capability 才是「该 provider 能不能」的真实来源。
+ */
 function validateBackground(
   model: string,
   background: GenerationParams["background"],
-  apiMode: ApiMode = "images",
+  apiMode: ApiMode | undefined,
+  supportsTransparent: boolean,
 ) {
-  if (apiMode === "images" && model === "gpt-image-2" && background === "transparent") {
-    throw new Error("gpt-image-2 当前不支持透明背景，请选择自动或不透明背景。");
+  if ((apiMode ?? "images") === "images" && !supportsTransparent && background === "transparent") {
+    throw new Error(
+      `${model} 当前不支持透明背景，请选择自动或不透明背景。`,
+    );
   }
 }
 

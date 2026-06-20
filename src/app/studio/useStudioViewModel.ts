@@ -132,12 +132,24 @@ export function useStudioViewModel() {
     getModel: () => settings.model.value,
     getStreamImages: () => settings.streamImages.value,
     getStreamPartialImages: () => settings.streamPartialImages.value,
+    getSupportsTransparent: () =>
+      settings.providerCapability.value.backgrounds.includes("transparent"),
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,
     getSessionToken: () => settings.companionSessionToken.value,
     getModel: () => settings.model.value,
   });
+  // provider 不支持 mask（区域编辑）时，强制关闭区域编辑模式，
+  // 避免按钮被隐藏后仍停留在「开」状态。
+  watch(
+    () => settings.providerCapability.value.mask,
+    (supportsMask) => {
+      if (!supportsMask && editModeEnabled.value) {
+        editModeEnabled.value = false;
+      }
+    },
+  );
   const imageClient: ImageClient = {
     generate(input) {
       if (

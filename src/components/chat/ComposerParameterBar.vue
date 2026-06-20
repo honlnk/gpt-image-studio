@@ -34,6 +34,7 @@ const promptModeLabel = computed(() => {
       内容: {{ promptModeLabel }}
     </span>
     <button
+      v-if="settings.providerCapability.mask"
       :class="[
         'cursor-pointer rounded-full px-2 py-0.5 text-[11px] transition-colors',
         composer.editModeEnabled

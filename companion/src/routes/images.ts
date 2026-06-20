@@ -1,10 +1,27 @@
 import type { FastifyInstance } from "fastify";
 import { loadCredentials } from "../credentials.js";
 import type { CompanionSecurityConfig } from "../securityConfig.js";
+import type {
+  OpenAIImageEditRequest,
+  OpenAIImageRequest,
+  ProviderConfig,
+} from "../providers/types.js";
+import { resolveAdapter } from "../providers/registry.js";
+import { extractBoundary, parseMultipart } from "../providers/multipart.js";
 
 type ImagesRoutesOptions = {
   security: CompanionSecurityConfig;
 };
+
+/** web 发的已知文本字段名（其余字段进 extra 透传）。 */
+const KNOWN_GENERATE_FIELDS = ["model", "prompt", "size", "background", "output_format"];
+const KNOWN_EDIT_FIELDS = [
+  "model",
+  "prompt",
+  "size",
+  "background",
+  "output_format",
+];
 
 export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptions) {
   app.post("/images/generations", async (req, reply) => {
@@ -23,26 +40,23 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
       return reply.status(400).send({ error: validationError });
     }
 
-    const apiUrl = `${creds.apiBaseUrl.replace(/\/+$/, "")}/generations`;
-
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${creds.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      return reply.status(502).send({
-        error: "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。",
-      });
+    const config = toProviderConfig(creds);
+    const adapter = resolveAdapter(config);
+    if (!adapter.capability.generate) {
+      return reply.status(501).send({ error: "当前 provider 不支持文生图" });
     }
 
-    const payload = await response.text();
-    return reply.status(response.status).header("content-type", "application/json").send(payload);
+    const request = toGenerateRequest(body);
+    let result;
+    try {
+      result = await adapter.generate(request, config);
+    } catch (error) {
+      return reply.status(502).send({ error: errorMessage(error) });
+    }
+
+    return reply.send({
+      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt }],
+    });
   });
 
   app.addContentTypeParser("multipart/form-data", function (_req, payload, done) {
@@ -62,33 +76,107 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
       return reply.status(415).send({ error: "请求 Content-Type 必须是 multipart/form-data" });
     }
 
-    const apiUrl = `${creds.apiBaseUrl.replace(/\/+$/, "")}/edits`;
-    const contentType = req.headers["content-type"]!;
     const rawBody = req.body as Buffer;
     const validationError = validateEditMultipart(rawBody, opts.security);
     if (validationError) {
       return reply.status(400).send({ error: validationError });
     }
 
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${creds.apiKey}`,
-          "Content-Type": contentType,
-        },
-        body: new Uint8Array(rawBody),
-      });
-    } catch {
-      return reply.status(502).send({
-        error: "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。",
-      });
+    const config = toProviderConfig(creds);
+    const adapter = resolveAdapter(config);
+    if (!adapter.capability.edit || !adapter.edit) {
+      return reply.status(501).send({ error: "当前 provider 不支持图片编辑" });
     }
 
-    const payload = await response.text();
-    return reply.status(response.status).header("content-type", "application/json").send(payload);
+    const boundary = extractBoundary(req.headers["content-type"]!);
+    if (!boundary) {
+      return reply.status(400).send({ error: "multipart 请求缺少 boundary" });
+    }
+    const parsed = parseMultipart(rawBody, boundary);
+    if ("message" in parsed) {
+      return reply.status(400).send({ error: parsed.message });
+    }
+
+    // mask 能力校验：带 mask 但 provider 不支持 → 明确报错
+    if (parsed.mask && !adapter.capability.mask) {
+      return reply.status(400).send({ error: "当前 provider 不支持遮罩局部编辑" });
+    }
+
+    const editRequest = toEditRequest(parsed);
+    let result;
+    try {
+      result = await adapter.edit(editRequest, config);
+    } catch (error) {
+      return reply.status(502).send({ error: errorMessage(error) });
+    }
+
+    return reply.send({
+      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt }],
+    });
   });
+}
+
+/** credentials.json → ProviderConfig。provider 缺省视为 openai。 */
+function toProviderConfig(creds: {
+  apiBaseUrl: string;
+  apiKey: string;
+  provider?: string;
+  model?: string;
+}): ProviderConfig {
+  return {
+    provider: creds.provider ?? "openai",
+    apiBaseUrl: creds.apiBaseUrl,
+    apiKey: creds.apiKey,
+    model: creds.model,
+  };
+}
+
+/** web JSON body → OpenAIImageRequest。已知字段抽出来，其余进 extra 透传。 */
+function toGenerateRequest(body: Record<string, unknown>): OpenAIImageRequest {
+  const extra: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (!KNOWN_GENERATE_FIELDS.includes(key)) {
+      extra[key] = value;
+    }
+  }
+  return {
+    model: String(body.model),
+    prompt: String(body.prompt),
+    size: String(body.size ?? "1024x1024"),
+    background: String(body.background ?? "auto"),
+    outputFormat: String(body.output_format ?? "png"),
+    extra,
+  };
+}
+
+/** 解析后的 multipart → OpenAIImageEditRequest。 */
+function toEditRequest(parsed: {
+  images: OpenAIImageEditRequest["images"];
+  mask?: OpenAIImageEditRequest["mask"];
+  fields: Record<string, string>;
+}): OpenAIImageEditRequest {
+  const editExtra: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed.fields)) {
+    if (!KNOWN_EDIT_FIELDS.includes(key)) {
+      editExtra[key] = value;
+    }
+  }
+  return {
+    model: parsed.fields.model ?? "",
+    prompt: parsed.fields.prompt ?? "",
+    size: parsed.fields.size ?? "1024x1024",
+    background: parsed.fields.background ?? "auto",
+    outputFormat: parsed.fields.output_format ?? "png",
+    extra: {},
+    images: parsed.images,
+    mask: parsed.mask,
+    editExtra,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "未知错误";
 }
 
 function isJsonRequest(contentType: string | undefined): boolean {

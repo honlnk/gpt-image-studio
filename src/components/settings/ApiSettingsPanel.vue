@@ -11,6 +11,7 @@ import {
   unpairCompanion,
 } from "../../services/companionApi";
 import type { CompanionAuthStatus, CompanionHealthResponse } from "../../types/companion";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 const props = defineProps<{
   connectionMode: ConnectionMode;
@@ -41,6 +42,9 @@ const emit = defineEmits<{
 const companionOnline = ref(false);
 const companionHealth = ref<CompanionHealthResponse | null>(null);
 const companionAuthStatus = ref<CompanionAuthStatus | null>(null);
+// 直接写 settingsStore：checkStatus 的 provider 元信息回流是局部副作用，
+// 而非表单值（表单值仍走 emit 链）。直接调 applyProviderInfo 比 emit 一路转发更直接。
+const settingsStore = useSettingsStore();
 const pairingInProgress = ref(false);
 const pairingError = ref("");
 const pairingCodeInput = ref("");
@@ -72,12 +76,14 @@ async function checkStatus() {
 
   if (!health || !props.companionSessionToken) {
     companionAuthStatus.value = null;
+    settingsStore.applyProviderInfo(null);
     return;
   }
 
   if (!health.paired) {
     emit("update:companionSessionToken", "");
     companionAuthStatus.value = null;
+    settingsStore.applyProviderInfo(null);
     pairingInProgress.value = false;
     pairingCodeInput.value = "";
     pairingError.value = "检测到本地 Companion 配对已失效，已清除浏览器里的旧会话，请重新配对。";
@@ -91,10 +97,13 @@ async function checkStatus() {
 
   if (authResult.ok) {
     companionAuthStatus.value = authResult.status;
+    // 回流 provider 元信息（model/capability/sizeConstraints）驱动 UI
+    settingsStore.applyProviderInfo(authResult.status);
     return;
   }
 
   companionAuthStatus.value = null;
+  settingsStore.applyProviderInfo(null);
   if (authResult.invalidToken) {
     emit("update:companionSessionToken", "");
     pairingInProgress.value = false;
@@ -122,7 +131,9 @@ async function handleConfirmPairing() {
     const result = await confirmPairing(props.companionUrl, pairingCodeInput.value);
     emit("update:companionSessionToken", result.sessionToken);
     pairingInProgress.value = false;
-    companionAuthStatus.value = await getCompanionAuthStatus(props.companionUrl, result.sessionToken);
+    const status = await getCompanionAuthStatus(props.companionUrl, result.sessionToken);
+    companionAuthStatus.value = status;
+    settingsStore.applyProviderInfo(status);
   } catch {
     pairingError.value = "配对码无效或已过期";
   }

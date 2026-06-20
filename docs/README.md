@@ -8,6 +8,7 @@
 - [产品路线图](roadmap.md)：产品方向和阶段性功能规划。
 - [本地 CLI Companion](companion.md)：本地伴侣的设计、协议、安全要求和分阶段计划。
 - [Companion 多 Provider 翻译层](companion-providers-plan.md)：在不改 Web 的前提下，让 companion 内部翻译层支持 GLM 等国产图像 API 的开发方案。首轮接 GLM-Image，后续候选豆包 / Qwen-Image / 通义万相。
+- [阶段一测试清单](phase1-test-checklist.md)：翻译层骨架 + 能力驱动 UI 的手动验证步骤（含重启 companion 这个坑）。
 - [遮罩局部编辑](mask-editing.md)：基于本地遮罩绘制的图片局部编辑方案。
 - [提示词模式开发计划](prompt-modes.md)：安全、创意、成人三级提示词模式的设计和实现计划。
 - [Responses API 与流式图片预览开发方案](responses-streaming-plan.md)：浏览器直连模式下接入 `Responses API` 与流式图片预览的设计和实施计划。

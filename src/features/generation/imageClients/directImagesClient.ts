@@ -10,6 +10,7 @@ type DirectClientConfig = {
   getModel: () => string;
   getStreamImages: () => boolean;
   getStreamPartialImages: () => 0 | 1 | 2 | 3;
+  getSupportsTransparent: () => boolean;
 };
 
 export function createDirectImagesClient(config: DirectClientConfig): ImageClient {
@@ -44,6 +45,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         streamPartialImages: config.getStreamPartialImages(),
         onPartialImage: input.onPartialImage,
         params: input.params,
+        supportsTransparent: config.getSupportsTransparent(),
       });
     },
     async edit(input) {
@@ -78,6 +80,7 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
         params: input.params,
         images: input.images,
         mask: input.mask,
+        supportsTransparent: config.getSupportsTransparent(),
       });
     },
   };

@@ -218,7 +218,8 @@ companion credentials.json (provider + model)
     "step": 32,
     "min": 512, "max": 2048,
     "maxPixels": 4194304,
-    "maxAspectRatio": null,        // null = 不限制
+    "minPixels": 0,                 // GLM 无总像素下限概念，置 0
+    "maxAspectRatio": null,         // null = 不限制
     "defaultSize": "1280x1280"
   },
   "capability": {
@@ -255,24 +256,34 @@ capability 只覆盖 GLM 明确有差异的维度（mask / backgrounds / outputF
 
 ### 改动点
 
-| 文件 | 改动 |
-|------|------|
-| `companion/src/providers/types.ts` | adapter 接口新增 `sizeConstraints` 和扩展后的 `capability` 字段（含 `backgrounds` / `outputFormats`） |
-| `companion/src/providers/openai.ts` | 声明 OpenAI 的 sizeConstraints + 全能力（backgrounds/format 都全） |
-| `companion/src/providers/glm.ts` | 声明 GLM 的 sizeConstraints + 能力（backgrounds 去掉 transparent，outputFormats 去掉 webp，mask=false） |
-| `companion/src/routes/auth.ts` | `/auth/status` 返回当前 adapter 的 `model`、`sizeConstraints`、`capability`；`provider` 读真实 `creds.provider` |
-| `src/types/companion.ts` | `CompanionAuthStatus` 新增 `model`、`sizeConstraints`、`capability` 字段 |
-| `src/stores/settingsStore.ts` | `SIZE_STEP` / `MAX_CUSTOM_*` 从常量改为 ref；`backgroundOptions` / `formatOptions` 按 capability 过滤后的结果；新增 model + capability 回流写入 |
-| `src/components/chat/ComposerParameterBar.vue` | 区域编辑 tag 加 `v-if` 按 capability.mask 显示；背景/格式 tag 读过滤后的选项 |
-| `src/components/settings/ApiSettingsPanel.vue` | `checkStatus()` 拿到 authStatus 后 emit 写回 model + sizeConstraints + capability |
+| 文件 | 改动 | 状态 |
+|------|------|------|
+| `companion/src/providers/types.ts` | adapter 接口 + `SizeConstraints` + `ProviderConfig` + `extra`/`editExtra` | ✅ 阶段一 |
+| `companion/src/providers/registry.ts` | 按 `creds.provider` 解析 adapter，缺省/未注册回退 openai | ✅ 阶段一 |
+| `companion/src/providers/openai.ts` | 声明 OpenAI 的 sizeConstraints + 全能力（backgrounds/format 都全） | ✅ 阶段一 |
+| `companion/src/providers/multipart.ts` | route 层把原始 multipart Buffer 拆成 images[]/mask/字段 | ✅ 阶段一 |
+| `companion/src/providers/taskPoller.ts` | 通用异步轮询基础设施（本轮 GLM 不调，已实现+测好） | ✅ 阶段一 |
+| `companion/src/routes/images.ts` | 改为调 `resolveAdapter().generate/edit`，validate 留 route 层 | ✅ 阶段一 |
+| `companion/src/routes/auth.ts` | `/auth/status` 返回当前 adapter 的 `model`、`sizeConstraints`、`capability`；`provider` 读真实 `creds.provider` | ✅ 阶段一 |
+| `companion/src/credentials.ts` | `Credentials` 加 `provider`/`model`，读时缺省兼容 | ✅ 阶段一 |
+| `companion/src/providers/glm.ts` | 声明 GLM 的 sizeConstraints + 能力（backgrounds 去掉 transparent，outputFormats 去掉 webp，mask=false） | ⏳ 阶段二 |
+| `src/types/companion.ts` | `CompanionAuthStatus` 新增 `model`、`sizeConstraints`、`capability` 字段 | ✅ 阶段一 web |
+| `src/stores/settingsStore.ts` | `SIZE_STEP` / `MAX_CUSTOM_*` 改为 ref；`backgroundOptions` / `formatOptions` 按 capability 过滤的 computed；`applyProviderInfo` 回流；model 跟随 companion；`transparentDisabled` 改读 capability | ✅ 阶段一 web |
+| `src/services/imagesApi.ts` | `validateBackground` 改 `supportsTransparent` 参数（capability 驱动，不再按 model 名字） | ✅ 阶段一 web |
+| `src/features/generation/imageClients/directImagesClient.ts` | 加 `getSupportsTransparent` 接 capability | ✅ 阶段一 web |
+| `src/components/chat/ComposerParameterBar.vue` | 区域编辑 tag 加 `v-if` 按 capability.mask 显示；背景/格式 tag 读过滤后的选项 | ✅ 阶段一 web |
+| `src/components/settings/ApiSettingsPanel.vue` | `checkStatus()` 拿到 authStatus 后调 `applyProviderInfo` 写回 model + sizeConstraints + capability | ✅ 阶段一 web |
+| `src/app/studio/useStudioViewModel.ts` | directClient 传 `getSupportsTransparent`；watch mask=false 时关 editModeEnabled | ✅ 阶段一 web |
 
-`dimensionsForRatio` / `getCustomSizeError` 逻辑不动，只是引用的常量变成响应式。
+`dimensionsForRatio` 逻辑不动，只是引用的常量变成响应式（读 sizeConstraints ref）；`getCustomSizeError` 本轮未参数化（见阶段一决策记录）。
 
-> 这个改动让 `settingsStore.model` 的语义从「写死的 FIXED_IMAGE_MODEL」变成「当前生效模型（companion 在线时被覆盖，否则回退默认）」。下游所有读 `model` 的地方（如 `transparentDisabled` 判断 `model === FIXED_IMAGE_MODEL`）需要顺带审查：在 capability 驱动 UI 后，`transparentDisabled` 这种按 model 名字判断的逻辑应该改成读 `capability.backgrounds` 是否含 transparent，语义更直接。
+> ~~这个改动让 `settingsStore.model` 的语义从「写死的 FIXED_IMAGE_MODEL」变成「当前生效模型（companion 在线时被覆盖，否则回退默认）」。下游所有读 `model` 的地方（如 `transparentDisabled` 判断 `model === FIXED_IMAGE_MODEL`）需要顺带审查：在 capability 驱动 UI 后，`transparentDisabled` 这种按 model 名字判断的逻辑应该改成读 `capability.backgrounds` 是否含 transparent，语义更直接。~~（阶段一 web 部分已按此落地：model 彻底跟随 companion，transparentDisabled 改读 capability.backgrounds。）
 
 ## 架构
 
-### 现状
+### 现状（重构前）
+
+> 此为阶段一落地**之前**的状态，已被下方「目标」取代（阶段一 companion 侧已完成）。
 
 ```text
 companion/src/routes/images.ts
@@ -281,20 +292,21 @@ companion/src/routes/images.ts
   返回上游响应原样
 ```
 
-### 目标
+### 目标（阶段一 companion 侧已落地）
 
 ```text
 companion/src/routes/images.ts
-  POST /images/generations  →  providerAdapter.generate(OpenAI形状入参)  →  返回 OpenAI 形状 {data:[{b64_json}]}
-  POST /images/edits        →  providerAdapter.edit(OpenAI形状入参)      →  返回 OpenAI 形状 {data:[{b64_json}]}
+  POST /images/generations  →  resolveAdapter(config).generate(OpenAI形状入参)  →  返回 OpenAI 形状 {data:[{b64_json}]}
+  POST /images/edits        →  resolveAdapter(config).edit(OpenAI形状入参)      →  返回 OpenAI 形状 {data:[{b64_json}]}
 
 companion/src/providers/
-  types.ts        # ProviderAdapter 接口、ProviderCapability、ProviderConfig
-  registry.ts     # provider 注册表 + 当前 provider 解析
-  openai.ts       # 现有透传逻辑搬过来，作为默认/兼容 adapter
+  types.ts        # ProviderAdapter 接口、ProviderCapability、ProviderConfig、SizeConstraints
+  registry.ts     # provider 注册表 + 当前 provider 解析（缺省/未注册回退 openai）
+  openai.ts       # 现有透传逻辑搬过来，作为默认/兼容 adapter（阶段一已落地）
+  multipart.ts    # multipart 解析器：route 层把原始 Buffer 拆成 images[]/mask/字段（阶段一已落地）
   glm.ts          # GLM-Image（智谱）adapter
-  urlToB64.ts     # 通用工具：provider 返回 URL 时 fetch 转 base64
-  taskPoller.ts   # 通用工具：异步 provider 的「提交 task → 轮询状态 → 取结果」封装
+  urlToB64.ts     # 通用工具：provider 返回 URL 时 fetch 转 base64（阶段二）
+  taskPoller.ts   # 通用工具：异步 provider 的「提交 task → 轮询状态 → 取结果」封装（阶段一已落地）
 ```
 
 ### ProviderAdapter 接口
@@ -314,26 +326,40 @@ export type SizeConstraints = {
   min: number;                  // 单边最小像素
   max: number;                  // 单边最大像素
   maxPixels: number;            // 总像素上限
+  minPixels: number;            // 总像素下限（OpenAI=655360；GLM 等无下限概念时置 0）
   maxAspectRatio: number | null; // null = 不限制
   defaultSize: string;          // auto / 默认尺寸
 };
 
+// 已知字段（跨 provider 共享）单独抽出；web 发出的其余字段进 extra 透传，
+// 透传型 adapter 原样带上，翻译型 adapter 按需取用。详见下方「参数保真」说明。
 export type OpenAIImageRequest = {
   model: string;
   prompt: string;
   size: string;          // OpenAI 形状的 size，例如 "1024x1024" / "auto"
   background: string;    // "auto" | "opaque" | "transparent"
   outputFormat: string;  // "png" | "webp" | "jpeg"
+  extra: Record<string, unknown>;  // 上述已知字段之外的 web 字段（quality/stream/...）
 };
 
+export type EditImage = { blob: Buffer; name: string; mimeType: string };
+
 export type OpenAIImageEditRequest = OpenAIImageRequest & {
-  images: { blob: Buffer; name: string; mimeType: string }[];
-  mask?: { blob: Buffer; name: string; mimeType: string };
+  images: EditImage[];
+  mask?: EditImage;
+  editExtra: Record<string, string>;  // 编辑请求额外的文本字段（stream/partial_images 等）
 };
 
 export type OpenAIImageResult = {
   b64Json: string;
   revisedPrompt?: string;
+};
+
+export type ProviderConfig = {
+  provider: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  model?: string;  // provider 专属 model id（login 时填，不写死在 adapter）
 };
 
 export type ProviderAdapter = {
@@ -357,32 +383,42 @@ export type ProviderAdapter = {
 
 adapter 的输入输出都是 OpenAI 形状，内部负责「OpenAI 形状 → 厂商形状 → fetch → 厂商响应 → OpenAI 形状」全过程。`routes/images.ts` 对所有 provider 的处理是统一的。
 
+> **结构化字段 vs 字节透传**（阶段一落地决策）：adapter 契约统一收**结构化字段**，而非原始字节。这意味着 OpenAI 这条本就形状正确的链路，从「route 把 web 的原始 multipart/JSON 字节级透传给上游」变成「route 解析成结构化字段 → openai adapter 重新序列化发上游」。重建后的请求与原请求**语义等价**（所有字段、图片二进制字节均保留），但**不逐字节相同**（boundary、字段顺序、header 大小写由 adapter 决定）。这个取舍是必须的——翻译型 adapter（如 GLM 编辑走 chat messages）不可能字节透传，契约必须统一。OpenAI 链路的「重建」由测试 `edit forwards multipart image[], mask, and extra fields` 和 `preserves binary body bytes exactly` 护航，确保语义零丢失。
+
 ### 路由层改造
 
-`routes/images.ts` 从「直接 fetch 上游」改成「调用当前 adapter」：
+`routes/images.ts` 从「直接 fetch 上游」改成「调用当前 adapter」。HTTP 边界校验（`validateGenerationBody` / `validateEditMultipart`）留在 route 层——它们是 Content-Type / part 形状 / 安全上限校验，与 provider 无关，所有 provider 共用。
 
 ```ts
-const adapter = resolveAdapter(creds); // 根据 creds.provider 选 adapter
-if (!adapter.capability.generate) throw new Error("当前 provider 不支持文生图");
+const adapter = resolveAdapter(config); // 根据 creds.provider 选 adapter，缺省回退 openai
+if (!adapter.capability.generate) {
+  return reply.status(501).send({ error: "当前 provider 不支持文生图" });
+}
 
-const result = await adapter.generate(
-  { model, prompt, size, background, outputFormat },
-  creds,
-);
+// 已知字段抽出来，其余进 extra 透传
+const request = toGenerateRequest(body);
+let result;
+try {
+  result = await adapter.generate(request, config);
+} catch (error) {
+  return reply.status(502).send({ error: errorMessage(error) });
+}
 return reply.send({
   data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt }],
 });
 ```
 
-edit 路径多一步能力检查：
+edit 路径多两步：解析 multipart + 能力检查。multipart 解析由 `providers/multipart.ts` 完成（route 层把原始 Buffer 拆成 images[]/mask/文本字段），校验仍由 route 层的 `validateEditMultipart` 在解析前做。
 
 ```ts
-if (!adapter.capability.edit) {
+if (!adapter.capability.edit || !adapter.edit) {
   return reply.status(501).send({ error: "当前 provider 不支持图片编辑" });
 }
-if (request.mask && !adapter.capability.mask) {
+const parsed = parseMultipart(rawBody, boundary); // → { images, mask, fields }
+if (parsed.mask && !adapter.capability.mask) {
   return reply.status(400).send({ error: "当前 provider 不支持遮罩局部编辑" });
 }
+const result = await adapter.edit(toEditRequest(parsed), config);
 ```
 
 ### 任务轮询基础设施
@@ -392,21 +428,22 @@ if (request.mask && !adapter.capability.mask) {
 - **同步**：一次 HTTP 请求，连接挂到画完为止，在同一个响应里返回结果。OpenAI Images API、GLM 同步接口都是这种。客户端就是一个普通 `await fetch()`，但长连接有超时风险。
 - **异步轮询**：第一次请求只提交任务、立即返回 `task_id`（连接断开）；客户端拿着 `task_id` 反复查询任务状态，直到任务完成取回结果。GLM 异步接口、通义万相（Wan）都是这种。优点是不挂长连接、不超时；缺点是客户端要实现「提交 → 轮询间隔 → 超时判断 → 重试 → 取结果」的状态机。
 
-本轮 GLM 用同步接口（简单），但同步模式有超时风险（图像生成几十秒是常态）。为此预留一套**通用任务轮询基础设施** `taskPoller.ts`：
+本轮 GLM 用同步接口（简单），但同步模式有超时风险（图像生成几十秒是常态）。为此预留一套**通用任务轮询基础设施** `taskPoller.ts`（阶段一已实现 + 测试）：
 
 ```ts
 // companion/src/providers/taskPoller.ts
 // 把异步 provider 的「提交 task → 轮询 → 取结果」包成一个同步 Promise
 export async function runAsyncTask(options: {
   submit: () => Promise<{ taskId: string }>;        // 提交任务，拿 task_id
-  poll: (taskId: string) => Promise<TaskStatus>;    // 查询状态
+  poll: (taskId: string) => Promise<TaskStatus>;    // 查询状态（PENDING/SUCCESS/FAILED）
   extractResult: (taskId: string) => Promise<OpenAIImageResult>; // 任务完成后取结果
   intervalMs: number;       // 轮询间隔
   timeoutMs: number;        // 总超时
+  sleep?: (ms: number) => Promise<void>;  // 测试注入用，默认 setTimeout
 }): Promise<OpenAIImageResult>;
 ```
 
-GLM adapter 本轮不调用它（用同步接口），但这个工具先实现并测试好。后续接通义万相等纯异步 provider 时，adapter 内部直接 `await runAsyncTask({...})` 就行，对 `routes/images.ts` 来说所有 provider 都是同一个 `adapter.generate()` 返回 Promise，无感知差异。
+GLM adapter 本轮不调用它（用同步接口），但这个工具已实现并测好（5 个单测覆盖 SUCCESS/PENDING/FAILED/超时/轮询异常）。后续接通义万相等纯异步 provider 时，adapter 内部直接 `await runAsyncTask({...})` 就行，对 `routes/images.ts` 来说所有 provider 都是同一个 `adapter.generate()` 返回 Promise，无感知差异。
 
 ### 凭据模型
 
@@ -564,22 +601,38 @@ companion/src/providers/
 
 把现有透传逻辑从 `routes/images.ts` 抽成 `providers/openai.ts`，建立 `ProviderAdapter` 接口和 registry，**行为零变化**。
 
-- [ ] 新增 `companion/src/providers/types.ts`（接口定义，含 `SizeConstraints`）
-- [ ] 新增 `companion/src/providers/registry.ts`（按 `creds.provider` 解析 adapter，缺省回退 openai）
-- [ ] 把 `routes/images.ts` 现有 fetch 逻辑搬到 `providers/openai.ts`
-- [ ] `routes/images.ts` 改为调用 `resolveAdapter(creds).generate/edit`
-- [ ] `credentials.ts` 读取时兼容无 `provider` 字段（默认 openai）
-- [ ] `providers/openai.ts` 声明 OpenAI 的 sizeConstraints（step=16 等）和全能力（mask=true, backgrounds/outputFormats 都全，即当前 web 行为）
-- [ ] 新增 `companion/src/providers/taskPoller.ts`（通用异步轮询基础设施，GLM 本轮不调用但先实现并测试）
-- [ ] `routes/auth.ts` 的 `provider` 读真实 `creds.provider`；新增返回 `model`、`sizeConstraints`、`capability`（来自当前 adapter）
-- [ ] `src/types/companion.ts` 的 `CompanionAuthStatus` 新增 `model`、`sizeConstraints`、`capability` 字段
-- [ ] `settingsStore.ts` 的 `SIZE_STEP` / `MAX_CUSTOM_*` 从常量改为 ref（companion 覆盖，否则回退 OpenAI 默认）；`backgroundOptions` / `formatOptions` 改为按 `capability` 过滤后的 computed；新增 model + capability 回流写入
-- [ ] `ComposerParameterBar.vue` 区域编辑 tag 加 `v-if` 按 capability.mask 显示；背景/格式 tag 读过滤后的选项
-- [ ] `ApiSettingsPanel.vue` 的 `checkStatus()` 拿到 authStatus 后 emit 写回 model + sizeConstraints + capability
-- [ ] 审查 `settingsStore.model` 下游消费者（`transparentDisabled` 等）在 capability 驱动后的语义（改读 `capability.backgrounds`）
-- [ ] 现有所有测试通过（零回归）
+阶段一拆成两半：**companion 侧**（已完成）+ **web 侧消费**（待做）。companion 侧先把翻译层骨架和回流通道建好，web 侧不改也能照常工作（companion 多返回的字段被忽略）；web 侧消费作为阶段一的下半场独立推进，验收「UI 能力驱动」时再做。
 
-**验收**：现有 OpenAI 中转站用户完全无感（OpenAI 全能力，UI 行为不变），companion 内部已有 adapter 抽象 + provider 元信息回流通道 + UI 能力驱动 + 异步轮询基础设施。
+#### 阶段一（companion 侧）—— ✅ 已完成
+
+- [x] 新增 `companion/src/providers/types.ts`（接口定义，含 `SizeConstraints` / `ProviderConfig` / `OpenAIImageRequest` + `extra`）
+- [x] 新增 `companion/src/providers/registry.ts`（按 `creds.provider` 解析 adapter，缺省/未注册回退 openai）
+- [x] 把 `routes/images.ts` 现有 fetch 逻辑搬到 `providers/openai.ts`
+- [x] `routes/images.ts` 改为调用 `resolveAdapter(config).generate/edit`
+- [x] 新增 `companion/src/providers/multipart.ts`（route 层把原始 multipart Buffer 拆成 images[]/mask/字段喂给 adapter）
+- [x] `credentials.ts` 读取时兼容无 `provider` 字段（默认 openai）；`saveCredentials` 加 provider/model 可选入参
+- [x] `providers/openai.ts` 声明 OpenAI 的 sizeConstraints（step=16, 16–3840, maxPixels=8294400, minPixels=655360, maxAspectRatio=3）和全能力（mask=true, backgrounds/outputFormats 都全，即当前 web 行为）
+- [x] 新增 `companion/src/providers/taskPoller.ts`（通用异步轮询基础设施，GLM 本轮不调用但已实现并测好）
+- [x] `routes/auth.ts` 的 `provider` 读真实 `creds.provider`；新增返回 `model`、`sizeConstraints`、`capability`（来自当前 adapter）；无凭据时回流 OpenAI 默认值
+- [x] `companion/src/types.ts` 的 `CompanionAuthStatus` 新增 `model`、`sizeConstraints`、`capability` 字段
+- [x] 测试：taskPoller(5) + openai adapter(8) + multipart(6) + images 集成(9) + auth 回流(3) + 原有(16) = **47 通过，tsc / build 干净，web vue-tsc 干净**
+
+> **落地决策记录**：adapter 契约统一收结构化字段（见上方「结构化字段 vs 字节透传」），因此 OpenAI 链路从字节透传改为语义等价的重建。参数保真靠 `extra` / `editExtra` 字段承载 web 的额外字段（quality/stream/partial_images 等），由 `openai.test.ts` 的 `preserves extra fields` 和 `images.integration.test.ts` 的 edit 路径测试护航。
+
+#### 阶段一（web 侧消费）—— ✅ 已完成
+
+- [x] `src/types/companion.ts` 的 `CompanionAuthStatus` 新增 `model`、`sizeConstraints`、`capability` 字段（与 companion 返回形状对齐）
+- [x] `settingsStore.ts`：`SIZE_STEP` / `MAX_CUSTOM_*` 改为 ref（companion 覆盖，未回流回退 OpenAI 默认）；`dimensionsForRatio`/`roundToStep`/`clampDimension` 挪进 store 闭包读 ref；`backgroundOptions` / `formatOptions` 改为按 `capability` 过滤的 computed；新增 `applyProviderInfo(status)` action 回流 model/capability/sizeConstraints
+- [x] `model` 彻底跟随 companion：`applySettings` 不再强制 `model = FIXED_IMAGE_MODEL`（改读持久化值兜底默认）；`currentSettings()` 读 ref；`transparentDisabled` 从 `model === FIXED_IMAGE_MODEL` 改读 `capability.backgrounds.includes("transparent")`
+- [x] `imagesApi.ts` 的 `validateBackground` 从 `model === "gpt-image-2"` 字面量改为 `supportsTransparent` 参数（capability 驱动），`imageApiParams` 透传；directImagesClient 加 `getSupportsTransparent` 接 capability
+- [x] `ComposerParameterBar.vue` 区域编辑 tag 加 `v-if="providerCapability.mask"`；`useStudioViewModel` 加 watch：mask=false 时强制关 editModeEnabled
+- [x] `ApiSettingsPanel.vue` 的 `checkStatus()` 拿到 authStatus 后直接调 `settingsStore.applyProviderInfo(status)`（离线/失配传 null）
+- [x] 测试：新增 `settingsStore.test.ts`(5) 覆盖 capability 默认值/回流/重置/选中值回退/离线保 model；**web 全量 141 通过，vue-tsc 干净**
+- [x] **前提修正**：companion openai adapter 的 `capability.backgrounds` 从含 transparent 改为 `["auto","opaque"]`（gpt-image-2 不支持透明背景，与 web 现状一致；同步改 openai.test.ts / auth.test.ts 断言）
+
+> **落地决策记录**：① transparent 的「禁用」语义统一到 capability——UI 通过 `backgroundOptions` 过滤 + 请求路径 `validateBackground(supportsTransparent)` 双保险，不再依赖 model 名字判断。② `applyProviderInfo` 内同步校正失效的选中值（background/format），不靠 watch，避免 UI 短暂停留在失效状态。③ 校验函数 `getCustomSizeError`（imagesApi.ts，含独立测试）本轮**未参数化**，仍是 OpenAI 硬规则——因为 customSizeError 只在「自定义」尺寸触发，GLM 本轮走 ratio 预设不触发；GLM 自定义尺寸的精细校验留到阶段二。
+
+**验收**：现有 OpenAI 中转站用户完全无感（模型 tag 显示 gpt-image-2、transparent 仍禁用、区域编辑仍可见、尺寸选项不变），companion + web 全链路 capability 驱动 UI 已打通。
 
 ### 阶段二：GLM 文生图 adapter
 
@@ -640,7 +693,8 @@ companion/src/providers/
 
 | 阶段 | 内容 | 估算 |
 |------|------|------|
-| 阶段一 | adapter 骨架 + openai 抽取 + provider 元信息回流 + taskPoller 基础设施（零行为变化） | 2.5-3 人天 |
+| 阶段一（companion 侧）✅ | adapter 骨架 + openai 抽取 + multipart 解析 + provider 元信息回流 + taskPoller 基础设施（零行为变化） | 2.5-3 人天 |
+| 阶段一（web 侧消费）✅ | `CompanionAuthStatus` 类型 + settingsStore 常量→ref + capability 驱动 UI + ApiSettingsPanel 回写 + validateBackground 改 capability | 1-1.5 人天 |
 | 阶段二 | GLM 文生图 adapter + login/status 改造 + urlToB64 + 测试 + 联调 | 3-4 人天 |
 | 阶段三 | GLM 全图编辑 adapter（可选，经 GLM-4V chat 翻译） | 2-3 人天（不做则 0） |
 | **合计（本轮 MVP）** | **GLM generate 打通，edit 视情况** | **7-10 人天** |
