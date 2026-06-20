@@ -48,6 +48,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
   return {
     ...refs,
     applySettings: settings.applySettings,
+    applyProviderInfo: settings.applyProviderInfo,
     applySizePreset: settings.applySizePreset,
     applySizeResolution: settings.applySizeResolution,
     currentGenerationParams: settings.currentGenerationParams,

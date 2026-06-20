@@ -16,6 +16,11 @@ import { DESKTOP_APP_DOWNLOAD_URL } from "../../shared/downloads";
 type ChatWorkspaceHeader = {
   activeConversation?: Conversation;
   isLibraryOpen: boolean;
+  companionStatus?: {
+    show: boolean;
+    online: boolean;
+    version?: string;
+  };
 };
 
 type ChatWorkspaceMessages = {
@@ -187,6 +192,30 @@ function imageFilesFromTransfer(
         >
           正在生成 {{ generation.pendingJobCount }} 张
         </span>
+        <button
+          v-if="header.companionStatus?.show"
+          class="flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors"
+          :class="
+            header.companionStatus.online
+              ? 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              : 'text-amber-600 hover:bg-amber-50'
+          "
+          type="button"
+          :title="
+            header.companionStatus.online
+              ? `Companion 在线${header.companionStatus.version ? ' v' + header.companionStatus.version : ''}`
+              : 'Companion 离线，点击打开设置'
+          "
+          @click="actions.openSettings"
+        >
+          <span
+            class="inline-block h-2 w-2 rounded-full"
+            :class="header.companionStatus.online ? 'bg-green-500' : 'bg-amber-400'"
+          />
+          <span class="hidden sm:inline">
+            {{ header.companionStatus.online ? 'Companion' : '离线' }}
+          </span>
+        </button>
         <a
           :href="DESKTOP_APP_DOWNLOAD_URL"
           download

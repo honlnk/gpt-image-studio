@@ -10,6 +10,7 @@ import {
   useStudioGeneration,
 } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
+import { useCompanionConnection } from "../../features/companion";
 import { useStudioSettings } from "../../features/settings";
 import { withNetworkRetry } from "../../services/networkRetry";
 import { clonePromptWordbanks } from "../../services/promptWordbanks";
@@ -102,6 +103,20 @@ export function useStudioViewModel() {
   const feedback = useStudioFeedback();
   const analytics = useAnalyticsStore();
   const { eventCount: analyticsEventCount } = storeToRefs(analytics);
+  // Companion 连接状态是全局唯一来源：探测/配对/断开都收拢在这里，
+  // 启动时（onMounted）即探测，不再依赖「设置 → 接口」面板挂载。
+  const companion = useCompanionConnection({
+    connectionMode: settings.connectionMode,
+    companionUrl: settings.companionUrl,
+    companionSessionToken: settings.companionSessionToken,
+    onClearSessionToken: () => {
+      settings.companionSessionToken.value = "";
+    },
+    onApplyProviderInfo: settings.applyProviderInfo,
+    onSessionTokenAcquired: (token) => {
+      settings.companionSessionToken.value = token;
+    },
+  });
   const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
     onStorageError: reportStorageError,
@@ -714,6 +729,11 @@ export function useStudioViewModel() {
   const chatHeader = proxyRefs({
     activeConversation: conversations.activeConversation,
     isLibraryOpen,
+    companionStatus: computed(() => ({
+      show: settings.connectionMode.value === "localCompanion",
+      online: companion.companionOnline.value,
+      version: companion.companionHealth.value?.version,
+    })),
   });
   const chatMessages = proxyRefs({
     activeAttachmentIds: attachedImageIds,
@@ -789,6 +809,17 @@ export function useStudioViewModel() {
     companionPaired: settings.companionPaired,
     companionSessionToken: settings.companionSessionToken,
     companionUrl: settings.companionUrl,
+    companionOnline: companion.companionOnline,
+    companionHealth: companion.companionHealth,
+    companionAuthStatus: companion.companionAuthStatus,
+    companionPairingInProgress: companion.pairingInProgress,
+    companionPairingError: companion.pairingError,
+    companionPairingCodeInput: companion.pairingCodeInput,
+    checkCompanionStatus: companion.checkStatus,
+    startCompanionPairing: companion.startPairing,
+    confirmCompanionPairing: companion.confirmPairing,
+    disconnectCompanion: companion.disconnect,
+    cancelCompanionPairing: companion.cancelPairing,
     connectionMode: settings.connectionMode,
     favoritePrompts: settings.favoritePrompts,
     promptMode: settings.promptMode,
