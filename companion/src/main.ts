@@ -16,7 +16,7 @@ import {
   stopManagedProcess,
 } from "./processManager.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.5.0";
 const DEFAULT_PORT = "19750";
 const DEFAULT_SESSION_TTL_DAYS = "30";
 
