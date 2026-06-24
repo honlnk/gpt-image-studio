@@ -69,11 +69,16 @@ const SIZE_RESOLUTION_OPTIONS = [
   { value: "4k", label: "4K", targetPixels: 3840 * 2160 },
 ] as const;
 
-/** 返回 maxPixels 约束下可用的分辨率档 value 列表（升序）。供 applyProviderInfo 校正用。 */
-function availableResolutionValues(maxPixels: number): SizeResolution[] {
-  return SIZE_RESOLUTION_OPTIONS.filter((opt) => opt.targetPixels <= maxPixels)
-    .map((opt) => opt.value);
-}
+/**
+ * direct 模式 / companion 离线时的兜底默认档位（OpenAI 形状 1K/2K/4K）。
+ * 走 companion 的 provider 一律用 companion 回流的 resolutionOptions，不读这个。
+ */
+const DEFAULT_RESOLUTION_OPTIONS: ReadonlyArray<{
+  value: string;
+  label: string;
+  targetPixels: number;
+}> = SIZE_RESOLUTION_OPTIONS;
+
 // OpenAI/gpt-image-2 的默认尺寸约束。companion 在线时被 providerCapability/sizeConstraints
 // 覆盖；离线或未回流时回退到这些值，保持现状行为。
 const DEFAULT_SIZE_STEP = 16;
@@ -136,12 +141,13 @@ export const useSettingsStore = defineStore("settings", () => {
   const activeSizePreset = ref<GenerationParams["size"]>("auto");
   const sizeResolution = ref<SizeResolution>("1k");
   const sizeRatioOptions = SIZE_RATIO_OPTIONS;
-  // 分辨率档按 provider maxPixels 过滤：某档 targetPixels 超过 maxPixels 则不显示。
-  // GLM maxPixels=4194304 → 4K(8294400) 被隐藏；OpenAI maxPixels=8294400 → 4K 保留。
+  // 分辨率档位：companion 声明、web 渲染（D1）。
+  // 走 companion 的 provider 一律用 companion 回流的档位（如豆包 [2k,3k,4k]）；
+  // direct / 离线 / 未回流时用 OpenAI 兜底默认 [1k,2k,4k]。
+  // 不再用 maxPixels 运行时过滤——provider 声明什么是它自己的真实能力。
+  const resolutionOptions = ref(DEFAULT_RESOLUTION_OPTIONS.map((o) => ({ ...o })));
   const sizeResolutionOptions = computed(() =>
-    SIZE_RESOLUTION_OPTIONS.filter(
-      (opt) => opt.targetPixels <= maxCustomPixels.value,
-    ).map(({ value, label }) => ({ value, label })),
+    resolutionOptions.value.map(({ value, label }) => ({ value, label })),
   );
   const quality = ref<GenerationParams["quality"]>("auto");
   const background = ref<GenerationParams["background"]>("auto");
@@ -234,14 +240,15 @@ export const useSettingsStore = defineStore("settings", () => {
       outputFormat.value,
   );
 
-  // 尺寸计算（读 sizeConstraints ref，受 companion 回流驱动）
+  // 尺寸计算（读 sizeConstraints ref + resolutionOptions ref，受 companion 回流驱动）
   function dimensionsForRatio(ratio: SizeRatio, resolution: SizeResolution) {
     const ratioOption =
       SIZE_RATIO_OPTIONS.find((option) => option.value === ratio) ??
       SIZE_RATIO_OPTIONS[4];
+    // 读 companion 回流的 resolutionOptions（如豆包 [2k,3k,4k]），找不到时回退第一个。
     const resolutionOption =
-      SIZE_RESOLUTION_OPTIONS.find((option) => option.value === resolution) ??
-      SIZE_RESOLUTION_OPTIONS[0];
+      resolutionOptions.value.find((option) => option.value === resolution) ??
+      resolutionOptions.value[0];
     const aspect = ratioOption.widthRatio / ratioOption.heightRatio;
     let width = Math.sqrt(resolutionOption.targetPixels * aspect);
     let height = width / aspect;
@@ -326,6 +333,14 @@ export const useSettingsStore = defineStore("settings", () => {
       maxCustomPixels.value = DEFAULT_MAX_CUSTOM_PIXELS;
       minCustomPixels.value = DEFAULT_MIN_CUSTOM_PIXELS;
       maxAspectRatio.value = DEFAULT_MAX_ASPECT_RATIO;
+      resolutionOptions.value = DEFAULT_RESOLUTION_OPTIONS.map((o) => ({ ...o }));
+      // 离线时若当前选中档不在默认列表（如刚从豆包切回 direct，还停在 3k），回退第一个。
+      const defaultValues = DEFAULT_RESOLUTION_OPTIONS.map((o) => o.value);
+      if (!defaultValues.includes(sizeResolution.value)) {
+        sizeResolution.value = defaultValues[0] ?? "1k";
+        const ratio = normalizeSizePreset(activeSizePreset.value);
+        if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
+      }
       // 离线时 model 不回退——保留用户上次生效的 model，避免 UI 闪烁
       return;
     }
@@ -342,6 +357,8 @@ export const useSettingsStore = defineStore("settings", () => {
     maxCustomPixels.value = sc.maxPixels;
     minCustomPixels.value = sc.minPixels;
     maxAspectRatio.value = sc.maxAspectRatio;
+    // 写入 companion 声明的分辨率档位（companion 声明、web 渲染）。
+    resolutionOptions.value = status.resolutionOptions.map((o) => ({ ...o }));
     if (status.model) model.value = status.model;
     // 当前选中的背景/格式若已不在新 provider 支持列表，立即回退到第一个可用值。
     // 放在这里（同步）而非 watch，避免 UI 短暂停留在失效值上。
@@ -351,10 +368,11 @@ export const useSettingsStore = defineStore("settings", () => {
     if (!status.capability.outputFormats.includes(outputFormat.value)) {
       outputFormat.value = status.capability.outputFormats[0] ?? "png";
     }
-    // 当前分辨率档若超过新 provider 的 maxPixels（如 GLM 下 4K 不可达），回退到第一个可用档。
-    const availableRes = availableResolutionValues(sc.maxPixels);
-    if (!availableRes.includes(sizeResolution.value)) {
-      sizeResolution.value = availableRes[0] ?? "1k";
+    // 当前分辨率档若不在新 provider 声明的档位列表，回退到第一个可用档。
+    // （如从豆包 [2k,3k,4k] 切到 GLM [1k,2k]，停在 4k 的要回退；从 GLM 切到豆包，停在 1k 的要回退）
+    const availableValues = status.resolutionOptions.map((o) => o.value);
+    if (!availableValues.includes(sizeResolution.value)) {
+      sizeResolution.value = availableValues[0] ?? "1k";
       // 尺寸变了，若当前是比例模式需重算尺寸
       const ratio = normalizeSizePreset(activeSizePreset.value);
       if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);

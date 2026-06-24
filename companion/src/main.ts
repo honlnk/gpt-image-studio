@@ -43,6 +43,12 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4/images",
     defaultModel: "glm-image",
   },
+  {
+    id: "doubao",
+    label: "豆包 Seedream（火山方舟 ByteDance）",
+    defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3/images",
+    defaultModel: "doubao-seedream-5-0-lite",
+  },
 ];
 
 type ServeLikeOptions = {

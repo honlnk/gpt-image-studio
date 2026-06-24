@@ -41,7 +41,7 @@ export type ProviderCapability = {
  * 满足边界的任意尺寸都允许透传，由 provider 自己决定如何规整。
  */
 export type SizeConstraints = {
-  /** 对齐步长。OpenAI=16，GLM=32。 */
+  /** 对齐步长。OpenAI=16，GLM=32，豆包=1（无步长约束）。 */
   step: number;
   /** 单边最小像素。 */
   min: number;
@@ -55,6 +55,25 @@ export type SizeConstraints = {
   maxAspectRatio: number | null;
   /** auto / 缺省 size 映射到的具体尺寸，例如 "1024x1024"。 */
   defaultSize: string;
+};
+
+/**
+ * 分辨率档位（companion 声明、web 渲染）。
+ *
+ * 每个 provider 直接声明自己支持哪几档——声明什么是 provider 自己的真实能力，
+ * 不是「为了不破坏现状而凑出来的值」。web 端不再写死 1K/2K/4K、不再用 maxPixels
+ * 运行时过滤（GLM 4K 过滤特判随之删除），改为直接渲染 companion 上报的档位。
+ *
+ * value 与 web 的 SizeResolution 对齐，但本类型用 string 而非枚举，
+ * 以便豆包能声明 web 此前没有的 "3k" 档。
+ */
+export type ResolutionOption = {
+  /** 档位标识，例如 "1k" / "2k" / "3k" / "4k"。 */
+  value: string;
+  /** 展示文案，例如 "1K" / "2K" / "3K" / "4K"。 */
+  label: string;
+  /** 该档的目标像素数（width × height 的基准），web 的 dimensionsForRatio 用它算具体尺寸。 */
+  targetPixels: number;
 };
 
 /**
@@ -127,11 +146,15 @@ export type ProviderConfig = {
  * - generate() 文生图，所有 provider 必须实现。
  * - edit() 图片编辑，可选；未实现时 capability.edit 应为 false，
  *   route 层据此返回 501。
+ * - resolutionOptions 声明该 provider 支持的分辨率档位（companion 声明、web 渲染）。
+ *   web 删除写死档位 + maxPixels 运行时过滤后，直接渲染本字段。
  */
 export type ProviderAdapter = {
   readonly id: string;
   readonly capability: ProviderCapability;
   readonly sizeConstraints: SizeConstraints;
+  /** 该 provider 支持的分辨率档位，companion 声明、web 渲染。 */
+  readonly resolutionOptions: readonly ResolutionOption[];
 
   describe(config: ProviderConfig): { label: string; providerId: string };
 

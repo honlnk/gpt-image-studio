@@ -670,7 +670,7 @@ companion/src/providers/
 
 每个一个 `providers/<name>.ts`，注册到 registry，`login` 增加选项。按形状接近度排序：
 
-- **豆包（火山方舟）**：形状与 GLM 最接近（都是 OpenAI 兼容 `/images/generations`，返回 URL/b64），adapter 基本是 GLM 的复制 + 改 sizeConstraints + 改 base url。预估 2-3 人天。**独立设计方案见 [`companion-doubao-plan.md`](companion-doubao-plan.md)**——调研后发现豆包的 size 约束（总像素下限 minPixels）和原生图生图能力让它必须有独立 adapter，不能简单复制 GLM。
+- **豆包（火山方舟）✅ 已完成**：形状与 GLM 最接近（OpenAI 兼容 `/images/generations`，返回 b64），但调研后发现 size 约束（总像素下限 minPixels）和原生图生图能力让它必须有独立 adapter，不能复制 GLM。**独立设计方案见 [`companion-doubao-plan.md`](companion-doubao-plan.md)**。已实现 generate + edit（图生图共用 `/generations` + image 字段，联调确认）+ 分辨率档统一为 provider 声明。预估 2-3 人天。
 - **Qwen-Image（阿里千问团队）**：走 dashscope，形状待确认，可能需要异步轮询。预估 2-4 人天。
 - **通义万相 Wan（阿里万相实验室）**：dashscope，支持图像编辑（Wan 2.6），异步任务模式（提交拿 task_id → 轮询）。taskPoller 基础设施已在阶段一就位，adapter 内部 `await runAsyncTask({...})` 即可。预估 2-3 人天。
 

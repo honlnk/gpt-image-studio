@@ -58,6 +58,11 @@ function makeStatus(
       maxAspectRatio: 3,
       defaultSize: "1024x1024",
     },
+    resolutionOptions: [
+      { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+      { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+      { value: "4k", label: "4K", targetPixels: 3840 * 2160 },
+    ],
     ...overrides,
   };
 }

@@ -256,4 +256,9 @@ describe("glmAdapter static metadata", () => {
       defaultSize: "1280x1280",
     });
   });
+
+  it("declares resolution options [1k, 2k] (GLM maxPixels=4M, no 4k)", () => {
+    expect(glmAdapter.resolutionOptions.map((o) => o.value)).toEqual(["1k", "2k"]);
+    expect(glmAdapter.resolutionOptions.find((o) => o.value === "4k")).toBeUndefined();
+  });
 });

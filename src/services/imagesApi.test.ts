@@ -482,6 +482,27 @@ describe("getCustomSizeError", () => {
     expect(getCustomSizeError(1280, 1280, GLM_CONSTRAINTS)).toBe("");
     expect(getCustomSizeError(1024, 576, GLM_CONSTRAINTS)).toBe("");
   });
+
+  it("Doubao enforces minPixels floor (3686400), no step constraint", () => {
+    // 豆包 step=1 → 无步长对齐，任意整数像素都接受（单边范围由 min/max 兜底）
+    const DOUBAO_CONSTRAINTS: SizeConstraints = {
+      step: 1,
+      min: 512,
+      max: 4096,
+      maxPixels: 16777216,
+      minPixels: 3686400,
+      maxAspectRatio: 16,
+      defaultSize: "2048x2048",
+    };
+    // 1024x1024 = 1048576 < minPixels 3686400 → 报总像素下限错
+    expect(getCustomSizeError(1024, 1024, DOUBAO_CONSTRAINTS)).toContain("总像素");
+    // 1920x1920 = 3686400 刚好等于下限 → 合法
+    expect(getCustomSizeError(1920, 1920, DOUBAO_CONSTRAINTS)).toBe("");
+    // 2048x2048 = 4194304 在范围内 → 合法
+    expect(getCustomSizeError(2048, 2048, DOUBAO_CONSTRAINTS)).toBe("");
+    // step=1：2345x2345 这种非步长倍数也合法（只要像素在范围）
+    expect(getCustomSizeError(2345, 2345, DOUBAO_CONSTRAINTS)).toBe("");
+  });
 });
 
 function jsonResponse(payload: unknown, status = 200) {

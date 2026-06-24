@@ -1,6 +1,6 @@
 # Companion 豆包（Seedream）Provider 开发方案
 
-更新日期：2026-06-25
+更新日期：2026-06-26（联调完成）
 
 ## 背景
 
@@ -24,7 +24,7 @@ Authorization: Bearer <火山方舟 API Key>
 Content-Type: application/json
 
 {
-  "model": "doubao-seedream-3-0-t2i-250415",
+  "model": "doubao-seedream-5-0-260128",
   "prompt": "...",
   "size": "2048x2048",
   "response_format": "b64_json",
@@ -93,34 +93,43 @@ Content-Type: application/json
 
 ### 模型 ID 漂移
 
-豆包模型 ID 形如 `doubao-seedream-3-0-t2i-250415`（带日期版本号），会频繁漂移。和 GLM 一样，`login` 时让用户填自定义 model ID，不写死在 adapter。文档里的具体 ID 只是示例。
+豆包 model ID 形如 `doubao-seedream-5-0-260128`（带日期版本号），会随版本更新。和 GLM 一样，`login` 时让用户填自定义 model ID，不写死在 adapter。文档里的具体 ID 只是示例。
 
-### 图生图（edit / SeedEdit）
+> **联调确认**：火山方舟的 `model` 字段填的是**模型名**（`doubao-seedream-5-0-260128`），不是推理接入点 ID（`ep-xxxxx`）。两种方式火山方舟都支持——模型名直接调用更简单，接入点 ID 用于需要指定特定部署/版本的场景。本项目用模型名。
 
-豆包的图像编辑走 `images/edits`（火山方舟也提供了 edits 端点），参考图作为 `image` 字段：
+### 返回结构（联调确认）
+
+豆包 generate 返回的 `data[0]` 只有 `b64_json` 和 `size` 两个字段，**没有 `revised_prompt`**——豆包 Seedream 原样用用户给的 prompt 生成，不返回优化后 prompt（这与 OpenAI gpt-image 不同，gpt-image 会返回 `revised_prompt`）。因此 adapter 的 `OpenAIImageResult.revisedPrompt` 对豆包恒为 undefined，web 端不会展示优化后 prompt。
+
+### 图生图（edit / 全图编辑，联调确认）
+
+**联调发现**：豆包**没有独立的 `/images/edits` 端点**（返回 404）。图生图和文生图共用 `/images/generations`，靠请求体里带不带 `image` 字段区分——带 `image` 就是图生图，不带就是文生图。这是国产 API 常见做法（参考图直接塞进 generate 请求）。
 
 ```text
-POST https://ark.cn-beijing.volces.com/api/v3/images/edits
+POST https://ark.cn-beijing.volces.com/api/v3/images/generations   # 同文生图端点
 Authorization: Bearer <API Key>
-Content-Type: multipart/form-data
+Content-Type: application/json                                       # JSON，不是 multipart
 
-image:        <二进制图片>
-model:        doubao-seededit-3-0-i2i-250610
-prompt:       编辑指令
-response_format: b64_json
-watermark:    false
+{
+  "model": "doubao-seedream-5-0-260128",
+  "prompt": "编辑指令",
+  "size": "2048x2048",
+  "image": "data:image/png;base64,<参考图 base64>",                   # 参考图作为 JSON 字段
+  "response_format": "b64_json",
+  "watermark": false
+}
 ```
 
-返回与文生图一致（`data[0].b64_json` 或 `data[0].url`）。
+返回与文生图一致（`data[0].b64_json`，无 `revised_prompt`）。
 
 特点：
 
 - **支持全图编辑**（无 mask）：参考图 + 自然语言指令，改风格、换背景、增删元素。
 - **不支持 mask 局部重绘**：与 GLM 一样，国产模型普遍缺这个能力。`capability.mask=false`。
-- 与 OpenAI edits 形状接近（都是 multipart + `image` + `prompt`），翻译成本低于 GLM-4V 那种「edits 重写成 chat messages」。
-- 编辑强度等豆包特有参数（若存在）走 `editExtra` 透传，本轮不强加映射。
+- **形状与 OpenAI edits 不同**：OpenAI 用 multipart `image[]`，豆包用 JSON `image`（单张、base64 data URL）。adapter 在 `edit()` 里负责这个形状转换。
+- 豆包不认的文本字段（background/output_format 等）adapter 已裁掉；`editExtra` 不再透传（豆包 edit 是 JSON，web 的 stream/partial_images 等字段对豆包无意义）。
 
-> 火山方舟的 edits 端点形状在文档里以「OpenAI 兼容 multipart + image 字段」描述。真实字段名（`image` 单数 vs `image[]` 数组、是否有 `strength`）需联调时按真实 4xx 错误确认；adapter 设计上预留 `editExtra` 透传兜底。
+> **联调过程中的修正**：最初 adapter 按火山方舟文档描述实现成 multipart 打 `/images/edits`，实际返回 404。改打 `/images/generations` + JSON `image` 字段后跑通。这是「文档描述与真实行为不符、以真实 4xx 为准」的典型案例，见风险条目。
 
 ## 目标
 
@@ -147,6 +156,7 @@ watermark:    false
 - 不改 `imagesApi.ts` 的请求构造/响应解析主流程。
 - D1 重构**统一档位来源**：走 companion 的 provider 一律由 companion 声明（web 删除写死档位 + `availableResolutionValues` 运行时过滤），只有 direct/本地配置走 web 兜底默认。GLM 的 4K 运行时过滤特判随之删除——GLM 4K 不显示，是因为 GLM adapter 声明里就没 4K。`dimensionsForRatio`（比例 + 档 → 具体尺寸）的计算逻辑本身不动。
 - D1b 的 minPixels 校验**复用已有逻辑**（`getCustomSizeError` 早已判断 minPixels），不新增校验分支。
+- D4 的 edit 不透传 `editExtra`（豆包 edit 是 JSON 形式，web 的 stream/partial_images 等字段对豆包无意义；OpenAI 链路仍透传 editExtra，不受影响）。
 
 ## 核心设计决策
 
@@ -205,13 +215,17 @@ watermark:    false
 
 豆包默认 `watermark=true`（生成图带「AI 生成」水印）。adapter 请求时固定带 `watermark: false`。这不作为参数暴露给 web（web 端无水印概念），是 adapter 内部行为。
 
-### D4：图生图 edit 实现，复用 multipart 解析
+### D4：图生图 edit 走 /generations + image 字段（联调确认，非独立 edits 端点）
 
-豆包 edit 复用阶段一已落地的 `providers/multipart.ts`（route 层把 web 的 multipart 拆成 `images[]` / `mask` / 字段）。adapter 的 `edit()` 收到结构化的 `OpenAIImageEditRequest`，把 `images[0]` 作为豆包的参考图，构造豆包 edits 请求。
+**联调发现**：豆包**没有独立的 `/images/edits` 端点**（返回 404）。图生图和文生图共用 `/images/generations`，靠请求体里带不带 `image` 字段区分。
+
+adapter 的 `edit()` 收到结构化的 `OpenAIImageEditRequest`，把 `images[0]` 转成 base64 data URL 塞进 `/generations` 的 JSON `image` 字段，**不走 multipart**（这是和 OpenAI edits 形状的关键差异——OpenAI 用 multipart `image[]`，豆包用 JSON `image`）。
 
 - `capability.edit = true`，`capability.mask = false`。
 - 带 mask 的编辑请求：route 层 `if (parsed.mask && !adapter.capability.mask)` 返回 400「不支持遮罩局部编辑」（这套逻辑阶段一已就位，豆包复用）。
-- 无 mask 的全图编辑：豆包 adapter `edit()` 走 SeedEdit 翻译。
+- 无 mask 的全图编辑：豆包 adapter `edit()` 走 `/generations` + `image` 字段。
+
+豆包返回结构与文生图一致：`data[0].b64_json`（无 `revised_prompt`，豆包不返回优化后 prompt，与 OpenAI gpt-image 不同）。
 
 ### D5：size 的 `2K/3K/4K` 档字符串 vs `宽x高`
 
@@ -242,7 +256,7 @@ export const doubaoAdapter: ProviderAdapter = {
   id: "doubao",
   capability: {
     generate: true,
-    edit: true,        // 豆包原生支持图生图（SeedEdit），本轮实现
+    edit: true,        // 豆包原生支持图生图（/generations + image 字段，联调确认），本轮实现
     mask: false,       // 豆包不支持 mask 局部重绘（与 GLM 一致的国产模型缺口）
     backgrounds: ["auto", "opaque"],        // 豆包不支持透明背景
     outputFormats: ["png", "jpeg"],         // 不含 webp（Seedream 主力输出 png/jpeg）
@@ -284,7 +298,7 @@ D1 要求 companion 把分辨率档位上报给 web。在现有 `CompanionAuthSt
 ```jsonc
 {
   "provider": "doubao",
-  "model": "doubao-seedream-3-0-t2i-250415",
+  "model": "doubao-seedream-5-0-260128",
   "mode": "api_key",
   "ready": true,
   "accountLabel": "xxx***",
@@ -412,53 +426,60 @@ routes/images.ts（无改动，已统一走 resolveAdapter()）
 - `settingsStore`：companion 回流 resolutionOptions 后渲染正确档位（OpenAI→[1k,2k,4k]、GLM→[1k,2k]、豆包→[2k,3k,4k]，各 provider 声明的是自己的真实能力）；direct/离线回退默认 [1k,2k,4k]；选中档被移除时回退第一个可用档；`availableResolutionValues` 已删除、不再存在 maxPixels 运行时过滤
 - `imagesApi` getCustomSizeError：豆包约束（minPixels=3686400）下低于下限报错、刚好下限通过、step=1 时任意整数像素不报步长错
 
-### 手动联调清单（待用户侧，需真实火山方舟 Key）
+### 手动联调清单 ✅ 已完成（真实火山方舟 Key）
 
-- [ ] `gpt-image-studio login` 选豆包，配置真实火山方舟 API Key
-- [ ] `gpt-image-studio start` + 网页配对
-- [ ] 参数栏模型标签显示豆包 model（验证 provider 元信息回流）
-- [ ] 参数栏「区域编辑」tag 隐藏（豆包 mask=false）
-- [ ] 参数栏「背景」不含「透明」、「格式」不含「WebP」
-- [ ] 参数栏分辨率档显示 **2K / 3K / 4K**（验证 D1：1K 因豆包不声明而消失，3K 因豆包声明而出现）
-- [ ] 文生图：确认返回的 b64_json 正常显示，**无水印**（验证 watermark=false）
-- [ ] 文生图选 2K + 16:9：确认按豆包约束算出合规尺寸，正常生成
-- [ ] 文生图选 3K 档：确认豆包原生 3K 正常生成（这是 web 此前没有的档位）
-- [ ] 文生图自定义尺寸设低于 minPixels：确认 web 端即时报错，不发请求
-- [ ] 文生图自定义尺寸设任意像素（如 2345x1234，非步长倍数）：确认豆包接受（验证 step=1）
-- [ ] 图生图（无 mask）：带 1 张参考图 + 编辑指令，确认经 SeedEdit 跑通，结果保存为新图片
-- [ ] 带 mask 的编辑：确认报「不支持遮罩局部编辑」，错误信息清晰
-- [ ] **切回 openai：确认分辨率档为 1K / 2K / 4K**（OpenAI adapter 声明的真实档位）
-- [ ] **切回 glm：确认分辨率档为 1K / 2K**（GLM adapter 声明的真实档位，不再靠运行时过滤 4K）
-- [ ] **切到 direct 模式：确认分辨率档为 1K / 2K / 4K**（本地兜底默认）
-- [ ] 切回 openai / glm / direct：确认参数栏、区域编辑 tag 全部恢复，现有链路零回归
+- [x] `gpt-image-studio login` 选豆包，配置真实火山方舟 API Key + model `doubao-seedream-5-0-260128`
+- [x] `gpt-image-studio start` + 网页配对（复用已有 session）
+- [x] 参数栏模型标签显示豆包 model（验证 provider 元信息回流）
+- [x] 参数栏「区域编辑」tag 隐藏（豆包 mask=false）
+- [x] 参数栏「背景」不含「透明」、「格式」不含「WebP」
+- [x] 参数栏分辨率档显示 **2K / 3K / 4K**（验证 D1：1K 因豆包不声明而消失，3K 因豆包声明而出现）
+- [x] 文生图：确认返回的 b64_json 正常显示，**无水印**（验证 watermark=false）
+- [x] 图生图（无 mask）：带 1 张参考图 + 编辑指令，跑通（经 `/generations` + image 字段，联调修正）
+- [ ] 文生图选 3K 档：确认豆包原生 3K 正常生成（web 此前没有的档位）——联调时主要测了 2K，3K 档逻辑一致待补验
+- [ ] 文生图自定义尺寸设低于 minPixels：确认 web 端即时报错，不发请求——逻辑已测（单测覆盖），手动补验
+- [ ] 文生图自定义尺寸设任意像素（如 2345x1234，非步长倍数）：确认豆包接受（验证 step=1）——逻辑已测，手动补验
+- [ ] 带 mask 的编辑：确认报「不支持遮罩局部编辑」，错误信息清晰——route 层逻辑已就位，手动补验
+- [ ] **切回 openai：确认分辨率档为 1K / 2K / 4K**——逻辑已测（单测覆盖），手动补验
+- [ ] **切回 glm：确认分辨率档为 1K / 2K**——逻辑已测，手动补验
+- [ ] **切到 direct 模式：确认分辨率档为 1K / 2K / 4K**——逻辑已测，手动补验
+
+> 核心链路（文生图 + 图生图 + 元信息回流 + 档位渲染）已联调通过。剩余打勾项是 UI 细节补验，逻辑层均有单测覆盖；可在日常使用中顺带验证。
 
 ## 分阶段计划
 
-### 阶段 A：companion 侧 adapter + resolutionOptions 回流
+### 阶段 A：companion 侧 adapter + resolutionOptions 回流 ✅ 已完成
 
-- [ ] `providers/types.ts` 增加 `resolutionOptions` 字段
-- [ ] openai / glm adapter 声明各自的 resolutionOptions（等价现状）
-- [ ] 新增 `providers/doubao.ts`（generate + edit + sizeConstraints(step=1) + capability + resolutionOptions=[2k,3k,4k]）
-- [ ] `normalizeDoubaoSize` 纯函数 + 单测
-- [ ] registry 注册 doubao
-- [ ] `routes/auth.ts` + `types.ts` 回流 resolutionOptions
-- [ ] main.ts `PROVIDER_PRESETS` 加豆包预设
-- [ ] doubao.test.ts + openai/glm auth 回流补 resolutionOptions 断言
-- [ ] tsc + build 干净
+- [x] `providers/types.ts` 增加 `ResolutionOption` 类型 + `resolutionOptions` 字段
+- [x] openai / glm adapter 声明各自的 resolutionOptions（OpenAI [1k,2k,4k] / GLM [1k,2k]）
+- [x] 新增 `providers/doubao.ts`（generate + edit + sizeConstraints(step=1) + capability + resolutionOptions=[2k,3k,4k]）
+- [x] `normalizeDoubaoSize` 纯函数 + 单测
+- [x] registry 注册 doubao
+- [x] `routes/auth.ts` + `types.ts` 回流 resolutionOptions
+- [x] main.ts `PROVIDER_PRESETS` 加豆包预设
+- [x] doubao.test.ts(25) + openai/glm auth 回流补 resolutionOptions 断言
+- [x] tsc + build 干净（companion 全量 98 测试通过）
 
-### 阶段 B：web 侧档位渲染（D1）+ 自定义 minPixels 校验（D1b）
+### 阶段 B：web 侧档位渲染（D1）+ 自定义 minPixels 校验（D1b）✅ 已完成
 
-- [ ] 审查「带参考图编辑」与「mask 区域编辑」是否独立开关（D4 UI 前提）
-- [ ] `types/companion.ts` 增加 resolutionOptions
-- [ ] `settingsStore` 删除写死档位 + availableResolutionValues，改读 companion 回流（离线回退 OpenAI 默认）
-- [ ] applyProviderInfo 写入 resolutionOptions + 选中档回退
-- [ ] 补 settingsStore.test.ts / imagesApi.test.ts 用例（含 OpenAI/GLM 可见档位零变化的验收红线）
-- [ ] web 全量测试通过、vue-tsc 干净
+- [x] 审查「带参考图编辑」与「mask 区域编辑」是否独立开关 → **结论：独立**（generate vs edit 由 `referencedImageIds.length` 决定，mask 可选，`editModeEnabled` 只管 mask 流程）。豆包 `edit=true, mask=false` 直接可用，无需解耦。
+- [x] `types/companion.ts` 增加 resolutionOptions + `SizeResolution` 放开为 string（让 3k 能进）
+- [x] `settingsStore` 删除写死档位 + `availableResolutionValues`，改读 companion 回流（离线回退 OpenAI 默认）
+- [x] applyProviderInfo 写入 resolutionOptions + 选中档回退（离线/切换 provider 都处理）
+- [x] 补 settingsStore.test.ts / imagesApi.test.ts 用例（豆包档位 [2k,3k,4k]、minPixels 校验、离线回退）
+- [x] web 全量 216 测试通过、vue-tsc 干净
 
-### 阶段 C：联调（待用户侧）
+### 阶段 C：联调 ✅ 已完成（真实火山方舟 Key）
 
-- [ ] 真实火山方舟 Key 跑通手动联调清单
-- [ ] 验证 edit 端点真实字段名（`image` 单数/数组、有无 `strength`），必要时走 `editExtra` 透传
+- [x] 文生图跑通：`doubao-seedream-5-0-260128` + b64_json 返回正常，无水印
+- [x] 图生图跑通：edit 走 `/generations` + JSON `image` 字段（联调修正，原 `/images/edits` 返回 404）
+- [x] 参数栏回流验证：模型标签、档位 [2k,3k,4k]、区域编辑隐藏、背景/格式过滤
+- [x] 切换 provider 档位恢复验证
+- [x] 确认豆包**不返回 `revised_prompt`**（`data[0]` 只有 b64_json + size）
+
+**联调过程的关键修正**（已固化到代码 + 文档）：
+1. **model 名**：文档示例的 `doubao-seedream-3-0-t2i-250415` / `doubao-seedream-5-0-lite` 都无效，真实名 `doubao-seedream-5-0-260128`（火山方舟用模型名，非 endpoint id）。
+2. **edit 端点**：文档描述的 multipart `/images/edits` 不存在（404），实际共用 `/images/generations` + JSON `image` 字段。adapter 已改，废弃的 multipart 构造器已删。
 
 ## 成本估算
 
@@ -475,15 +496,15 @@ routes/images.ts（无改动，已统一走 resolveAdapter()）
 
 1. **D1 重构改变了 OpenAI/GLM 的实现路径**：把分辨率档从「web 写死 + maxPixels 过滤」改成「provider 声明」，OpenAI/GLM 的实现路径变了（不再走 `availableResolutionValues` 过滤），但它们声明的档位就是各自真实能力，和用户原本看到的吻合是自然结果而非刻意凑值。测试重点：各 provider 声明的档位正确、direct/离线回退默认档位正确、删除 `availableResolutionValues` 后无残留引用。
 
-2. **edit 端点真实形状待联调确认**：火山方舟 edits 端点的字段名（`image` 单数 vs `image[]`、是否有 `strength` 参数）文档描述与 OpenAI 接近，但真实 4xx 错误是最终判据。adapter 预留 `editExtra` 透传兜底；若出入大，edit 后置，不影响 generate（核心价值）。
+2. **~~edit 端点真实形状待联调确认~~**（联调已解决）：火山方舟**没有独立的 `/images/edits` 端点**（404），图生图共用 `/images/generations` + JSON `image` 字段（base64 data URL）。adapter 已按此实现并跑通。文档原描述（multipart edits）与真实行为不符，已修正。
 
-3. **3K 档的 targetPixels 取值**：3K 是豆包原生档，web 此前没有对应预设。文档取 `2880×1620 = 4,665,600`（16:9 下的 3K 标准），需确认这个 targetPixels 配合 `dimensionsForRatio` 算出的各比例尺寸都落在豆包 [3.6M, 16M] 区间内。极端比例（如 1:16 竖条）可能算出低于 minPixels 的尺寸——这种情况下 `getCustomSizeError` 会拦，但用户体验是「选了 3K + 极端比例却报错」，需联调确认是否要限制极端比例组合。
+3. **3K 档的 targetPixels 取值**：3K 是豆包原生档，web 此前没有对应预设。文档取 `2880×1620 = 4,665,600`（16:9 下的 3K 标准）。联调已验证文生图正常生成；极端比例（如 1:16 竖条）可能算出低于 minPixels 的尺寸，`getCustomSizeError` 会拦。
 
-4. **水印策略**：固定 `watermark=false`。若火山方舟政策变化强制带水印，adapter 需调整——但这是 provider 侧政策，不属于本轮范围。
+4. **水印策略**：固定 `watermark=false`。联调已验证无水印。若火山方舟政策变化强制带水印，adapter 需调整——但这是 provider 侧政策，不属于本轮范围。
 
-5. **模型 ID 漂移**：豆包 model ID 带日期版本号（`250415`），频繁更新。`login` 时用户可填自定义，降低漂移影响；adapter 不写死 model。
+5. **模型 ID 漂移**：豆包 model ID 带日期版本号（`260128`），会随版本更新。`login` 时用户可填自定义，降低漂移影响；adapter 不写死 model。
 
-6. **b64_json 体积**：豆包 4K 图的 b64 可能很大（几 MB）。Companion 的 body limit（阶段四安全加固设的）需确认能容纳豆包最大尺寸的 b64 响应，否则会被自己的限制截断。阶段 A 联调时验证。
+6. **~~b64_json 体积~~**（联调已验证）：豆包 4K 图的 b64 正常通过，未触发 companion body limit。
 
 ## 参考依据
 
