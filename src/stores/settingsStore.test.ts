@@ -42,6 +42,11 @@ function makeStatus(overrides: Partial<CompanionAuthStatus> = {}): CompanionAuth
       maxAspectRatio: 3,
       defaultSize: "1024x1024",
     },
+    resolutionOptions: [
+      { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+      { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+      { value: "4k", label: "4K", targetPixels: 3840 * 2160 },
+    ],
     ...overrides,
   };
 }
@@ -160,7 +165,7 @@ describe("settingsStore capability-driven UI", () => {
     expect(s.sizeResolutionOptions.map((o) => o.value)).toEqual(["1k", "2k", "4k"]);
   });
 
-  it("applies GLM size constraints: hides 4K, custom 512-2048 step 32", () => {
+  it("applies GLM size constraints: resolutionOptions [1k,2k] (GLM declares its own tiers)", () => {
     const s = useSettingsStore();
     s.applyProviderInfo(
       makeStatus({
@@ -173,10 +178,15 @@ describe("settingsStore capability-driven UI", () => {
           maxAspectRatio: null,
           defaultSize: "1280x1280",
         },
+        // D1：GLM 声明自己的档位 [1k, 2k]——4K 不显示是因为没声明，不再靠 maxPixels 过滤
+        resolutionOptions: [
+          { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+          { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+        ],
       }),
     );
 
-    // GLM maxPixels=4194304，4K(8294400) 被隐藏，只剩 1K/2K
+    // GLM 声明的档位 [1k, 2k]
     expect(s.sizeResolutionOptions.map((o) => o.value)).toEqual(["1k", "2k"]);
     expect(s.sizeStep).toBe(32);
     expect(s.minCustomDimension).toBe(512);
@@ -184,13 +194,13 @@ describe("settingsStore capability-driven UI", () => {
     expect(s.currentSizeConstraints.maxAspectRatio).toBeNull();
   });
 
-  it("falls back resolution when provider drops it (GLM hides 4K, current 4K resets)", () => {
+  it("falls back resolution when provider drops it (GLM [1k,2k], current 4K resets)", () => {
     const s = useSettingsStore();
     // OpenAI 模式下选 4K
     s.applySizeResolution("4k");
     expect(s.sizeResolution).toBe("4k");
 
-    // 切 GLM → 4K 不可用，自动回退
+    // 切 GLM → 4K 不在 GLM 声明的档位里，自动回退到第一个可用档
     s.applyProviderInfo(
       makeStatus({
         sizeConstraints: {
@@ -202,6 +212,10 @@ describe("settingsStore capability-driven UI", () => {
           maxAspectRatio: null,
           defaultSize: "1280x1280",
         },
+        resolutionOptions: [
+          { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+          { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+        ],
       }),
     );
     expect(s.sizeResolution).toBe("1k");
@@ -254,6 +268,61 @@ describe("settingsStore capability-driven UI", () => {
     s.imageWidth = 2048;
     s.imageHeight = 512;
     expect(s.customSizeError).toBe("");
+  });
+
+  it("Doubao declares [2k, 3k, 4k] tiers (no 1k, native 3k appears)", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(
+      makeStatus({
+        provider: "doubao",
+        sizeConstraints: {
+          step: 1,
+          min: 512,
+          max: 4096,
+          maxPixels: 16777216,
+          minPixels: 3686400,
+          maxAspectRatio: 16,
+          defaultSize: "2048x2048",
+        },
+        resolutionOptions: [
+          { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+          { value: "3k", label: "3K", targetPixels: 2880 * 1620 },
+          { value: "4k", label: "4K", targetPixels: 4096 * 2160 },
+        ],
+      }),
+    );
+    // 豆包档位 [2k, 3k, 4k]——1K 被自然排除，3K 是豆包原生档
+    expect(s.sizeResolutionOptions.map((o) => o.value)).toEqual(["2k", "3k", "4k"]);
+    // 默认选中档 1k 不在豆包列表里 → 回退第一个 2k
+    expect(s.sizeResolution).toBe("2k");
+    // step=1（无步长约束）
+    expect(s.sizeStep).toBe(1);
+    // 豆包 minPixels=3686400，自定义尺寸低于下限报错
+    s.applySizePreset("custom");
+    s.imageWidth = 1024;
+    s.imageHeight = 1024;
+    expect(s.customSizeError).toContain("总像素");
+  });
+
+  it("applyProviderInfo(null) resets resolutionOptions to OpenAI defaults [1k,2k,4k]", () => {
+    const s = useSettingsStore();
+    // 先切豆包（档位 [2k,3k,4k]，选中 3k）
+    s.applyProviderInfo(
+      makeStatus({
+        resolutionOptions: [
+          { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+          { value: "3k", label: "3K", targetPixels: 2880 * 1620 },
+          { value: "4k", label: "4K", targetPixels: 4096 * 2160 },
+        ],
+      }),
+    );
+    s.applySizeResolution("3k");
+    expect(s.sizeResolution).toBe("3k");
+
+    // 离线 → 回退 OpenAI 默认档位 [1k,2k,4k]，3k 不在默认列表 → 回退 1k
+    s.applyProviderInfo(null);
+    expect(s.sizeResolutionOptions.map((o) => o.value)).toEqual(["1k", "2k", "4k"]);
+    expect(s.sizeResolution).toBe("1k");
   });
 });
 

@@ -23,6 +23,16 @@ export type CompanionSizeConstraints = {
   defaultSize: string;
 };
 
+/**
+ * 分辨率档位（companion 声明、web 渲染）。
+ * value 用 string 而非枚举，以便接收 web 此前没有的档位（如豆包的 "3k"）。
+ */
+export type CompanionResolutionOption = {
+  value: string;
+  label: string;
+  targetPixels: number;
+};
+
 export type CompanionAuthStatus = {
   provider: string;
   mode: "api_key";
@@ -34,6 +44,11 @@ export type CompanionAuthStatus = {
   capability: CompanionProviderCapability;
   /** provider 的尺寸软约束，web 据此生成合法尺寸选项。 */
   sizeConstraints: CompanionSizeConstraints;
+  /**
+   * provider 支持的分辨率档位（companion 声明、web 渲染）。
+   * web 不再写死 1K/2K/4K、不再用 maxPixels 运行时过滤，直接渲染本字段。
+   */
+  resolutionOptions: CompanionResolutionOption[];
 };
 
 export type CompanionAuthStatusResult =

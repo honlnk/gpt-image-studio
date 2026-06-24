@@ -4,6 +4,7 @@ import type {
   ProviderAdapter,
   ProviderCapability,
   ProviderConfig,
+  ResolutionOption,
   SizeConstraints,
 } from "./types.js";
 import { urlToB64 } from "./urlToB64.js";
@@ -50,6 +51,17 @@ const CAPABILITY: ProviderCapability = {
   outputFormats: ["png", "jpeg"],
 };
 
+/**
+ * GLM 支持的分辨率档位。GLM maxPixels=4194304（2²²），真实只到 2K，
+ * 4K（8.3M）生成不了——这里只声明 1K/2K，是 GLM 的真实能力。
+ * （此前 web 是靠 availableResolutionValues 按 maxPixels 运行时过滤掉 4K，
+ *  D1 统一机制后该特判删除，GLM 4K 不显示是因为这里压根没声明。）
+ */
+const RESOLUTION_OPTIONS: readonly ResolutionOption[] = [
+  { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+  { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+];
+
 /** GLM 默认 base url（智谱开放平台）。login 时可被覆盖。 */
 const DEFAULT_GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/images";
 /** GLM 默认 model（智谱 2026 旗舰文生图模型）。login 时可填自定义。 */
@@ -59,6 +71,7 @@ export const glmAdapter: ProviderAdapter = {
   id: "glm",
   capability: CAPABILITY,
   sizeConstraints: SIZE_CONSTRAINTS,
+  resolutionOptions: RESOLUTION_OPTIONS,
 
   describe(config: ProviderConfig) {
     return { label: config.model ?? DEFAULT_GLM_MODEL, providerId: "glm" };

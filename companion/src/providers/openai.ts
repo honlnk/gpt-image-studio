@@ -5,6 +5,7 @@ import type {
   ProviderAdapter,
   ProviderCapability,
   ProviderConfig,
+  ResolutionOption,
   SizeConstraints,
 } from "./types.js";
 
@@ -46,6 +47,17 @@ const OPENAI_CAPABILITY: ProviderCapability = {
 };
 
 /**
+ * OpenAI（gpt-image-2）支持的分辨率档位。
+ * 与 web 原本写死的 SIZE_RESOLUTION_OPTIONS 一致——OpenAI 的真实档位。
+ * 这里的值就是 OpenAI 的真实能力，不是「凑成和现状一致」。
+ */
+const OPENAI_RESOLUTION_OPTIONS: readonly ResolutionOption[] = [
+  { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+  { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+  { value: "4k", label: "4K", targetPixels: 3840 * 2160 },
+];
+
+/**
  * OpenAI adapter：现有透传逻辑（原 routes/images.ts）的整体搬迁。
  *
  * 入参是 OpenAI 形状，出参是 OpenAI 形状——对 OpenAI 这种本就兼容 OpenAI
@@ -62,6 +74,7 @@ export const openaiAdapter: ProviderAdapter = {
   id: "openai",
   capability: OPENAI_CAPABILITY,
   sizeConstraints: OPENAI_SIZE_CONSTRAINTS,
+  resolutionOptions: OPENAI_RESOLUTION_OPTIONS,
 
   describe(config: ProviderConfig) {
     return { label: config.model ?? "gpt-image-2", providerId: "openai" };

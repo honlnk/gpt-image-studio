@@ -30,6 +30,15 @@ export type CompanionAuthStatus = {
     maxAspectRatio: number | null;
     defaultSize: string;
   };
+  /**
+   * provider 支持的分辨率档位（companion 声明、web 渲染）。
+   * web 不再写死 1K/2K/4K、不再用 maxPixels 运行时过滤，直接渲染本字段。
+   */
+  resolutionOptions: readonly {
+    value: string;
+    label: string;
+    targetPixels: number;
+  }[];
 };
 
 export type PairStartResponse = {

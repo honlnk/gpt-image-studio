@@ -337,8 +337,10 @@ function normalizeSize(value: unknown): GenerationParams["size"] | undefined {
 }
 
 function normalizeResolution(value: unknown): SizeResolution | undefined {
-  return typeof value === "string" && RESOLUTION_VALUES.includes(value as SizeResolution)
-    ? value as SizeResolution
+  // URL 参数只认 web 原生的 1k/2k/4k（兜底）；companion 回流的 3k 等不通过 URL 传入。
+  return typeof value === "string" &&
+    (RESOLUTION_VALUES as readonly string[]).includes(value)
+    ? value
     : undefined;
 }
 

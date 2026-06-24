@@ -67,7 +67,11 @@ export type ImageAsset = {
 };
 
 export type SizeRatio = "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "3:4" | "2:3" | "9:16";
-export type SizeResolution = "1k" | "2k" | "4k";
+/**
+ * 分辨率档位。放开为 string 而非枚举，以便接收 companion 回流的任意档位
+ * （如豆包的 "3k"，web 此前没有）。持久化/URL 里仍是 "1k"/"2k"/"4k" 这些值。
+ */
+export type SizeResolution = string;
 
 export type GenerationParams = {
   size: "auto" | SizeRatio | "custom";

@@ -187,4 +187,12 @@ describe("openaiAdapter static metadata", () => {
       defaultSize: "1024x1024",
     });
   });
+
+  it("declares resolution options [1k, 2k, 4k] (OpenAI full range)", () => {
+    expect(openaiAdapter.resolutionOptions.map((o) => o.value)).toEqual([
+      "1k",
+      "2k",
+      "4k",
+    ]);
+  });
 });

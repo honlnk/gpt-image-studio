@@ -122,7 +122,7 @@ GLM 的图片编辑能力分散在两个模型、两套接口上，且都不是 
 | 全图编辑（无 mask） | multipart `image[]` + prompt | GLM-4V chat + `image_url` + 指令 | 能，但要把 edits 整体重写成 chat messages，并从 chat 返回里提取图片 URL |
 | mask 局部重绘 | `image[]` + `mask` + `prompt` | 不支持 | 不能 |
 
-结论：mask 局部重绘是确认的功能缺口（非待实测），Web 端带 mask 的编辑请求 companion 只能报错。全图编辑理论可做，但翻译成本高（chat vs images 两种形状 + 返回解析），且效果是自然语言驱动，质量不如 mask 精确。阶段三据此调整（见「分阶段计划」）。
+结论：mask 局部重绘是确认的功能缺口（非待实测），Web 端带 mask 的编辑请求 companion 只能报错。全图编辑理论可做，但翻译成本高（chat vs images 两种形状 + 返回解析），且效果是自然语言驱动，质量不如 mask 精确——经评估投入产出比低，本轮确认不做（见「分阶段计划 → 阶段三」）。
 
 ## 目标
 
@@ -498,7 +498,7 @@ export const glmAdapter: ProviderAdapter = {
   id: "glm",
   capability: {
     generate: true,
-    edit: false,      // GLM-Image 无 edits 端点；GLM-4V 全图编辑走 chat 接口，阶段三视优先级决定
+    edit: false,      // 确认不做：GLM-Image 无 edits 端点；GLM-4V 全图编辑走 chat 接口，翻译成本高且效果依赖自然语言理解，投入产出比低
     mask: false,      // 智谱全系列不支持 mask 局部重绘（确认的缺口）
     backgrounds: ["auto", "opaque"],           // 不含 transparent（GLM 不支持透明）
     outputFormats: ["png", "jpeg"],            // 不含 webp
@@ -516,7 +516,7 @@ export const glmAdapter: ProviderAdapter = {
 
 UI 层按这份 capability 驱动：区域编辑 tag 因 `mask:false` 隐藏，背景选项因不含 transparent 而不显示「透明」，格式选项因不含 webp 而不显示「WebP」。OpenAI adapter 对应声明全能力（`mask:true`、backgrounds/format 都全），direct 模式下 UI 行为与现在完全一致。
 
-若阶段三决定做全图编辑，把 `edit` 打开即可（走 GLM-4V chat 翻译），`mask` 始终保持 `false`。Web 侧无感（Web 本来就在发编辑请求，companion 按 capability 决定报错还是翻译）。
+`capability.edit` 保持 `false`：GLM 全图编辑经评估确认不做（见「分阶段计划 → 阶段三」），Web 侧带图编辑请求始终报「不支持图片编辑」，无感切换。
 
 ## CLI 命令
 
@@ -594,7 +594,7 @@ companion/src/providers/
 - [ ] 参数栏「背景」选项不含「透明」（GLM 不支持 transparent）
 - [ ] 参数栏「格式」选项不含「WebP」（GLM 不支持 webp）
 - [ ] Web 端带 mask 的编辑图：确认报「不支持遮罩局部编辑」（GLM 确认不支持 mask），错误信息清晰
-- [ ] Web 端全图编辑（无 mask）：若阶段三已实现，确认经 GLM-4V chat 翻译跑通；若未实现，确认报「不支持图片编辑」
+- [ ] Web 端全图编辑（无 mask）：确认报「不支持图片编辑」（GLM 全图编辑经评估确认不做，`capability.edit=false`，route 层返回 501）
 - [ ] 切回 `login` 选 openai：确认参数栏模型回到 gpt-image-2，size 约束回到 step=16，区域编辑/背景/格式 tag 全部恢复，现有 OpenAI 中转站流程零回归
 
 ## 分阶段计划
@@ -655,33 +655,28 @@ companion/src/providers/
 
 **验收**：companion 侧 70 测试通过、tsc + build 干净。用户配置 GLM 凭据后，参数栏自动隐藏 GLM 不支持的选项（区域编辑/透明背景/webp），文生图与 OpenAI 体验一致。编辑图此时报「不支持」（因为 `capability.edit=false`，route 层返回 501）。真实联调由用户用智谱 API Key 完成。
 
-### 阶段三：GLM 全图编辑 adapter（可选，视优先级）
+### 阶段三：GLM 全图编辑 adapter —— ❌ 确认不做
 
 基于调研结论（见「图片编辑」），GLM 编辑能力有明确边界：
 
 - **mask 局部重绘**：确认不支持，不做。`capability.mask` 保持 `false`，带 mask 的编辑请求直接报错。
-- **全图编辑**：GLM-4V-Plus 能做，但走 `chat/completions` 接口，翻译成本高（edits 整体重写成 chat messages + 从 chat 返回提取图片 URL），且效果是自然语言驱动。
+- **全图编辑**：GLM-4V-Plus 能做，但走 `chat/completions` 接口，翻译成本高（edits 整体重写成 chat messages + 从 chat 返回提取图片 URL），且效果是自然语言驱动、质量不稳定。经评估投入产出比低，**确认不做**。
 
-- [ ] 若决定做全图编辑：
-  - GLM adapter 增加 `edit`：OpenAI edits（multipart image[] + prompt）→ GLM-4V chat（image_url + 指令）
-  - 解析 chat 返回提取图片 URL → urlToB64 → OpenAI 形状
-  - `capability: { edit: true, mask: false }`
-  - 单元测试 + 手动联调（重点验证自然语言指令的编辑质量是否可接受）
-- [ ] 若决定不做：保持 `capability.edit=false`，带图编辑请求报错，本阶段跳过
+`capability: { edit: false, mask: false }` 保持不变，Web 侧带图编辑请求始终报「不支持图片编辑」。
 
-**验收**：mask 局部重绘确认不支持（报错）。全图编辑视优先级决定是否实现；不做也不阻塞本轮 MVP，因为文生图（阶段二）是核心价值。
+**验收**：mask 局部重绘和全图编辑均确认不支持（报错），不影响文生图（阶段二，核心价值）。本轮 MVP 以 GLM 文生图为终点。
 
 ### 阶段四（后续，本轮不做）：更多 provider
 
 每个一个 `providers/<name>.ts`，注册到 registry，`login` 增加选项。按形状接近度排序：
 
-- **豆包（火山方舟）**：形状与 GLM 最接近（都是 OpenAI 兼容 `/images/generations`，返回 URL/b64），adapter 基本是 GLM 的复制 + 改 sizeConstraints + 改 base url。预估 2-3 人天。
+- **豆包（火山方舟）✅ 已完成**：形状与 GLM 最接近（OpenAI 兼容 `/images/generations`，返回 b64），但调研后发现 size 约束（总像素下限 minPixels）和原生图生图能力让它必须有独立 adapter，不能复制 GLM。**独立设计方案见 [`companion-doubao-plan.md`](companion-doubao-plan.md)**。已实现 generate + edit（图生图共用 `/generations` + image 字段，联调确认）+ 分辨率档统一为 provider 声明。预估 2-3 人天。
 - **Qwen-Image（阿里千问团队）**：走 dashscope，形状待确认，可能需要异步轮询。预估 2-4 人天。
 - **通义万相 Wan（阿里万相实验室）**：dashscope，支持图像编辑（Wan 2.6），异步任务模式（提交拿 task_id → 轮询）。taskPoller 基础设施已在阶段一就位，adapter 内部 `await runAsyncTask({...})` 即可。预估 2-3 人天。
 
 ## 风险与开放问题
 
-1. **GLM 编辑能力有明确缺口**：mask 局部重绘确认不支持（智谱全系列无 mask inpainting），带 mask 的编辑请求只能报错。全图编辑可经 GLM-4V chat 接口实现，但形状差异大、效果依赖自然语言理解，质量不稳定。这是本轮 MVP 的已知功能边界，文生图（核心价值）不受影响。
+1. **GLM 编辑能力有明确缺口**：mask 局部重绘确认不支持（智谱全系列无 mask inpainting），带 mask 的编辑请求只能报错；全图编辑经评估确认不做（翻译成本高、效果依赖自然语言理解，投入产出比低）。这是本轮 MVP 的已知功能边界，文生图（核心价值）不受影响。
 
 2. **参数保真 vs 用户体验**：报错策略下，用户设了 transparent 调 GLM 会直接报错。错误信息要足够清晰（指明哪个参数、为什么、怎么改），否则用户会困惑「为什么同样的设置在 OpenAI 能用在 GLM 不行」。
 
@@ -700,8 +695,8 @@ companion/src/providers/
 | 阶段一（companion 侧）✅ | adapter 骨架 + openai 抽取 + multipart 解析 + provider 元信息回流 + taskPoller 基础设施（零行为变化） | 2.5-3 人天 |
 | 阶段一（web 侧消费）✅ | `CompanionAuthStatus` 类型 + settingsStore 常量→ref + capability 驱动 UI + ApiSettingsPanel 回写 + validateBackground 改 capability | 1-1.5 人天 |
 | 阶段二 ✅ | GLM 文生图 adapter + login/status 改造 + urlToB64 + 测试（联调待用户侧） | 3-4 人天 |
-| 阶段三 | GLM 全图编辑 adapter（可选，经 GLM-4V chat 翻译） | 2-3 人天（不做则 0） |
-| **合计（本轮 MVP）** | **GLM generate 打通，edit 视情况** | **7-10 人天** |
+| 阶段三 ❌ | GLM 全图编辑 adapter（确认不做：翻译成本高、效果不稳定，投入产出比低） | 0 |
+| **合计（本轮 MVP）** | **GLM generate 打通，edit 不做** | **7-9 人天** |
 
 后续每增加一个 provider，成本约 2-3 人天（写 adapter + 测试 + 联调）。通义万相虽是异步轮询型，但 taskPoller 基础设施已在阶段一就位，不再额外增加成本。
 

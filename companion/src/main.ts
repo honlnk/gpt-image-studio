@@ -16,7 +16,7 @@ import {
   stopManagedProcess,
 } from "./processManager.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.5.0";
 const DEFAULT_PORT = "19750";
 const DEFAULT_SESSION_TTL_DAYS = "30";
 
@@ -42,6 +42,12 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "GLM-Image（智谱 Zhipu）",
     defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4/images",
     defaultModel: "glm-image",
+  },
+  {
+    id: "doubao",
+    label: "豆包 Seedream（火山方舟 ByteDance）",
+    defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3/images",
+    defaultModel: "doubao-seedream-5-0-lite",
   },
 ];
 

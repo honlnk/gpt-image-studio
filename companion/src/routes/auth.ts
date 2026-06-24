@@ -5,9 +5,10 @@ import { resolveAdapter } from "../providers/registry.js";
 import { openaiAdapter } from "../providers/openai.js";
 import type { ProviderConfig } from "../providers/types.js";
 
-/** 无凭据时回流的默认能力/约束，取 OpenAI（web 默认 UI 行为）。 */
+/** 无凭据时回流的默认能力/约束/档位，取 OpenAI（web 默认 UI 行为）。 */
 const OPENAI_DEFAULT_CAPABILITY = openaiAdapter.capability;
 const OPENAI_DEFAULT_SIZE_CONSTRAINTS = openaiAdapter.sizeConstraints;
+const OPENAI_DEFAULT_RESOLUTION_OPTIONS = openaiAdapter.resolutionOptions;
 
 export async function authRoutes(app: FastifyInstance) {
   app.get<{ Reply: CompanionAuthStatus }>("/auth/status", async () => {
@@ -18,10 +19,11 @@ export async function authRoutes(app: FastifyInstance) {
         mode: "api_key" as const,
         ready: false,
         accountLabel: "",
-        // 无凭据时仍回流 OpenAI 默认能力/约束，web 能正常渲染默认 UI
+        // 无凭据时仍回流 OpenAI 默认能力/约束/档位，web 能正常渲染默认 UI
         model: "",
         capability: OPENAI_DEFAULT_CAPABILITY,
         sizeConstraints: OPENAI_DEFAULT_SIZE_CONSTRAINTS,
+        resolutionOptions: OPENAI_DEFAULT_RESOLUTION_OPTIONS,
       };
     }
 
@@ -41,6 +43,7 @@ export async function authRoutes(app: FastifyInstance) {
       model: creds.model ?? "",
       capability: adapter.capability,
       sizeConstraints: adapter.sizeConstraints,
+      resolutionOptions: adapter.resolutionOptions,
     };
   });
 }
