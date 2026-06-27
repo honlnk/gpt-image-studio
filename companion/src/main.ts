@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline";
 import { existsSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { Option, program } from "commander";
 import type { CompanionHealthResponse, PairWaitResponse } from "./types.js";
 import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials.js";
@@ -16,7 +17,9 @@ import {
   stopManagedProcess,
 } from "./processManager.js";
 
-const VERSION = "0.5.0";
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version: string };
+const COMPANION_VERSION = packageJson.version;
 const DEFAULT_PORT = "19750";
 const DEFAULT_SESSION_TTL_DAYS = "30";
 
@@ -71,7 +74,7 @@ function addServeOptions(command: ReturnType<typeof program.command>) {
 program
   .name("gpt-image-studio")
   .description("GPT Image Studio 本地 CLI Companion")
-  .version(VERSION);
+  .version(COMPANION_VERSION);
 
 addServeOptions(program
   .command("serve")
@@ -294,6 +297,7 @@ program
     console.log("│  GPT Image Studio Companion     │");
     console.log("└─────────────────────────────────┘");
     console.log("");
+    console.log(`版本:    v${COMPANION_VERSION}`);
 
     if (creds) {
       const providerId = creds.provider ?? "openai";
@@ -328,7 +332,8 @@ program
     try {
       const res = await fetch(`http://127.0.0.1:${statusPort}/health`, { signal: AbortSignal.timeout(2000) });
       if (res.ok) {
-        console.log(`服务:    运行中 (127.0.0.1:${statusPort})`);
+        const health = await res.json() as CompanionHealthResponse;
+        console.log(`服务:    运行中 (127.0.0.1:${statusPort}, v${health.version})`);
       } else {
         console.log("服务:    未运行");
       }
