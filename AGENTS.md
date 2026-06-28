@@ -97,7 +97,7 @@ Browser direct mode can use Images API or Responses API depending on settings. R
 
 ### Companion Provider Layer
 
-`companion/src/providers/` contains provider adapters behind a registry. Current adapters include OpenAI-compatible, GLM, and Doubao/Volcano Ark Seedream providers. The Web app should stay capability-driven: provider-specific validation, size translation, task polling, multipart handling, and URL-to-base64 conversion belong in Companion provider modules unless the UI needs a generic capability signal.
+`companion/src/providers/` contains provider adapters behind a registry. Current adapters include OpenAI-compatible, GLM, Doubao/Volcano Ark Seedream, and Qwen-Image providers. The Web app should stay capability-driven: provider-specific validation, size translation, task polling, multipart handling, DashScope response parsing, and URL-to-base64 conversion belong in Companion provider modules unless the UI needs a generic capability signal.
 
 Companion security boundaries still matter:
 - Listen on `127.0.0.1`, not `0.0.0.0`.
@@ -140,7 +140,7 @@ See `docs/roadmap.md` for the full roadmap. Current status:
 - Done: Prompt modes (`src/services/promptBuilder.ts`, `docs/prompt-modes.md`)
 - Done: Responses API streaming image previews for browser direct mode (`docs/responses-streaming-plan.md`)
 - Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with first-pairing wait flow; system keychain is deferred
-- Done: Companion provider translation layer with OpenAI-compatible, GLM, and Doubao/Seedream providers (`docs/companion-providers-plan.md`, `docs/companion-doubao-plan.md`)
+- Done: Companion provider translation layer with OpenAI-compatible, GLM, Doubao/Seedream, and Qwen-Image providers (`docs/companion-providers-plan.md`, `docs/companion-doubao-plan.md`)
 - Done: Tauri v2 desktop packaging first version (`desktop/src-tauri`, `docs/desktop-packaging.md`)
 - Upcoming: finer image-library filters, desktop signing/notarization/cross-platform builds/updater, optional Companion sidecar, analytics V2 analysis layer
 

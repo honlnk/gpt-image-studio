@@ -2,6 +2,7 @@ import type { ProviderAdapter, ProviderConfig } from "./types.js";
 import { openaiAdapter } from "./openai.js";
 import { glmAdapter } from "./glm.js";
 import { doubaoAdapter } from "./doubao.js";
+import { qwenAdapter } from "./qwen.js";
 
 /**
  * 已注册的 adapter 表。key = provider id（与 credentials.json 的 provider 字段对齐）。
@@ -11,6 +12,7 @@ const REGISTRY: Record<string, ProviderAdapter> = {
   openai: openaiAdapter,
   glm: glmAdapter,
   doubao: doubaoAdapter,
+  qwen: qwenAdapter,
 };
 
 /** 默认 provider。credentials 缺 provider 字段、或 provider 未注册时回退到它。 */

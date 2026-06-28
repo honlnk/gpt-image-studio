@@ -30,7 +30,10 @@ import { isoTimestamp } from "../shared/dateTime";
 import { createId } from "../shared/id";
 import { readStorage, writeStorage } from "../shared/localStorage";
 import { FIXED_IMAGE_MODEL } from "../shared/models";
-import type { CompanionAuthStatus, CompanionProviderCapability } from "../types/companion";
+import type {
+  CompanionAuthStatus,
+  CompanionProviderCapability,
+} from "../types/companion";
 import type {
   AnalyticsPromptCapture,
   ApiMode,
@@ -194,6 +197,8 @@ export const useSettingsStore = defineStore("settings", () => {
       providerCapability.value.outputFormats.includes(o.value),
     ),
   );
+  const backgroundTagVisible = computed(() => backgroundOptions.value.length > 1);
+  const formatTagVisible = computed(() => formatOptions.value.length > 1);
   const sizeLabel = computed(() => {
     if (activeSizePreset.value === "auto") return "自动";
     if (activeSizePreset.value === "custom")
@@ -338,9 +343,9 @@ export const useSettingsStore = defineStore("settings", () => {
       const defaultValues = DEFAULT_RESOLUTION_OPTIONS.map((o) => o.value);
       if (!defaultValues.includes(sizeResolution.value)) {
         sizeResolution.value = defaultValues[0] ?? "1k";
-        const ratio = normalizeSizePreset(activeSizePreset.value);
-        if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
       }
+      const ratio = normalizeSizePreset(activeSizePreset.value);
+      if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
       // 离线时 model 不回退——保留用户上次生效的 model，避免 UI 闪烁
       return;
     }
@@ -373,10 +378,10 @@ export const useSettingsStore = defineStore("settings", () => {
     const availableValues = status.resolutionOptions.map((o) => o.value);
     if (!availableValues.includes(sizeResolution.value)) {
       sizeResolution.value = availableValues[0] ?? "1k";
-      // 尺寸变了，若当前是比例模式需重算尺寸
-      const ratio = normalizeSizePreset(activeSizePreset.value);
-      if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
     }
+    // provider 约束变化时，即使档位值不变也要重算比例尺寸。
+    const ratio = normalizeSizePreset(activeSizePreset.value);
+    if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
   }
 
   function applySettings(settings: AppSettings) {
@@ -599,6 +604,7 @@ export const useSettingsStore = defineStore("settings", () => {
     background,
     backgroundLabel,
     backgroundOptions,
+    backgroundTagVisible,
     transparentDisabled,
     currentGenerationParams,
     currentSettings,
@@ -606,6 +612,7 @@ export const useSettingsStore = defineStore("settings", () => {
     customSizeError,
     formatLabel,
     formatOptions,
+    formatTagVisible,
     favoritePrompts,
     imageCount,
     imageCountMode,

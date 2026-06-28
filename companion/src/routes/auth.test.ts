@@ -159,4 +159,37 @@ describe("/auth/status provider info backflow", () => {
     ]);
     await app.close();
   });
+
+  it("returns Qwen capability + constraints when provider=qwen", async () => {
+    const app = await makeApp({
+      provider: "qwen",
+      apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+      apiKey: "qwen-test",
+      model: "qwen-image-2.0-pro",
+      savedAt: "2026-06-28T00:00:00.000Z",
+    });
+    const res = await app.inject({ method: "GET", url: "/auth/status" });
+    const body = res.json();
+    expect(body.provider).toBe("qwen");
+    expect(body.model).toBe("qwen-image-2.0-pro");
+    expect(body.capability).toEqual({
+      generate: true,
+      edit: true,
+      mask: false,
+      backgrounds: ["auto"],
+      outputFormats: ["png"],
+    });
+    expect(body.sizeConstraints).toMatchObject({
+      step: 1,
+      min: 512,
+      max: 8192,
+      minPixels: 262144,
+      maxPixels: 4194304,
+    });
+    expect(body.resolutionOptions.map((o: { value: string }) => o.value)).toEqual([
+      "1k",
+      "2k",
+    ]);
+    await app.close();
+  });
 });

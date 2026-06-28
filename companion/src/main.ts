@@ -52,6 +52,12 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3/images",
     defaultModel: "doubao-seedream-5-0-lite",
   },
+  {
+    id: "qwen",
+    label: "Qwen-Image（阿里云百炼 DashScope）",
+    defaultBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+    defaultModel: "qwen-image-2.0-pro",
+  },
 ];
 
 type ServeLikeOptions = {

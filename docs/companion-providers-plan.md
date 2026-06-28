@@ -144,7 +144,7 @@ GLM 的图片编辑能力分散在两个模型、两套接口上，且都不是 
 - 不改 `imagesApi.ts` 的请求构造/响应解析、生成/编辑/重试流程。`GenerationParams` 类型结构不动，但其中 size 相关的约束数据（步长/范围/像素上限）从写死改为 provider 驱动（见「provider 元信息回流」）。
 - 不做 Web 端的多 provider / 多模型切换 UI（参数栏显示的是 companion 上报的 model，只读，不可选）。
 - 不做「Web 端选择 provider」——provider 选择是 companion 侧的本地配置。
-- 不做 Qwen-Image、通义万相、豆包（留作后续 provider adapter，本轮只接 GLM）。
+- GLM 阶段不做 Qwen-Image、通义万相、豆包；后续已补 GLM 之外的 provider 时，以当前 adapter 实现和各 provider 独立方案为准。
 - 本轮 GLM adapter 用同步接口（companion 内部是一个 fetch 等返回）；异步轮询作为通用基础设施预留（见「任务轮询基础设施」），但不在 GLM 链路启用。
 - 不做服务端图片格式转码（PNG↔webp），若 provider 只返回某种格式，本轮直接接受（见「参数保真」）。
 - 不做 OAuth、keychain、多 provider profile 持久化切换（本轮 provider 配置覆盖式写入即可）。
@@ -671,7 +671,7 @@ companion/src/providers/
 每个一个 `providers/<name>.ts`，注册到 registry，`login` 增加选项。按形状接近度排序：
 
 - **豆包（火山方舟）✅ 已完成**：形状与 GLM 最接近（OpenAI 兼容 `/images/generations`，返回 b64），但调研后发现 size 约束（总像素下限 minPixels）和原生图生图能力让它必须有独立 adapter，不能复制 GLM。**独立设计方案见 [`companion-doubao-plan.md`](companion-doubao-plan.md)**。已实现 generate + edit（图生图共用 `/generations` + image 字段，联调确认）+ 分辨率档统一为 provider 声明。预估 2-3 人天。
-- **Qwen-Image（阿里千问团队）**：走 dashscope，形状待确认，可能需要异步轮询。预估 2-4 人天。
+- **Qwen-Image（阿里千问团队）✅ 已完成**：走 DashScope multimodal-generation 同步接口，支持文生图 + 无 mask 图像编辑；返回图片 URL，companion 立即转 b64。Qwen-Image 2.0 的尺寸声明只回流官方总像素范围 `512*512` 至 `2048*2048`、默认 `2048*2048` 和 1K/2K 档位；具体比例尺寸继续走 web 通用 `targetPixels` 算法，和 GPT / 豆包保持同一套计算逻辑。
 - **通义万相 Wan（阿里万相实验室）**：dashscope，支持图像编辑（Wan 2.6），异步任务模式（提交拿 task_id → 轮询）。taskPoller 基础设施已在阶段一就位，adapter 内部 `await runAsyncTask({...})` 即可。预估 2-3 人天。
 
 ## 风险与开放问题

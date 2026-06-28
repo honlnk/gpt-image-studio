@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useComposerStore } from "../../stores/composerStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import ComposerEditorPanel from "./ComposerEditorPanel.vue";
@@ -19,6 +19,18 @@ const promptModeLabel = computed(() => {
   };
   return labels[settings.promptMode];
 });
+
+watch(
+  () => [settings.backgroundTagVisible, settings.formatTagVisible] as const,
+  ([backgroundVisible, formatVisible]) => {
+    if (
+      (!backgroundVisible && composer.activeEditor === "background") ||
+      (!formatVisible && composer.activeEditor === "format")
+    ) {
+      composer.closeAllEditors();
+    }
+  },
+);
 </script>
 
 <template>
@@ -75,7 +87,7 @@ const promptModeLabel = computed(() => {
         :active-editor="composer.activeEditor"
       />
     </span>
-    <span class="relative inline-flex">
+    <span v-if="settings.backgroundTagVisible" class="relative inline-flex">
       <button
         class="cursor-pointer rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500 transition-colors hover:bg-gray-200"
         :class="composer.activeEditor === 'background' ? 'bg-gray-200 text-gray-800' : ''"
@@ -89,7 +101,7 @@ const promptModeLabel = computed(() => {
         :active-editor="composer.activeEditor"
       />
     </span>
-    <span class="relative inline-flex">
+    <span v-if="settings.formatTagVisible" class="relative inline-flex">
       <button
         class="cursor-pointer rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500 transition-colors hover:bg-gray-200"
         :class="composer.activeEditor === 'format' ? 'bg-gray-200 text-gray-800' : ''"
