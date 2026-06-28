@@ -86,7 +86,14 @@ function applyPromptMode(prompt: string, mode: PromptMode, wordbanks: PromptWord
   return buildImagePrompt({ prompt, mode, wordbanks });
 }
 
-function buildParams(params: { size: string; width: number; height: number; background: string; outputFormat: string }) {
+function buildParams(params: {
+  size: string;
+  resolution: string;
+  width: number;
+  height: number;
+  background: string;
+  outputFormat: string;
+}) {
   const size = params.size === "auto"
     ? "auto"
     : params.size.includes(":") || params.size === "custom"
@@ -95,6 +102,7 @@ function buildParams(params: { size: string; width: number; height: number; back
 
   return {
     size,
+    companion_resolution: params.resolution,
     background: params.background,
     output_format: params.outputFormat,
   };

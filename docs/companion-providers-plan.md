@@ -672,7 +672,7 @@ companion/src/providers/
 
 - **豆包（火山方舟）✅ 已完成**：形状与 GLM 最接近（OpenAI 兼容 `/images/generations`，返回 b64），但调研后发现 size 约束（总像素下限 minPixels）和原生图生图能力让它必须有独立 adapter，不能复制 GLM。**独立设计方案见 [`companion-doubao-plan.md`](companion-doubao-plan.md)**。已实现 generate + edit（图生图共用 `/generations` + image 字段，联调确认）+ 分辨率档统一为 provider 声明。预估 2-3 人天。
 - **Qwen-Image（阿里千问团队）✅ 已完成**：走 DashScope multimodal-generation 同步接口，支持文生图 + 无 mask 图像编辑；返回图片 URL，companion 立即转 b64。Qwen-Image 2.0 的尺寸声明只回流官方总像素范围 `512*512` 至 `2048*2048`、默认 `2048*2048` 和 1K/2K 档位；具体比例尺寸继续走 web 通用 `targetPixels` 算法，和 GPT / 豆包保持同一套计算逻辑。
-- **通义万相 Wan（阿里万相实验室）**：dashscope，支持图像编辑（Wan 2.6），异步任务模式（提交拿 task_id → 轮询）。taskPoller 基础设施已在阶段一就位，adapter 内部 `await runAsyncTask({...})` 即可。预估 2-3 人天。
+- **通义万相 Wan（阿里万相实验室）✅ 已完成**：走 DashScope multimodal-generation 同步接口，默认模型 `wan2.7-image`，支持文生图 + 无 mask 图像编辑；返回图片 URL，companion 立即转 b64。默认模型按官方统一 1K/2K 能力回流：总像素 `768*768` 至 `2048*2048`、宽高比 `1:8` 至 `8:1`、默认 `2048*2048`。若用户选择 `wan2.7-image-pro`，/auth/status 回流文生图 4K 能力（总像素至 `4096*4096`，档位含 4K）；图像编辑仍按官方最高 2K 限制，4K 编辑请求会明确报错。具体比例尺寸继续走 web 通用 `targetPixels` 算法。
 
 ## 风险与开放问题
 

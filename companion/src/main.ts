@@ -58,6 +58,12 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     defaultBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
     defaultModel: "qwen-image-2.0-pro",
   },
+  {
+    id: "wan",
+    label: "通义万相 Wan（阿里云百炼 DashScope）",
+    defaultBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+    defaultModel: "wan2.7-image",
+  },
 ];
 
 type ServeLikeOptions = {

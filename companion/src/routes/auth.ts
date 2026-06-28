@@ -42,8 +42,8 @@ export async function authRoutes(app: FastifyInstance) {
       accountLabel: maskApiKey(creds.apiKey),
       model: creds.model ?? "",
       capability: adapter.capability,
-      sizeConstraints: adapter.sizeConstraints,
-      resolutionOptions: adapter.resolutionOptions,
+      sizeConstraints: adapter.getSizeConstraints?.(config) ?? adapter.sizeConstraints,
+      resolutionOptions: adapter.getResolutionOptions?.(config) ?? adapter.resolutionOptions,
     };
   });
 }

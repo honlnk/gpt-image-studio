@@ -192,4 +192,66 @@ describe("/auth/status provider info backflow", () => {
     ]);
     await app.close();
   });
+
+  it("returns Wan capability + constraints when provider=wan", async () => {
+    const app = await makeApp({
+      provider: "wan",
+      apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+      apiKey: "wan-test",
+      model: "wan2.7-image",
+      savedAt: "2026-06-28T00:00:00.000Z",
+    });
+    const res = await app.inject({ method: "GET", url: "/auth/status" });
+    const body = res.json();
+    expect(body.provider).toBe("wan");
+    expect(body.model).toBe("wan2.7-image");
+    expect(body.capability).toEqual({
+      generate: true,
+      edit: true,
+      mask: false,
+      backgrounds: ["auto"],
+      outputFormats: ["png"],
+    });
+    expect(body.sizeConstraints).toMatchObject({
+      step: 1,
+      min: 768,
+      max: Math.floor((2048 * 2048) / 768),
+      minPixels: 589824,
+      maxPixels: 4194304,
+      maxAspectRatio: 8,
+    });
+    expect(body.resolutionOptions.map((o: { value: string }) => o.value)).toEqual([
+      "1k",
+      "2k",
+    ]);
+    await app.close();
+  });
+
+  it("returns Wan Pro 4K text-to-image constraints when model=wan2.7-image-pro", async () => {
+    const app = await makeApp({
+      provider: "wan",
+      apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+      apiKey: "wan-test",
+      model: "wan2.7-image-pro",
+      savedAt: "2026-06-28T00:00:00.000Z",
+    });
+    const res = await app.inject({ method: "GET", url: "/auth/status" });
+    const body = res.json();
+    expect(body.provider).toBe("wan");
+    expect(body.model).toBe("wan2.7-image-pro");
+    expect(body.sizeConstraints).toMatchObject({
+      step: 1,
+      min: 768,
+      max: Math.floor((4096 * 4096) / 768),
+      minPixels: 589824,
+      maxPixels: 16777216,
+      maxAspectRatio: 8,
+    });
+    expect(body.resolutionOptions.map((o: { value: string }) => o.value)).toEqual([
+      "1k",
+      "2k",
+      "4k",
+    ]);
+    await app.close();
+  });
 });

@@ -3,16 +3,18 @@ import { openaiAdapter } from "./openai.js";
 import { glmAdapter } from "./glm.js";
 import { doubaoAdapter } from "./doubao.js";
 import { qwenAdapter } from "./qwen.js";
+import { wanAdapter } from "./wan.js";
 
 /**
  * 已注册的 adapter 表。key = provider id（与 credentials.json 的 provider 字段对齐）。
- * 后续再加 qwen/wan 在这里注册。
+ * 后续再加 provider 在这里注册。
  */
 const REGISTRY: Record<string, ProviderAdapter> = {
   openai: openaiAdapter,
   glm: glmAdapter,
   doubao: doubaoAdapter,
   qwen: qwenAdapter,
+  wan: wanAdapter,
 };
 
 /** 默认 provider。credentials 缺 provider 字段、或 provider 未注册时回退到它。 */
