@@ -31,3 +31,6 @@ desktop/src-tauri/target/
 desktop/src-tauri/gen/
 desktop/src-tauri/app-icon.png
 desktop/src-tauri/WixTools/
+
+# ZCode agent workspace (plans only)
+.zcode/plans/

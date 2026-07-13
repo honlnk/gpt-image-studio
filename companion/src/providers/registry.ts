@@ -4,6 +4,8 @@ import { glmAdapter } from "./glm.js";
 import { doubaoAdapter } from "./doubao.js";
 import { qwenAdapter } from "./qwen.js";
 import { wanAdapter } from "./wan.js";
+import { grokAdapter } from "./grok.js";
+import { geminiAdapter } from "./gemini.js";
 
 /**
  * 已注册的 adapter 表。key = provider id（与 credentials.json 的 provider 字段对齐）。
@@ -15,6 +17,8 @@ const REGISTRY: Record<string, ProviderAdapter> = {
   doubao: doubaoAdapter,
   qwen: qwenAdapter,
   wan: wanAdapter,
+  grok: grokAdapter,
+  gemini: geminiAdapter,
 };
 
 /** 默认 provider。credentials 缺 provider 字段、或 provider 未注册时回退到它。 */

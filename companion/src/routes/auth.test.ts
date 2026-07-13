@@ -254,4 +254,61 @@ describe("/auth/status provider info backflow", () => {
     ]);
     await app.close();
   });
+
+  it("returns Grok capability + constraints when provider=grok", async () => {
+    const app = await makeApp({
+      provider: "grok",
+      apiBaseUrl: "https://api.x.ai/v1/images",
+      apiKey: "xai-test",
+      model: "grok-imagine-image",
+      savedAt: "2026-06-28T00:00:00.000Z",
+    });
+    const res = await app.inject({ method: "GET", url: "/auth/status" });
+    const body = res.json();
+    expect(body.provider).toBe("grok");
+    expect(body.model).toBe("grok-imagine-image");
+    // Grok 能力：支持编辑、不支持 mask、无透明背景
+    expect(body.capability).toEqual({
+      generate: true,
+      edit: true,
+      mask: false,
+      backgrounds: ["auto", "opaque"],
+      outputFormats: ["png", "jpeg", "webp"],
+    });
+    // Grok 档位：[1k, 2k]（官方 ImageResolution 枚举）
+    expect(body.resolutionOptions.map((o: { value: string }) => o.value)).toEqual([
+      "1k",
+      "2k",
+    ]);
+    await app.close();
+  });
+
+  it("returns Gemini capability + constraints when provider=gemini", async () => {
+    const app = await makeApp({
+      provider: "gemini",
+      apiBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      apiKey: "gemini-test",
+      model: "gemini-2.5-flash-image",
+      savedAt: "2026-06-28T00:00:00.000Z",
+    });
+    const res = await app.inject({ method: "GET", url: "/auth/status" });
+    const body = res.json();
+    expect(body.provider).toBe("gemini");
+    expect(body.model).toBe("gemini-2.5-flash-image");
+    // Gemini 能力：支持编辑（generateContent + inline_data）、不支持 mask、无透明背景
+    expect(body.capability).toEqual({
+      generate: true,
+      edit: true,
+      mask: false,
+      backgrounds: ["auto", "opaque"],
+      outputFormats: ["png", "jpeg", "webp"],
+    });
+    // Gemini 档位：[1k, 2k, 4k]（Gemini 3 系列）
+    expect(body.resolutionOptions.map((o: { value: string }) => o.value)).toEqual([
+      "1k",
+      "2k",
+      "4k",
+    ]);
+    await app.close();
+  });
 });

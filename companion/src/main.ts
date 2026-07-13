@@ -64,6 +64,18 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     defaultBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
     defaultModel: "wan2.7-image",
   },
+  {
+    id: "grok",
+    label: "Grok Imagine（xAI）",
+    defaultBaseUrl: "https://api.x.ai/v1/images",
+    defaultModel: "grok-imagine-image",
+  },
+  {
+    id: "gemini",
+    label: "Gemini Image（Google）",
+    defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    defaultModel: "gemini-2.5-flash-image",
+  },
 ];
 
 type ServeLikeOptions = {
