@@ -2,11 +2,13 @@
 import { onMounted, ref, watch } from "vue";
 import type {
   CompanionAuthStatus,
-  CompanionCredentialsView,
+  CompanionCredentialEntry,
+  CompanionCredentialInput,
   CompanionHealthResponse,
   CompanionLogsTailResponse,
   CompanionProviderPreset,
 } from "../../types/companion";
+import ConfirmDialog from "../ui/ConfirmDialog.vue";
 
 const props = defineProps<{
   // 连接状态（透传自 useCompanionConnection）。
@@ -18,9 +20,10 @@ const props = defineProps<{
   companionAuthStatus: CompanionAuthStatus | null;
   connectError: string;
   connecting: boolean;
-  // 凭证 + 日志（来自 useCompanionManagement）。
+  // 凭据列表 + 日志（来自 useCompanionManagement）。
   presets: CompanionProviderPreset[];
-  credentials: CompanionCredentialsView | null;
+  credentialList: CompanionCredentialEntry[];
+  activeCredentialId: string | null;
   logs: CompanionLogsTailResponse | null;
   loadingPresets: boolean;
   loadingCredentials: boolean;
@@ -34,21 +37,35 @@ const emit = defineEmits<{
   "check-status": [];
   "connect-with-key": [key: string];
   "disconnect-companion": [];
-  // 凭证 + 日志管理动作。
+  // 凭据列表 CRUD 动作。
   "load-presets": [];
   "load-credentials": [];
-  "submit-credentials": [form: { provider?: string; apiBaseUrl: string; apiKey: string; model?: string }];
-  "remove-credentials": [];
+  "add-credential": [form: CompanionCredentialInput];
+  "update-credential": [id: string, form: CompanionCredentialInput];
+  "remove-credential": [id: string];
+  "activate-credential": [id: string];
   "load-logs": [params: { lines?: number; date?: string }];
 }>();
 
-// ---- 凭证表单本地态 ----
+// ---- 凭据表单本地态 ----
+// editingId：null = 新增模式；有值 = 编辑该 id；"" = 表单关闭。
+const editingId = ref<string | null | "">("");
+const formLabel = ref("");
 const formProvider = ref("");
 const formBaseUrl = ref("");
 const formModel = ref("");
 const formApiKey = ref("");
-// 是否处于"编辑/新增"模式（未配置凭据时默认进入；已配置时点"修改"才进入）。
-const editingCredentials = ref(false);
+// apiKey 明文显隐切换（列表展示和编辑表单均可切换）。
+const showApiKey = ref<Record<string, boolean>>({});
+
+// ---- 删除确认对话框 ----
+const deleteDialog = ref<{
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone: "danger";
+} | null>(null);
+const pendingDeleteId = ref<string | null>(null);
 
 // ---- 连接密钥输入本地态 ----
 const accessKeyInput = ref("");
@@ -58,12 +75,29 @@ function connect() {
   accessKeyInput.value = "";
 }
 
-function applyPresetDefaults() {
-  const preset = props.presets.find((p) => p.id === formProvider.value);
-  if (!preset) return;
-  // 仅在字段为空时填默认值，避免覆盖用户已输入内容。
-  if (!formBaseUrl.value) formBaseUrl.value = preset.defaultBaseUrl;
-  if (!formModel.value) formModel.value = preset.defaultModel;
+// ---- 凭据表单操作 ----
+
+function startAdd() {
+  editingId.value = null;
+  formLabel.value = "";
+  formProvider.value = props.presets[0]?.id ?? "";
+  formBaseUrl.value = props.presets[0]?.defaultBaseUrl ?? "";
+  formModel.value = props.presets[0]?.defaultModel ?? "";
+  formApiKey.value = "";
+}
+
+function startEdit(entry: CompanionCredentialEntry) {
+  editingId.value = entry.id;
+  formLabel.value = entry.label;
+  formProvider.value = entry.provider;
+  formBaseUrl.value = entry.apiBaseUrl;
+  formModel.value = entry.model;
+  formApiKey.value = entry.apiKey;
+}
+
+function cancelForm() {
+  editingId.value = "";
+  formApiKey.value = "";
 }
 
 function onProviderChange() {
@@ -75,49 +109,60 @@ function onProviderChange() {
   }
 }
 
-function startEdit() {
-  // 进入编辑态：用当前已配置的值预填（provider/baseUrl/model），apiKey 留空要求重输。
-  const cred = props.credentials;
-  formProvider.value = cred?.provider ?? props.presets[0]?.id ?? "";
-  formBaseUrl.value = cred?.apiBaseUrl ?? "";
-  formModel.value = cred?.model ?? "";
-  formApiKey.value = "";
-  applyPresetDefaults();
-  editingCredentials.value = true;
-}
-
-function cancelEdit() {
-  editingCredentials.value = false;
-  formApiKey.value = "";
-}
-
 function submit() {
-  emit("submit-credentials", {
+  const form: CompanionCredentialInput = {
+    label: formLabel.value.trim() || undefined,
     provider: formProvider.value || undefined,
     apiBaseUrl: formBaseUrl.value.trim(),
     apiKey: formApiKey.value.trim(),
     model: formModel.value.trim() || undefined,
-  });
-  // 保存后清空内存里的 key 输入；保存成功由父级刷新 credentials prop。
+  };
+  if (editingId.value === null) {
+    emit("add-credential", form);
+  } else if (editingId.value) {
+    emit("update-credential", editingId.value, form);
+  }
+  // 保存后关闭表单，清空内存里的 key 输入。
+  editingId.value = "";
   formApiKey.value = "";
-  editingCredentials.value = false;
 }
 
-// 已配置凭据或 presets 加载后，同步表单默认 provider（供首次填写的占位）。
-watch(
-  () => [props.credentials, props.presets] as const,
-  () => {
-    if (!formProvider.value) {
-      formProvider.value = props.credentials?.provider ?? props.presets[0]?.id ?? "";
-    }
-    if (!editingCredentials.value) {
-      // 非编辑态：同步展示用的 baseUrl/model（只读模式下显示）。
-      formBaseUrl.value = props.credentials?.apiBaseUrl ?? "";
-      formModel.value = props.credentials?.model ?? "";
-    }
-  },
-  { immediate: true },
-);
+function confirmDelete(entry: CompanionCredentialEntry) {
+  pendingDeleteId.value = entry.id;
+  deleteDialog.value = {
+    title: `删除「${entry.label}」`,
+    description: "确定删除这条 provider 配置吗？此操作不可撤销。",
+    confirmLabel: "删除",
+    tone: "danger",
+  };
+}
+
+function onDialogConfirm() {
+  if (pendingDeleteId.value) {
+    emit("remove-credential", pendingDeleteId.value);
+  }
+  deleteDialog.value = null;
+  pendingDeleteId.value = null;
+}
+
+function onDialogCancel() {
+  deleteDialog.value = null;
+  pendingDeleteId.value = null;
+}
+
+function toggleApiKeyVisibility(id: string) {
+  showApiKey.value = { ...showApiKey.value, [id]: !showApiKey.value[id] };
+}
+
+/** 列表展示用的 key 掩码（编辑表单里用明文）。 */
+function maskKey(key: string): string {
+  if (key.length <= 8) return "***";
+  return key.slice(0, 8) + "***";
+}
+
+function providerLabel(id: string): string {
+  return props.presets.find((p) => p.id === id)?.label ?? id;
+}
 
 // ---- 日志 ----
 const logDate = ref(todayStr());
@@ -156,6 +201,8 @@ onMounted(() => {
 
 <template>
   <section aria-labelledby="companionPanelTitle" class="space-y-6">
+    <ConfirmDialog :dialog="deleteDialog" @cancel="onDialogCancel" @confirm="onDialogConfirm" />
+
     <div>
       <h3 id="companionPanelTitle" class="text-base font-semibold text-gray-900">Companion</h3>
       <p class="mt-1 text-xs leading-relaxed text-gray-500">
@@ -191,7 +238,7 @@ onMounted(() => {
         </p>
         <div class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
           <div class="font-mono text-gray-800">npm install -g @honlnk/image-studio-companion</div>
-          <div class="font-mono text-gray-800">gpt-image-studio login</div>
+          <div class="font-mono text-gray-800">gpt-image-studio provider add</div>
           <div class="font-mono text-gray-800">gpt-image-studio start</div>
         </div>
       </template>
@@ -203,9 +250,9 @@ onMounted(() => {
             {{ companionAuthStatus.ready ? "凭据已配置" : "凭据未配置" }}
           </span>
           <template v-if="companionAuthStatus.ready">
+            <span class="text-gray-500"> · {{ companionAuthStatus.accountLabel }}</span>
             <span class="text-gray-500"> · {{ companionAuthStatus.provider }}</span>
             <span v-if="companionAuthStatus.model" class="text-gray-500"> · {{ companionAuthStatus.model }}</span>
-            <span v-if="companionAuthStatus.accountLabel" class="text-gray-500"> · {{ companionAuthStatus.accountLabel }}</span>
           </template>
         </div>
       </template>
@@ -254,40 +301,40 @@ onMounted(() => {
       <p v-if="connectError" class="text-xs text-red-600">{{ connectError }}</p>
     </div>
 
-    <!-- ③ 凭证管理（仅在线） -->
+    <!-- ③ 凭据列表（仅在线） -->
     <div v-if="companionOnline" class="rounded-lg border border-gray-200 p-4 space-y-3">
       <div class="flex items-center justify-between">
         <h4 class="text-sm font-medium text-gray-700">API 凭据</h4>
         <button
-          v-if="credentials?.hasApiKey && !editingCredentials"
-          class="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+          v-if="editingId === ''"
+          class="text-xs text-gray-600 hover:text-gray-900 cursor-pointer rounded-md border border-gray-300 px-2 py-1 hover:bg-gray-50"
           type="button"
-          @click="startEdit"
+          @click="startAdd"
         >
-          修改
+          + 新增
         </button>
       </div>
 
-      <!-- 已配置（只读展示） -->
-      <div v-if="credentials?.hasApiKey && !editingCredentials" class="space-y-1 text-xs text-gray-600">
-        <div>Provider：<span class="text-gray-800">{{ credentials.provider ?? "openai" }}</span></div>
-        <div>Base URL：<span class="font-mono text-gray-800">{{ credentials.apiBaseUrl }}</span></div>
-        <div>Model：<span class="font-mono text-gray-800">{{ credentials.model || "（未设置）" }}</span></div>
-        <div>API Key：<span class="font-mono text-gray-800">{{ credentials.accountLabel || "***" }}</span></div>
-        <div v-if="credentials.savedAt" class="text-gray-400">
-          保存于 {{ new Date(credentials.savedAt).toLocaleString() }}
+      <p v-if="loadingCredentials" class="text-xs text-gray-400">加载中…</p>
+
+      <!-- 空列表提示 -->
+      <p v-else-if="credentialList.length === 0 && editingId === ''" class="text-xs text-gray-400">
+        暂无 provider 配置，点击「新增」添加。
+      </p>
+
+      <!-- 新增/编辑表单 -->
+      <div v-if="editingId !== ''" class="space-y-3 rounded-lg bg-gray-50 p-4">
+        <div class="text-xs font-medium text-gray-600">
+          {{ editingId === null ? "新增配置" : "编辑配置" }}
         </div>
-        <button
-          class="mt-2 text-xs text-red-500 hover:text-red-700 cursor-pointer"
-          type="button"
-          @click="emit('remove-credentials')"
-        >
-          清除凭据
-        </button>
-      </div>
-
-      <!-- 编辑/新增表单 -->
-      <div v-else class="space-y-3">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">名称</label>
+          <input
+            v-model="formLabel"
+            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-500"
+            placeholder="如：豆包测试号"
+          />
+        </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">Provider</label>
           <select
@@ -335,16 +382,94 @@ onMounted(() => {
             {{ savingCredentials ? "保存中…" : "保存" }}
           </button>
           <button
-            v-if="credentials?.hasApiKey"
             class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer"
             type="button"
-            @click="cancelEdit"
+            @click="cancelForm"
           >
             取消
           </button>
         </div>
-        <p v-if="credError" class="text-xs text-red-600">{{ credError }}</p>
       </div>
+
+      <!-- 凭据列表 -->
+      <div v-if="editingId === ''" class="space-y-2">
+        <div
+          v-for="entry in credentialList"
+          :key="entry.id"
+          class="rounded-lg border border-gray-200 p-3 space-y-2"
+          :class="entry.id === activeCredentialId ? 'ring-1 ring-green-400 bg-green-50/30' : ''"
+        >
+          <!-- 头部：名称 + 激活标记 + 操作 -->
+          <div class="flex items-center gap-2">
+            <span
+              class="inline-block h-2 w-2 rounded-full"
+              :class="entry.id === activeCredentialId ? 'bg-green-500' : 'bg-gray-300'"
+            />
+            <span class="text-sm font-medium text-gray-900">{{ entry.label }}</span>
+            <span
+              v-if="entry.id === activeCredentialId"
+              class="text-xs text-green-700 bg-green-100 px-1.5 py-0.5 rounded"
+            >
+              激活中
+            </span>
+            <div class="ml-auto flex items-center gap-2">
+              <button
+                v-if="entry.id !== activeCredentialId"
+                class="text-xs text-gray-500 hover:text-gray-900 cursor-pointer"
+                type="button"
+                @click="emit('activate-credential', entry.id)"
+              >
+                激活
+              </button>
+              <button
+                class="text-xs text-gray-500 hover:text-gray-900 cursor-pointer"
+                type="button"
+                @click="startEdit(entry)"
+              >
+                编辑
+              </button>
+              <button
+                class="text-xs text-red-500 hover:text-red-700 cursor-pointer"
+                type="button"
+                @click="confirmDelete(entry)"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+
+          <!-- 详情 -->
+          <div class="space-y-0.5 text-xs text-gray-500">
+            <div>
+              <span class="text-gray-400">Provider：</span>
+              <span class="text-gray-700">{{ providerLabel(entry.provider) }}</span>
+            </div>
+            <div>
+              <span class="text-gray-400">Base URL：</span>
+              <span class="font-mono text-gray-700">{{ entry.apiBaseUrl }}</span>
+            </div>
+            <div>
+              <span class="text-gray-400">Model：</span>
+              <span class="font-mono text-gray-700">{{ entry.model || "（未设置）" }}</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-gray-400">API Key：</span>
+              <span class="font-mono text-gray-700">
+                {{ showApiKey[entry.id] ? entry.apiKey : maskKey(entry.apiKey) }}
+              </span>
+              <button
+                class="text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
+                type="button"
+                @click="toggleApiKeyVisibility(entry.id)"
+              >
+                {{ showApiKey[entry.id] ? "隐藏" : "显示" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p v-if="credError" class="text-xs text-red-600">{{ credError }}</p>
     </div>
 
     <!-- ④ 日志查看（仅在线 + 已配对） -->

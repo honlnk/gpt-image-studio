@@ -42,31 +42,47 @@ export type CompanionAuthStatus = {
 // ---- 凭证管理（Web 面板专用）----
 
 /**
- * GET /credentials 的返回。永不包含原始 apiKey——只给脱敏标签 + 是否已配置的布尔。
- * Web 面板据此渲染"当前凭据"块；改 key 时 apiKey 字段由用户重新输入。
+ * 单条 provider 配置。GET /credentials 返回明文 apiKey——凭证接口受 loopbackGuard
+ * 保护（只接受本机请求），明文回传给本机浏览器是安全的，方便用户编辑时查看。
  */
-export type CompanionCredentialsView = {
-  hasApiKey: boolean;
-  provider?: string;
-  apiBaseUrl?: string;
-  model?: string;
-  accountLabel: string;
-  savedAt?: string;
+export type CompanionCredentialEntry = {
+  id: string;
+  label: string;
+  provider: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-export type CompanionCredentialsSaveRequest = {
+/** GET /credentials 的返回：全量列表 + 当前激活 id。 */
+export type CompanionCredentialsListResponse = {
+  entries: CompanionCredentialEntry[];
+  activeId: string | null;
+};
+
+/** POST /credentials、PUT /credentials/:id 的请求体。 */
+export type CompanionCredentialInput = {
+  label?: string;
   provider?: string;
   apiBaseUrl: string;
   apiKey: string;
   model?: string;
 };
 
-export type CompanionCredentialsSaveResponse = {
+/** 新增/更新成功后返回的单条配置。 */
+export type CompanionCredentialMutationResponse = {
   ok: true;
-  accountLabel: string;
+  entry: CompanionCredentialEntry;
 };
 
-export type CompanionCredentialsClearResponse = {
+export type CompanionCredentialActivateResponse = {
+  ok: true;
+  activeId: string;
+};
+
+export type CompanionCredentialDeleteResponse = {
   ok: true;
 };
 

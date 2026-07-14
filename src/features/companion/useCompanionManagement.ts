@@ -2,14 +2,17 @@ import { ref } from "vue";
 import type { Ref } from "vue";
 import {
   getCompanionPresets,
-  getCompanionCredentials,
-  saveCompanionCredentials,
-  clearCompanionCredentials,
+  listCompanionCredentials,
+  addCompanionCredential,
+  updateCompanionCredential,
+  removeCompanionCredential,
+  activateCompanionCredential,
   getCompanionLogs,
 } from "../../services/companionApi";
 import type {
   CompanionProviderPreset,
-  CompanionCredentialsView,
+  CompanionCredentialEntry,
+  CompanionCredentialInput,
   CompanionLogsTailResponse,
 } from "../../types/companion";
 
@@ -26,15 +29,15 @@ type UseCompanionManagementInput = {
 };
 
 /**
- * Companion 管理面板的状态机：凭证（替代 CLI login）+ 日志（替代 CLI logs）。
+ * Companion 管理面板的状态机：多配置凭据 CRUD（替代 CLI provider 命令）+ 日志。
  *
- * 与 useCompanionConnection 并列、不合并：后者管连接/健康探测，已稳定；
- * 本 composable 只服务管理面板，职责清晰、互不耦合。
- * 面板挂载时按需 loadPresets/loadCredentials；日志在面板内显式触发。
+ * 凭据从单条改为列表：credentialList + activeCredentialId 替代旧的 credentials。
+ * 每次增删改激活后调用 onCredentialsChanged，让连接层刷新 /auth/status。
  */
 export function useCompanionManagement(input: UseCompanionManagementInput) {
   const presets = ref<CompanionProviderPreset[]>([]);
-  const credentials = ref<CompanionCredentialsView | null>(null);
+  const credentialList = ref<CompanionCredentialEntry[]>([]);
+  const activeCredentialId = ref<string | null>(null);
   const logs = ref<CompanionLogsTailResponse | null>(null);
 
   const loadingPresets = ref(false);
@@ -59,50 +62,82 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
     loadingCredentials.value = true;
     credError.value = "";
     try {
-      credentials.value = await getCompanionCredentials(input.companionUrl.value);
+      const data = await listCompanionCredentials(input.companionUrl.value);
+      credentialList.value = Array.isArray(data.entries) ? data.entries : [];
+      activeCredentialId.value = data.activeId ?? null;
     } catch (e) {
-      credError.value = e instanceof Error ? e.message : "无法获取当前凭据";
+      credError.value = e instanceof Error ? e.message : "无法获取凭据列表";
     } finally {
       loadingCredentials.value = false;
     }
   }
 
-  async function submitCredentials(form: {
-    provider?: string;
-    apiBaseUrl: string;
-    apiKey: string;
-    model?: string;
-  }) {
+  async function addCredential(form: CompanionCredentialInput) {
     savingCredentials.value = true;
     credError.value = "";
     try {
-      const result = await saveCompanionCredentials(input.companionUrl.value, form);
-      credentials.value = {
-        hasApiKey: true,
-        provider: form.provider,
-        apiBaseUrl: form.apiBaseUrl,
-        model: form.model,
-        accountLabel: result.accountLabel,
-        savedAt: new Date().toISOString(),
-      };
-      // 通知连接层重新拉 /auth/status，让能力/尺寸约束即时刷新。
+      const entry = await addCompanionCredential(input.companionUrl.value, form);
+      credentialList.value = [...credentialList.value, entry];
+      // 服务端可能自动激活首条，重新拉一次保证 activeId 同步
+      await syncActiveId();
       input.onCredentialsChanged();
     } catch (e) {
-      credError.value = e instanceof Error ? e.message : "保存凭据失败";
+      credError.value = e instanceof Error ? e.message : "新增凭据失败";
       throw e;
     } finally {
       savingCredentials.value = false;
     }
   }
 
-  async function removeCredentials() {
+  async function updateCredential(id: string, form: CompanionCredentialInput) {
+    savingCredentials.value = true;
     credError.value = "";
     try {
-      await clearCompanionCredentials(input.companionUrl.value);
-      credentials.value = { hasApiKey: false, accountLabel: "" };
+      const entry = await updateCompanionCredential(input.companionUrl.value, id, form);
+      credentialList.value = credentialList.value.map((e) => (e.id === id ? entry : e));
       input.onCredentialsChanged();
     } catch (e) {
-      credError.value = e instanceof Error ? e.message : "清除凭据失败";
+      credError.value = e instanceof Error ? e.message : "更新凭据失败";
+      throw e;
+    } finally {
+      savingCredentials.value = false;
+    }
+  }
+
+  async function removeCredential(id: string) {
+    credError.value = "";
+    try {
+      await removeCompanionCredential(input.companionUrl.value, id);
+      credentialList.value = credentialList.value.filter((e) => e.id !== id);
+      // 删激活项后服务端可能自动切到剩余首条，重新拉一次
+      await syncActiveId();
+      input.onCredentialsChanged();
+    } catch (e) {
+      credError.value = e instanceof Error ? e.message : "删除凭据失败";
+    }
+  }
+
+  async function activateCredential(id: string) {
+    credError.value = "";
+    try {
+      await activateCompanionCredential(input.companionUrl.value, id);
+      activeCredentialId.value = id;
+      input.onCredentialsChanged();
+    } catch (e) {
+      credError.value = e instanceof Error ? e.message : "激活凭据失败";
+    }
+  }
+
+  /**
+   * 从服务端同步 activeId——add/remove 后服务端可能自动切换激活项，
+   * 本地不能盲猜，拉一次最准确。
+   */
+  async function syncActiveId() {
+    try {
+      const data = await listCompanionCredentials(input.companionUrl.value);
+      activeCredentialId.value = data.activeId;
+    } catch {
+      // 同步失败不阻塞主流程，credError 已由上层设置
     }
   }
 
@@ -128,7 +163,8 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
 
   return {
     presets,
-    credentials,
+    credentialList,
+    activeCredentialId,
     logs,
     loadingPresets,
     loadingCredentials,
@@ -138,8 +174,10 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
     logsError,
     loadPresets,
     loadCredentials,
-    submitCredentials,
-    removeCredentials,
+    addCredential,
+    updateCredential,
+    removeCredential,
+    activateCredential,
     loadLogs,
   };
 }

@@ -7,15 +7,42 @@ let authRoutes: typeof import("./auth.js").authRoutes;
 beforeEach(() => vi.resetModules());
 afterEach(() => vi.doUnmock("../credentials.js"));
 
+/**
+ * mock getActiveCredential：返回 CredentialEntry 或 null。
+ * 测试只关心 /auth/status 的回流，不碰真实文件系统。
+ */
 async function makeApp(creds: unknown) {
   vi.doMock("../credentials.js", () => ({
-    loadCredentials: () => creds,
-    maskApiKey: (k: string) => k.slice(0, 4) + "***",
+    getActiveCredential: () => creds,
   }));
   authRoutes = (await import("./auth.js")).authRoutes;
   const app: FastifyInstance = Fastify();
   app.register(authRoutes);
   return app;
+}
+
+/** 构造 CredentialEntry 的辅助函数，减少重复。 */
+function entry(overrides: Partial<{
+  id: string;
+  label: string;
+  provider: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+}> = {}) {
+  return {
+    id: "test-id",
+    label: "测试配置",
+    provider: "openai",
+    apiBaseUrl: "https://api.example.com/v1/images",
+    apiKey: "sk-test123456",
+    model: "gpt-image-2",
+    createdAt: "2026-06-20T00:00:00.000Z",
+    updatedAt: "2026-06-20T00:00:00.000Z",
+    ...overrides,
+  };
 }
 
 describe("/auth/status provider info backflow", () => {
@@ -50,18 +77,20 @@ describe("/auth/status provider info backflow", () => {
     await app.close();
   });
 
-  it("returns OpenAI capability + sizeConstraints for legacy creds (no provider field)", async () => {
-    const app = await makeApp({
-      apiBaseUrl: "https://api.example.com/v1/images",
-      apiKey: "sk-abcdefghijk",
-      savedAt: "2026-06-20T00:00:00.000Z",
-    });
+  it("returns OpenAI capability + sizeConstraints for openai provider", async () => {
+    const app = await makeApp(
+      entry({
+        provider: "openai",
+        apiKey: "sk-test123456",
+        model: "gpt-image-2",
+      }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body).toMatchObject({
       provider: "openai",
       ready: true,
-      accountLabel: "sk-a***",
+      accountLabel: "测试配置",
     });
     expect(body.capability.mask).toBe(true);
     expect(body.sizeConstraints.step).toBe(16);
@@ -74,14 +103,9 @@ describe("/auth/status provider info backflow", () => {
   });
 
   it("returns provider-specific metadata when provider field present", async () => {
-    // 当前只有 openai adapter 注册，provider=openai 应直接透传
-    const app = await makeApp({
-      provider: "openai",
-      apiBaseUrl: "https://api.example.com/v1/images",
-      apiKey: "sk-test123456",
-      model: "gpt-image-2",
-      savedAt: "2026-06-20T00:00:00.000Z",
-    });
+    const app = await makeApp(
+      entry({ provider: "openai", model: "gpt-image-2" }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body.model).toBe("gpt-image-2");
@@ -90,13 +114,14 @@ describe("/auth/status provider info backflow", () => {
   });
 
   it("returns GLM capability + constraints when provider=glm (drives UI to hide unsupported options)", async () => {
-    const app = await makeApp({
-      provider: "glm",
-      apiBaseUrl: "https://open.bigmodel.cn/api/paas/v4/images",
-      apiKey: "glm-abc123",
-      model: "glm-image",
-      savedAt: "2026-06-20T00:00:00.000Z",
-    });
+    const app = await makeApp(
+      entry({
+        provider: "glm",
+        apiBaseUrl: "https://open.bigmodel.cn/api/paas/v4/images",
+        apiKey: "glm-abc123",
+        model: "glm-image",
+      }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body.provider).toBe("glm");
@@ -125,13 +150,14 @@ describe("/auth/status provider info backflow", () => {
   });
 
   it("returns Doubao capability + constraints when provider=doubao", async () => {
-    const app = await makeApp({
-      provider: "doubao",
-      apiBaseUrl: "https://ark.cn-beijing.volces.com/api/v3/images",
-      apiKey: "doubao-test",
-      model: "doubao-seedream-5-0-lite",
-      savedAt: "2026-06-25T00:00:00.000Z",
-    });
+    const app = await makeApp(
+      entry({
+        provider: "doubao",
+        apiBaseUrl: "https://ark.cn-beijing.volces.com/api/v3/images",
+        apiKey: "doubao-test",
+        model: "doubao-seedream-5-0-lite",
+      }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body.provider).toBe("doubao");
@@ -161,13 +187,14 @@ describe("/auth/status provider info backflow", () => {
   });
 
   it("returns Qwen capability + constraints when provider=qwen", async () => {
-    const app = await makeApp({
-      provider: "qwen",
-      apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
-      apiKey: "qwen-test",
-      model: "qwen-image-2.0-pro",
-      savedAt: "2026-06-28T00:00:00.000Z",
-    });
+    const app = await makeApp(
+      entry({
+        provider: "qwen",
+        apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+        apiKey: "qwen-test",
+        model: "qwen-image-2.0-pro",
+      }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body.provider).toBe("qwen");
@@ -194,13 +221,14 @@ describe("/auth/status provider info backflow", () => {
   });
 
   it("returns Wan capability + constraints when provider=wan", async () => {
-    const app = await makeApp({
-      provider: "wan",
-      apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
-      apiKey: "wan-test",
-      model: "wan2.7-image",
-      savedAt: "2026-06-28T00:00:00.000Z",
-    });
+    const app = await makeApp(
+      entry({
+        provider: "wan",
+        apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+        apiKey: "wan-test",
+        model: "wan2.7-image",
+      }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body.provider).toBe("wan");
@@ -228,13 +256,14 @@ describe("/auth/status provider info backflow", () => {
   });
 
   it("returns Wan Pro 4K text-to-image constraints when model=wan2.7-image-pro", async () => {
-    const app = await makeApp({
-      provider: "wan",
-      apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
-      apiKey: "wan-test",
-      model: "wan2.7-image-pro",
-      savedAt: "2026-06-28T00:00:00.000Z",
-    });
+    const app = await makeApp(
+      entry({
+        provider: "wan",
+        apiBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+        apiKey: "wan-test",
+        model: "wan2.7-image-pro",
+      }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body.provider).toBe("wan");
@@ -256,13 +285,14 @@ describe("/auth/status provider info backflow", () => {
   });
 
   it("returns Grok capability + constraints when provider=grok", async () => {
-    const app = await makeApp({
-      provider: "grok",
-      apiBaseUrl: "https://api.x.ai/v1/images",
-      apiKey: "xai-test",
-      model: "grok-imagine-image",
-      savedAt: "2026-06-28T00:00:00.000Z",
-    });
+    const app = await makeApp(
+      entry({
+        provider: "grok",
+        apiBaseUrl: "https://api.x.ai/v1/images",
+        apiKey: "xai-test",
+        model: "grok-imagine-image",
+      }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body.provider).toBe("grok");
@@ -284,13 +314,14 @@ describe("/auth/status provider info backflow", () => {
   });
 
   it("returns Gemini capability + constraints when provider=gemini", async () => {
-    const app = await makeApp({
-      provider: "gemini",
-      apiBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
-      apiKey: "gemini-test",
-      model: "gemini-2.5-flash-image",
-      savedAt: "2026-06-28T00:00:00.000Z",
-    });
+    const app = await makeApp(
+      entry({
+        provider: "gemini",
+        apiBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        apiKey: "gemini-test",
+        model: "gemini-2.5-flash-image",
+      }),
+    );
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     const body = res.json();
     expect(body.provider).toBe("gemini");

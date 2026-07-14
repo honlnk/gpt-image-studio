@@ -29,6 +29,10 @@ afterEach(async () => {
   vi.doUnmock("../credentials.js");
 });
 
+/**
+ * mock getActiveCredential：返回 CredentialEntry 形状或 null。
+ * toProviderConfig 只消费 provider/apiBaseUrl/apiKey/model，所以测试给最小字段即可。
+ */
 async function setupWithCredentials(creds: {
   apiBaseUrl: string;
   apiKey: string;
@@ -36,8 +40,7 @@ async function setupWithCredentials(creds: {
   model?: string;
 } | null) {
   vi.doMock("../credentials.js", () => ({
-    loadCredentials: () => creds,
-    maskApiKey: (k: string) => k.slice(0, 4) + "***",
+    getActiveCredential: () => creds,
   }));
   const mod = await import("./images.js");
   imagesRoutes = mod.imagesRoutes;
@@ -257,12 +260,13 @@ describe("images routes integration — edit", () => {
 });
 
 describe("provider config passthrough", () => {
-  it("passes provider field through to adapter resolution (regression: old creds without provider)", async () => {
-    // 老 credentials.json 无 provider 字段 → 应回退 openai，正常工作
+  it("defaults to openai when provider field is absent (toProviderConfig fallback)", async () => {
+    // toProviderConfig 对缺省 provider 回退 openai；CredentialEntry.provider 恒有值，
+    // 但该回退是防御性代码，保留测试以防误删。
     const app = await setupWithCredentials({
       apiBaseUrl: "https://up.example.com/v1/images",
       apiKey: "sk-test",
-      // 故意不传 provider
+      // 故意不传 provider，验证回退逻辑
     });
     vi.stubGlobal(
       "fetch",

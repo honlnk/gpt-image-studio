@@ -3,10 +3,9 @@ import type {
   CompanionAuthStatus,
   CompanionHealthResponse,
   CompanionProviderPreset,
-  CompanionCredentialsView,
-  CompanionCredentialsSaveInput,
-  CompanionCredentialsSaveResponse,
-  CompanionCredentialsClearResponse,
+  CompanionCredentialsListResponse,
+  CompanionCredentialInput,
+  CompanionCredentialEntry,
   CompanionLogsTailResponse,
 } from "../types/companion";
 
@@ -48,8 +47,8 @@ export async function getCompanionAuthStatusResult(
   }
 }
 
-// ---- 凭证管理（GET /credentials/presets、GET/POST/DELETE /credentials）----
-// 凭证接口不走连接密钥——companion 侧用 loopback 来源校验，等同 CLI login 的信任模型。
+// ---- 凭证管理（多配置 CRUD + 激活切换）----
+// 凭证接口不走连接密钥——companion 侧用 loopback 来源校验，等同 CLI 的信任模型。
 
 export async function getCompanionPresets(
   url: string,
@@ -61,42 +60,73 @@ export async function getCompanionPresets(
   return await res.json();
 }
 
-export async function getCompanionCredentials(
+export async function listCompanionCredentials(
   url: string,
-): Promise<CompanionCredentialsView> {
+): Promise<CompanionCredentialsListResponse> {
   const res = await fetch(`${url}/credentials`, {
     signal: AbortSignal.timeout(3000),
   });
-  if (!res.ok) throw new Error("无法获取当前凭据");
+  if (!res.ok) throw new Error("无法获取凭据列表");
   return await res.json();
 }
 
-export async function saveCompanionCredentials(
+export async function addCompanionCredential(
   url: string,
-  input: CompanionCredentialsSaveInput,
-): Promise<CompanionCredentialsSaveResponse> {
+  input: CompanionCredentialInput,
+): Promise<CompanionCredentialEntry> {
   const res = await fetch(`${url}/credentials`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   if (!res.ok) {
-    let message = "保存凭据失败";
+    let message = "新增凭据失败";
     try {
       const data = (await res.json()) as { error?: string };
       message = data.error || message;
     } catch {}
     throw new Error(message);
   }
-  return await res.json();
+  const data = (await res.json()) as { entry: CompanionCredentialEntry };
+  return data.entry;
 }
 
-export async function clearCompanionCredentials(
+export async function updateCompanionCredential(
   url: string,
-): Promise<CompanionCredentialsClearResponse> {
-  const res = await fetch(`${url}/credentials`, { method: "DELETE" });
-  if (!res.ok) throw new Error("清除凭据失败");
-  return await res.json();
+  id: string,
+  input: CompanionCredentialInput,
+): Promise<CompanionCredentialEntry> {
+  const res = await fetch(`${url}/credentials/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    let message = "更新凭据失败";
+    try {
+      const data = (await res.json()) as { error?: string };
+      message = data.error || message;
+    } catch {}
+    throw new Error(message);
+  }
+  const data = (await res.json()) as { entry: CompanionCredentialEntry };
+  return data.entry;
+}
+
+export async function removeCompanionCredential(
+  url: string,
+  id: string,
+): Promise<void> {
+  const res = await fetch(`${url}/credentials/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("删除凭据失败");
+}
+
+export async function activateCompanionCredential(
+  url: string,
+  id: string,
+): Promise<void> {
+  const res = await fetch(`${url}/credentials/${id}/activate`, { method: "POST" });
+  if (!res.ok) throw new Error("激活凭据失败");
 }
 
 // ---- 日志查看（GET /logs/tail，需连接密钥）----

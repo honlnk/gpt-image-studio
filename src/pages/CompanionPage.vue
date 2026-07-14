@@ -17,7 +17,8 @@ const settings = useSettingsStore();
 
 const {
   presets,
-  credentials,
+  credentialList,
+  activeCredentialId,
   logs,
   loadingPresets,
   loadingCredentials,
@@ -66,7 +67,8 @@ onMounted(() => {
         :connect-error="connectError"
         :connecting="connecting"
         :presets="presets"
-        :credentials="credentials"
+        :credential-list="credentialList"
+        :active-credential-id="activeCredentialId"
         :logs="logs"
         :loading-presets="loadingPresets"
         :loading-credentials="loadingCredentials"
@@ -79,8 +81,10 @@ onMounted(() => {
         @disconnect-companion="companion.disconnect"
         @load-presets="companion.loadPresets"
         @load-credentials="companion.loadCredentials"
-        @submit-credentials="companion.submitCredentials"
-        @remove-credentials="companion.removeCredentials"
+        @add-credential="companion.addCredential"
+        @update-credential="companion.updateCredential"
+        @remove-credential="companion.removeCredential"
+        @activate-credential="companion.activateCredential"
         @load-logs="companion.loadLogs"
       />
     </main>

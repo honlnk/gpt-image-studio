@@ -40,6 +40,7 @@ export async function startServer(opts: {
     origin: (origin, cb) => {
       cb(null, isOriginAllowed(origin, opts.security.allowedOrigins));
     },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   });
 

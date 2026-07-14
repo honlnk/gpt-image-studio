@@ -4,10 +4,18 @@ import { existsSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Option, program } from "commander";
 import type { CompanionHealthResponse } from "./types.js";
-import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials.js";
+import type { CredentialEntry, CredentialInput } from "./credentials.js";
+import {
+  listCredentials,
+  getActiveCredential,
+  addCredential,
+  updateCredential,
+  removeCredential,
+  activateCredential,
+} from "./credentials.js";
 import { loadOrCreateAccessKey, resetAccessKey, getAccessKey } from "./accessKey.js";
 import { createSecurityConfig } from "./securityConfig.js";
-import { PROVIDER_PRESETS, type ProviderPreset } from "./providerPresets.js";
+import { PROVIDER_PRESETS } from "./providerPresets.js";
 import {
   getLogFilePath,
   isProcessRunning,
@@ -129,84 +137,120 @@ program
     }
   });
 
-program
-  .command("login")
-  .description("配置 API 凭据")
-  .action(async () => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const ask = (q: string): Promise<string> =>
-      new Promise((resolve) => rl.question(q, resolve));
+// ==================== provider 子命令组 ====================
 
-    // 1. 选 provider
-    console.log("选择 Provider：");
-    PROVIDER_PRESETS.forEach((p, i) => console.log(`  ${i + 1}. ${p.label}`));
-    const providerChoice = (await ask(`输入序号（默认 1）: `)).trim();
-    const providerIndex =
-      Number(providerChoice) >= 1 && Number(providerChoice) <= PROVIDER_PRESETS.length
-        ? Number(providerChoice) - 1
-        : 0;
-    const preset = PROVIDER_PRESETS[providerIndex];
+const providerCmd = program
+  .command("provider")
+  .description("管理 provider 配置列表（增删改查 + 激活切换）");
 
-    // 2. base url（带 provider 默认值）
-    const apiBaseUrl =
-      (await ask(`API Base URL（默认 ${preset.defaultBaseUrl}）: `)).trim() ||
-      preset.defaultBaseUrl;
-
-    // 3. model（带 provider 默认值；模型 ID 会漂移，让用户可改）
-    const model =
-      (await ask(`Model（默认 ${preset.defaultModel}）: `)).trim() || preset.defaultModel;
-
-    // 4. api key（隐藏输入）
-    const apiKey = await new Promise<string>((resolve) => {
-      process.stdout.write("API Key: ");
-      const stdin = process.stdin;
-      const wasRaw = stdin.isRaw;
-      if (stdin.isTTY) stdin.setRawMode(true);
-      let input = "";
-      const onData = (ch: Buffer) => {
-        const c = ch.toString();
-        if (c === "\n" || c === "\r") {
-          stdin.removeListener("data", onData);
-          if (stdin.isTTY) stdin.setRawMode(wasRaw ?? false);
-          process.stdout.write("\n");
-          resolve(input);
-        } else if (c === "\b" || c === "\x7f") {
-          // 退格：\b (0x08) 和 DEL (0x7f) 都要识别——多数终端退格键发 0x7f。
-          // 之前漏了 0x7f，导致按退格时 DEL 字符被当普通字符存进 key（污染凭据）。
-          input = input.slice(0, -1);
-        } else if (c === "\x03") {
-          // Ctrl-C
-          process.exit(1);
-        } else if (c >= " " && c !== "\x7f") {
-          // 只接受可打印字符（0x20 起），跳过其他控制字符
-          input += c;
-        }
-      };
-      stdin.resume();
-      stdin.on("data", onData);
-    });
-
-    rl.close();
-
-    if (!apiKey.trim()) {
-      console.log("未输入 API Key，取消操作。");
+providerCmd
+  .command("list")
+  .description("列出所有 provider 配置")
+  .action(() => {
+    const store = listCredentials();
+    if (store.entries.length === 0) {
+      console.log("暂无 provider 配置，用 gpt-image-studio provider add 添加。");
       return;
     }
-
-    saveCredentials(apiBaseUrl, apiKey.trim(), { provider: preset.id, model });
-    console.log("");
-    console.log("凭据已保存。");
-    console.log(`  Provider:     ${preset.label}`);
-    console.log(`  API Base URL: ${apiBaseUrl}`);
-    console.log(`  Model:        ${model}`);
-    console.log(`  API Key:      ${maskApiKey(apiKey.trim())}`);
+    console.log("=".repeat(60));
+    store.entries.forEach((entry) => {
+      const active = entry.id === store.activeId ? " [激活中]" : "";
+      console.log(`${entry.label}${active}`);
+      console.log(`  ID:       ${entry.id}`);
+      console.log(`  Provider: ${entry.provider}`);
+      console.log(`  Model:    ${entry.model || "(未设置)"}`);
+      console.log(`  Base URL: ${entry.apiBaseUrl}`);
+      console.log(`  API Key:  ${entry.apiKey}`);
+      console.log("");
+    });
+    console.log("=".repeat(60));
   });
+
+providerCmd
+  .command("show <id>")
+  .description("查看单条配置详情")
+  .action((id: string) => {
+    const store = listCredentials();
+    const entry = store.entries.find((e) => e.id === id);
+    if (!entry) {
+      console.log(`未找到 ID 为 ${id} 的配置。`);
+      return;
+    }
+    const active = entry.id === store.activeId ? " [激活中]" : "";
+    console.log(`${entry.label}${active}`);
+    console.log(`  ID:       ${entry.id}`);
+    console.log(`  Provider: ${entry.provider}`);
+    console.log(`  Model:    ${entry.model || "(未设置)"}`);
+    console.log(`  Base URL: ${entry.apiBaseUrl}`);
+    console.log(`  API Key:  ${entry.apiKey}`);
+    console.log(`  创建时间: ${entry.createdAt}`);
+    console.log(`  更新时间: ${entry.updatedAt}`);
+  });
+
+providerCmd
+  .command("add")
+  .description("交互式新增 provider 配置")
+  .action(async () => {
+    const input = await promptCredentialInput();
+    if (!input) return;
+    const entry = addCredential(input);
+    console.log("");
+    console.log("配置已保存。");
+    printEntrySummary(entry);
+    console.log(`  ID: ${entry.id}`);
+  });
+
+providerCmd
+  .command("edit <id>")
+  .description("编辑指定 provider 配置")
+  .action(async (id: string) => {
+    const store = listCredentials();
+    const existing = store.entries.find((e) => e.id === id);
+    if (!existing) {
+      console.log(`未找到 ID 为 ${id} 的配置。`);
+      return;
+    }
+    const input = await promptCredentialInput(existing);
+    if (!input) return;
+    const entry = updateCredential(id, input);
+    if (entry) {
+      console.log("");
+      console.log("配置已更新。");
+      printEntrySummary(entry);
+    }
+  });
+
+providerCmd
+  .command("remove <id>")
+  .description("删除指定 provider 配置")
+  .action((id: string) => {
+    const removed = removeCredential(id);
+    if (removed) {
+      console.log("配置已删除。");
+    } else {
+      console.log(`未找到 ID 为 ${id} 的配置。`);
+    }
+  });
+
+providerCmd
+  .command("activate <id>")
+  .description("将指定配置设为激活")
+  .action((id: string) => {
+    const ok = activateCredential(id);
+    if (ok) {
+      console.log("已设为激活。");
+    } else {
+      console.log(`未找到 ID 为 ${id} 的配置。`);
+    }
+  });
+
+// ==================== status 命令 ====================
 
 program
   .command("status")
   .description("查看 companion 状态")
   .action(async () => {
-    const creds = loadCredentials();
+    const active = getActiveCredential();
     const accessKey = getAccessKey();
 
     console.log("=".repeat(50));
@@ -215,17 +259,15 @@ program
     console.log("");
     console.log(`版本:    v${COMPANION_VERSION}`);
 
-    if (creds) {
-      const providerId = creds.provider ?? "openai";
-      const preset = PROVIDER_PRESETS.find((p) => p.id === providerId);
-      console.log(`凭据:    已配置`);
-      console.log(`  Provider: ${preset ? preset.label : providerId}`);
-      console.log(`  Model:    ${creds.model ?? "(未设置)"}`);
-      console.log(`  Base URL: ${creds.apiBaseUrl}`);
-      console.log(`  API Key:  ${maskApiKey(creds.apiKey)}`);
-      console.log(`  保存时间: ${creds.savedAt}`);
+    if (active) {
+      const preset = PROVIDER_PRESETS.find((p) => p.id === active.provider);
+      console.log(`凭据:    已配置（${listCredentials().entries.length} 条，当前激活：${active.label}）`);
+      console.log(`  Provider: ${preset ? preset.label : active.provider}`);
+      console.log(`  Model:    ${active.model || "(未设置)"}`);
+      console.log(`  Base URL: ${active.apiBaseUrl}`);
+      console.log(`  API Key:  ${active.apiKey}`);
     } else {
-      console.log("凭据:    未配置（运行 gpt-image-studio login 进行配置）");
+      console.log("凭据:    未配置（运行 gpt-image-studio provider add 添加配置）");
     }
 
     const managed = readManagedProcessInfo();
@@ -272,17 +314,9 @@ program
   });
 
 program
-  .command("logout")
-  .description("清除已保存的凭据")
-  .action(async () => {
-    clearCredentials();
-    console.log("凭据已清除。");
-  });
-
-program
   .command("reset-key")
   .description("重新生成连接密钥（旧密钥立即失效，需在网页重新粘贴新密钥）")
-  .action(async () => {
+  .action(() => {
     const newKey = resetAccessKey();
     console.log("连接密钥已重新生成。旧密钥已失效。");
     console.log("");
@@ -293,6 +327,107 @@ program
   });
 
 program.parse();
+
+// ==================== 交互式输入辅助 ====================
+
+async function promptCredentialInput(existing?: CredentialEntry): Promise<CredentialInput | null> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q: string): Promise<string> =>
+    new Promise((resolve) => rl.question(q, resolve));
+
+  // 1. label
+  const defaultLabel = existing?.label ?? "";
+  const label =
+    (await ask(`配置名称${defaultLabel ? `（默认 ${defaultLabel}）` : "（可选）"}: `)).trim() ||
+    defaultLabel;
+
+  // 2. provider
+  console.log("选择 Provider：");
+  PROVIDER_PRESETS.forEach((p, i) => console.log(`  ${i + 1}. ${p.label}`));
+  const currentProviderIndex = existing
+    ? PROVIDER_PRESETS.findIndex((p) => p.id === existing.provider)
+    : 0;
+  const providerChoice = (await ask(`输入序号（默认 ${currentProviderIndex + 1}）: `)).trim();
+  const providerIndex =
+    Number(providerChoice) >= 1 && Number(providerChoice) <= PROVIDER_PRESETS.length
+      ? Number(providerChoice) - 1
+      : Math.max(0, currentProviderIndex);
+  const preset = PROVIDER_PRESETS[providerIndex];
+
+  // 3. base url
+  const baseUrlDefault = existing?.apiBaseUrl || preset.defaultBaseUrl;
+  const apiBaseUrl =
+    (await ask(`API Base URL（默认 ${baseUrlDefault}）: `)).trim() || baseUrlDefault;
+
+  // 4. model
+  const modelDefault = existing?.model || preset.defaultModel;
+  const model =
+    (await ask(`Model（默认 ${modelDefault}）: `)).trim() || modelDefault;
+
+  // 5. api key
+  const keyHint = existing ? `（当前 ${existing.apiKey}，直接回车保留）` : "";
+  let apiKey: string;
+  if (existing) {
+    apiKey = (await ask(`API Key${keyHint}: `)).trim() || existing.apiKey;
+  } else {
+    apiKey = await promptPassword("API Key: ");
+  }
+
+  rl.close();
+
+  if (!apiKey.trim()) {
+    console.log("未输入 API Key，取消操作。");
+    return null;
+  }
+
+  return {
+    label: label || undefined,
+    provider: preset.id,
+    apiBaseUrl,
+    apiKey: apiKey.trim(),
+    model,
+  };
+}
+
+/** 隐藏输入读取 API Key。 */
+async function promptPassword(prompt: string): Promise<string> {
+  return new Promise<string>((resolve) => {
+    process.stdout.write(prompt);
+    const stdin = process.stdin;
+    const wasRaw = stdin.isRaw;
+    if (stdin.isTTY) stdin.setRawMode(true);
+    let input = "";
+    const onData = (ch: Buffer) => {
+      const c = ch.toString();
+      if (c === "\n" || c === "\r") {
+        stdin.removeListener("data", onData);
+        if (stdin.isTTY) stdin.setRawMode(wasRaw ?? false);
+        process.stdout.write("\n");
+        resolve(input);
+      } else if (c === "\b" || c === "\x7f") {
+        // 退格：\b (0x08) 和 DEL (0x7f) 都要识别——多数终端退格键发 0x7f。
+        input = input.slice(0, -1);
+      } else if (c === "\x03") {
+        // Ctrl-C
+        process.exit(1);
+      } else if (c >= " " && c !== "\x7f") {
+        // 只接受可打印字符（0x20 起），跳过其他控制字符
+        input += c;
+      }
+    };
+    stdin.resume();
+    stdin.on("data", onData);
+  });
+}
+
+function printEntrySummary(entry: CredentialEntry): void {
+  const preset = PROVIDER_PRESETS.find((p) => p.id === entry.provider);
+  console.log(`  名称:     ${entry.label}`);
+  console.log(`  Provider: ${preset ? preset.label : entry.provider}`);
+  console.log(`  Model:    ${entry.model || "(未设置)"}`);
+  console.log(`  Base URL: ${entry.apiBaseUrl}`);
+  console.log(`  API Key:  ${entry.apiKey}`);
+}
 
 async function followLogFile(logFile: string): Promise<void> {
   let offset = existsSync(logFile) ? statSync(logFile).size : 0;

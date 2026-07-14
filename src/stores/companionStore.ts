@@ -55,9 +55,10 @@ export const useCompanionStore = defineStore("companion", () => {
     checkStatus: connection.checkStatus,
     connectWithKey: connection.connectWithKey,
     disconnect: connection.disconnect,
-    // 凭证 + 日志（useCompanionManagement）
+    // 凭据列表 + 日志（useCompanionManagement）
     presets: management.presets,
-    credentials: management.credentials,
+    credentialList: management.credentialList,
+    activeCredentialId: management.activeCredentialId,
     logs: management.logs,
     loadingPresets: management.loadingPresets,
     loadingCredentials: management.loadingCredentials,
@@ -67,8 +68,10 @@ export const useCompanionStore = defineStore("companion", () => {
     logsError: management.logsError,
     loadPresets: management.loadPresets,
     loadCredentials: management.loadCredentials,
-    submitCredentials: management.submitCredentials,
-    removeCredentials: management.removeCredentials,
+    addCredential: management.addCredential,
+    updateCredential: management.updateCredential,
+    removeCredential: management.removeCredential,
+    activateCredential: management.activateCredential,
     loadLogs: management.loadLogs,
   };
 });

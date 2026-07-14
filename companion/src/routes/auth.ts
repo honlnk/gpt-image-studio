@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { CompanionAuthStatus } from "../types.js";
-import { loadCredentials, maskApiKey } from "../credentials.js";
+import { getActiveCredential } from "../credentials.js";
 import { resolveAdapter } from "../providers/registry.js";
 import { openaiAdapter } from "../providers/openai.js";
 import type { ProviderConfig } from "../providers/types.js";
@@ -12,7 +12,7 @@ const OPENAI_DEFAULT_RESOLUTION_OPTIONS = openaiAdapter.resolutionOptions;
 
 export async function authRoutes(app: FastifyInstance) {
   app.get<{ Reply: CompanionAuthStatus }>("/auth/status", async () => {
-    const creds = loadCredentials();
+    const creds = getActiveCredential();
     if (!creds) {
       return {
         provider: "openai",
@@ -28,10 +28,10 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const config: ProviderConfig = {
-      provider: creds.provider ?? "openai",
+      provider: creds.provider,
       apiBaseUrl: creds.apiBaseUrl,
       apiKey: creds.apiKey,
-      model: creds.model,
+      model: creds.model || undefined,
     };
     const adapter = resolveAdapter(config);
 
@@ -39,8 +39,8 @@ export async function authRoutes(app: FastifyInstance) {
       provider: adapter.id,
       mode: "api_key" as const,
       ready: true,
-      accountLabel: maskApiKey(creds.apiKey),
-      model: creds.model ?? "",
+      accountLabel: creds.label,
+      model: creds.model,
       capability: adapter.capability,
       sizeConstraints: adapter.getSizeConstraints?.(config) ?? adapter.sizeConstraints,
       resolutionOptions: adapter.getResolutionOptions?.(config) ?? adapter.resolutionOptions,
