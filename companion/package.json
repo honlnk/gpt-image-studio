@@ -1,6 +1,6 @@
 {
   "name": "@honlnk/image-studio-companion",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Local CLI companion for GPT Image Studio image API credential proxying.",
   "type": "module",
   "bin": {

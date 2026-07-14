@@ -49,7 +49,7 @@ export async function startServer(opts: {
   //    否则 /credentials/* 会被 bearer 守卫拦成 401（凭证接口不走连接密钥）。
   // 2) authMiddleware（bearer token 守卫）。
   // 3) 其余受保护路由 + logsRoutes（日志走连接密钥，放在 authMiddleware 之后）。
-  await app.register(credentialsRoutes);
+  await app.register(credentialsRoutes, { allowedOrigins: opts.security.allowedOrigins });
   await authMiddleware(app);
   await app.register(authRoutes);
   await app.register(imagesRoutes, { security: opts.security });
