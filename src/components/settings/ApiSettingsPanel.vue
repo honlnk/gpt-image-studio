@@ -137,7 +137,7 @@ onUnmounted(() => {
 
         <!-- v0.6 重构迁移提示 -->
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
-          <p class="text-sm font-medium text-amber-800">⚙️ 升级提示（v0.6.0）</p>
+          <p class="text-sm font-medium text-amber-800">⚙️ 升级提示</p>
           <p class="text-xs leading-relaxed text-amber-700">
             Companion 凭据存储结构已重构，不再兼容旧版本。如果你之前使用过 Companion，请：
           </p>
