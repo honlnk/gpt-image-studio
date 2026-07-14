@@ -56,9 +56,11 @@ describe("settingsStore capability-driven UI", () => {
     const s = useSettingsStore();
     // 未回流时背景不含 transparent（与 gpt-image-2 现状一致）
     expect(s.backgroundOptions.map((o) => o.value)).toEqual(["auto", "opaque"]);
+    expect(s.backgroundTagVisible).toBe(true);
     expect(s.transparentDisabled).toBe(true);
     // 全格式默认可见
     expect(s.formatOptions.map((o) => o.value)).toEqual(["png", "webp", "jpeg"]);
+    expect(s.formatTagVisible).toBe(true);
     // mask 默认支持 → 区域编辑可见
     expect(s.providerCapability.mask).toBe(true);
   });
@@ -302,6 +304,55 @@ describe("settingsStore capability-driven UI", () => {
     s.imageWidth = 1024;
     s.imageHeight = 1024;
     expect(s.customSizeError).toContain("总像素");
+  });
+
+  it("Qwen 2K uses the same targetPixels sizing as other providers", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(
+      makeStatus({
+        provider: "qwen",
+        sizeConstraints: {
+          step: 1,
+          min: 512,
+          max: 8192,
+          maxPixels: 2048 * 2048,
+          minPixels: 512 * 512,
+          maxAspectRatio: null,
+          defaultSize: "2048x2048",
+        },
+        resolutionOptions: [
+          { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+          { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+        ],
+      }),
+    );
+    s.applySizeResolution("2k");
+    s.applySizePreset("16:9");
+
+    expect(s.sizeResolution).toBe("2k");
+    expect(s.imageWidth).toBe(2730);
+    expect(s.imageHeight).toBe(1536);
+  });
+
+  it("hides background and format tags when the provider only exposes one option", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(
+      makeStatus({
+        provider: "qwen",
+        capability: {
+          generate: true,
+          edit: true,
+          mask: false,
+          backgrounds: ["auto"],
+          outputFormats: ["png"],
+        },
+      }),
+    );
+
+    expect(s.backgroundOptions.map((o) => o.value)).toEqual(["auto"]);
+    expect(s.backgroundTagVisible).toBe(false);
+    expect(s.formatOptions.map((o) => o.value)).toEqual(["png"]);
+    expect(s.formatTagVisible).toBe(false);
   });
 
   it("applyProviderInfo(null) resets resolutionOptions to OpenAI defaults [1k,2k,4k]", () => {

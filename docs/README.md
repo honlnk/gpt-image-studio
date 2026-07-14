@@ -7,7 +7,7 @@
 - [架构说明](architecture.md)：当前项目结构、目标结构和模块边界。
 - [产品路线图](roadmap.md)：产品方向和阶段性功能规划。
 - [本地 CLI Companion](companion.md)：本地伴侣的设计、协议、安全要求和分阶段计划。
-- [Companion 多 Provider 翻译层](companion-providers-plan.md)：在不改 Web 的前提下，让 companion 内部翻译层支持 GLM 等国产图像 API 的开发方案。首轮接 GLM-Image，后续候选豆包 / Qwen-Image / 通义万相。
+- [Companion 多 Provider 翻译层](companion-providers-plan.md)：在不改 Web 的前提下，让 companion 内部翻译层支持 GLM 等国产图像 API 的开发方案。已接 GLM-Image、豆包 Seedream、Qwen-Image、通义万相 Wan。
 - [Companion 豆包 Provider 方案](companion-doubao-plan.md)：豆包（火山方舟 Seedream）adapter 的独立设计方案。文生图 + 图生图都做；核心是 size 总像素下限（minPixels）要反向增强 web 通用尺寸逻辑。
 - [阶段一测试清单](phase1-test-checklist.md)：翻译层骨架 + 能力驱动 UI 的手动验证步骤（含重启 companion 这个坑）。
 - [遮罩局部编辑](mask-editing.md)：基于本地遮罩绘制的图片局部编辑方案。

@@ -148,6 +148,8 @@ export type ProviderConfig = {
  *   route 层据此返回 501。
  * - resolutionOptions 声明该 provider 支持的分辨率档位（companion 声明、web 渲染）。
  *   web 删除写死档位 + maxPixels 运行时过滤后，直接渲染本字段。
+ * - getSizeConstraints/getResolutionOptions 可选：用于 Wan 这类能力会随 model
+ *   变化的 provider。未提供时使用静态字段。
  */
 export type ProviderAdapter = {
   readonly id: string;
@@ -155,6 +157,8 @@ export type ProviderAdapter = {
   readonly sizeConstraints: SizeConstraints;
   /** 该 provider 支持的分辨率档位，companion 声明、web 渲染。 */
   readonly resolutionOptions: readonly ResolutionOption[];
+  getSizeConstraints?(config: ProviderConfig): SizeConstraints;
+  getResolutionOptions?(config: ProviderConfig): readonly ResolutionOption[];
 
   describe(config: ProviderConfig): { label: string; providerId: string };
 

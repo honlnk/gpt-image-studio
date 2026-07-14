@@ -130,8 +130,9 @@ POST /images/edits
 ```json
 {
   "app": "gpt-image-studio-companion",
-  "version": "0.1.0",
-  "paired": true
+  "version": "<companion package version>",
+  "paired": true,
+  "runMode": "serve"
 }
 ```
 

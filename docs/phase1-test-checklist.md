@@ -90,7 +90,7 @@ const OPENAI_CAPABILITY: ProviderCapability = {
 
 ### 配置 GLM 凭据
 
-> **⚠️ 必须用源码版 companion，不能用全局 `gpt-image-studio` 命令**：全局装的是已发布旧版（0.3.0），不含阶段二的 login provider 选择和 GLM adapter。所有命令都在 `companion/` 目录下用 `npx tsx src/main.ts` 直跑源码。
+> **⚠️ 必须用源码版 companion，不能用全局 `gpt-image-studio` 命令**：全局安装版本可能落后于当前源码，不含阶段二的 login provider 选择和 GLM adapter。所有命令都在 `companion/` 目录下用 `npx tsx src/main.ts` 直跑源码。
 
 ```bash
 cd companion

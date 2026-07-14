@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline";
 import { existsSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { Option, program } from "commander";
-import type { CompanionHealthResponse, PairWaitResponse } from "./types.js";
-import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials.js";
-import { clearSession, getSessionInfo, loadSession } from "./pairingState.js";
+import type { CompanionHealthResponse } from "./types.js";
+import type { CredentialEntry, CredentialInput } from "./credentials.js";
+import {
+  listCredentials,
+  getActiveCredential,
+  addCredential,
+  updateCredential,
+  removeCredential,
+  activateCredential,
+} from "./credentials.js";
+import { loadOrCreateAccessKey, resetAccessKey, getAccessKey } from "./accessKey.js";
 import { createSecurityConfig } from "./securityConfig.js";
+import { PROVIDER_PRESETS } from "./providerPresets.js";
 import {
   getLogFilePath,
   isProcessRunning,
@@ -16,46 +26,15 @@ import {
   stopManagedProcess,
 } from "./processManager.js";
 
-const VERSION = "0.5.0";
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version: string };
+const COMPANION_VERSION = packageJson.version;
 const DEFAULT_PORT = "19750";
-const DEFAULT_SESSION_TTL_DAYS = "30";
-
-/**
- * login 命令的 provider 预设：每个 provider 的默认 base url + 默认 model + 简介。
- * 新增 provider 时在这里加一项即可（adapter 在 registry 注册后，login 这里就能选）。
- */
-type ProviderPreset = {
-  id: string;
-  label: string;
-  defaultBaseUrl: string;
-  defaultModel: string;
-};
-const PROVIDER_PRESETS: ProviderPreset[] = [
-  {
-    id: "openai",
-    label: "OpenAI 兼容（gpt-image-2 / 中转站）",
-    defaultBaseUrl: "https://api.packyapi.com/v1/images",
-    defaultModel: "gpt-image-2",
-  },
-  {
-    id: "glm",
-    label: "GLM-Image（智谱 Zhipu）",
-    defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4/images",
-    defaultModel: "glm-image",
-  },
-  {
-    id: "doubao",
-    label: "豆包 Seedream（火山方舟 ByteDance）",
-    defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3/images",
-    defaultModel: "doubao-seedream-5-0-lite",
-  },
-];
 
 type ServeLikeOptions = {
   port: string;
   channel?: string;
   allowOrigin?: string[];
-  sessionTtlDays: string;
   managed?: boolean;
 };
 
@@ -64,14 +43,13 @@ function addServeOptions(command: ReturnType<typeof program.command>) {
     .option("-p, --port <port>", "监听端口", DEFAULT_PORT)
     .option("--channel <channel>", "安全渠道：stable 或 dev", process.env.GPT_IMAGE_STUDIO_COMPANION_CHANNEL)
     .option("--allow-origin <origin...>", "额外允许的完整 origin，例如 http://localhost:5173")
-    .option("--session-ttl-days <days>", "配对 session 有效天数", DEFAULT_SESSION_TTL_DAYS)
     .addOption(new Option("--managed", "由 start 命令托管的后台服务").hideHelp());
 }
 
 program
   .name("gpt-image-studio")
   .description("GPT Image Studio 本地 CLI Companion")
-  .version(VERSION);
+  .version(COMPANION_VERSION);
 
 addServeOptions(program
   .command("serve")
@@ -83,9 +61,7 @@ addServeOptions(program
       security: createSecurityConfig({
         channel: opts.channel,
         allowOrigins: opts.allowOrigin ?? [],
-        sessionTtlDays: Number(opts.sessionTtlDays),
       }),
-      runMode: opts.managed ? "managed" : "serve",
     });
   });
 
@@ -97,13 +73,12 @@ addServeOptions(program
       port: Number(opts.port),
       channel: opts.channel ?? "stable",
       allowOrigins: opts.allowOrigin ?? [],
-      sessionTtlDays: Number(opts.sessionTtlDays),
     });
 
     console.log(`Companion 已在后台启动: http://127.0.0.1:${info.port}`);
     console.log(`PID: ${info.pid}`);
     console.log(`日志: ${info.logFile}`);
-    console.log("需要配对时请运行：gpt-image-studio pair");
+    console.log("启动日志中包含连接密钥，可用 gpt-image-studio status 查看。");
   });
 
 program
@@ -133,12 +108,11 @@ addServeOptions(program
       port: Number(opts.port),
       channel: opts.channel ?? "stable",
       allowOrigins: opts.allowOrigin ?? [],
-      sessionTtlDays: Number(opts.sessionTtlDays),
     });
     console.log(`Companion 已在后台重启: http://127.0.0.1:${info.port}`);
     console.log(`PID: ${info.pid}`);
     console.log(`日志: ${info.logFile}`);
-    console.log("需要配对时请运行：gpt-image-studio pair");
+    console.log("启动日志中包含连接密钥，可用 gpt-image-studio status 查看。");
   });
 
 program
@@ -163,154 +137,137 @@ program
     }
   });
 
-program
-  .command("pair")
-  .description("进入配对模式，等待网页端发起配对并完成确认")
-  .option("-p, --port <port>", "companion 服务端口", DEFAULT_PORT)
-  .option("--timeout <seconds>", "等待配对成功的秒数", "300")
-  .action(async (opts: { port: string; timeout: string }) => {
-    const port = Number(opts.port);
-    const timeoutSeconds = Number(opts.timeout);
-    const baseUrl = `http://127.0.0.1:${port}`;
-    const managed = readManagedProcessInfo();
-    if (!managed || !isProcessRunning(managed.pid) || managed.port !== port) {
-      console.log(`没有找到由 start 启动的后台 Companion：${baseUrl}`);
-      console.log("请先运行 gpt-image-studio start，或确认 pair 使用了正确的 --port。");
+// ==================== provider 子命令组 ====================
+
+const providerCmd = program
+  .command("provider")
+  .description("管理 provider 配置列表（增删改查 + 激活切换）");
+
+providerCmd
+  .command("list")
+  .description("列出所有 provider 配置")
+  .action(() => {
+    const store = listCredentials();
+    if (store.entries.length === 0) {
+      console.log("暂无 provider 配置，用 gpt-image-studio provider add 添加。");
       return;
     }
-    const logFile = managed.logFile;
-    let offset = existsSync(logFile) ? statSync(logFile).size : 0;
-
-    let result: PairWaitResponse;
-    try {
-      const res = await fetch(`${baseUrl}/pair/wait`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timeoutSeconds }),
-        signal: AbortSignal.timeout(3000),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      result = await res.json() as PairWaitResponse;
-    } catch {
-      console.log(`无法连接 Companion 服务：${baseUrl}`);
-      console.log("请先运行 gpt-image-studio start，或确认 serve 正在前台运行。");
-      return;
-    }
-
-    console.log(`已进入配对模式，有效期 ${Math.floor(result.expiresInSeconds / 60)} 分钟。`);
-    console.log("请在网页设置中点击「开始配对」，随后在此处查看配对码。");
-    console.log("按 Ctrl+C 可停止等待，后台服务会继续运行。");
-
-    const paired = await waitForPairingFromLog(baseUrl, logFile, offset, timeoutSeconds * 1000);
-    if (paired) {
-      console.log("配对成功。");
-    } else {
-      console.log("等待超时。请重新运行 gpt-image-studio pair 后再在网页端开始配对。");
-    }
-  });
-
-program
-  .command("login")
-  .description("配置 API 凭据")
-  .action(async () => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const ask = (q: string): Promise<string> =>
-      new Promise((resolve) => rl.question(q, resolve));
-
-    // 1. 选 provider
-    console.log("选择 Provider：");
-    PROVIDER_PRESETS.forEach((p, i) => console.log(`  ${i + 1}. ${p.label}`));
-    const providerChoice = (await ask(`输入序号（默认 1）: `)).trim();
-    const providerIndex =
-      Number(providerChoice) >= 1 && Number(providerChoice) <= PROVIDER_PRESETS.length
-        ? Number(providerChoice) - 1
-        : 0;
-    const preset = PROVIDER_PRESETS[providerIndex];
-
-    // 2. base url（带 provider 默认值）
-    const apiBaseUrl =
-      (await ask(`API Base URL（默认 ${preset.defaultBaseUrl}）: `)).trim() ||
-      preset.defaultBaseUrl;
-
-    // 3. model（带 provider 默认值；模型 ID 会漂移，让用户可改）
-    const model =
-      (await ask(`Model（默认 ${preset.defaultModel}）: `)).trim() || preset.defaultModel;
-
-    // 4. api key（隐藏输入）
-    const apiKey = await new Promise<string>((resolve) => {
-      process.stdout.write("API Key: ");
-      const stdin = process.stdin;
-      const wasRaw = stdin.isRaw;
-      if (stdin.isTTY) stdin.setRawMode(true);
-      let input = "";
-      const onData = (ch: Buffer) => {
-        const c = ch.toString();
-        if (c === "\n" || c === "\r") {
-          stdin.removeListener("data", onData);
-          if (stdin.isTTY) stdin.setRawMode(wasRaw ?? false);
-          process.stdout.write("\n");
-          resolve(input);
-        } else if (c === "\b" || c === "\x7f") {
-          // 退格：\b (0x08) 和 DEL (0x7f) 都要识别——多数终端退格键发 0x7f。
-          // 之前漏了 0x7f，导致按退格时 DEL 字符被当普通字符存进 key（污染凭据）。
-          input = input.slice(0, -1);
-        } else if (c === "\x03") {
-          // Ctrl-C
-          process.exit(1);
-        } else if (c >= " " && c !== "\x7f") {
-          // 只接受可打印字符（0x20 起），跳过其他控制字符
-          input += c;
-        }
-      };
-      stdin.resume();
-      stdin.on("data", onData);
+    console.log("=".repeat(60));
+    store.entries.forEach((entry) => {
+      const active = entry.id === store.activeId ? " [激活中]" : "";
+      console.log(`${entry.label}${active}`);
+      console.log(`  ID:       ${entry.id}`);
+      console.log(`  Provider: ${entry.provider}`);
+      console.log(`  Model:    ${entry.model || "(未设置)"}`);
+      console.log(`  Base URL: ${entry.apiBaseUrl}`);
+      console.log(`  API Key:  ${entry.apiKey}`);
+      console.log("");
     });
+    console.log("=".repeat(60));
+  });
 
-    rl.close();
-
-    if (!apiKey.trim()) {
-      console.log("未输入 API Key，取消操作。");
+providerCmd
+  .command("show <id>")
+  .description("查看单条配置详情")
+  .action((id: string) => {
+    const store = listCredentials();
+    const entry = store.entries.find((e) => e.id === id);
+    if (!entry) {
+      console.log(`未找到 ID 为 ${id} 的配置。`);
       return;
     }
-
-    saveCredentials(apiBaseUrl, apiKey.trim(), { provider: preset.id, model });
-    console.log("");
-    console.log("凭据已保存。");
-    console.log(`  Provider:     ${preset.label}`);
-    console.log(`  API Base URL: ${apiBaseUrl}`);
-    console.log(`  Model:        ${model}`);
-    console.log(`  API Key:      ${maskApiKey(apiKey.trim())}`);
+    const active = entry.id === store.activeId ? " [激活中]" : "";
+    console.log(`${entry.label}${active}`);
+    console.log(`  ID:       ${entry.id}`);
+    console.log(`  Provider: ${entry.provider}`);
+    console.log(`  Model:    ${entry.model || "(未设置)"}`);
+    console.log(`  Base URL: ${entry.apiBaseUrl}`);
+    console.log(`  API Key:  ${entry.apiKey}`);
+    console.log(`  创建时间: ${entry.createdAt}`);
+    console.log(`  更新时间: ${entry.updatedAt}`);
   });
+
+providerCmd
+  .command("add")
+  .description("交互式新增 provider 配置")
+  .action(async () => {
+    const input = await promptCredentialInput();
+    if (!input) return;
+    const entry = addCredential(input);
+    console.log("");
+    console.log("配置已保存。");
+    printEntrySummary(entry);
+    console.log(`  ID: ${entry.id}`);
+  });
+
+providerCmd
+  .command("edit <id>")
+  .description("编辑指定 provider 配置")
+  .action(async (id: string) => {
+    const store = listCredentials();
+    const existing = store.entries.find((e) => e.id === id);
+    if (!existing) {
+      console.log(`未找到 ID 为 ${id} 的配置。`);
+      return;
+    }
+    const input = await promptCredentialInput(existing);
+    if (!input) return;
+    const entry = updateCredential(id, input);
+    if (entry) {
+      console.log("");
+      console.log("配置已更新。");
+      printEntrySummary(entry);
+    }
+  });
+
+providerCmd
+  .command("remove <id>")
+  .description("删除指定 provider 配置")
+  .action((id: string) => {
+    const removed = removeCredential(id);
+    if (removed) {
+      console.log("配置已删除。");
+    } else {
+      console.log(`未找到 ID 为 ${id} 的配置。`);
+    }
+  });
+
+providerCmd
+  .command("activate <id>")
+  .description("将指定配置设为激活")
+  .action((id: string) => {
+    const ok = activateCredential(id);
+    if (ok) {
+      console.log("已设为激活。");
+    } else {
+      console.log(`未找到 ID 为 ${id} 的配置。`);
+    }
+  });
+
+// ==================== status 命令 ====================
 
 program
   .command("status")
   .description("查看 companion 状态")
   .action(async () => {
-    loadSession();
-    const creds = loadCredentials();
-    const session = getSessionInfo();
+    const active = getActiveCredential();
+    const accessKey = getAccessKey();
 
-    console.log("┌─────────────────────────────────┐");
-    console.log("│  GPT Image Studio Companion     │");
-    console.log("└─────────────────────────────────┘");
+    console.log("=".repeat(50));
+    console.log("  GPT Image Studio Companion");
+    console.log("=".repeat(50));
     console.log("");
+    console.log(`版本:    v${COMPANION_VERSION}`);
 
-    if (creds) {
-      const providerId = creds.provider ?? "openai";
-      const preset = PROVIDER_PRESETS.find((p) => p.id === providerId);
-      console.log(`凭据:    已配置`);
-      console.log(`  Provider: ${preset ? preset.label : providerId}`);
-      console.log(`  Model:    ${creds.model ?? "(未设置)"}`);
-      console.log(`  Base URL: ${creds.apiBaseUrl}`);
-      console.log(`  API Key:  ${maskApiKey(creds.apiKey)}`);
-      console.log(`  保存时间: ${creds.savedAt}`);
+    if (active) {
+      const preset = PROVIDER_PRESETS.find((p) => p.id === active.provider);
+      console.log(`凭据:    已配置（${listCredentials().entries.length} 条，当前激活：${active.label}）`);
+      console.log(`  Provider: ${preset ? preset.label : active.provider}`);
+      console.log(`  Model:    ${active.model || "(未设置)"}`);
+      console.log(`  Base URL: ${active.apiBaseUrl}`);
+      console.log(`  API Key:  ${active.apiKey}`);
     } else {
-      console.log("凭据:    未配置（运行 gpt-image-studio login 进行配置）");
-    }
-
-    console.log(`配对:    ${session.paired ? "已配对" : "未配对"}`);
-    if (session.expiresAt) {
-      console.log(`  过期时间: ${session.expiresAt}`);
+      console.log("凭据:    未配置（运行 gpt-image-studio provider add 添加配置）");
     }
 
     const managed = readManagedProcessInfo();
@@ -328,32 +285,149 @@ program
     try {
       const res = await fetch(`http://127.0.0.1:${statusPort}/health`, { signal: AbortSignal.timeout(2000) });
       if (res.ok) {
-        console.log(`服务:    运行中 (127.0.0.1:${statusPort})`);
+        const health = await res.json() as CompanionHealthResponse;
+        console.log(`服务:    运行中 (127.0.0.1:${statusPort}, v${health.version})`);
       } else {
         console.log("服务:    未运行");
       }
     } catch {
       console.log("服务:    未运行");
     }
+
+    // 连接密钥：服务运行时从内存读，否则从磁盘读。
+    if (accessKey) {
+      console.log("");
+      console.log("=".repeat(60));
+      console.log("  连接密钥（请粘进网页 /companion 页面完成连接）");
+      console.log(`  ${accessKey}`);
+      console.log("=".repeat(60));
+    } else if (managed && isProcessRunning(managed.pid)) {
+      // 服务在跑但 CLI 进程还没 loadOrCreateAccessKey（正常情况：服务进程持有密钥）。
+      // 从磁盘读给用户看。
+      const key = loadOrCreateAccessKey();
+      console.log("");
+      console.log("=".repeat(60));
+      console.log("  连接密钥（请粘进网页 /companion 页面完成连接）");
+      console.log(`  ${key}`);
+      console.log("=".repeat(60));
+    }
   });
 
 program
-  .command("logout")
-  .description("清除已保存的凭据")
-  .action(async () => {
-    clearCredentials();
-    console.log("凭据已清除。");
-  });
-
-program
-  .command("unpair")
-  .description("清除网页端配对 session")
-  .action(async () => {
-    clearSession();
-    console.log("配对 session 已清除。");
+  .command("reset-key")
+  .description("重新生成连接密钥（旧密钥立即失效，需在网页重新粘贴新密钥）")
+  .action(() => {
+    const newKey = resetAccessKey();
+    console.log("连接密钥已重新生成。旧密钥已失效。");
+    console.log("");
+    console.log("=".repeat(60));
+    console.log("  新连接密钥（请粘进网页 /companion 页面完成连接）");
+    console.log(`  ${newKey}`);
+    console.log("=".repeat(60));
   });
 
 program.parse();
+
+// ==================== 交互式输入辅助 ====================
+
+async function promptCredentialInput(existing?: CredentialEntry): Promise<CredentialInput | null> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q: string): Promise<string> =>
+    new Promise((resolve) => rl.question(q, resolve));
+
+  // 1. label
+  const defaultLabel = existing?.label ?? "";
+  const label =
+    (await ask(`配置名称${defaultLabel ? `（默认 ${defaultLabel}）` : "（可选）"}: `)).trim() ||
+    defaultLabel;
+
+  // 2. provider
+  console.log("选择 Provider：");
+  PROVIDER_PRESETS.forEach((p, i) => console.log(`  ${i + 1}. ${p.label}`));
+  const currentProviderIndex = existing
+    ? PROVIDER_PRESETS.findIndex((p) => p.id === existing.provider)
+    : 0;
+  const providerChoice = (await ask(`输入序号（默认 ${currentProviderIndex + 1}）: `)).trim();
+  const providerIndex =
+    Number(providerChoice) >= 1 && Number(providerChoice) <= PROVIDER_PRESETS.length
+      ? Number(providerChoice) - 1
+      : Math.max(0, currentProviderIndex);
+  const preset = PROVIDER_PRESETS[providerIndex];
+
+  // 3. base url
+  const baseUrlDefault = existing?.apiBaseUrl || preset.defaultBaseUrl;
+  const apiBaseUrl =
+    (await ask(`API Base URL（默认 ${baseUrlDefault}）: `)).trim() || baseUrlDefault;
+
+  // 4. model
+  const modelDefault = existing?.model || preset.defaultModel;
+  const model =
+    (await ask(`Model（默认 ${modelDefault}）: `)).trim() || modelDefault;
+
+  // 5. api key
+  const keyHint = existing ? `（当前 ${existing.apiKey}，直接回车保留）` : "";
+  let apiKey: string;
+  if (existing) {
+    apiKey = (await ask(`API Key${keyHint}: `)).trim() || existing.apiKey;
+  } else {
+    apiKey = await promptPassword("API Key: ");
+  }
+
+  rl.close();
+
+  if (!apiKey.trim()) {
+    console.log("未输入 API Key，取消操作。");
+    return null;
+  }
+
+  return {
+    label: label || undefined,
+    provider: preset.id,
+    apiBaseUrl,
+    apiKey: apiKey.trim(),
+    model,
+  };
+}
+
+/** 隐藏输入读取 API Key。 */
+async function promptPassword(prompt: string): Promise<string> {
+  return new Promise<string>((resolve) => {
+    process.stdout.write(prompt);
+    const stdin = process.stdin;
+    const wasRaw = stdin.isRaw;
+    if (stdin.isTTY) stdin.setRawMode(true);
+    let input = "";
+    const onData = (ch: Buffer) => {
+      const c = ch.toString();
+      if (c === "\n" || c === "\r") {
+        stdin.removeListener("data", onData);
+        if (stdin.isTTY) stdin.setRawMode(wasRaw ?? false);
+        process.stdout.write("\n");
+        resolve(input);
+      } else if (c === "\b" || c === "\x7f") {
+        // 退格：\b (0x08) 和 DEL (0x7f) 都要识别——多数终端退格键发 0x7f。
+        input = input.slice(0, -1);
+      } else if (c === "\x03") {
+        // Ctrl-C
+        process.exit(1);
+      } else if (c >= " " && c !== "\x7f") {
+        // 只接受可打印字符（0x20 起），跳过其他控制字符
+        input += c;
+      }
+    };
+    stdin.resume();
+    stdin.on("data", onData);
+  });
+}
+
+function printEntrySummary(entry: CredentialEntry): void {
+  const preset = PROVIDER_PRESETS.find((p) => p.id === entry.provider);
+  console.log(`  名称:     ${entry.label}`);
+  console.log(`  Provider: ${preset ? preset.label : entry.provider}`);
+  console.log(`  Model:    ${entry.model || "(未设置)"}`);
+  console.log(`  Base URL: ${entry.apiBaseUrl}`);
+  console.log(`  API Key:  ${entry.apiKey}`);
+}
 
 async function followLogFile(logFile: string): Promise<void> {
   let offset = existsSync(logFile) ? statSync(logFile).size : 0;
@@ -365,42 +439,6 @@ async function followLogFile(logFile: string): Promise<void> {
     const chunk = readLogChunkSince(logFile, offset);
     offset = size;
     process.stdout.write(chunk);
-  }
-}
-
-async function waitForPairingFromLog(
-  baseUrl: string,
-  logFile: string,
-  offset: number,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    await sleep(1000);
-    if (existsSync(logFile)) {
-      const size = statSync(logFile).size;
-      if (size > offset) {
-        const chunk = readLogChunkSince(logFile, offset);
-        offset = size;
-        chunk
-          .split(/\r?\n/)
-          .filter((line) => /配对码|请在网页端输入此配对码|有效期/.test(line))
-          .forEach((line) => console.log(line));
-      }
-    }
-    if (await isRemotePaired(baseUrl)) return true;
-  }
-  return false;
-}
-
-async function isRemotePaired(baseUrl: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(2000) });
-    if (!res.ok) return false;
-    const health = await res.json() as CompanionHealthResponse;
-    return health.paired;
-  } catch {
-    return false;
   }
 }
 

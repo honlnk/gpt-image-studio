@@ -1,8 +1,6 @@
 export type CompanionHealthResponse = {
   app: "gpt-image-studio-companion";
   version: string;
-  paired: boolean;
-  runMode: "serve" | "managed";
 };
 
 export type CompanionAuthStatus = {
@@ -41,28 +39,57 @@ export type CompanionAuthStatus = {
   }[];
 };
 
-export type PairStartResponse = {
-  expiresInSeconds: number;
+// ---- 凭证管理（Web 面板专用）----
+
+/**
+ * 单条 provider 配置。GET /credentials 返回明文 apiKey——凭证接口受 loopbackGuard
+ * 保护（只接受本机请求），明文回传给本机浏览器是安全的，方便用户编辑时查看。
+ */
+export type CompanionCredentialEntry = {
+  id: string;
+  label: string;
+  provider: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-export type PairWaitRequest = {
-  timeoutSeconds?: number;
+/** GET /credentials 的返回：全量列表 + 当前激活 id。 */
+export type CompanionCredentialsListResponse = {
+  entries: CompanionCredentialEntry[];
+  activeId: string | null;
 };
 
-export type PairWaitResponse = {
-  waiting: true;
-  expiresInSeconds: number;
+/** POST /credentials、PUT /credentials/:id 的请求体。 */
+export type CompanionCredentialInput = {
+  label?: string;
+  provider?: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  model?: string;
 };
 
-export type PairConfirmRequest = {
-  pairingCode: string;
+/** 新增/更新成功后返回的单条配置。 */
+export type CompanionCredentialMutationResponse = {
+  ok: true;
+  entry: CompanionCredentialEntry;
 };
 
-export type PairConfirmResponse = {
-  sessionToken: string;
-  expiresAt?: string;
+export type CompanionCredentialActivateResponse = {
+  ok: true;
+  activeId: string;
 };
 
-export type PairUnpairResponse = {
-  paired: false;
+export type CompanionCredentialDeleteResponse = {
+  ok: true;
+};
+
+// ---- 日志查看（Web 面板专用）----
+
+export type CompanionLogsTailResponse = {
+  lines: string[];
+  logFile: string | null;
+  date: string;
 };

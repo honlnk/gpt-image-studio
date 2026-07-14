@@ -4,9 +4,6 @@ import {
   checkCompanionHealth,
   getCompanionAuthStatus,
   getCompanionAuthStatusResult,
-  startPairing,
-  confirmPairing,
-  unpairCompanion,
 } from "../../services/companionApi";
 import type {
   CompanionAuthStatus,
@@ -17,64 +14,46 @@ import type { ConnectionMode } from "../../types/studio";
 type UseCompanionConnectionInput = {
   connectionMode: Ref<ConnectionMode>;
   companionUrl: Ref<string>;
-  companionSessionToken: Ref<string>;
+  companionAccessKey: Ref<string>;
   /**
-   * token 失效（401）/配对已失效时清空持久化的 sessionToken。
-   * 由 view model 注入（实际是写 settingsStore.companionSessionToken）。
+   * 连接密钥失效（401）/被用户断开时清空持久化的 accessKey。
+   * 由 view model 注入（实际是写 settingsStore.companionAccessKey）。
    */
-  onClearSessionToken: () => void;
+  onClearAccessKey: () => void;
   /** 回流 provider 元信息（model/capability/sizeConstraints）驱动 UI。 */
   onApplyProviderInfo: (status: CompanionAuthStatus | null) => void;
-  /** 配对成功时持久化新 sessionToken（view model 写 settingsStore）。 */
-  onSessionTokenAcquired: (token: string) => void;
+  /** 用户粘贴密钥连接成功时持久化 accessKey（view model 写 settingsStore）。 */
+  onAccessKeyAcquired: (key: string) => void;
 };
 
 /**
  * 全局唯一的 Companion 连接状态源。
  *
- * 历史问题：连接探测（/health → /auth/status → applyProviderInfo）曾只存在于
- * ApiSettingsPanel.vue 的 onMounted/checkStatus 里，而该面板是惰性挂载的
- * （被 SettingsModal 的 v-if="isOpen" + 自身 activeTab==='api' 双重拦截）。
- * 结果页面刷新后即便 connectionMode 已恢复为 localCompanion，也不会发探测请求，
- * providerCapability 一直停在 OpenAI 默认值——必须打开「设置 → 接口」才回流。
- *
- * 本 composable 把探测时机提升到 view model 层：onMounted + connectionMode/token
- * watch，任何挂载它的组件都会触发，不再依赖设置面板是否打开。
+ * 用户在网页粘贴 Companion 启动时打印的连接密钥完成连接——没有配对仪式。
+ * 密钥存 localStorage（settingsStore），每次探测 /auth/status 时用它做 Bearer 认证，
+ * 401 说明密钥不对（或被 reset-key 重置了），清掉让用户重新粘。
  */
 export function useCompanionConnection(input: UseCompanionConnectionInput) {
   const companionOnline = ref(false);
   const companionHealth = ref<CompanionHealthResponse | null>(null);
   const companionAuthStatus = ref<CompanionAuthStatus | null>(null);
-  const pairingInProgress = ref(false);
-  const pairingError = ref("");
-  // 配对码输入框是局部交互态，仍由消费组件双向绑定最直接；这里持有方便测试。
-  const pairingCodeInput = ref("");
+  const connectError = ref("");
+  const connecting = ref(false);
 
   async function checkStatus() {
     const health = await checkCompanionHealth(input.companionUrl.value);
     companionHealth.value = health;
     companionOnline.value = health !== null;
 
-    if (!health || !input.companionSessionToken.value) {
+    if (!health || !input.companionAccessKey.value) {
       companionAuthStatus.value = null;
       input.onApplyProviderInfo(null);
-      return;
-    }
-
-    if (!health.paired) {
-      input.onClearSessionToken();
-      companionAuthStatus.value = null;
-      input.onApplyProviderInfo(null);
-      pairingInProgress.value = false;
-      pairingCodeInput.value = "";
-      pairingError.value =
-        "检测到本地 Companion 配对已失效，已清除浏览器里的旧会话，请重新配对。";
       return;
     }
 
     const authResult = await getCompanionAuthStatusResult(
       input.companionUrl.value,
-      input.companionSessionToken.value,
+      input.companionAccessKey.value,
     );
 
     if (authResult.ok) {
@@ -86,76 +65,67 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
     companionAuthStatus.value = null;
     input.onApplyProviderInfo(null);
     if (authResult.invalidToken) {
-      input.onClearSessionToken();
-      pairingInProgress.value = false;
-      pairingCodeInput.value = "";
-      pairingError.value =
-        "检测到本地 Companion 拒绝了旧 token，已清除浏览器会话，请重新配对。";
+      input.onClearAccessKey();
+      connectError.value =
+        "Companion 拒绝了当前密钥（可能已通过 reset-key 重置），已清除浏览器里的旧密钥。";
     }
   }
 
-  async function startPairingFlow() {
-    pairingError.value = "";
-    pairingCodeInput.value = "";
-    try {
-      await startPairing(input.companionUrl.value);
-      pairingInProgress.value = true;
-    } catch (error) {
-      pairingError.value =
-        error instanceof Error ? error.message : "无法连接 Companion 服务";
+  /**
+   * 用户在网页粘贴连接密钥后调用。
+   * 存入 settingsStore，然后立即探测 /auth/status 验证——200 就是连上了，401 就是密钥错。
+   */
+  async function connectWithKey(key: string) {
+    connectError.value = "";
+    const trimmed = key.trim();
+    if (!trimmed) {
+      connectError.value = "请输入连接密钥。";
+      return;
     }
-  }
 
-  async function confirmPairingFlow() {
-    pairingError.value = "";
+    connecting.value = true;
     try {
-      const result = await confirmPairing(
-        input.companionUrl.value,
-        pairingCodeInput.value,
-      );
-      input.onSessionTokenAcquired(result.sessionToken);
-      pairingInProgress.value = false;
+      input.onAccessKeyAcquired(trimmed);
+
+      const health = await checkCompanionHealth(input.companionUrl.value);
+      companionHealth.value = health;
+      companionOnline.value = health !== null;
+
+      if (!health) {
+        input.onClearAccessKey();
+        connectError.value = "无法连接 Companion 服务，请确认它正在运行。";
+        return;
+      }
+
       const status = await getCompanionAuthStatus(
         input.companionUrl.value,
-        result.sessionToken,
+        trimmed,
       );
+      if (!status) {
+        input.onClearAccessKey();
+        connectError.value = "连接密钥无效，请核对后重试。";
+        return;
+      }
+
       companionAuthStatus.value = status;
       input.onApplyProviderInfo(status);
     } catch {
-      pairingError.value = "配对码无效或已过期";
+      input.onClearAccessKey();
+      connectError.value = "连接失败，请确认 Companion 在线且密钥正确。";
+    } finally {
+      connecting.value = false;
     }
   }
 
-  async function disconnect() {
-    pairingError.value = "";
-    const health = await checkCompanionHealth(input.companionUrl.value);
-    companionHealth.value = health;
-    companionOnline.value = health !== null;
-    if (!health) {
-      pairingError.value =
-        "Companion 离线，无法确认断开连接。请先启动 Companion 后再断开。";
-      return;
-    }
-
-    try {
-      await unpairCompanion(
-        input.companionUrl.value,
-        input.companionSessionToken.value,
-      );
-    } catch {
-      pairingError.value = "断开失败，Companion 未确认清除本地 session。";
-      return;
-    }
-
-    input.onClearSessionToken();
+  /**
+   * 断开连接：纯前端操作，清 localStorage 里的密钥。
+   * 不需要调后端——密钥是持久的，后端没有「撤销单个会话」的概念。
+   */
+  function disconnect() {
+    input.onClearAccessKey();
     companionAuthStatus.value = null;
-    await checkStatus();
-  }
-
-  function cancelPairing() {
-    pairingInProgress.value = false;
-    pairingCodeInput.value = "";
-    pairingError.value = "";
+    input.onApplyProviderInfo(null);
+    connectError.value = "";
   }
 
   // 切到 Companion 模式（含初始 localCompanion）时立即探测：immediate=true
@@ -169,7 +139,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
   );
 
   watch(
-    () => input.companionSessionToken.value,
+    () => input.companionAccessKey.value,
     () => {
       if (input.connectionMode.value === "localCompanion") void checkStatus();
     },
@@ -179,13 +149,10 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
     companionOnline,
     companionHealth,
     companionAuthStatus,
-    pairingInProgress,
-    pairingError,
-    pairingCodeInput,
+    connectError,
+    connecting,
     checkStatus,
-    startPairing: startPairingFlow,
-    confirmPairing: confirmPairingFlow,
+    connectWithKey,
     disconnect,
-    cancelPairing,
   };
 }

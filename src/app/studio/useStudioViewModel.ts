@@ -10,8 +10,8 @@ import {
   useStudioGeneration,
 } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
-import { useCompanionConnection } from "../../features/companion";
 import { useStudioSettings } from "../../features/settings";
+import { useCompanionStore } from "../../stores/companionStore";
 import { withNetworkRetry } from "../../services/networkRetry";
 import { clonePromptWordbanks } from "../../services/promptWordbanks";
 import {
@@ -103,20 +103,9 @@ export function useStudioViewModel() {
   const feedback = useStudioFeedback();
   const analytics = useAnalyticsStore();
   const { eventCount: analyticsEventCount } = storeToRefs(analytics);
-  // Companion 连接状态是全局唯一来源：探测/配对/断开都收拢在这里，
-  // 启动时（onMounted）即探测，不再依赖「设置 → 接口」面板挂载。
-  const companion = useCompanionConnection({
-    connectionMode: settings.connectionMode,
-    companionUrl: settings.companionUrl,
-    companionSessionToken: settings.companionSessionToken,
-    onClearSessionToken: () => {
-      settings.companionSessionToken.value = "";
-    },
-    onApplyProviderInfo: settings.applyProviderInfo,
-    onSessionTokenAcquired: (token) => {
-      settings.companionSessionToken.value = token;
-    },
-  });
+  // Companion 连接 + 管理状态：共享 Pinia 单例 store，工作台和 /companion 管理页共用。
+  // 探活/配对/凭证/日志全收拢在这里，不重复实例化、不重复轮询。
+  const companionStore = useCompanionStore();
   const conversations = useStudioConversations({
     clearDraft: clearConversationDraft,
     onStorageError: reportStorageError,
@@ -153,7 +142,7 @@ export function useStudioViewModel() {
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,
-    getSessionToken: () => settings.companionSessionToken.value,
+    getAccessKey: () => settings.companionAccessKey.value,
     getModel: () => settings.model.value,
   });
   // provider 不支持 mask（区域编辑）时，强制关闭区域编辑模式，
@@ -731,8 +720,8 @@ export function useStudioViewModel() {
     isLibraryOpen,
     companionStatus: computed(() => ({
       show: settings.connectionMode.value === "localCompanion",
-      online: companion.companionOnline.value,
-      version: companion.companionHealth.value?.version,
+      online: companionStore.companionOnline,
+      version: companionStore.companionHealth?.version,
     })),
   });
   const chatMessages = proxyRefs({
@@ -806,20 +795,6 @@ export function useStudioViewModel() {
     apiBaseUrl: settings.apiBaseUrl,
     apiBaseUrlMode: settings.apiBaseUrlMode,
     apiKey: settings.apiKey,
-    companionPaired: settings.companionPaired,
-    companionSessionToken: settings.companionSessionToken,
-    companionUrl: settings.companionUrl,
-    companionOnline: companion.companionOnline,
-    companionHealth: companion.companionHealth,
-    companionAuthStatus: companion.companionAuthStatus,
-    companionPairingInProgress: companion.pairingInProgress,
-    companionPairingError: companion.pairingError,
-    companionPairingCodeInput: companion.pairingCodeInput,
-    checkCompanionStatus: companion.checkStatus,
-    startCompanionPairing: companion.startPairing,
-    confirmCompanionPairing: companion.confirmPairing,
-    disconnectCompanion: companion.disconnect,
-    cancelCompanionPairing: companion.cancelPairing,
     connectionMode: settings.connectionMode,
     favoritePrompts: settings.favoritePrompts,
     promptMode: settings.promptMode,

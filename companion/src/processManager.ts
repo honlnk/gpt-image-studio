@@ -31,7 +31,6 @@ export type StartManagedProcessInput = {
   port: number;
   channel: string;
   allowOrigins: string[];
-  sessionTtlDays: number;
 };
 
 export function getPidFilePath(): string {
@@ -143,8 +142,6 @@ export function startManagedProcess(input: StartManagedProcessInput): ManagedPro
     String(input.port),
     "--channel",
     input.channel,
-    "--session-ttl-days",
-    String(input.sessionTtlDays),
     "--managed",
   ];
 

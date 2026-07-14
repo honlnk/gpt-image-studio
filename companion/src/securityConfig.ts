@@ -3,7 +3,6 @@ export type CompanionChannel = "stable" | "dev";
 export type CompanionSecurityConfig = {
   channel: CompanionChannel;
   allowedOrigins: string[];
-  sessionTtlMs: number;
   maxJsonBodyBytes: number;
   maxEditBodyBytes: number;
   maxEditImages: number;
@@ -17,7 +16,6 @@ const DEV_ORIGINS = [
   "http://localhost:8888",
 ];
 
-const DEFAULT_SESSION_TTL_DAYS = 30;
 const DEFAULT_JSON_BODY_BYTES = 1024 * 1024;
 const DEFAULT_EDIT_BODY_BYTES = 50 * 1024 * 1024;
 const DEFAULT_MAX_EDIT_IMAGES = 16;
@@ -60,19 +58,14 @@ export function parseAllowOrigins(values: string[] = []): string[] {
 export function createSecurityConfig(opts: {
   channel?: string;
   allowOrigins?: string[];
-  sessionTtlDays?: number;
 } = {}): CompanionSecurityConfig {
   const channel = resolveChannel(opts.channel);
   const baseOrigins = channel === "dev" ? DEV_ORIGINS : STABLE_ORIGINS;
   const extraOrigins = parseAllowOrigins(opts.allowOrigins);
-  const sessionTtlDays = Number.isFinite(opts.sessionTtlDays)
-    ? opts.sessionTtlDays!
-    : DEFAULT_SESSION_TTL_DAYS;
 
   return {
     channel,
     allowedOrigins: Array.from(new Set([...baseOrigins, ...extraOrigins])),
-    sessionTtlMs: Math.max(1, sessionTtlDays) * 24 * 60 * 60 * 1000,
     maxJsonBodyBytes: DEFAULT_JSON_BODY_BYTES,
     maxEditBodyBytes: DEFAULT_EDIT_BODY_BYTES,
     maxEditImages: DEFAULT_MAX_EDIT_IMAGES,

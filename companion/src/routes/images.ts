@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { loadCredentials } from "../credentials.js";
+import { getActiveCredential } from "../credentials.js";
 import type { CompanionSecurityConfig } from "../securityConfig.js";
 import type {
   OpenAIImageEditRequest,
@@ -25,9 +25,9 @@ const KNOWN_EDIT_FIELDS = [
 
 export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptions) {
   app.post("/images/generations", async (req, reply) => {
-    const creds = loadCredentials();
+    const creds = getActiveCredential();
     if (!creds) {
-      return reply.status(503).send({ error: "Companion 未配置凭据，请先运行 login" });
+      return reply.status(503).send({ error: "Companion 未配置凭据，请先添加 provider 配置" });
     }
 
     if (!isJsonRequest(req.headers["content-type"])) {
@@ -67,9 +67,9 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
   });
 
   app.post("/images/edits", { bodyLimit: opts.security.maxEditBodyBytes }, async (req, reply) => {
-    const creds = loadCredentials();
+    const creds = getActiveCredential();
     if (!creds) {
-      return reply.status(503).send({ error: "Companion 未配置凭据，请先运行 login" });
+      return reply.status(503).send({ error: "Companion 未配置凭据，请先添加 provider 配置" });
     }
 
     if (!isMultipartRequest(req.headers["content-type"])) {
@@ -116,7 +116,7 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
   });
 }
 
-/** credentials.json → ProviderConfig。provider 缺省视为 openai。 */
+/** 激活凭据 → ProviderConfig。provider 缺省视为 openai（兼容历史数据）。 */
 function toProviderConfig(creds: {
   apiBaseUrl: string;
   apiKey: string;
