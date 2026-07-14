@@ -53,7 +53,7 @@ const SETTINGS_STORAGE_KEYS = {
   apiKey: "gpt-image-studio:api-key",
   apiBaseUrl: "gpt-image-studio:api-base-url",
   companionUrl: "gpt-image-studio:companion-url",
-  companionSessionToken: "gpt-image-studio:companion-session-token",
+  companionAccessKey: "gpt-image-studio:companion-access-key",
 } as const;
 
 const SIZE_RATIO_OPTIONS = [
@@ -132,10 +132,10 @@ export const useSettingsStore = defineStore("settings", () => {
   const companionUrl = ref(
     readStorage(SETTINGS_STORAGE_KEYS.companionUrl, "http://127.0.0.1:19750"),
   );
-  const companionSessionToken = ref(
-    readStorage(SETTINGS_STORAGE_KEYS.companionSessionToken, ""),
+  const companionAccessKey = ref(
+    readStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, ""),
   );
-  const companionPaired = computed(() => companionSessionToken.value !== "");
+  const companionConnected = computed(() => companionAccessKey.value !== "");
   const imageWidth = ref(1024);
   const imageHeight = ref(1024);
   const imageCount = ref(1);
@@ -569,8 +569,8 @@ export const useSettingsStore = defineStore("settings", () => {
   watch(companionUrl, (v) =>
     writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v),
   );
-  watch(companionSessionToken, (v) =>
-    writeStorage(SETTINGS_STORAGE_KEYS.companionSessionToken, v),
+  watch(companionAccessKey, (v) =>
+    writeStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, v),
   );
   // Companion 模式只支持 Images API。切到 companion 时若残留 responses，
   // 强制校正为 images，避免发出注定抛「仅支持 Images API」的请求。
@@ -592,8 +592,8 @@ export const useSettingsStore = defineStore("settings", () => {
     autoRetryOnNetworkError,
     analyticsEnabled,
     analyticsPromptCapture,
-    companionPaired,
-    companionSessionToken,
+    companionConnected,
+    companionAccessKey,
     companionUrl,
     connectionMode,
     applySettings,

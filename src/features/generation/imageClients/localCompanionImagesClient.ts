@@ -5,17 +5,17 @@ import type { ImageClient, ImageClientResult } from "./imageClient";
 
 type CompanionClientConfig = {
   getCompanionUrl: () => string;
-  getSessionToken: () => string;
+  getAccessKey: () => string;
   getModel: () => string;
 };
 
 export function createLocalCompanionImagesClient(config: CompanionClientConfig): ImageClient {
   function headers() {
-    const token = config.getSessionToken();
-    if (!token) {
-      throw new Error("尚未与本地 Companion 配对，请先在设置中完成配对。");
+    const key = config.getAccessKey();
+    if (!key) {
+      throw new Error("尚未连接 Companion，请先在设置中输入连接密钥。");
     }
-    return { Authorization: `Bearer ${token}` };
+    return { Authorization: `Bearer ${key}` };
   }
 
   return {

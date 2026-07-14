@@ -8,9 +8,6 @@ import type {
   CompanionCredentialsSaveResponse,
   CompanionCredentialsClearResponse,
   CompanionLogsTailResponse,
-  PairConfirmResponse,
-  PairStartResponse,
-  PairUnpairResponse,
 } from "../types/companion";
 
 export async function checkCompanionHealth(
@@ -27,20 +24,20 @@ export async function checkCompanionHealth(
 
 export async function getCompanionAuthStatus(
   url: string,
-  sessionToken: string,
+  accessKey: string,
 ): Promise<CompanionAuthStatus | null> {
-  const result = await getCompanionAuthStatusResult(url, sessionToken);
+  const result = await getCompanionAuthStatusResult(url, accessKey);
   return result.ok ? result.status : null;
 }
 
 export async function getCompanionAuthStatusResult(
   url: string,
-  sessionToken: string,
+  accessKey: string,
 ): Promise<CompanionAuthStatusResult> {
-  if (!sessionToken) return { ok: false, invalidToken: false };
+  if (!accessKey) return { ok: false, invalidToken: false };
   try {
     const res = await fetch(`${url}/auth/status`, {
-      headers: { Authorization: `Bearer ${sessionToken}` },
+      headers: { Authorization: `Bearer ${accessKey}` },
       signal: AbortSignal.timeout(3000),
     });
     if (res.status === 401) return { ok: false, invalidToken: true };
@@ -51,46 +48,8 @@ export async function getCompanionAuthStatusResult(
   }
 }
 
-export async function startPairing(url: string): Promise<PairStartResponse> {
-  const res = await fetch(`${url}/pair/start`, { method: "POST" });
-  if (!res.ok) {
-    let message = "发起配对失败";
-    try {
-      const data = await res.json() as { error?: string };
-      message = data.error || message;
-    } catch {}
-    throw new Error(message);
-  }
-  return await res.json();
-}
-
-export async function confirmPairing(
-  url: string,
-  pairingCode: string,
-): Promise<PairConfirmResponse> {
-  const res = await fetch(`${url}/pair/confirm`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pairingCode }),
-  });
-  if (!res.ok) throw new Error("配对码无效或已过期");
-  return await res.json();
-}
-
-export async function unpairCompanion(
-  url: string,
-  sessionToken: string,
-): Promise<PairUnpairResponse> {
-  const res = await fetch(`${url}/pair/unpair`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${sessionToken}` },
-  });
-  if (!res.ok) throw new Error("解除配对失败");
-  return await res.json();
-}
-
 // ---- 凭证管理（GET /credentials/presets、GET/POST/DELETE /credentials）----
-// 凭证接口不走配对 token——companion 侧用 loopback 来源校验，等同 CLI login 的信任模型。
+// 凭证接口不走连接密钥——companion 侧用 loopback 来源校验，等同 CLI login 的信任模型。
 
 export async function getCompanionPresets(
   url: string,
@@ -140,11 +99,11 @@ export async function clearCompanionCredentials(
   return await res.json();
 }
 
-// ---- 日志查看（GET /logs/tail，需配对 token）----
+// ---- 日志查看（GET /logs/tail，需连接密钥）----
 
 export async function getCompanionLogs(
   url: string,
-  sessionToken: string,
+  accessKey: string,
   params: { lines?: number; date?: string } = {},
 ): Promise<CompanionLogsTailResponse> {
   const search = new URLSearchParams();
@@ -152,7 +111,7 @@ export async function getCompanionLogs(
   if (params.date) search.set("date", params.date);
   const query = search.toString();
   const res = await fetch(`${url}/logs/tail${query ? `?${query}` : ""}`, {
-    headers: { Authorization: `Bearer ${sessionToken}` },
+    headers: { Authorization: `Bearer ${accessKey}` },
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error("无法获取日志");

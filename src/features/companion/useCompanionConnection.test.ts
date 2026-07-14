@@ -12,25 +12,17 @@ const mocks = vi.hoisted(() => ({
   checkCompanionHealth: vi.fn(),
   getCompanionAuthStatusResult: vi.fn(),
   getCompanionAuthStatus: vi.fn(),
-  startPairing: vi.fn(),
-  confirmPairing: vi.fn(),
-  unpairCompanion: vi.fn(),
 }));
 
 vi.mock("../../services/companionApi", () => ({
   checkCompanionHealth: mocks.checkCompanionHealth,
   getCompanionAuthStatusResult: mocks.getCompanionAuthStatusResult,
   getCompanionAuthStatus: mocks.getCompanionAuthStatus,
-  startPairing: mocks.startPairing,
-  confirmPairing: mocks.confirmPairing,
-  unpairCompanion: mocks.unpairCompanion,
 }));
 
 const HEALTH_ONLINE: CompanionHealthResponse = {
   app: "gpt-image-studio-companion",
   version: "1.2.3",
-  paired: true,
-  runMode: "serve",
 };
 
 function makeStatus(
@@ -70,7 +62,7 @@ function makeStatus(
 type Options = {
   connectionMode?: "direct" | "localCompanion";
   companionUrl?: string;
-  companionSessionToken?: string;
+  companionAccessKey?: string;
 };
 
 /**
@@ -81,29 +73,29 @@ function setupComposable(options: Options = {}) {
   const scope = effectScope();
   const connectionMode = ref(options.connectionMode ?? "localCompanion");
   const companionUrl = ref(options.companionUrl ?? "http://127.0.0.1:19750");
-  const companionSessionToken = ref(options.companionSessionToken ?? "tok-1");
-  const onClearSessionToken = vi.fn();
+  const companionAccessKey = ref(options.companionAccessKey ?? "test-key-1");
+  const onClearAccessKey = vi.fn();
   const onApplyProviderInfo = vi.fn();
-  const onSessionTokenAcquired = vi.fn();
+  const onAccessKeyAcquired = vi.fn();
 
   const result = scope.run(() =>
     useCompanionConnection({
       connectionMode: connectionMode as Ref<"direct" | "localCompanion">,
       companionUrl,
-      companionSessionToken,
-      onClearSessionToken,
+      companionAccessKey,
+      onClearAccessKey,
       onApplyProviderInfo,
-      onSessionTokenAcquired,
+      onAccessKeyAcquired,
     }),
   )!;
 
   return {
     result,
     scope,
-    refs: { connectionMode, companionUrl, companionSessionToken },
-    onClearSessionToken,
+    refs: { connectionMode, companionUrl, companionAccessKey },
+    onClearAccessKey,
     onApplyProviderInfo,
-    onSessionTokenAcquired,
+    onAccessKeyAcquired,
   };
 }
 
@@ -156,30 +148,66 @@ describe("useCompanionConnection", () => {
     });
   });
 
-  it("clears session token when health reports paired=false", async () => {
-    mocks.checkCompanionHealth.mockResolvedValue({
-      ...HEALTH_ONLINE,
-      paired: false,
-    });
-
-    const { onClearSessionToken, onApplyProviderInfo } = setupComposable();
-    await vi.waitFor(() => {
-      expect(onClearSessionToken).toHaveBeenCalledTimes(1);
-    });
-    expect(onApplyProviderInfo).toHaveBeenCalledWith(null);
-  });
-
-  it("clears session token when auth/status returns 401 (invalidToken)", async () => {
+  it("clears access key when auth/status returns 401 (invalidToken)", async () => {
     mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
     mocks.getCompanionAuthStatusResult.mockResolvedValue({
       ok: false,
       invalidToken: true,
     });
 
-    const { onClearSessionToken, onApplyProviderInfo } = setupComposable();
+    const { onClearAccessKey, onApplyProviderInfo } = setupComposable();
     await vi.waitFor(() => {
-      expect(onClearSessionToken).toHaveBeenCalledTimes(1);
+      expect(onClearAccessKey).toHaveBeenCalledTimes(1);
     });
+    expect(onApplyProviderInfo).toHaveBeenCalledWith(null);
+  });
+
+  it("connects successfully with a valid key", async () => {
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatus.mockResolvedValue(makeStatus());
+
+    const { result, onAccessKeyAcquired, onApplyProviderInfo } = setupComposable({
+      companionAccessKey: "",
+    });
+
+    await result.connectWithKey("valid-uuid-key");
+    expect(onAccessKeyAcquired).toHaveBeenCalledWith("valid-uuid-key");
+    expect(onApplyProviderInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "openai" }),
+    );
+  });
+
+  it("clears access key and reports error when key is invalid", async () => {
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatus.mockResolvedValue(null);
+
+    const { result, onAccessKeyAcquired, onClearAccessKey } = setupComposable({
+      companionAccessKey: "",
+    });
+
+    await result.connectWithKey("bad-key");
+    expect(onAccessKeyAcquired).toHaveBeenCalledWith("bad-key");
+    expect(onClearAccessKey).toHaveBeenCalledTimes(1);
+    expect(result.connectError.value).toContain("密钥无效");
+  });
+
+  it("reports error when companion is offline during connect", async () => {
+    mocks.checkCompanionHealth.mockResolvedValue(null);
+
+    const { result, onClearAccessKey } = setupComposable({
+      companionAccessKey: "",
+    });
+
+    await result.connectWithKey("some-key");
+    expect(onClearAccessKey).toHaveBeenCalledTimes(1);
+    expect(result.connectError.value).toContain("无法连接");
+  });
+
+  it("disconnect clears access key locally without backend call", async () => {
+    const { result, onClearAccessKey, onApplyProviderInfo } = setupComposable();
+
+    result.disconnect();
+    expect(onClearAccessKey).toHaveBeenCalledTimes(1);
     expect(onApplyProviderInfo).toHaveBeenCalledWith(null);
   });
 });

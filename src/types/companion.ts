@@ -1,8 +1,6 @@
 export type CompanionHealthResponse = {
   app: "gpt-image-studio-companion";
   version: string;
-  paired: boolean;
-  runMode?: "serve" | "managed";
 };
 
 export type CompanionProviderCapability = {
@@ -60,19 +58,6 @@ export type CompanionAuthStatusResult =
       ok: false;
       invalidToken: boolean;
     };
-
-export type PairStartResponse = {
-  expiresInSeconds: number;
-};
-
-export type PairConfirmResponse = {
-  sessionToken: string;
-  expiresAt?: string;
-};
-
-export type PairUnpairResponse = {
-  paired: false;
-};
 
 // ---- 凭证管理（Companion 管理面板专用）----
 

@@ -142,7 +142,7 @@ export function useStudioViewModel() {
   });
   const localCompanionImagesClient = createLocalCompanionImagesClient({
     getCompanionUrl: () => settings.companionUrl.value,
-    getSessionToken: () => settings.companionSessionToken.value,
+    getAccessKey: () => settings.companionAccessKey.value,
     getModel: () => settings.model.value,
   });
   // provider 不支持 mask（区域编辑）时，强制关闭区域编辑模式，

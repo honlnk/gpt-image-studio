@@ -16,8 +16,8 @@ import type {
 type UseCompanionManagementInput = {
   /** companion 基地址，reactive（通常来自 settingsStore.companionUrl）。 */
   companionUrl: Ref<string>;
-  /** 配对 session token，reactive；日志接口需要它。 */
-  companionSessionToken: Ref<string>;
+  /** 连接密钥，reactive；日志接口需要它。 */
+  companionAccessKey: Ref<string>;
   /**
    * 凭证变化后回调（通常指向 useCompanionConnection.checkStatus）。
    * 让 /auth/status 重新拉取，provider 能力/尺寸约束即时刷新。
@@ -28,7 +28,7 @@ type UseCompanionManagementInput = {
 /**
  * Companion 管理面板的状态机：凭证（替代 CLI login）+ 日志（替代 CLI logs）。
  *
- * 与 useCompanionConnection 并列、不合并：后者管配对/健康探测，已稳定；
+ * 与 useCompanionConnection 并列、不合并：后者管连接/健康探测，已稳定；
  * 本 composable 只服务管理面板，职责清晰、互不耦合。
  * 面板挂载时按需 loadPresets/loadCredentials；日志在面板内显式触发。
  */
@@ -107,8 +107,8 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
   }
 
   async function loadLogs(params: { lines?: number; date?: string } = {}) {
-    if (!input.companionSessionToken.value) {
-      logsError.value = "需要先配对才能查看日志";
+    if (!input.companionAccessKey.value) {
+      logsError.value = "需要先连接 Companion 才能查看日志";
       return;
     }
     logsLoading.value = true;
@@ -116,7 +116,7 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
     try {
       logs.value = await getCompanionLogs(
         input.companionUrl.value,
-        input.companionSessionToken.value,
+        input.companionAccessKey.value,
         params,
       );
     } catch (e) {

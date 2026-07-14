@@ -1,8 +1,6 @@
 export type CompanionHealthResponse = {
   app: "gpt-image-studio-companion";
   version: string;
-  paired: boolean;
-  runMode: "serve" | "managed";
 };
 
 export type CompanionAuthStatus = {
@@ -39,32 +37,6 @@ export type CompanionAuthStatus = {
     label: string;
     targetPixels: number;
   }[];
-};
-
-export type PairStartResponse = {
-  expiresInSeconds: number;
-};
-
-export type PairWaitRequest = {
-  timeoutSeconds?: number;
-};
-
-export type PairWaitResponse = {
-  waiting: true;
-  expiresInSeconds: number;
-};
-
-export type PairConfirmRequest = {
-  pairingCode: string;
-};
-
-export type PairConfirmResponse = {
-  sessionToken: string;
-  expiresAt?: string;
-};
-
-export type PairUnpairResponse = {
-  paired: false;
 };
 
 // ---- 凭证管理（Web 面板专用）----

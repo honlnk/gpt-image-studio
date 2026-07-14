@@ -15,8 +15,8 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
  *   否则视为远程请求，拒绝。这样即使 companion 某天被错误地暴露到 0.0.0.0 或经反向代理，
  *   凭证写入接口也无法被局域网/外网调用。
  *
- * 这是 pair.ts 里 `/pair/wait` 用 `req.headers.origin` 拒绝浏览器请求的反向应用：
- * 那里要保证"只 CLI 能触发"，这里要保证"只本机能写凭证"。
+ * 这与凭证接口的特殊信任模型一致：凭证管理发生在连接之前，
+ * 不走连接密钥，只认本机来源。
  */
 export function isLoopbackRequest(req: FastifyRequest): boolean {
   const origin = req.headers.origin;

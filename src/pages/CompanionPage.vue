@@ -8,7 +8,7 @@ import CompanionPanel from "../components/settings/CompanionPanel.vue";
  * /companion 独立管理页：全屏挂载 CompanionPanel。
  *
  * 状态全部来自 companionStore（与工作台共享的单例），页面本身只做布局 + 绑定。
- * companionUrl / companionSessionToken / companionPaired 在 settingsStore 持有（localStorage 持久化），
+ * companionUrl / companionAccessKey / companionConnected 在 settingsStore 持有（localStorage 持久化），
  * 这里通过 storeToRefs 响应式读取。
  */
 const companion = useCompanionStore();
@@ -27,16 +27,11 @@ const {
   companionOnline,
   companionHealth,
   companionAuthStatus,
-  pairingInProgress,
-  pairingError,
-  pairingCodeInput,
+  connectError,
+  connecting,
 } = storeToRefs(companion);
 
-const { companionUrl, companionSessionToken, companionPaired } = storeToRefs(settings);
-
-function onUpdatePairingCodeInput(value: string) {
-  companion.pairingCodeInput = value;
-}
+const { companionUrl, companionAccessKey, companionConnected } = storeToRefs(settings);
 </script>
 
 <template>
@@ -56,14 +51,13 @@ function onUpdatePairingCodeInput(value: string) {
     <main class="mx-auto max-w-3xl px-6 py-8">
       <CompanionPanel
         :companion-url="companionUrl"
-        :companion-session-token="companionSessionToken"
-        :companion-paired="companionPaired"
+        :companion-access-key="companionAccessKey"
+        :companion-connected="companionConnected"
         :companion-online="companionOnline"
         :companion-health="companionHealth"
         :companion-auth-status="companionAuthStatus"
-        :companion-pairing-in-progress="pairingInProgress"
-        :companion-pairing-error="pairingError"
-        :companion-pairing-code-input="pairingCodeInput"
+        :connect-error="connectError"
+        :connecting="connecting"
         :presets="presets"
         :credentials="credentials"
         :logs="logs"
@@ -73,12 +67,9 @@ function onUpdatePairingCodeInput(value: string) {
         :logs-loading="logsLoading"
         :cred-error="credError"
         :logs-error="logsError"
-        @update:companion-pairing-code-input="onUpdatePairingCodeInput"
         @check-status="companion.checkStatus"
-        @start-pairing="companion.startPairing"
-        @confirm-pairing="companion.confirmPairing"
+        @connect-with-key="companion.connectWithKey"
         @disconnect-companion="companion.disconnect"
-        @cancel-pairing="companion.cancelPairing"
         @load-presets="companion.loadPresets"
         @load-credentials="companion.loadCredentials"
         @submit-credentials="companion.submitCredentials"

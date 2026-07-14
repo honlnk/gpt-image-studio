@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import type {
   CompanionAuthStatus,
   CompanionCredentialsView,
@@ -9,16 +9,15 @@ import type {
 } from "../../types/companion";
 
 const props = defineProps<{
-  // 连接状态（透传自 useCompanionConnection，复用现有配对逻辑）。
+  // 连接状态（透传自 useCompanionConnection）。
   companionUrl: string;
-  companionSessionToken: string;
-  companionPaired: boolean;
+  companionAccessKey: string;
+  companionConnected: boolean;
   companionOnline: boolean;
   companionHealth: CompanionHealthResponse | null;
   companionAuthStatus: CompanionAuthStatus | null;
-  companionPairingInProgress: boolean;
-  companionPairingError: string;
-  companionPairingCodeInput: string;
+  connectError: string;
+  connecting: boolean;
   // 凭证 + 日志（来自 useCompanionManagement）。
   presets: CompanionProviderPreset[];
   credentials: CompanionCredentialsView | null;
@@ -32,12 +31,9 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  "update:companionPairingCodeInput": [value: string];
   "check-status": [];
-  "start-pairing": [];
-  "confirm-pairing": [];
+  "connect-with-key": [key: string];
   "disconnect-companion": [];
-  "cancel-pairing": [];
   // 凭证 + 日志管理动作。
   "load-presets": [];
   "load-credentials": [];
@@ -46,10 +42,6 @@ const emit = defineEmits<{
   "load-logs": [params: { lines?: number; date?: string }];
 }>();
 
-const isManagedCompanion = computed(
-  () => props.companionHealth?.runMode !== "serve",
-);
-
 // ---- 凭证表单本地态 ----
 const formProvider = ref("");
 const formBaseUrl = ref("");
@@ -57,6 +49,14 @@ const formModel = ref("");
 const formApiKey = ref("");
 // 是否处于"编辑/新增"模式（未配置凭据时默认进入；已配置时点"修改"才进入）。
 const editingCredentials = ref(false);
+
+// ---- 连接密钥输入本地态 ----
+const accessKeyInput = ref("");
+
+function connect() {
+  emit("connect-with-key", accessKeyInput.value);
+  accessKeyInput.value = "";
+}
 
 function applyPresetDefaults() {
   const preset = props.presets.find((p) => p.id === formProvider.value);
@@ -174,7 +174,7 @@ onMounted(() => {
           {{ companionOnline ? "Companion 在线" : "Companion 离线" }}
         </span>
         <span v-if="companionHealth" class="text-xs text-gray-400">
-          v{{ companionHealth.version }} · {{ companionHealth.runMode === "managed" ? "后台托管" : "前台服务" }}
+          v{{ companionHealth.version }}
         </span>
         <button
           class="ml-auto text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
@@ -211,13 +211,13 @@ onMounted(() => {
       </template>
     </div>
 
-    <!-- ② 配对管理（仅在线） -->
+    <!-- ② 连接管理（仅在线） -->
     <div v-if="companionOnline" class="rounded-lg border border-gray-200 p-4 space-y-3">
-      <h4 class="text-sm font-medium text-gray-700">配对</h4>
+      <h4 class="text-sm font-medium text-gray-700">连接</h4>
 
-      <template v-if="companionPaired && !companionPairingInProgress">
+      <template v-if="companionConnected">
         <div class="flex items-center justify-between">
-          <span class="text-sm text-green-700">已配对</span>
+          <span class="text-sm text-green-700">已连接</span>
           <button
             class="text-xs text-red-500 hover:text-red-700 cursor-pointer"
             type="button"
@@ -228,54 +228,30 @@ onMounted(() => {
         </div>
       </template>
 
-      <template v-else-if="!companionPairingInProgress">
+      <template v-else>
         <p class="text-sm text-gray-500">
-          <template v-if="isManagedCompanion">
-            后台托管模式下，请先在终端运行 <span class="font-mono text-gray-700">gpt-image-studio pair</span>，再点击开始配对。
-          </template>
-          <template v-else>
-            点击开始配对后，请在当前 Companion 终端查看配对码。
-          </template>
+          请将 Companion 终端打印的连接密钥粘贴到下方完成连接。
+          密钥可在终端用 <span class="font-mono text-gray-700">gpt-image-studio status</span> 查看。
         </p>
-        <button
-          class="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50 cursor-pointer"
-          type="button"
-          @click="emit('start-pairing')"
-        >
-          开始配对
-        </button>
-      </template>
-
-      <template v-if="companionPairingInProgress">
-        <p class="text-sm text-gray-600">请在 Companion 终端查看配对码，然后在下方输入。</p>
         <div class="flex gap-2">
           <input
-            :value="companionPairingCodeInput"
-            class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-center tracking-widest text-gray-900 outline-none focus:border-gray-500"
-            placeholder="输入 6 位配对码"
-            maxlength="6"
-            inputmode="numeric"
-            @input="emit('update:companionPairingCodeInput', ($event.target as HTMLInputElement).value)"
+            v-model="accessKeyInput"
+            class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-500"
+            placeholder="粘贴连接密钥"
+            @keydown.enter="connect"
           />
           <button
             class="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50 cursor-pointer"
             type="button"
-            :disabled="companionPairingCodeInput.length !== 6"
-            @click="emit('confirm-pairing')"
+            :disabled="connecting || !accessKeyInput.trim()"
+            @click="connect"
           >
-            确认
-          </button>
-          <button
-            class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer"
-            type="button"
-            @click="emit('cancel-pairing')"
-          >
-            取消
+            {{ connecting ? "连接中…" : "连接" }}
           </button>
         </div>
       </template>
 
-      <p v-if="companionPairingError" class="text-xs text-red-600">{{ companionPairingError }}</p>
+      <p v-if="connectError" class="text-xs text-red-600">{{ connectError }}</p>
     </div>
 
     <!-- ③ 凭证管理（仅在线） -->
@@ -372,7 +348,7 @@ onMounted(() => {
     </div>
 
     <!-- ④ 日志查看（仅在线 + 已配对） -->
-    <div v-if="companionOnline && companionPaired" class="rounded-lg border border-gray-200 p-4 space-y-3">
+    <div v-if="companionOnline && companionConnected" class="rounded-lg border border-gray-200 p-4 space-y-3">
       <h4 class="text-sm font-medium text-gray-700">日志</h4>
       <div class="flex flex-wrap items-center gap-2">
         <input

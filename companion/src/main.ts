@@ -3,9 +3,9 @@ import { createInterface } from "node:readline";
 import { existsSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Option, program } from "commander";
-import type { CompanionHealthResponse, PairWaitResponse } from "./types.js";
+import type { CompanionHealthResponse } from "./types.js";
 import { loadCredentials, saveCredentials, clearCredentials, maskApiKey } from "./credentials.js";
-import { clearSession, getSessionInfo, loadSession } from "./pairingState.js";
+import { loadOrCreateAccessKey, resetAccessKey, getAccessKey } from "./accessKey.js";
 import { createSecurityConfig } from "./securityConfig.js";
 import { PROVIDER_PRESETS, type ProviderPreset } from "./providerPresets.js";
 import {
@@ -22,13 +22,11 @@ const require = createRequire(import.meta.url);
 const packageJson = require("../package.json") as { version: string };
 const COMPANION_VERSION = packageJson.version;
 const DEFAULT_PORT = "19750";
-const DEFAULT_SESSION_TTL_DAYS = "30";
 
 type ServeLikeOptions = {
   port: string;
   channel?: string;
   allowOrigin?: string[];
-  sessionTtlDays: string;
   managed?: boolean;
 };
 
@@ -37,7 +35,6 @@ function addServeOptions(command: ReturnType<typeof program.command>) {
     .option("-p, --port <port>", "监听端口", DEFAULT_PORT)
     .option("--channel <channel>", "安全渠道：stable 或 dev", process.env.GPT_IMAGE_STUDIO_COMPANION_CHANNEL)
     .option("--allow-origin <origin...>", "额外允许的完整 origin，例如 http://localhost:5173")
-    .option("--session-ttl-days <days>", "配对 session 有效天数", DEFAULT_SESSION_TTL_DAYS)
     .addOption(new Option("--managed", "由 start 命令托管的后台服务").hideHelp());
 }
 
@@ -56,9 +53,7 @@ addServeOptions(program
       security: createSecurityConfig({
         channel: opts.channel,
         allowOrigins: opts.allowOrigin ?? [],
-        sessionTtlDays: Number(opts.sessionTtlDays),
       }),
-      runMode: opts.managed ? "managed" : "serve",
     });
   });
 
@@ -70,13 +65,12 @@ addServeOptions(program
       port: Number(opts.port),
       channel: opts.channel ?? "stable",
       allowOrigins: opts.allowOrigin ?? [],
-      sessionTtlDays: Number(opts.sessionTtlDays),
     });
 
     console.log(`Companion 已在后台启动: http://127.0.0.1:${info.port}`);
     console.log(`PID: ${info.pid}`);
     console.log(`日志: ${info.logFile}`);
-    console.log("需要配对时请运行：gpt-image-studio pair");
+    console.log("启动日志中包含连接密钥，可用 gpt-image-studio status 查看。");
   });
 
 program
@@ -106,12 +100,11 @@ addServeOptions(program
       port: Number(opts.port),
       channel: opts.channel ?? "stable",
       allowOrigins: opts.allowOrigin ?? [],
-      sessionTtlDays: Number(opts.sessionTtlDays),
     });
     console.log(`Companion 已在后台重启: http://127.0.0.1:${info.port}`);
     console.log(`PID: ${info.pid}`);
     console.log(`日志: ${info.logFile}`);
-    console.log("需要配对时请运行：gpt-image-studio pair");
+    console.log("启动日志中包含连接密钥，可用 gpt-image-studio status 查看。");
   });
 
 program
@@ -133,52 +126,6 @@ program
     if (opts.follow) {
       console.log(`\n正在跟随日志：${logFile}`);
       await followLogFile(logFile);
-    }
-  });
-
-program
-  .command("pair")
-  .description("进入配对模式，等待网页端发起配对并完成确认")
-  .option("-p, --port <port>", "companion 服务端口", DEFAULT_PORT)
-  .option("--timeout <seconds>", "等待配对成功的秒数", "300")
-  .action(async (opts: { port: string; timeout: string }) => {
-    const port = Number(opts.port);
-    const timeoutSeconds = Number(opts.timeout);
-    const baseUrl = `http://127.0.0.1:${port}`;
-    const managed = readManagedProcessInfo();
-    if (!managed || !isProcessRunning(managed.pid) || managed.port !== port) {
-      console.log(`没有找到由 start 启动的后台 Companion：${baseUrl}`);
-      console.log("请先运行 gpt-image-studio start，或确认 pair 使用了正确的 --port。");
-      return;
-    }
-    const logFile = managed.logFile;
-    let offset = existsSync(logFile) ? statSync(logFile).size : 0;
-
-    let result: PairWaitResponse;
-    try {
-      const res = await fetch(`${baseUrl}/pair/wait`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timeoutSeconds }),
-        signal: AbortSignal.timeout(3000),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      result = await res.json() as PairWaitResponse;
-    } catch {
-      console.log(`无法连接 Companion 服务：${baseUrl}`);
-      console.log("请先运行 gpt-image-studio start，或确认 serve 正在前台运行。");
-      return;
-    }
-
-    console.log(`已进入配对模式，有效期 ${Math.floor(result.expiresInSeconds / 60)} 分钟。`);
-    console.log("请在网页设置中点击「开始配对」，随后在此处查看配对码。");
-    console.log("按 Ctrl+C 可停止等待，后台服务会继续运行。");
-
-    const paired = await waitForPairingFromLog(baseUrl, logFile, offset, timeoutSeconds * 1000);
-    if (paired) {
-      console.log("配对成功。");
-    } else {
-      console.log("等待超时。请重新运行 gpt-image-studio pair 后再在网页端开始配对。");
     }
   });
 
@@ -259,13 +206,12 @@ program
   .command("status")
   .description("查看 companion 状态")
   .action(async () => {
-    loadSession();
     const creds = loadCredentials();
-    const session = getSessionInfo();
+    const accessKey = getAccessKey();
 
-    console.log("┌─────────────────────────────────┐");
-    console.log("│  GPT Image Studio Companion     │");
-    console.log("└─────────────────────────────────┘");
+    console.log("=".repeat(50));
+    console.log("  GPT Image Studio Companion");
+    console.log("=".repeat(50));
     console.log("");
     console.log(`版本:    v${COMPANION_VERSION}`);
 
@@ -280,11 +226,6 @@ program
       console.log(`  保存时间: ${creds.savedAt}`);
     } else {
       console.log("凭据:    未配置（运行 gpt-image-studio login 进行配置）");
-    }
-
-    console.log(`配对:    ${session.paired ? "已配对" : "未配对"}`);
-    if (session.expiresAt) {
-      console.log(`  过期时间: ${session.expiresAt}`);
     }
 
     const managed = readManagedProcessInfo();
@@ -310,6 +251,24 @@ program
     } catch {
       console.log("服务:    未运行");
     }
+
+    // 连接密钥：服务运行时从内存读，否则从磁盘读。
+    if (accessKey) {
+      console.log("");
+      console.log("=".repeat(60));
+      console.log("  连接密钥（请粘进网页 /companion 页面完成连接）");
+      console.log(`  ${accessKey}`);
+      console.log("=".repeat(60));
+    } else if (managed && isProcessRunning(managed.pid)) {
+      // 服务在跑但 CLI 进程还没 loadOrCreateAccessKey（正常情况：服务进程持有密钥）。
+      // 从磁盘读给用户看。
+      const key = loadOrCreateAccessKey();
+      console.log("");
+      console.log("=".repeat(60));
+      console.log("  连接密钥（请粘进网页 /companion 页面完成连接）");
+      console.log(`  ${key}`);
+      console.log("=".repeat(60));
+    }
   });
 
 program
@@ -321,11 +280,16 @@ program
   });
 
 program
-  .command("unpair")
-  .description("清除网页端配对 session")
+  .command("reset-key")
+  .description("重新生成连接密钥（旧密钥立即失效，需在网页重新粘贴新密钥）")
   .action(async () => {
-    clearSession();
-    console.log("配对 session 已清除。");
+    const newKey = resetAccessKey();
+    console.log("连接密钥已重新生成。旧密钥已失效。");
+    console.log("");
+    console.log("=".repeat(60));
+    console.log("  新连接密钥（请粘进网页 /companion 页面完成连接）");
+    console.log(`  ${newKey}`);
+    console.log("=".repeat(60));
   });
 
 program.parse();
@@ -340,42 +304,6 @@ async function followLogFile(logFile: string): Promise<void> {
     const chunk = readLogChunkSince(logFile, offset);
     offset = size;
     process.stdout.write(chunk);
-  }
-}
-
-async function waitForPairingFromLog(
-  baseUrl: string,
-  logFile: string,
-  offset: number,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    await sleep(1000);
-    if (existsSync(logFile)) {
-      const size = statSync(logFile).size;
-      if (size > offset) {
-        const chunk = readLogChunkSince(logFile, offset);
-        offset = size;
-        chunk
-          .split(/\r?\n/)
-          .filter((line) => /配对码|请在网页端输入此配对码|有效期/.test(line))
-          .forEach((line) => console.log(line));
-      }
-    }
-    if (await isRemotePaired(baseUrl)) return true;
-  }
-  return false;
-}
-
-async function isRemotePaired(baseUrl: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(2000) });
-    if (!res.ok) return false;
-    const health = await res.json() as CompanionHealthResponse;
-    return health.paired;
-  } catch {
-    return false;
   }
 }
 
