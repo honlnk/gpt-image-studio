@@ -125,10 +125,40 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Companion mode 提示：配对/凭证/日志管理已移到独立页面 -->
-      <div v-if="connectionMode === 'localCompanion'" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
-        Companion 的配对、API 凭据、日志管理已移至独立页面：
-        <a href="/companion" class="font-medium text-gray-800 underline underline-offset-2">Companion 管理页</a>
+      <!-- Companion mode：说明 + 迁移指引 + 管理入口 -->
+      <div v-if="connectionMode === 'localCompanion'" class="space-y-3">
+        <div class="rounded-lg bg-gray-50 p-4 space-y-2 text-sm text-gray-600">
+          <p class="font-medium text-gray-800">本地 Companion 服务</p>
+          <p class="text-xs leading-relaxed">
+            Companion 是一个运行在本机的轻量代理服务，负责将浏览器请求转发给你配置的 AI 图片生成接口。
+            现已支持多套 provider 配置，可在管理页中自由增删切换。
+          </p>
+        </div>
+
+        <!-- v0.6 重构迁移提示 -->
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-sm font-medium text-amber-800">⚙️ 升级提示（v0.6.0）</p>
+          <p class="text-xs leading-relaxed text-amber-700">
+            Companion 凭据存储结构已重构，不再兼容旧版本。如果你之前使用过 Companion，请：
+          </p>
+          <ol class="ml-4 list-decimal space-y-1 text-xs leading-relaxed text-amber-700">
+            <li>更新 Companion：<span class="font-mono text-amber-900">npm install -g @honlnk/image-studio-companion@latest</span></li>
+            <li>删除旧配置：<span class="font-mono text-amber-900">rm ~/.gpt-image-studio/credentials.json</span></li>
+            <li>前往管理页重新添加 provider 配置</li>
+          </ol>
+        </div>
+
+        <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+          <div class="text-xs text-gray-500">
+            配置管理（增删改、切换激活、查看日志）已移至独立页面
+          </div>
+          <a
+            href="/companion"
+            class="shrink-0 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-700"
+          >
+            打开管理页 →
+          </a>
+        </div>
       </div>
 
       <!-- Direct mode -->
