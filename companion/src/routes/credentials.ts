@@ -29,9 +29,14 @@ import {
  *
  * GET /credentials 返回明文 apiKey——loopback 边界下只本机能拿，方便编辑时查看。
  */
-export async function credentialsRoutes(app: FastifyInstance) {
+type CredentialsRoutesOptions = {
+  allowedOrigins?: string[];
+};
+
+export async function credentialsRoutes(app: FastifyInstance, opts?: CredentialsRoutesOptions) {
   // plugin 内最先注册守卫：本 plugin 所有路由都受 loopback 约束。
-  await loopbackGuard(app);
+  // allowedOrigins 与 CORS 白名单共享，让受信任的远程站点也能管理凭证。
+  await loopbackGuard(app, opts?.allowedOrigins ?? []);
 
   app.get<{ Reply: ProviderPreset[] }>("/credentials/presets", async () => {
     return PROVIDER_PRESETS;
