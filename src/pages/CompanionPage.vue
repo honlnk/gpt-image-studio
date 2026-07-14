@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useCompanionStore } from "../stores/companionStore";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -32,6 +33,12 @@ const {
 } = storeToRefs(companion);
 
 const { companionUrl, companionAccessKey, companionConnected } = storeToRefs(settings);
+
+// 页面刷新后无论工作台处于 direct 还是 localCompanion 模式，管理页都需要探测
+// Companion 是否在线——useCompanionConnection 的 watch 只在 localCompanion 模式下触发。
+onMounted(() => {
+  companion.checkStatus();
+});
 </script>
 
 <template>
