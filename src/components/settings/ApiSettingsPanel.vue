@@ -2,7 +2,6 @@
 import { computed, ref, onUnmounted } from "vue";
 import type { ApiMode, ConnectionMode } from "../../types/studio";
 import { FIXED_IMAGE_MODEL } from "../../shared/models";
-import type { CompanionAuthStatus, CompanionHealthResponse } from "../../types/companion";
 
 const props = defineProps<{
   connectionMode: ConnectionMode;
@@ -13,17 +12,6 @@ const props = defineProps<{
   model: string;
   streamImages: boolean;
   streamPartialImages: 0 | 1 | 2 | 3;
-  companionUrl: string;
-  companionSessionToken: string;
-  companionPaired: boolean;
-  // Companion 连接状态：由 useCompanionConnection（全局唯一来源）透传，本面板只做展示。
-  companionOnline: boolean;
-  companionHealth: CompanionHealthResponse | null;
-  companionAuthStatus: CompanionAuthStatus | null;
-  companionPairingInProgress: boolean;
-  companionPairingError: string;
-  // v-model:companionPairingCodeInput —— 配对码输入框双向绑定。
-  companionPairingCodeInput: string;
 }>();
 
 const emit = defineEmits<{
@@ -35,21 +23,12 @@ const emit = defineEmits<{
   "update:model": [value: string];
   "update:streamImages": [value: boolean];
   "update:streamPartialImages": [value: 0 | 1 | 2 | 3];
-  "update:companionSessionToken": [value: string];
-  "update:companionPairingCodeInput": [value: string];
-  // 连接操作委托给 view model 调用 useCompanionConnection。
-  "check-status": [];
-  "start-pairing": [];
-  "confirm-pairing": [];
-  "disconnect-companion": [];
-  "cancel-pairing": [];
 }>();
 
 const apiKeyVisible = ref(false);
 const apiKeyCopyStatus = ref<"idle" | "copied" | "failed">("idle");
 let apiKeyCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
-const isManagedCompanion = computed(() => props.companionHealth?.runMode !== "serve");
 const apiModeOptions: Array<{ value: ApiMode; label: string; description: string }> = [
   { value: "images", label: "Images API", description: "直接调用 /v1/images，兼容传统图片接口。" },
   { value: "responses", label: "Responses API", description: "通过 /v1/responses 调用 image_generation 工具。" },
@@ -144,6 +123,12 @@ onUnmounted(() => {
             本地 Companion
           </button>
         </div>
+      </div>
+
+      <!-- Companion mode 提示：配对/凭证/日志管理已移到独立页面 -->
+      <div v-if="connectionMode === 'localCompanion'" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+        Companion 的配对、API 凭据、日志管理已移至独立页面：
+        <a href="/companion" class="font-medium text-gray-800 underline underline-offset-2">Companion 管理页</a>
       </div>
 
       <!-- Direct mode -->
@@ -384,134 +369,6 @@ onUnmounted(() => {
             <p class="mt-1.5 text-xs text-gray-500">
               建议保留默认值 1。设置为 0 时仍可开启流式，但不会请求中间图。
             </p>
-          </div>
-        </div>
-      </template>
-
-      <!-- Local Companion mode -->
-      <template v-if="connectionMode === 'localCompanion'">
-        <div class="rounded-lg border border-gray-200 p-4 space-y-3">
-          <div class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
-            <div class="font-mono text-gray-800">npm install -g @honlnk/image-studio-companion</div>
-            <div class="mt-1 font-mono text-gray-800">gpt-image-studio login</div>
-            <div class="mt-1 font-mono text-gray-800">gpt-image-studio start</div>
-            <div class="mt-1 font-mono text-gray-800">gpt-image-studio pair</div>
-          </div>
-
-          <div class="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-            本地 Companion 当前仅支持 Images API。若要使用 Responses API 或流式预览，请先切回浏览器直连模式。
-          </div>
-
-          <!-- Status -->
-          <div class="flex items-center gap-2">
-            <span
-              class="inline-block h-2 w-2 rounded-full"
-              :class="companionOnline ? 'bg-green-500' : 'bg-gray-300'"
-            />
-            <span class="text-sm text-gray-700">
-              {{ companionOnline ? "Companion 在线" : "Companion 离线" }}
-            </span>
-            <span v-if="companionHealth" class="text-xs text-gray-400">
-              v{{ companionHealth.version }}
-            </span>
-            <button
-              class="ml-auto text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
-              type="button"
-              @click="emit('check-status')"
-            >
-              刷新
-            </button>
-          </div>
-
-          <!-- Paired state -->
-          <template v-if="companionPaired && !companionPairingInProgress">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-green-700">已配对</span>
-              <button
-                class="text-xs text-red-500 hover:text-red-700 cursor-pointer"
-                type="button"
-                @click="emit('disconnect-companion')"
-              >
-                断开连接
-              </button>
-            </div>
-          </template>
-
-          <!-- Not paired, not in progress -->
-          <template v-else-if="!companionPairingInProgress">
-            <p class="text-sm text-gray-500">
-              <template v-if="isManagedCompanion">
-                需要与本地 Companion 配对后才能使用。请先在终端运行 <span class="font-mono text-gray-700">gpt-image-studio pair</span>，再点击开始配对。
-              </template>
-              <template v-else>
-                需要与本地 Companion 配对后才能使用。点击开始配对后，请在当前 Companion 终端查看配对码。
-              </template>
-            </p>
-            <p v-if="!companionOnline" class="text-xs text-gray-500">
-              请先在终端启动 <span class="font-mono text-gray-700">gpt-image-studio start</span>，然后点击刷新。
-            </p>
-            <button
-              class="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50 cursor-pointer"
-              type="button"
-              :disabled="!companionOnline"
-              @click="emit('start-pairing')"
-            >
-              开始配对
-            </button>
-          </template>
-
-          <!-- Pairing in progress -->
-          <template v-if="companionPairingInProgress">
-            <p class="text-sm text-gray-600">
-              请在 Companion 终端查看配对码，然后在下方输入。
-            </p>
-            <div class="flex gap-2">
-              <input
-                :value="companionPairingCodeInput"
-                class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-center tracking-widest text-gray-900 outline-none focus:border-gray-500"
-                placeholder="输入 6 位配对码"
-                maxlength="6"
-                inputmode="numeric"
-                @input="emit('update:companionPairingCodeInput', ($event.target as HTMLInputElement).value)"
-              />
-              <button
-                class="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50 cursor-pointer"
-                type="button"
-                :disabled="companionPairingCodeInput.length !== 6"
-                @click="emit('confirm-pairing')"
-              >
-                确认
-              </button>
-              <button
-                class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer"
-                type="button"
-                @click="emit('cancel-pairing')"
-              >
-                取消
-              </button>
-            </div>
-          </template>
-
-          <!-- Error -->
-          <p v-if="companionPairingError" class="text-xs text-red-600">
-            {{ companionPairingError }}
-            <template v-if="isManagedCompanion && companionPairingError.includes('gpt-image-studio pair')">
-              ；请确认 pair 命令仍在等待中，然后再点击开始配对。
-            </template>
-          </p>
-
-          <div v-if="companionPaired && companionOnline" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
-            <template v-if="companionAuthStatus">
-              <span :class="companionAuthStatus.ready ? 'text-green-700' : 'text-amber-700'">
-                {{ companionAuthStatus.ready ? "凭据已配置" : "凭据未配置" }}
-              </span>
-              <span v-if="companionAuthStatus.accountLabel">
-                ：{{ companionAuthStatus.accountLabel }}
-              </span>
-            </template>
-            <template v-else>
-              已配对，但暂时无法读取凭据状态。请确认服务仍在运行。
-            </template>
           </div>
         </div>
       </template>

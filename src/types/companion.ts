@@ -73,3 +73,54 @@ export type PairConfirmResponse = {
 export type PairUnpairResponse = {
   paired: false;
 };
+
+// ---- 凭证管理（Companion 管理面板专用）----
+
+/**
+ * provider 预设：下拉选项 + 默认值。
+ * 来自 companion 的 GET /credentials/presets，与 CLI login 菜单同源
+ * （companion/src/providerPresets.ts）。
+ */
+export type CompanionProviderPreset = {
+  id: string;
+  label: string;
+  defaultBaseUrl: string;
+  defaultModel: string;
+};
+
+/**
+ * 当前凭证视图。companion 永不返回原始 apiKey——只给脱敏标签 + hasApiKey 布尔。
+ * 面板据此渲染"当前凭据"块；改 key 时 apiKey 字段由用户重新输入。
+ */
+export type CompanionCredentialsView = {
+  hasApiKey: boolean;
+  provider?: string;
+  apiBaseUrl?: string;
+  model?: string;
+  accountLabel: string;
+  savedAt?: string;
+};
+
+export type CompanionCredentialsSaveInput = {
+  provider?: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  model?: string;
+};
+
+export type CompanionCredentialsSaveResponse = {
+  ok: true;
+  accountLabel: string;
+};
+
+export type CompanionCredentialsClearResponse = {
+  ok: true;
+};
+
+// ---- 日志查看（Companion 管理面板专用）----
+
+export type CompanionLogsTailResponse = {
+  lines: string[];
+  logFile: string | null;
+  date: string;
+};

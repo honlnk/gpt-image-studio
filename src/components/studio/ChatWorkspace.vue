@@ -57,6 +57,11 @@ const generation = useGenerationStore();
 const images = useImagesStore();
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
+
+/** 跳转到 /companion 管理页（配对/凭证/日志）。 */
+function goToCompanionPage() {
+  window.location.href = "/companion";
+}
 let dragDepth = 0;
 
 function isImageAttached(id: string) {
@@ -203,10 +208,10 @@ function imageFilesFromTransfer(
           type="button"
           :title="
             header.companionStatus.online
-              ? `Companion 在线${header.companionStatus.version ? ' v' + header.companionStatus.version : ''}`
-              : 'Companion 离线，点击打开设置'
+              ? `Companion 在线${header.companionStatus.version ? ' v' + header.companionStatus.version : ''}，点击管理`
+              : 'Companion 离线，点击管理'
           "
-          @click="actions.openSettings"
+          @click="goToCompanionPage"
         >
           <span
             class="inline-block h-2 w-2 rounded-full"

@@ -13,7 +13,6 @@ import type {
   PromptWordbanks,
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
-import type { CompanionAuthStatus, CompanionHealthResponse } from "../../types/companion";
 import AboutPanel from "../settings/AboutPanel.vue";
 import AnalyticsPanel from "../settings/AnalyticsPanel.vue";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
@@ -50,16 +49,6 @@ const props = defineProps<{
   streamImages: boolean;
   streamPartialImages: 0 | 1 | 2 | 3;
   model: string;
-  companionUrl: string;
-  companionSessionToken: string;
-  companionPaired: boolean;
-  // Companion 连接状态透传（来自 useCompanionConnection）。
-  companionOnline: boolean;
-  companionHealth: CompanionHealthResponse | null;
-  companionAuthStatus: CompanionAuthStatus | null;
-  companionPairingInProgress: boolean;
-  companionPairingError: string;
-  companionPairingCodeInput: string;
   promptMode: PromptMode;
   promptWordbanks: PromptWordbanks;
   favoritePrompts: FavoritePrompt[];
@@ -90,13 +79,6 @@ const emit = defineEmits<{
   "update:streamImages": [value: boolean];
   "update:streamPartialImages": [value: 0 | 1 | 2 | 3];
   "update:model": [value: string];
-  "update:companionSessionToken": [value: string];
-  "update:companionPairingCodeInput": [value: string];
-  "check-status": [];
-  "start-pairing": [];
-  "confirm-pairing": [];
-  "disconnect-companion": [];
-  "cancel-pairing": [];
   "update:promptMode": [value: PromptMode];
   savePromptWordbank: [section: PromptWordbankSectionKey, terms: string[]];
   restoreDefaultPromptWordbank: [section: PromptWordbankSectionKey];
@@ -251,15 +233,6 @@ function forwardSavePromptWordbank(
               :model="model"
               :stream-images="streamImages"
               :stream-partial-images="streamPartialImages"
-              :companion-url="companionUrl"
-              :companion-session-token="companionSessionToken"
-              :companion-paired="companionPaired"
-              :companion-online="companionOnline"
-              :companion-health="companionHealth"
-              :companion-auth-status="companionAuthStatus"
-              :companion-pairing-in-progress="companionPairingInProgress"
-              :companion-pairing-error="companionPairingError"
-              :companion-pairing-code-input="companionPairingCodeInput"
               @update:connection-mode="emit('update:connectionMode', $event)"
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
               @update:api-base-url-mode="emit('update:apiBaseUrlMode', $event)"
@@ -268,13 +241,6 @@ function forwardSavePromptWordbank(
               @update:model="emit('update:model', $event)"
               @update:stream-images="emit('update:streamImages', $event)"
               @update:stream-partial-images="emit('update:streamPartialImages', $event)"
-              @update:companion-session-token="emit('update:companionSessionToken', $event)"
-              @update:companion-pairing-code-input="emit('update:companionPairingCodeInput', $event)"
-              @check-status="emit('check-status')"
-              @start-pairing="emit('start-pairing')"
-              @confirm-pairing="emit('confirm-pairing')"
-              @disconnect-companion="emit('disconnect-companion')"
-              @cancel-pairing="emit('cancel-pairing')"
             />
 
             <PromptModeSettingsPanel

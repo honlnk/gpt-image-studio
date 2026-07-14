@@ -66,3 +66,42 @@ export type PairConfirmResponse = {
 export type PairUnpairResponse = {
   paired: false;
 };
+
+// ---- 凭证管理（Web 面板专用）----
+
+/**
+ * GET /credentials 的返回。永不包含原始 apiKey——只给脱敏标签 + 是否已配置的布尔。
+ * Web 面板据此渲染"当前凭据"块；改 key 时 apiKey 字段由用户重新输入。
+ */
+export type CompanionCredentialsView = {
+  hasApiKey: boolean;
+  provider?: string;
+  apiBaseUrl?: string;
+  model?: string;
+  accountLabel: string;
+  savedAt?: string;
+};
+
+export type CompanionCredentialsSaveRequest = {
+  provider?: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  model?: string;
+};
+
+export type CompanionCredentialsSaveResponse = {
+  ok: true;
+  accountLabel: string;
+};
+
+export type CompanionCredentialsClearResponse = {
+  ok: true;
+};
+
+// ---- 日志查看（Web 面板专用）----
+
+export type CompanionLogsTailResponse = {
+  lines: string[];
+  logFile: string | null;
+  date: string;
+};

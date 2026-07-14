@@ -6,6 +6,8 @@ import { loadSession, isPaired } from "./pairingState.js";
 import { pairRoutes } from "./routes/pair.js";
 import { authRoutes } from "./routes/auth.js";
 import { imagesRoutes } from "./routes/images.js";
+import { credentialsRoutes } from "./routes/credentials.js";
+import { logsRoutes } from "./routes/logs.js";
 import { authMiddleware } from "./middleware/auth.js";
 import type { CompanionSecurityConfig } from "./securityConfig.js";
 import { isOriginAllowed } from "./securityConfig.js";
@@ -46,6 +48,12 @@ export async function startServer(opts: {
     credentials: true,
   });
 
+  // 注册顺序很重要：
+  // 1) credentialsRoutes 自带 loopbackGuard，必须在 authMiddleware 之前注册，
+  //    否则 /credentials/* 会被 bearer 守卫拦成 401（凭证接口不走配对 token）。
+  // 2) authMiddleware（bearer token 守卫）。
+  // 3) 其余受保护路由 + logsRoutes（日志走配对 token，放在 authMiddleware 之后）。
+  await app.register(credentialsRoutes);
   await authMiddleware(app);
   await app.register(pairRoutes, {
     sessionTtlMs: opts.security.sessionTtlMs,
@@ -53,6 +61,7 @@ export async function startServer(opts: {
   });
   await app.register(authRoutes);
   await app.register(imagesRoutes, { security: opts.security });
+  await app.register(logsRoutes);
 
   app.get("/health", async (): Promise<CompanionHealthResponse> => {
     return {

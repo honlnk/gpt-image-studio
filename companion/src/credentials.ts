@@ -5,7 +5,7 @@ import { join } from "node:path";
 const CONFIG_DIR = join(homedir(), ".gpt-image-studio");
 const CREDENTIALS_FILE = join(CONFIG_DIR, "credentials.json");
 
-type Credentials = {
+export type Credentials = {
   /** provider id（openai/glm/...），缺省视为 openai（兼容老 credentials.json）。 */
   provider?: string;
   apiBaseUrl: string;
