@@ -51,6 +51,7 @@ watch(
   <div ref="scrollContainer" class="flex-1 overflow-y-auto">
     <ChatEmptyState
       v-if="messages.length === 0"
+      @copy-text="emit('copyText', $event)"
     />
 
     <div v-else class="mx-auto max-w-3xl px-4 py-6">
