@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { useRepoStars } from "../../composables/useRepoStars";
+import { QQ_GROUP_NUMBER } from "../../shared/community";
+
+const emit = defineEmits<{
+  copyText: [text: string];
+}>();
 
 const { stars, failed: starsFailed } = useRepoStars();
 
@@ -120,6 +125,28 @@ const features = [
           >求个 Star 鼓励一下嘛（{{ stars }} 位好心人已点亮）</template
         >
       </a>
+
+      <p class="mt-3 text-xs text-gray-400">
+        欢迎加入 QQ 交流群
+        <button
+          class="inline-flex cursor-pointer items-center gap-1 align-middle font-medium text-gray-500 transition-colors hover:text-gray-900"
+          type="button"
+          title="点击复制群号"
+          @click="emit('copyText', QQ_GROUP_NUMBER)"
+        >
+          {{ QQ_GROUP_NUMBER }}
+          <svg
+            class="h-3 w-3"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z" />
+            <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z" />
+          </svg>
+        </button>
+        ，交流使用心得、反馈问题
+      </p>
     </div>
   </div>
 </template>
