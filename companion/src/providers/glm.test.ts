@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("./urlToB64.js", () => ({ urlToB64: vi.fn() }));
+
 import { glmAdapter, normalizeGlmSize } from "./glm.js";
+import { urlToB64 } from "./urlToB64.js";
 import type { ProviderConfig, SizeConstraints } from "./types.js";
+
+const urlToB64Mock = vi.mocked(urlToB64);
 
 const CONSTRAINTS: SizeConstraints = {
   step: 32,
@@ -90,6 +95,9 @@ describe("normalizeGlmSize", () => {
 
 describe("glmAdapter.generate", () => {
   beforeEach(() => {
+    urlToB64Mock.mockResolvedValue(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init: RequestInit) => {
@@ -113,41 +121,13 @@ describe("glmAdapter.generate", () => {
         );
       }),
     );
-    // mock urlToB64 用的全局 fetch 会被上面覆盖；这里用 spy 隔离 url fetch
-    // 由于 generate 内部 urlToB64 也走 fetch，上面 mock 会同时拦截 url fetch。
-    // 让 fetch 根据 url 返回不同内容：
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    urlToB64Mock.mockReset();
+    vi.unstubAllGlobals();
+  });
 
   it("translates request, fetches url, returns b64", async () => {
-    // 用一个能区分 generations 请求和图片下载的 fetch mock
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string, init?: RequestInit) => {
-        if (init?.method === "POST") {
-          const body = JSON.parse(String(init.body));
-          expect(body).toMatchObject({
-            model: "glm-image",
-            prompt: "a cat",
-            size: "1280x1280",
-          });
-          expect(body.background).toBeUndefined();
-          expect(body.output_format).toBeUndefined();
-          return new Response(
-            JSON.stringify({
-              data: [{ url: "https://cdn.example.com/img.png" }],
-            }),
-            { status: 200 },
-          );
-        }
-        // 图片下载
-        expect(url).toBe("https://cdn.example.com/img.png");
-        return new Response(Buffer.from([0x89, 0x50, 0x4e, 0x47]), {
-          status: 200,
-        });
-      }),
-    );
-
     const result = await glmAdapter.generate(
       {
         model: "glm-image",
@@ -163,6 +143,7 @@ describe("glmAdapter.generate", () => {
     expect(result.b64Json).toBe(
       Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
     );
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/img.png");
   });
 
   it("throws upstream disconnect when fetch throws", async () => {

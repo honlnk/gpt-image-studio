@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("./urlToB64.js", () => ({ urlToB64: vi.fn() }));
+
 import { normalizeQwenSize, qwenAdapter } from "./qwen.js";
+import { urlToB64 } from "./urlToB64.js";
 import type { ProviderConfig, SizeConstraints } from "./types.js";
+
+const urlToB64Mock = vi.mocked(urlToB64);
 
 const CONSTRAINTS: SizeConstraints = {
   step: 1,
@@ -69,34 +74,34 @@ describe("normalizeQwenSize", () => {
 });
 
 describe("qwenAdapter.generate", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    urlToB64Mock.mockReset();
+    vi.unstubAllGlobals();
+  });
 
   it("posts DashScope multimodal request, downloads returned image URL, and returns b64", async () => {
     const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        expect(url).toBe(
-          "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-        );
-        expect((init.headers as Record<string, string>).Authorization).toBe("Bearer qwen-test-key");
-        const body = JSON.parse(String(init.body));
-        expect(body).toEqual({
-          model: "qwen-image-2.0-pro",
-          input: {
-            messages: [
-              {
-                role: "user",
-                content: [{ text: "a sign with Chinese text" }],
-              },
-            ],
-          },
-          parameters: { size: "2048*2048" },
-        });
-        return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
-      }
-
-      expect(url).toBe("https://cdn.example.com/qwen.png");
-      return new Response(imageBytes, { status: 200 });
+      expect(init?.method).toBe("POST");
+      expect(url).toBe(
+        "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+      );
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bearer qwen-test-key");
+      const body = JSON.parse(String(init.body));
+      expect(body).toEqual({
+        model: "qwen-image-2.0-pro",
+        input: {
+          messages: [
+            {
+              role: "user",
+              content: [{ text: "a sign with Chinese text" }],
+            },
+          ],
+        },
+        parameters: { size: "2048*2048" },
+      });
+      return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -113,7 +118,8 @@ describe("qwenAdapter.generate", () => {
     );
 
     expect(result.b64Json).toBe(imageBytes.toString("base64"));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/qwen.png");
   });
 
   it("throws upstream error message on non-2xx", async () => {
@@ -165,27 +171,28 @@ describe("qwenAdapter.generate", () => {
 });
 
 describe("qwenAdapter.edit", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    urlToB64Mock.mockReset();
+    vi.unstubAllGlobals();
+  });
 
   it("posts image data URLs before text prompt", async () => {
     const imageBytes = Buffer.from([0x01, 0x02, 0x03]);
     const reference = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        expect(url).toBe(
-          "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-        );
-        const body = JSON.parse(String(init.body));
-        expect(body.model).toBe("qwen-image-2.0-pro");
-        expect(body.parameters).toEqual({ size: "1024*1024" });
-        expect(body.input.messages[0].content).toEqual([
-          { image: `data:image/png;base64,${reference.toString("base64")}` },
-          { text: "把招牌改成中文" },
-        ]);
-        return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
-      }
-
-      return new Response(imageBytes, { status: 200 });
+      expect(init?.method).toBe("POST");
+      expect(url).toBe(
+        "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+      );
+      const body = JSON.parse(String(init.body));
+      expect(body.model).toBe("qwen-image-2.0-pro");
+      expect(body.parameters).toEqual({ size: "1024*1024" });
+      expect(body.input.messages[0].content).toEqual([
+        { image: `data:image/png;base64,${reference.toString("base64")}` },
+        { text: "把招牌改成中文" },
+      ]);
+      return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -204,7 +211,8 @@ describe("qwenAdapter.edit", () => {
     );
 
     expect(result.b64Json).toBe(imageBytes.toString("base64"));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/qwen.png");
   });
 
   it("throws when no reference image provided", async () => {

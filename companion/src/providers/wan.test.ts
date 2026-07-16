@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("./urlToB64.js", () => ({ urlToB64: vi.fn() }));
+
 import { normalizeWanSize, wanAdapter } from "./wan.js";
+import { urlToB64 } from "./urlToB64.js";
 import type { ProviderConfig, SizeConstraints } from "./types.js";
+
+const urlToB64Mock = vi.mocked(urlToB64);
 
 const CONSTRAINTS: SizeConstraints = {
   step: 1,
@@ -81,39 +86,39 @@ describe("normalizeWanSize", () => {
 });
 
 describe("wanAdapter.generate", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    urlToB64Mock.mockReset();
+    vi.unstubAllGlobals();
+  });
 
   it("posts DashScope multimodal request, downloads returned image URL, and returns b64", async () => {
     const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        expect(url).toBe(
-          "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-        );
-        expect((init.headers as Record<string, string>).Authorization).toBe("Bearer wan-test-key");
-        const body = JSON.parse(String(init.body));
-        expect(body).toEqual({
-          model: "wan2.7-image",
-          input: {
-            messages: [
-              {
-                role: "user",
-                content: [{ text: "一张电影感城市夜景" }],
-              },
-            ],
-          },
-          parameters: {
-            size: "2048*2048",
-            n: 1,
-            watermark: false,
-            thinking_mode: true,
-          },
-        });
-        return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
-      }
-
-      expect(url).toBe("https://cdn.example.com/wan.png");
-      return new Response(imageBytes, { status: 200 });
+      expect(init?.method).toBe("POST");
+      expect(url).toBe(
+        "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+      );
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bearer wan-test-key");
+      const body = JSON.parse(String(init.body));
+      expect(body).toEqual({
+        model: "wan2.7-image",
+        input: {
+          messages: [
+            {
+              role: "user",
+              content: [{ text: "一张电影感城市夜景" }],
+            },
+          ],
+        },
+        parameters: {
+          size: "2048*2048",
+          n: 1,
+          watermark: false,
+          thinking_mode: true,
+        },
+      });
+      return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -130,20 +135,19 @@ describe("wanAdapter.generate", () => {
     );
 
     expect(result.b64Json).toBe(imageBytes.toString("base64"));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/wan.png");
   });
 
   it("allows 4K size for wan2.7-image-pro text-to-image", async () => {
     const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        const body = JSON.parse(String(init.body));
-        expect(body.model).toBe("wan2.7-image-pro");
-        expect(body.parameters.size).toBe("4096*2304");
-        return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
-      }
-
-      return new Response(imageBytes, { status: 200 });
+      expect(init?.method).toBe("POST");
+      const body = JSON.parse(String(init.body));
+      expect(body.model).toBe("wan2.7-image-pro");
+      expect(body.parameters.size).toBe("4096*2304");
+      return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -211,31 +215,32 @@ describe("wanAdapter.generate", () => {
 });
 
 describe("wanAdapter.edit", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    urlToB64Mock.mockReset();
+    vi.unstubAllGlobals();
+  });
 
   it("posts image data URLs before text prompt", async () => {
     const imageBytes = Buffer.from([0x01, 0x02, 0x03]);
     const reference = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        expect(url).toBe(
-          "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-        );
-        const body = JSON.parse(String(init.body));
-        expect(body.model).toBe("wan2.7-image");
-        expect(body.parameters).toEqual({
-          size: "1024*1024",
-          n: 1,
-          watermark: false,
-        });
-        expect(body.input.messages[0].content).toEqual([
-          { image: `data:image/png;base64,${reference.toString("base64")}` },
-          { text: "把画面改成水彩风格" },
-        ]);
-        return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
-      }
-
-      return new Response(imageBytes, { status: 200 });
+      expect(init?.method).toBe("POST");
+      expect(url).toBe(
+        "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+      );
+      const body = JSON.parse(String(init.body));
+      expect(body.model).toBe("wan2.7-image");
+      expect(body.parameters).toEqual({
+        size: "1024*1024",
+        n: 1,
+        watermark: false,
+      });
+      expect(body.input.messages[0].content).toEqual([
+        { image: `data:image/png;base64,${reference.toString("base64")}` },
+        { text: "把画面改成水彩风格" },
+      ]);
+      return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -254,7 +259,8 @@ describe("wanAdapter.edit", () => {
     );
 
     expect(result.b64Json).toBe(imageBytes.toString("base64"));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/wan.png");
   });
 
   it("throws when no reference image provided", async () => {
@@ -302,14 +308,12 @@ describe("wanAdapter.edit", () => {
   it("normalizes near-2K rounded dimensions instead of treating them as 4K", async () => {
     const imageBytes = Buffer.from([0x01, 0x02, 0x03]);
     const reference = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        const body = JSON.parse(String(init.body));
-        expect(body.parameters.size).toBe("3127*1341");
-        return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
-      }
-
-      return new Response(imageBytes, { status: 200 });
+      expect(init?.method).toBe("POST");
+      const body = JSON.parse(String(init.body));
+      expect(body.parameters.size).toBe("3127*1341");
+      return new Response(JSON.stringify(dashscopeImageResponse()), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
