@@ -212,7 +212,15 @@ API Key 由独立的 `/credentials` 接口向受信 Origin 提供。
 - OAuth access token 和 refresh token 在正式接入前需要单独评估，不自动沿用普通 API Key 的决定。
 - 日志不记录 Authorization、完整 prompt、图片 base64 或上传图片内容。
 - 限制上传图片数量、大小和 MIME 类型。
-- 下载 Provider 返回的图片 URL 时限制目标地址、重定向、内容类型和响应大小。
+- 下载 Provider 返回的图片 URL 时只允许 HTTPS，拒绝 URL 凭据、loopback、私网、
+  link-local、云元数据、组播和保留地址。
+- DNS 校验结果直接用于 HTTPS socket 建连；DNS 同时返回公网和非公网地址时整体拒绝，
+  防止 DNS rebinding 或地址选择绕过。
+- 手动处理图片 URL 重定向，每一跳重新校验，最多 3 次。
+- 只接受 `image/png`、`image/jpeg` 和 `image/webp`，并校验文件 magic bytes 与
+  `Content-Type` 一致。
+- 图片响应流式读取，单张默认最大 32 MiB；超过声明或实际字节上限时立即中止。
+- 只重试瞬时网络错误、HTTP 408、429 和 5xx，不重试安全策略、证书和普通 4xx 错误。
 - 默认只监听 `127.0.0.1`，不要监听 `0.0.0.0`。
 - CORS 只允许白名单 origin，不能使用 `Access-Control-Allow-Origin: *`。
 
