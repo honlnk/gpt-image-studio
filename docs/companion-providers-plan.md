@@ -2,6 +2,10 @@
 
 更新日期：2026-06-20
 
+> 本文保留多 Provider 翻译层的设计和实施记录。当前受信 Web Origin 可以读取和管理
+> 普通 Provider API Key；安全信任模型以
+> [ADR 002](decisions/002-companion-security-boundary.md) 为准。
+
 ## 背景
 
 现有架构：
@@ -27,9 +31,12 @@ Web App ──OpenAI 形状请求(固定 gpt-image-2)──> Companion 翻译层
 - Web App 保持只兼容 OpenAI / gpt-image-2 形状，不引入多供应商、不引入多模型切换、不改 `imagesApi.ts` 的请求构造与响应解析。
 - Companion 对外接口基本不变：`/images/generations`、`/images/edits` 仍是 OpenAI 形状请求体，仍返回 `data[0].b64_json`；唯一扩展是现有的 `/auth/status` 顺手多返回 provider 元信息（model + size 约束），见下。
 - Companion 内部新增一层 provider adapter，根据当前 provider 把 OpenAI 形状请求翻译成对应厂商的形状，再把厂商响应翻译回 OpenAI 形状。
-- Provider 选择和凭据配置完全在 companion CLI 侧完成，Web 永远不知道背后接的是哪家；但 Web 需要知道背后接的是什么模型及其参数约束，这些信息通过现有的 `/auth/status` 回流，不新增接口。
+- Provider 选择和凭据配置可以在 companion CLI 或受信 Web 设置页完成。Web 通过
+  `/auth/status` 获取当前 Provider、模型及其参数约束。
 
-这是 ADR 002「Companion 安全边界」和 ADR 003「连接模式」的自然延伸：companion 本来就是「Web 与真实凭据之间的隔离层」，在隔离层里做协议翻译不破坏任何现有边界。
+这是 ADR 002「Companion 安全边界」和 ADR 003「连接模式」的自然延伸：Companion
+负责本地凭据存储、Provider 协议翻译和图片请求代理；受信 Web Origin 是普通 Provider
+API Key 的受信管理主体。
 
 ## 关键调研：国产图像 API 是三条独立的线
 

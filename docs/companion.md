@@ -1,6 +1,10 @@
 # 本地 CLI Companion 方案
 
-更新日期：2026-05-24
+更新日期：2026-07-16
+
+> 当前实现已经使用持久化连接密钥替代早期的一次性配对码和短期 session token。
+> 受信 Origin 可以管理并读取普通 Provider API Key。本文后半部分保留部分历史分阶段
+> 记录；当前安全决策以 [ADR 002](decisions/002-companion-security-boundary.md) 为准。
 
 ## 背景
 
@@ -38,7 +42,8 @@ GPT Image Studio 当前是一个本地优先 Web App。用户在网页中配置 
 - 用户安装本地 CLI companion。
 - CLI 在本机保存 API key、OAuth token 或其它 provider 凭据。
 - Vue 网页只和 `127.0.0.1` 上的本地服务通信。
-- 网页永远不读取、不保存、不导出本地助手里的真实凭据。
+- 受信 Origin 可以读取和管理普通 Provider API Key，但普通项目备份不导出 Companion
+  凭据或连接密钥。
 
 ## 推荐仓库结构
 
@@ -96,29 +101,35 @@ Vue Web App
 - 凭据保存。
 - token 刷新。
 - 模型请求代理。
-- 本地配对和权限校验。
+- 连接密钥和 Origin 权限校验。
 - 日志脱敏。
 
 Vue 负责：
 
 - 检测本地助手是否运行。
-- 发起配对。
+- 使用连接密钥建立连接。
+- 管理 Provider 凭据。
 - 调用本地助手的图片生成和编辑接口。
 - 展示结果并继续使用当前 IndexedDB 数据模型。
 
 ## 协议 MVP
 
-第一版只支持当前已有图片功能，不急着做 ChatGPT/Codex OAuth。
+当前图片协议继续保持 OpenAI Images API 兼容形状，不急着做 ChatGPT/Codex OAuth。
 
-建议接口：
+当前主要接口：
 
 ```text
 GET  /health
-POST /pair/start
-POST /pair/confirm
 GET  /auth/status
+GET  /credentials/presets
+GET  /credentials
+POST /credentials
+PUT  /credentials/:id
+DELETE /credentials/:id
+POST /credentials/:id/activate
 POST /images/generations
 POST /images/edits
+GET  /logs/tail
 ```
 
 ### `/health`
@@ -136,17 +147,13 @@ POST /images/edits
 }
 ```
 
-### `/pair/start` 和 `/pair/confirm`
+### 连接密钥
 
-首次连接必须配对。不能让任意网页自动调用本机服务。
+Companion 启动时加载或生成持久化连接密钥。用户将连接密钥粘贴到 Web 设置中，Web
+使用 `Authorization: Bearer <key>` 调用状态、图片代理和日志接口。
 
-可选流程：
-
-1. 网页请求 `/pair/start`。
-2. CLI 在终端或本地浏览器页面显示一次性配对码。
-3. 用户在网页输入配对码。
-4. 网页调用 `/pair/confirm`。
-5. CLI 返回短期 session token。
+Provider 凭据管理接口采用受信 Origin 模型，不要求连接密钥。正式站点和显式允许的
+开发 Origin 可以管理凭据；任意第三方网页不能通过 CORS 和 Origin 校验。
 
 ### `/auth/status`
 
@@ -163,7 +170,8 @@ POST /images/edits
 }
 ```
 
-不要返回真实 API key、access token、refresh token。
+`/auth/status` 不返回真实 API Key，只返回当前 Provider、模型和能力信息。普通 Provider
+API Key 由独立的 `/credentials` 接口向受信 Origin 提供。
 
 ### `/images/generations`
 
@@ -198,11 +206,13 @@ POST /images/edits
 
 - 校验 `Origin`，正式版默认只允许 `https://image.honlnk.com`。
 - 开发版可以额外允许本地开发 origin，例如 `http://localhost:<port>`、`http://127.0.0.1:<port>`。
-- 首次使用必须配对。
-- 每个请求必须带配对后的 session token。
-- 不允许网页读取 API key、OAuth access token 或 refresh token。
+- 状态、图片代理和日志接口必须携带连接密钥。
+- 凭据管理接口只允许本机调用方、loopback Origin 和白名单中的受信 Origin。
+- 受信 Origin 可以读取和管理普通 Provider API Key。
+- OAuth access token 和 refresh token 在正式接入前需要单独评估，不自动沿用普通 API Key 的决定。
 - 日志不记录 Authorization、完整 prompt、图片 base64 或上传图片内容。
 - 限制上传图片数量、大小和 MIME 类型。
+- 下载 Provider 返回的图片 URL 时限制目标地址、重定向、内容类型和响应大小。
 - 默认只监听 `127.0.0.1`，不要监听 `0.0.0.0`。
 - CORS 只允许白名单 origin，不能使用 `Access-Control-Allow-Origin: *`。
 
@@ -252,18 +262,14 @@ GPT_IMAGE_STUDIO_COMPANION_CHANNEL=dev
 
 ## 凭据策略
 
-第一阶段：
+当前策略：
 
-- 只支持用户在本地 CLI 中配置 OpenAI 兼容 API key。
-- CLI 本地保存凭据。
-- Web App 不再保存这类本地助手凭据。
-
-后续阶段：
-
-- 支持更多 OpenAI 兼容 provider。
-- 支持系统 keychain。
-- 支持 provider 级 profile。
-- 再评估 ChatGPT/Codex OAuth。
+- Companion 支持多条 Provider 配置和激活切换。
+- CLI 和受信 Web Origin 都可以管理 Provider 配置。
+- Provider API Key 保存在 Companion 本地配置文件中。
+- 普通项目备份不导出 Companion 凭据。
+- 系统 keychain 仍为后续能力。
+- ChatGPT/Codex OAuth 仍需单独评估。
 
 ChatGPT/Codex OAuth 不作为第一版本地助手目标。它涉及 OAuth token sink、refresh token 轮换、账号额度、Codex app-server 或 Codex backend 路由等更复杂边界，需要在本地助手基础稳定后再做。
 
@@ -334,7 +340,7 @@ gpt-image-studio logout
 
 - `login`：提示用户输入 API Base URL 和 API key，保存到本地。
 - `serve`：启动 `127.0.0.1` HTTP 服务。
-- `status`：显示服务状态、配置的 provider、是否已配对。
+- `status`：显示服务状态、配置的 provider 和连接密钥。
 - `logout`：清除本地凭据。
 
 技术栈建议先用 Node.js + TypeScript。这样可以复用前端项目的类型、校验逻辑和包管理方式。
@@ -355,7 +361,9 @@ gpt-image-studio logout
 - 新增本地助手检测 UI，但可以先隐藏或标记为实验。
 - 起草本地助手 HTTP 协议类型。当前类型分别保留在 Web App 和 companion 内部，不发布共享协议包。
 
-### 阶段三：本地助手 API key 代理 MVP ✅ 已完成
+### 阶段三：本地助手 API key 代理 MVP ✅ 已完成（历史实现）
+
+本阶段记录的是最初的一次性配对码和 session token 方案，后续已由持久化连接密钥替代。
 
 - ✅ 新增 `companion/`（pnpm workspace monorepo 结构）。
 - ✅ 实现 `serve` 命令（Fastify HTTP 服务，监听 `127.0.0.1:19750`）。
@@ -368,7 +376,9 @@ gpt-image-studio logout
 - ✅ 实现 `/images/generations` 和 `/images/edits`（图片代理）。
 - ✅ 前端 `localCompanionImagesClient` 对接真实请求。
 
-### 阶段四：基础安全加固 ✅ 已完成
+### 阶段四：基础安全加固 ✅ 已完成（历史实现）
+
+本阶段中的配对 token 和 session 文件描述属于旧方案；当前实现使用连接密钥文件。
 
 - ✅ Origin 白名单配置化。正式渠道默认只允许 `https://image.honlnk.com`，开发渠道允许本地开发 origin，并支持显式 `--allow-origin`。
 - ✅ 配对 token 过期和重置。session 默认 30 天过期，`unpair` 可清除配对，不影响 API 凭据。
@@ -428,7 +438,7 @@ PID 文件建议保存：
 - `logs --date YYYY-MM-DD` 查看指定日期日志。
 - 每次 `start` 时自动删除 7 天前的 companion 日志。
 
-首次配对体验：
+首次配对体验（历史行为，当前已由连接密钥流程替代）：
 
 - 如果已经存在有效 session，`start` 后台启动成功后直接退出。
 - 如果没有有效 session，`start` 启动后台服务后不立刻退出，而是在当前终端等待首次配对完成。
@@ -466,8 +476,8 @@ PID 文件建议保存：
 本地助手 MVP 满足：
 
 - 网页能检测本地助手是否运行。
-- 首次连接必须配对。
-- 网页不能读取本地助手保存的 API key。
+- 用户通过连接密钥连接受保护接口。
+- 只有白名单中的受信 Origin 可以管理本地 Provider API Key。
 - 本地助手能代理 `gpt-image-2` 文生图。
 - 本地助手能代理带引用图的编辑请求。
 - 关闭本地助手后，网页能给出清晰提示并允许切回基础模式。
@@ -476,6 +486,6 @@ PID 文件建议保存：
 
 - 不在纯前端中直接实现 ChatGPT/Codex OAuth。
 - 不把 OAuth refresh token 存到 IndexedDB。
-- 不让网页读取本地 CLI 的真实凭据。
+- 不允许任意第三方网页读取 Companion 凭据。
 - 不在第一版 companion 中加入文件系统、shell 或浏览器控制能力。
 - 不强制用户安装 companion，基础模式继续保留。

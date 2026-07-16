@@ -9,6 +9,7 @@
 - [本地 CLI Companion](companion.md)：本地伴侣的设计、协议、安全要求和分阶段计划。
 - [Companion 多 Provider 翻译层](companion-providers-plan.md)：在不改 Web 的前提下，让 companion 内部翻译层支持 GLM 等国产图像 API 的开发方案。已接 GLM-Image、豆包 Seedream、Qwen-Image、通义万相 Wan。
 - [Companion 豆包 Provider 方案](companion-doubao-plan.md)：豆包（火山方舟 Seedream）adapter 的独立设计方案。文生图 + 图生图都做；核心是 size 总像素下限（minPixels）要反向增强 web 通用尺寸逻辑。
+- [Companion 多模型适配层审查](companion-provider-adapter-review.md)：当前 Provider Adapter 架构、已接受的安全决策、实现风险和建议整改顺序。
 - [阶段一测试清单](phase1-test-checklist.md)：翻译层骨架 + 能力驱动 UI 的手动验证步骤（含重启 companion 这个坑）。
 - [遮罩局部编辑](mask-editing.md)：基于本地遮罩绘制的图片局部编辑方案。
 - [提示词模式开发计划](prompt-modes.md)：安全、创意、成人三级提示词模式的设计和实现计划。
