@@ -6,6 +6,7 @@ import { grokAdapter } from "./adapters/grok.js";
 import { qwenAdapter } from "./adapters/qwen.js";
 import { wanAdapter } from "./adapters/wan.js";
 import { geminiAdapter } from "./adapters/gemini.js";
+import { deepinfraAdapter } from "./adapters/deepinfra.js";
 
 /**
  * 已注册的 adapter 表。key = provider id（与 credentials.json 的 provider 字段对齐）。
@@ -19,6 +20,7 @@ const REGISTRY: Record<string, ProviderAdapter> = {
   wan: wanAdapter,
   grok: grokAdapter,
   gemini: geminiAdapter,
+  deepinfra: deepinfraAdapter,
 };
 
 /** 默认 provider。credentials 缺 provider 字段、或 provider 未注册时回退到它。 */

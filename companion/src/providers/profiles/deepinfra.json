@@ -1,0 +1,27 @@
+{
+  "preset": {
+    "label": "DeepInfra（OpenAI 兼容聚合）",
+    "defaultBaseUrl": "https://api.deepinfra.com/v1/openai/images",
+    "defaultModel": "black-forest-labs/FLUX-1.1-pro",
+    "order": 80
+  },
+  "capability": {
+    "generate": true,
+    "edit": true,
+    "mask": false,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "jpeg", "webp"]
+  },
+  "sizeConstraints": {
+    "step": 32,
+    "min": 256,
+    "max": 1440,
+    "maxPixels": 2073600,
+    "minPixels": 65536,
+    "maxAspectRatio": null,
+    "defaultSize": "1024x1024"
+  },
+  "resolutionOptions": [
+    { "value": "1k", "label": "1K", "targetPixels": 1048576 }
+  ]
+}
