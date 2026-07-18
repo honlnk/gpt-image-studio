@@ -125,8 +125,10 @@ async function extractB64Json(response: Response): Promise<ImageClientResult> {
   if (!imageData) {
     throw new Error("响应中没有 data[0].b64_json。");
   }
+  const item = payload.data?.[0];
   return {
     b64Json: imageData,
-    revisedPrompt: payload.data?.[0]?.revised_prompt,
+    revisedPrompt: item?.revised_prompt,
+    mimeType: typeof item?.mime_type === "string" ? item.mime_type : undefined,
   };
 }

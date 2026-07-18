@@ -25,9 +25,10 @@ function baseGenerateRequest(
     model: "grok-imagine-image",
     prompt: "画一张图",
     size: "16:9",
+    resolution: "2k",
     background: "auto",
     outputFormat: "png",
-    extra: { resolution: "2k" },
+    extra: {},
     ...overrides,
   };
 }
@@ -39,9 +40,10 @@ function baseEditRequest(
     model: "grok-imagine-image",
     prompt: "改一下图",
     size: "1:1",
+    resolution: "1k",
     background: "auto",
     outputFormat: "png",
-    extra: { resolution: "1k" },
+    extra: {},
     images: [
       {
         blob: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
@@ -120,15 +122,15 @@ describe("buildGrokGenerateBody", () => {
     expect(body.aspect_ratio).toBeUndefined();
   });
 
-  it("omits resolution when extra.resolution missing or unsupported", () => {
+  it("omits resolution when request.resolution is missing or unsupported", () => {
     const bodyNoRes = buildGrokGenerateBody(
-      baseGenerateRequest({ extra: {} }),
+      baseGenerateRequest({ resolution: undefined }),
       "grok-imagine-image",
     );
     expect(bodyNoRes.resolution).toBeUndefined();
 
     const bodyBadRes = buildGrokGenerateBody(
-      baseGenerateRequest({ extra: { resolution: "4k" } }),
+      baseGenerateRequest({ resolution: "4k" }),
       "grok-imagine-image",
     );
     expect(bodyBadRes.resolution).toBeUndefined();
@@ -138,7 +140,8 @@ describe("buildGrokGenerateBody", () => {
     const body = buildGrokGenerateBody(
       baseGenerateRequest({
         background: "transparent",
-        extra: { resolution: "1k", quality: "high" },
+        resolution: "1k",
+        extra: { quality: "high" },
       }),
       "grok-imagine-image",
     );

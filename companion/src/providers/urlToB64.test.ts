@@ -22,7 +22,10 @@ describe("urlToB64", () => {
       "content-length": String(bytes.length),
     }));
 
-    await expect(download(requestImpl)).resolves.toBe(bytes.toString("base64"));
+    await expect(download(requestImpl)).resolves.toEqual({
+      b64Json: bytes.toString("base64"),
+      mimeType: contentType,
+    });
   });
 
   it.each([
@@ -114,7 +117,10 @@ describe("urlToB64", () => {
       }, 302))
       .mockResolvedValueOnce(response(PNG, { "content-type": "image/png" }));
 
-    await expect(download(requestImpl)).resolves.toBe(PNG.toString("base64"));
+    await expect(download(requestImpl)).resolves.toEqual({
+      b64Json: PNG.toString("base64"),
+      mimeType: "image/png",
+    });
     expect(requestImpl.mock.calls.map(([url]) => url.href)).toEqual([
       "https://example.com/image.png",
       "https://example.com/final.png",
@@ -175,7 +181,10 @@ describe("urlToB64", () => {
 
       await vi.runAllTimersAsync();
 
-      await expect(result).resolves.toBe(PNG.toString("base64"));
+      await expect(result).resolves.toEqual({
+        b64Json: PNG.toString("base64"),
+        mimeType: "image/png",
+      });
       expect(requestImpl).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();

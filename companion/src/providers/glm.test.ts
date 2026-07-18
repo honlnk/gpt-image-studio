@@ -95,9 +95,10 @@ describe("normalizeGlmSize", () => {
 
 describe("glmAdapter.generate", () => {
   beforeEach(() => {
-    urlToB64Mock.mockResolvedValue(
-      Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
-    );
+    urlToB64Mock.mockResolvedValue({
+      b64Json: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
+      mimeType: "image/png",
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init: RequestInit) => {

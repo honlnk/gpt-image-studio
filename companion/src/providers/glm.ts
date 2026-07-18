@@ -107,8 +107,8 @@ export const glmAdapter: ProviderAdapter = {
     }
 
     // GLM 返回 URL（有时效），立即 fetch 转 b64，以 OpenAI 形状返回
-    const b64Json = await urlToB64(url);
-    return { b64Json };
+    const { b64Json, mimeType } = await urlToB64(url);
+    return { b64Json, mimeType };
   },
   // edit 不实现：capability.edit=false，route 层会返回 501。
 };

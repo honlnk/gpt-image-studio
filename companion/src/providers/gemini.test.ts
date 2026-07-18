@@ -21,9 +21,10 @@ function baseGenerateRequest(
     model: "gemini-2.5-flash-image",
     prompt: "画一张图",
     size: "16:9",
+    resolution: "2k",
     background: "auto",
     outputFormat: "png",
-    extra: { resolution: "2k" },
+    extra: {},
     ...overrides,
   };
 }
@@ -35,9 +36,10 @@ function baseEditRequest(
     model: "gemini-2.5-flash-image",
     prompt: "改一下图",
     size: "1:1",
+    resolution: "1k",
     background: "auto",
     outputFormat: "png",
-    extra: { resolution: "1k" },
+    extra: {},
     images: [
       { blob: Buffer.from([0x89, 0x50, 0x4e, 0x47]), name: "ref.png", mimeType: "image/png" },
     ],
@@ -94,7 +96,7 @@ describe("buildGeminiGenerateContentUrl", () => {
 
 describe("buildGeminiRequestBody (generate)", () => {
   it("builds contents/generationConfig with responseModalities and responseFormat.image", () => {
-    const body = buildGeminiRequestBody("画一张图", "16:9", { resolution: "2k" });
+    const body = buildGeminiRequestBody("画一张图", "16:9", "2k");
     expect(body).toEqual({
       contents: [{ parts: [{ text: "画一张图" }] }],
       generationConfig: {
@@ -110,7 +112,7 @@ describe("buildGeminiRequestBody (generate)", () => {
   });
 
   it("uses camelCase for responseFormat.image fields", () => {
-    const body = buildGeminiRequestBody("test", "9:16", { resolution: "1k" });
+    const body = buildGeminiRequestBody("test", "9:16", "1k");
     const imageConfig = (body.generationConfig as { responseFormat: { image: Record<string, string> } }).responseFormat.image;
     expect(imageConfig).toHaveProperty("aspectRatio");
     expect(imageConfig).toHaveProperty("imageSize");
@@ -119,13 +121,13 @@ describe("buildGeminiRequestBody (generate)", () => {
   });
 
   it("uppercases imageSize (2k → 2K)", () => {
-    const body = buildGeminiRequestBody("test", "1:1", { resolution: "2k" });
+    const body = buildGeminiRequestBody("test", "1:1", "2k");
     const imageConfig = (body.generationConfig as { responseFormat: { image: { imageSize: string } } }).responseFormat.image;
     expect(imageConfig.imageSize).toBe("2K");
   });
 
   it("omits responseFormat when no aspectRatio and no resolution", () => {
-    const body = buildGeminiRequestBody("test", "auto", {});
+    const body = buildGeminiRequestBody("test", "auto", undefined);
     expect(body.generationConfig).toEqual({
       responseModalities: ["TEXT", "IMAGE"],
     });
@@ -134,14 +136,14 @@ describe("buildGeminiRequestBody (generate)", () => {
 
   it("omits aspectRatio for unsupported ratio", () => {
     // 9:19.5 是 Grok 支持但 Gemini 不支持的
-    const body = buildGeminiRequestBody("test", "9:19.5", { resolution: "1k" });
+    const body = buildGeminiRequestBody("test", "9:19.5", "1k");
     const imageConfig = (body.generationConfig as { responseFormat: { image: Record<string, unknown> } }).responseFormat.image;
     expect(imageConfig.aspectRatio).toBeUndefined();
     expect(imageConfig.imageSize).toBe("1K");
   });
 
   it("omits imageSize for unsupported resolution (4k not in Gemini 2.5, but 4K is declared for Gemini 3)", () => {
-    const body = buildGeminiRequestBody("test", "1:1", { resolution: "8k" });
+    const body = buildGeminiRequestBody("test", "1:1", "8k");
     const imageConfig = (body.generationConfig as { responseFormat: { image: Record<string, unknown> } }).responseFormat.image;
     expect(imageConfig.imageSize).toBeUndefined();
     expect(imageConfig.aspectRatio).toBe("1:1");
@@ -151,7 +153,7 @@ describe("buildGeminiRequestBody (generate)", () => {
 describe("buildGeminiRequestBody (edit)", () => {
   it("appends inline_data parts in snake_case with raw base64", () => {
     const blob = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-    const body = buildGeminiRequestBody("改一下图", "1:1", { resolution: "1k" }, [
+    const body = buildGeminiRequestBody("改一下图", "1:1", "1k", [
       { blob, mimeType: "image/png" },
     ]);
     const parts = (body.contents as Array<{ parts: Record<string, unknown>[] }>)[0].parts;
@@ -168,7 +170,7 @@ describe("buildGeminiRequestBody (edit)", () => {
   });
 
   it("appends multiple inline_data parts", () => {
-    const body = buildGeminiRequestBody("融合", "16:9", {}, [
+    const body = buildGeminiRequestBody("融合", "16:9", undefined, [
       { blob: Buffer.from([0x89]), mimeType: "image/png" },
       { blob: Buffer.from([0xff]), mimeType: "image/jpeg" },
     ]);

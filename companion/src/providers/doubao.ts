@@ -8,6 +8,7 @@ import type {
   ResolutionOption,
   SizeConstraints,
 } from "./types.js";
+import { sniffMimeTypeFromBase64 } from "./imageSignature.js";
 
 /**
  * 豆包 Seedream（火山方舟 ByteDance）adapter。
@@ -116,7 +117,8 @@ export const doubaoAdapter: ProviderAdapter = {
       throw new Error(extractErrorMessage(payload) ?? "豆包响应中没有 data[0].b64_json");
     }
     // D2：直接拿 b64_json，不走 urlToB64（豆包支持 response_format=b64_json）。
-    return { b64Json };
+    // 豆包丢弃 output_format，真实格式由服务端决定，对字节嗅探得到真实 MIME。
+    return { b64Json, mimeType: sniffMimeTypeFromBase64(b64Json) ?? undefined };
   },
 
   async edit(
@@ -162,7 +164,7 @@ export const doubaoAdapter: ProviderAdapter = {
     if (!b64Json) {
       throw new Error(extractErrorMessage(payload) ?? "豆包响应中没有 data[0].b64_json");
     }
-    return { b64Json };
+    return { b64Json, mimeType: sniffMimeTypeFromBase64(b64Json) ?? undefined };
   },
 };
 

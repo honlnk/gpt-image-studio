@@ -144,7 +144,8 @@ export const wanAdapter: ProviderAdapter = {
       response,
       "Wan 响应中没有 output.choices[0].message.content[].image",
     );
-    return { b64Json: await urlToB64(imageUrl) };
+    const { b64Json, mimeType } = await urlToB64(imageUrl);
+    return { b64Json, mimeType };
   },
 
   async edit(
@@ -203,7 +204,8 @@ export const wanAdapter: ProviderAdapter = {
       response,
       "Wan 编辑响应中没有 output.choices[0].message.content[].image",
     );
-    return { b64Json: await urlToB64(imageUrl) };
+    const { b64Json, mimeType } = await urlToB64(imageUrl);
+    return { b64Json, mimeType };
   },
 };
 
@@ -312,7 +314,7 @@ function isWanProModel(model?: string): boolean {
 }
 
 function isExplicitWanEdit4K(request: OpenAIImageEditRequest): boolean {
-  if (request.editExtra.companion_resolution === "4k") return true;
+  if (request.resolution?.trim().toLowerCase() === "4k") return true;
   return isClearly4KSize(request.size);
 }
 

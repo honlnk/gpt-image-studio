@@ -404,7 +404,8 @@ export const useGenerationStore = defineStore("generation", () => {
       const now = Date.now();
       const createdAt = isoTimestamp(now);
       const generationDurationMs = Math.max(0, now - job.startedAtMs);
-      const mimeType = outputFormatToMimeType(params.outputFormat);
+      // 优先用结果真实 MIME（companion 回流），回退 outputFormat 猜测（direct 模式无 mimeType）。
+      const mimeType = imageResult.mimeType ?? outputFormatToMimeType(params.outputFormat);
       const blob = base64ToBlob(imageResult.b64Json, mimeType);
       const dimensions = await readImageDimensions(blob);
       const imageId = createId("img");

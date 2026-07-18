@@ -6,6 +6,7 @@ import {
   createPublicOnlyLookup,
   UnsafeOutboundAddressError,
 } from "./outboundAddressPolicy.js";
+import { assertSignatureMatches } from "./imageSignature.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRIES = 2;
@@ -64,6 +65,9 @@ export type UrlToB64Options = {
 /**
  * 下载 Provider 返回的临时图片 URL，并转成不含 data: 前缀的 base64。
  *
+ * 返回值同时带出真实 MIME（来自响应 Content-Type + magic bytes 双重校验），
+ * 供 adapter 透传给 Web，避免 ImageAsset.mimeType 与字节不符。
+ *
  * 安全边界：
  * - 只允许 HTTPS；
  * - DNS 校验与实际 socket 建连使用同一个 lookup；
@@ -74,7 +78,7 @@ export type UrlToB64Options = {
 export async function urlToB64(
   url: string,
   options: UrlToB64Options = {},
-): Promise<string> {
+): Promise<{ b64Json: string; mimeType: string }> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = options.retries ?? DEFAULT_RETRIES;
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_IMAGE_BYTES;
@@ -97,14 +101,14 @@ export async function urlToB64(
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const buffer = await downloadImage(initialUrl, {
+      const downloaded = await downloadImage(initialUrl, {
         signal: AbortSignal.timeout(timeoutMs),
         lookup,
         maxBytes,
         maxRedirects,
         requestImpl,
       });
-      return buffer.toString("base64");
+      return { b64Json: downloaded.buffer.toString("base64"), mimeType: downloaded.mimeType };
     } catch (error) {
       lastError = error;
       if (!isRetryable(error)) {
@@ -130,7 +134,10 @@ type DownloadContext = {
   requestImpl: ImageRequest;
 };
 
-async function downloadImage(initialUrl: URL, context: DownloadContext): Promise<Buffer> {
+async function downloadImage(
+  initialUrl: URL,
+  context: DownloadContext,
+): Promise<{ buffer: Buffer; mimeType: string }> {
   let currentUrl = initialUrl;
   const visited = new Set<string>();
 
@@ -185,8 +192,8 @@ async function downloadImage(initialUrl: URL, context: DownloadContext): Promise
     try {
       const mimeType = validateResponseHeaders(response.headers, context.maxBytes);
       const buffer = await readBoundedBody(response, context.maxBytes);
-      validateImageSignature(buffer, mimeType);
-      return buffer;
+      assertSignatureMatches(buffer, mimeType);
+      return { buffer, mimeType };
     } catch (error) {
       response.destroy(error instanceof Error ? error : undefined);
       throw error;
@@ -301,45 +308,6 @@ async function readBoundedBody(
   }
 
   return Buffer.concat(chunks, totalBytes);
-}
-
-function validateImageSignature(buffer: Buffer, mimeType: string): void {
-  const valid =
-    (mimeType === "image/png" && isPng(buffer)) ||
-    (mimeType === "image/jpeg" && isJpeg(buffer)) ||
-    (mimeType === "image/webp" && isWebp(buffer));
-
-  if (!valid) {
-    throw new DownloadPolicyError(
-      `图片内容与 Content-Type ${mimeType} 不匹配。`,
-    );
-  }
-}
-
-function isPng(buffer: Buffer): boolean {
-  return (
-    buffer.length >= 8 &&
-    buffer.subarray(0, 8).equals(
-      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    )
-  );
-}
-
-function isJpeg(buffer: Buffer): boolean {
-  return (
-    buffer.length >= 3 &&
-    buffer[0] === 0xff &&
-    buffer[1] === 0xd8 &&
-    buffer[2] === 0xff
-  );
-}
-
-function isWebp(buffer: Buffer): boolean {
-  return (
-    buffer.length >= 12 &&
-    buffer.toString("ascii", 0, 4) === "RIFF" &&
-    buffer.toString("ascii", 8, 12) === "WEBP"
-  );
 }
 
 function getSingleHeader(value: string | string[] | undefined): string | undefined {

@@ -128,7 +128,7 @@ export const geminiAdapter: ProviderAdapter = {
     const body = buildGeminiRequestBody(
       request.prompt,
       request.size,
-      request.extra,
+      request.resolution,
       /* images */ undefined,
     );
 
@@ -162,7 +162,7 @@ export const geminiAdapter: ProviderAdapter = {
     const body = buildGeminiRequestBody(
       request.prompt,
       request.size,
-      request.extra,
+      request.resolution,
       request.images,
     );
 
@@ -192,7 +192,7 @@ const UPSTREAM_DISCONNECT_MESSAGE =
  *
  * @param prompt   文本提示
  * @param size     web 发来的 size（比例格式如 "16:9"，或 WxH/auto）
- * @param extra    web 额外字段（含 resolution 档位）
+ * @param resolution web 选择的分辨率档位
  * @param images   编辑时的参考图（文生图时为 undefined）
  *
  * 结构：
@@ -209,7 +209,7 @@ const UPSTREAM_DISCONNECT_MESSAGE =
 export function buildGeminiRequestBody(
   prompt: string,
   size: string,
-  extra: Record<string, unknown>,
+  resolution: string | undefined,
   images?: { blob: Buffer; mimeType: string }[],
 ): Record<string, unknown> {
   const parts: Record<string, unknown>[] = [{ text: prompt }];
@@ -234,7 +234,7 @@ export function buildGeminiRequestBody(
   const aspectRatio = readAspectRatio(size);
   if (aspectRatio) imageConfig.aspectRatio = aspectRatio;
 
-  const imageSize = readImageSize(extra);
+  const imageSize = readImageSize(resolution);
   if (imageSize) imageConfig.imageSize = imageSize;
 
   if (Object.keys(imageConfig).length > 0) {
@@ -259,11 +259,10 @@ function readAspectRatio(size: string): string | null {
 }
 
 /**
- * 从 extra.resolution 读档位，转成 Gemini 的 imageSize（大写）。
+ * 从 request.resolution 读档位，转成 Gemini 的 imageSize（大写）。
  * web 发 "2k" → Gemini 要 "2K"。
  */
-function readImageSize(extra: Record<string, unknown>): string | null {
-  const raw = extra.resolution;
+function readImageSize(raw: string | undefined): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim().toLowerCase();
   return RESOLUTION_TO_IMAGE_SIZE[trimmed] ?? null;
@@ -321,9 +320,9 @@ async function parseGeminiResponse(response: Response): Promise<OpenAIImageResul
     const parts = candidate?.content?.parts;
     if (!Array.isArray(parts)) continue;
     for (const part of parts) {
-      const b64Json = extractInlineData(part);
-      if (b64Json) {
-        return { b64Json };
+      const inline = extractInlineData(part);
+      if (inline) {
+        return { b64Json: inline.data, mimeType: inline.mimeType };
       }
     }
   }
@@ -335,21 +334,28 @@ async function parseGeminiResponse(response: Response): Promise<OpenAIImageResul
 }
 
 /**
- * 从一个 part 里提取图片 base64 数据，兼容 camelCase 和 snake_case。
+ * 从一个 part 里提取图片 base64 数据及厂商声明的 MIME，兼容 camelCase 和 snake_case。
  * 返回 null 表示该 part 不是图片 part（可能是 text part）。
+ * mimeType 可能为 undefined（厂商未声明时），由调用方决定是否嗅探。
  */
-function extractInlineData(part: Record<string, any>): string | null {
-  // camelCase: inlineData.data
+function extractInlineData(
+  part: Record<string, any>,
+): { data: string; mimeType?: string } | null {
+  // camelCase: inlineData.{data, mimeType}
   const inlineDataCamel = part?.inlineData;
   if (inlineDataCamel && typeof inlineDataCamel.data === "string" && inlineDataCamel.data) {
-    return inlineDataCamel.data;
+    return { data: inlineDataCamel.data, mimeType: readOptionalString(inlineDataCamel.mimeType) };
   }
-  // snake_case: inline_data.data
+  // snake_case: inline_data.{data, mime_type}
   const inlineDataSnake = part?.inline_data;
   if (inlineDataSnake && typeof inlineDataSnake.data === "string" && inlineDataSnake.data) {
-    return inlineDataSnake.data;
+    return { data: inlineDataSnake.data, mimeType: readOptionalString(inlineDataSnake.mime_type) };
   }
   return null;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
 }
 
 function safeJsonParse(text: string): Record<string, any> | null {

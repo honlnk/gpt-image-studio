@@ -90,6 +90,8 @@ export type OpenAIImageRequest = {
   prompt: string;
   /** OpenAI 形状的 size，例如 "1024x1024" / "auto"。 */
   size: string;
+  /** Companion 能力协议中的分辨率档位，例如 "1k" / "2k" / "4k"。 */
+  resolution?: string;
   background: string;
   outputFormat: string;
   /** web 请求体中上述已知字段之外的所有字段，原样保留。 */
@@ -120,11 +122,16 @@ export type OpenAIImageEditRequest = OpenAIImageRequest & {
 
 /**
  * adapter 统一的输出形状。routes/images.ts 会把它再包成
- * `{ data: [{ b64_json, revised_prompt }] }` 返回给 web。
+ * `{ data: [{ b64_json, revised_prompt, mime_type }] }` 返回给 web。
+ *
+ * mimeType 是图片字节的真实格式（来自厂商响应字段、URL 下载的 Content-Type，
+ * 或对 base64 的 magic bytes 嗅探），web 据此给 ImageAsset.mimeType 赋值，
+ * 避免标签与字节不符。未探测到时为 undefined，web 回退到 outputFormat 猜测。
  */
 export type OpenAIImageResult = {
   b64Json: string;
   revisedPrompt?: string;
+  mimeType?: string;
 };
 
 /**

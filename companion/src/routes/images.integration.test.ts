@@ -47,6 +47,22 @@ async function setupWithCredentials(creds: {
   return makeApp();
 }
 
+function makeWebEditMultipart(fields: Record<string, string>): {
+  boundary: string;
+  body: Buffer;
+} {
+  const boundary = "----web-resolution-boundary";
+  const crlf = "\r\n";
+  const parts = Object.entries(fields).map(([name, value]) =>
+    `--${boundary}${crlf}Content-Disposition: form-data; name="${name}"${crlf}${crlf}${value}${crlf}`
+  );
+  parts.push(
+    `--${boundary}${crlf}Content-Disposition: form-data; name="image[]"; filename="ref.png"${crlf}Content-Type: image/png${crlf}${crlf}PNG${crlf}`,
+  );
+  parts.push(`--${boundary}--${crlf}`);
+  return { boundary, body: Buffer.from(parts.join(""), "utf8") };
+}
+
 describe("images routes integration — generate", () => {
   it("returns b64_json from upstream on happy path", async () => {
     const app = await setupWithCredentials({
@@ -63,6 +79,8 @@ describe("images routes integration — generate", () => {
           prompt: "a cat",
           quality: "high", // extra 字段必须透传
         });
+        expect(body.companion_resolution).toBeUndefined();
+        expect(body.resolution).toBeUndefined();
         return new Response(
           JSON.stringify({ data: [{ b64_json: "QUJD", revised_prompt: "rp" }] }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -74,12 +92,18 @@ describe("images routes integration — generate", () => {
       method: "POST",
       url: "/images/generations",
       headers: { "content-type": "application/json" },
-      payload: { model: "gpt-image-2", prompt: "a cat", size: "1024x1024", quality: "high" },
+      payload: {
+        model: "gpt-image-2",
+        prompt: "a cat",
+        size: "1024x1024",
+        companion_resolution: "1k",
+        quality: "high",
+      },
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      data: [{ b64_json: "QUJD", revised_prompt: "rp" }],
+      data: [{ b64_json: "QUJD", revised_prompt: "rp", mime_type: undefined }],
     });
     await app.close();
   });
@@ -170,6 +194,168 @@ describe("images routes integration — generate", () => {
   });
 });
 
+describe("images routes integration — resolution contract", () => {
+  it("normalizes Grok generation companion_resolution", async () => {
+    const app = await setupWithCredentials({
+      provider: "grok",
+      apiBaseUrl: "https://api.x.ai/v1/images",
+      apiKey: "xai-test",
+      model: "grok-imagine-image",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body));
+        expect(body.resolution).toBe("2k");
+        expect(body.companion_resolution).toBeUndefined();
+        return new Response(JSON.stringify({ data: [{ b64_json: "R1JPSw==" }] }), {
+          status: 200,
+        });
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "grok-imagine-image",
+        prompt: "a cat",
+        size: "2048x2048",
+        companion_resolution: "2k",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("normalizes Grok edit companion_resolution", async () => {
+    const app = await setupWithCredentials({
+      provider: "grok",
+      apiBaseUrl: "https://api.x.ai/v1/images",
+      apiKey: "xai-test",
+      model: "grok-imagine-image",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body));
+        expect(body.resolution).toBe("1k");
+        expect(body.companion_resolution).toBeUndefined();
+        return new Response(JSON.stringify({ data: [{ b64_json: "R1JPSw==" }] }), {
+          status: 200,
+        });
+      }),
+    );
+    const multipart = makeWebEditMultipart({
+      model: "grok-imagine-image",
+      prompt: "edit it",
+      size: "1024x1024",
+      companion_resolution: "1k",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: {
+        "content-type": `multipart/form-data; boundary=${multipart.boundary}`,
+      },
+      payload: multipart.body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("normalizes Gemini generation companion_resolution", async () => {
+    const app = await setupWithCredentials({
+      provider: "gemini",
+      apiBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      apiKey: "gemini-test",
+      model: "gemini-2.5-flash-image",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body));
+        expect(body.generationConfig.responseFormat.image.imageSize).toBe("4K");
+        expect(JSON.stringify(body)).not.toContain("companion_resolution");
+        return new Response(
+          JSON.stringify({
+            candidates: [{
+              content: {
+                parts: [{ inlineData: { data: "R0VNSU5J", mimeType: "image/png" } }],
+              },
+            }],
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "gemini-2.5-flash-image",
+        prompt: "a cat",
+        size: "4096x4096",
+        companion_resolution: "4k",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("normalizes Gemini edit companion_resolution", async () => {
+    const app = await setupWithCredentials({
+      provider: "gemini",
+      apiBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      apiKey: "gemini-test",
+      model: "gemini-2.5-flash-image",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body));
+        expect(body.generationConfig.responseFormat.image.imageSize).toBe("2K");
+        expect(JSON.stringify(body)).not.toContain("companion_resolution");
+        return new Response(
+          JSON.stringify({
+            candidates: [{
+              content: {
+                parts: [{ inlineData: { data: "R0VNSU5J", mimeType: "image/png" } }],
+              },
+            }],
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+    const multipart = makeWebEditMultipart({
+      model: "gemini-2.5-flash-image",
+      prompt: "edit it",
+      size: "2048x2048",
+      companion_resolution: "2k",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: {
+        "content-type": `multipart/form-data; boundary=${multipart.boundary}`,
+      },
+      payload: multipart.body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
 describe("images routes integration — edit", () => {
   it("forwards multipart image[], mask, and extra fields to upstream", async () => {
     const app = await setupWithCredentials({
@@ -222,7 +408,7 @@ describe("images routes integration — edit", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ data: [{ b64_json: "UVdY", revised_prompt: undefined }] });
+    expect(res.json()).toEqual({ data: [{ b64_json: "UVdY", revised_prompt: undefined, mime_type: undefined }] });
 
     // 上游收到的应是合法 multipart，含 image[] + mask + 文本字段
     expect(seen).toHaveLength(1);

@@ -81,7 +81,7 @@ describe("qwenAdapter.generate", () => {
 
   it("posts DashScope multimodal request, downloads returned image URL, and returns b64", async () => {
     const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
+    urlToB64Mock.mockResolvedValue({ b64Json: imageBytes.toString("base64"), mimeType: "image/png" });
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(init?.method).toBe("POST");
       expect(url).toBe(
@@ -179,7 +179,7 @@ describe("qwenAdapter.edit", () => {
   it("posts image data URLs before text prompt", async () => {
     const imageBytes = Buffer.from([0x01, 0x02, 0x03]);
     const reference = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
+    urlToB64Mock.mockResolvedValue({ b64Json: imageBytes.toString("base64"), mimeType: "image/png" });
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(init?.method).toBe("POST");
       expect(url).toBe(

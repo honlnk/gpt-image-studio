@@ -8,6 +8,7 @@ import type {
   ResolutionOption,
   SizeConstraints,
 } from "./types.js";
+import { sniffMimeTypeFromBase64 } from "./imageSignature.js";
 
 /**
  * 上游连接被主动断开（fetch 抛异常）时的统一文案。
@@ -162,6 +163,8 @@ async function parseImagesResponse(
   return {
     b64Json,
     revisedPrompt: item?.revised_prompt,
+    // OpenAI 响应不带 MIME，对 base64 做签名嗅探得到真实格式。
+    mimeType: sniffMimeTypeFromBase64(b64Json) ?? undefined,
   };
 }
 

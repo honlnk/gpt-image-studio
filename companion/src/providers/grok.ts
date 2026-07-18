@@ -8,6 +8,7 @@ import type {
   ResolutionOption,
   SizeConstraints,
 } from "./types.js";
+import { sniffMimeTypeFromBase64 } from "./imageSignature.js";
 
 /**
  * Grok Imagine（xAI）adapter。
@@ -19,8 +20,8 @@ import type {
  * 与 OpenAI adapter 的差异（adapter 内部处理）：
  *   1. size 不透传：把 web 发来的比例格式（如 "16:9"）转成 aspect_ratio 字段，
  *      WxH / auto 形式则不传 aspect_ratio（让 Grok 自选）。
- *   2. resolution 从 request.extra 里读（web 发的 "1k"/"2k" 档位），转成 Grok 的 resolution 字段。
- *      注意：request.outputFormat 是图片格式（png/jpeg），不是分辨率——分辨率在 extra.resolution 里。
+ *   2. resolution 从 request.resolution 读（web 发的 "1k"/"2k" 档位），转成 Grok 的 resolution 字段。
+ *      注意：request.outputFormat 是图片格式（png/jpeg），不是分辨率。
  *   3. 编辑走 /v1/images/edits，单图用 image 字段、多图用 images 字段（互斥），
  *      图片以 { type:"image_url", url:"data:..." } 形状传递（OpenAI chat 兼容形状）。
  *   4. 固定 response_format=b64_json，避免拿到有时效的 url 再二次下载。
@@ -163,7 +164,7 @@ const UPSTREAM_DISCONNECT_MESSAGE =
  * - model/prompt 必带。
  * - response_format 固定 b64_json。
  * - aspect_ratio：当 request.size 是支持的比例枚举时带上，否则不传（让 Grok 自选）。
- * - resolution：从 extra.resolution 读（web 的档位选择），仅当是支持的值时带上。
+ * - resolution：从 request.resolution 读（web 的档位选择），仅当是支持的值时带上。
  */
 export function buildGrokGenerateBody(
   request: OpenAIImageRequest,
@@ -178,7 +179,7 @@ export function buildGrokGenerateBody(
   const aspectRatio = readAspectRatio(request.size);
   if (aspectRatio) body.aspect_ratio = aspectRatio;
 
-  const resolution = readResolution(request.extra);
+  const resolution = readResolution(request.resolution);
   if (resolution) body.resolution = resolution;
 
   return body;
@@ -216,7 +217,7 @@ export function buildGrokEditBody(
   const aspectRatio = readAspectRatio(request.size);
   if (aspectRatio) body.aspect_ratio = aspectRatio;
 
-  const resolution = readResolution(request.extra);
+  const resolution = readResolution(request.resolution);
   if (resolution) body.resolution = resolution;
 
   return body;
@@ -238,11 +239,9 @@ function readAspectRatio(size: string): string | null {
 }
 
 /**
- * 从 request.extra 读 resolution 档位。
- * web 把分辨率档位（"1k"/"2k"）放在 extra.resolution 里（不在 outputFormat，后者是图片格式）。
+ * 从 request.resolution 读分辨率档位。
  */
-function readResolution(extra: Record<string, unknown>): string | null {
-  const raw = extra.resolution;
+function readResolution(raw: string | undefined): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim().toLowerCase();
   if (SUPPORTED_RESOLUTIONS.has(trimmed)) return trimmed;
@@ -284,6 +283,8 @@ async function parseGrokResponse(response: Response): Promise<OpenAIImageResult>
   return {
     b64Json,
     revisedPrompt: item?.revised_prompt,
+    // Grok 响应不带 MIME，对 base64 做签名嗅探得到真实格式。
+    mimeType: sniffMimeTypeFromBase64(b64Json) ?? undefined,
   };
 }
 

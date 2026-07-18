@@ -93,7 +93,7 @@ describe("wanAdapter.generate", () => {
 
   it("posts DashScope multimodal request, downloads returned image URL, and returns b64", async () => {
     const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
+    urlToB64Mock.mockResolvedValue({ b64Json: imageBytes.toString("base64"), mimeType: "image/png" });
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(init?.method).toBe("POST");
       expect(url).toBe(
@@ -141,7 +141,7 @@ describe("wanAdapter.generate", () => {
 
   it("allows 4K size for wan2.7-image-pro text-to-image", async () => {
     const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
+    urlToB64Mock.mockResolvedValue({ b64Json: imageBytes.toString("base64"), mimeType: "image/png" });
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(init?.method).toBe("POST");
       const body = JSON.parse(String(init.body));
@@ -223,7 +223,7 @@ describe("wanAdapter.edit", () => {
   it("posts image data URLs before text prompt", async () => {
     const imageBytes = Buffer.from([0x01, 0x02, 0x03]);
     const reference = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
+    urlToB64Mock.mockResolvedValue({ b64Json: imageBytes.toString("base64"), mimeType: "image/png" });
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(init?.method).toBe("POST");
       expect(url).toBe(
@@ -308,7 +308,7 @@ describe("wanAdapter.edit", () => {
   it("normalizes near-2K rounded dimensions instead of treating them as 4K", async () => {
     const imageBytes = Buffer.from([0x01, 0x02, 0x03]);
     const reference = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-    urlToB64Mock.mockResolvedValue(imageBytes.toString("base64"));
+    urlToB64Mock.mockResolvedValue({ b64Json: imageBytes.toString("base64"), mimeType: "image/png" });
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       expect(init?.method).toBe("POST");
       const body = JSON.parse(String(init.body));
@@ -322,11 +322,12 @@ describe("wanAdapter.edit", () => {
         model: "gpt-image-2",
         prompt: "保持构图，改成胶片质感",
         size: "3128x1341",
+        resolution: "2k",
         background: "auto",
         outputFormat: "png",
         extra: {},
         images: [{ blob: reference, name: "ref.png", mimeType: "image/png" }],
-        editExtra: { companion_resolution: "2k" },
+        editExtra: {},
       },
       PRO_CONFIG,
     );
@@ -359,11 +360,12 @@ describe("wanAdapter.edit", () => {
           model: "x",
           prompt: "x",
           size: "2048x2048",
+          resolution: "4k",
           background: "auto",
           outputFormat: "png",
           extra: {},
           images: [{ blob: Buffer.from([1]), name: "ref.png", mimeType: "image/png" }],
-          editExtra: { companion_resolution: "4k" },
+          editExtra: {},
         },
         PRO_CONFIG,
       ),

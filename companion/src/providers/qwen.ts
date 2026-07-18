@@ -108,7 +108,8 @@ export const qwenAdapter: ProviderAdapter = {
       response,
       "Qwen-Image 响应中没有 output.choices[0].message.content[].image",
     );
-    return { b64Json: await urlToB64(imageUrl) };
+    const { b64Json, mimeType } = await urlToB64(imageUrl);
+    return { b64Json, mimeType };
   },
 
   async edit(
@@ -160,7 +161,8 @@ export const qwenAdapter: ProviderAdapter = {
       response,
       "Qwen-Image 编辑响应中没有 output.choices[0].message.content[].image",
     );
-    return { b64Json: await urlToB64(imageUrl) };
+    const { b64Json, mimeType } = await urlToB64(imageUrl);
+    return { b64Json, mimeType };
   },
 };
 

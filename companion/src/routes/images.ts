@@ -14,11 +14,19 @@ type ImagesRoutesOptions = {
 };
 
 /** web 发的已知文本字段名（其余字段进 extra 透传）。 */
-const KNOWN_GENERATE_FIELDS = ["model", "prompt", "size", "background", "output_format"];
+const KNOWN_GENERATE_FIELDS = [
+  "model",
+  "prompt",
+  "size",
+  "companion_resolution",
+  "background",
+  "output_format",
+];
 const KNOWN_EDIT_FIELDS = [
   "model",
   "prompt",
   "size",
+  "companion_resolution",
   "background",
   "output_format",
 ];
@@ -55,7 +63,7 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
     }
 
     return reply.send({
-      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt }],
+      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt, mime_type: result.mimeType }],
     });
   });
 
@@ -111,7 +119,7 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
     }
 
     return reply.send({
-      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt }],
+      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt, mime_type: result.mimeType }],
     });
   });
 }
@@ -143,6 +151,7 @@ function toGenerateRequest(body: Record<string, unknown>): OpenAIImageRequest {
     model: String(body.model),
     prompt: String(body.prompt),
     size: String(body.size ?? "1024x1024"),
+    resolution: optionalString(body.companion_resolution),
     background: String(body.background ?? "auto"),
     outputFormat: String(body.output_format ?? "png"),
     extra,
@@ -165,6 +174,7 @@ function toEditRequest(parsed: {
     model: parsed.fields.model ?? "",
     prompt: parsed.fields.prompt ?? "",
     size: parsed.fields.size ?? "1024x1024",
+    resolution: optionalString(parsed.fields.companion_resolution),
     background: parsed.fields.background ?? "auto",
     outputFormat: parsed.fields.output_format ?? "png",
     extra: {},
@@ -172,6 +182,10 @@ function toEditRequest(parsed: {
     mask: parsed.mask,
     editExtra,
   };
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
 function errorMessage(error: unknown): string {
