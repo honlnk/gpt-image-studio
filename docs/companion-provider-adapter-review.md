@@ -285,6 +285,13 @@ type ProviderCapability = {
 
 模型相关能力继续使用动态方法返回，不要对同一 Provider 的所有模型声明同一组档位。
 
+> 取舍记录（2026-07-18）：不在 Companion 的全局 `securityConfig` 中设置统一的单图或
+> 总参考图字节上限。不同 Provider/模型的图片大小限制可能不同，当前 Web 侧的 20 MiB
+> 引用图限制也是 GPT-image-2 的既有规则，不能直接推广到所有模型。后续应把
+> `maxReferenceBytes` / `maxTotalReferenceBytes` 作为 Provider/模型能力的一部分，随
+> `ProviderEditConstraints` 和 `/auth/status` 回流；在此之前 Companion 只保留整体请求体
+> 的通用安全上限，不把 32 MiB/48 MiB 当作 Provider 能力。
+
 ### P3：凭据文件损坏被静默视为空配置
 
 `loadStore` 在 JSON 解析失败或结构不合法时直接返回空 Store。用户看到的现象会像是所有
@@ -326,6 +333,8 @@ Provider 配置突然消失，且缺少可诊断日志。
 2. 将 Gemini 等 Provider 改为模型动态能力。
 3. 未知 Provider 改为显式配置错误。
 4. 补充各 Provider 的端到端契约测试。
+
+其中“参考图大小”应按 Provider/模型分别配置，不能用一个全局字节数覆盖所有模型。
 
 ## 测试基线
 

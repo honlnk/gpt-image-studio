@@ -20,6 +20,8 @@
 import type { OpenAIImageResult } from "./types.js";
 import { sniffMimeTypeFromBase64 } from "./imageSignature.js";
 
+const DEBUG_REQUEST_LOGS = process.env.GPT_IMAGE_STUDIO_DEBUG_REQUESTS === "1";
+
 /** 上游连接被主动断开（fetch 抛异常）时的统一文案。 */
 export const UPSTREAM_DISCONNECT_MESSAGE =
   "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。";
@@ -78,6 +80,7 @@ export async function postJson(
   headers: Record<string, string>,
   body: unknown,
 ): Promise<Response> {
+  logSafeProviderRequest(url, body);
   try {
     return await fetch(url, {
       method: "POST",
@@ -87,6 +90,48 @@ export async function postJson(
   } catch {
     throw new Error(UPSTREAM_DISCONNECT_MESSAGE);
   }
+}
+
+/**
+ * 调试时只记录真正发给上游的尺寸相关字段，不记录 prompt、API key、图片或 base64。
+ * 通过 GPT_IMAGE_STUDIO_DEBUG_REQUESTS=1 显式开启，避免正常运行日志泄露请求细节。
+ */
+function logSafeProviderRequest(url: string, body: unknown): void {
+  if (!DEBUG_REQUEST_LOGS || !body || typeof body !== "object" || Array.isArray(body)) {
+    return;
+  }
+
+  const record = body as Record<string, unknown>;
+  const safe: Record<string, unknown> = { url };
+  for (const key of [
+    "model",
+    "size",
+    "width",
+    "height",
+    "resolution",
+    "image_size",
+    "aspect_ratio",
+    "background",
+    "output_format",
+    "response_format",
+  ]) {
+    const value = record[key];
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      safe[key] = value;
+    }
+  }
+
+  const imageConfig = (
+    (record.generationConfig as Record<string, unknown> | undefined)?.responseFormat as
+      | Record<string, unknown>
+      | undefined
+  )?.image as Record<string, unknown> | undefined;
+  if (imageConfig) {
+    if (typeof imageConfig.aspectRatio === "string") safe.aspect_ratio = imageConfig.aspectRatio;
+    if (typeof imageConfig.imageSize === "string") safe.image_size = imageConfig.imageSize;
+  }
+
+  console.info(`[companion debug] provider request ${JSON.stringify(safe)}`);
 }
 
 /**

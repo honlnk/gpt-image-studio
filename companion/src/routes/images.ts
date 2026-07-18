@@ -8,6 +8,7 @@ import type {
 } from "../providers/types.js";
 import { resolveAdapter } from "../providers/registry.js";
 import { extractBoundary, parseMultipart } from "../providers/multipart.js";
+import type { ParsedEditBody } from "../providers/multipart.js";
 
 type ImagesRoutesOptions = {
   security: CompanionSecurityConfig;
@@ -55,6 +56,15 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
     }
 
     const request = toGenerateRequest(body);
+    logNormalizedImageRequest(app, {
+      operation: "generate",
+      provider: adapter.id,
+      model: request.model,
+      size: request.size,
+      resolution: request.resolution,
+      background: request.background,
+      outputFormat: request.outputFormat,
+    });
     let result;
     try {
       result = await adapter.generate(request, config);
@@ -85,7 +95,17 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
     }
 
     const rawBody = req.body as Buffer;
-    const validationError = validateEditMultipart(rawBody, opts.security);
+    const boundary = extractBoundary(req.headers["content-type"]!);
+    if (!boundary) {
+      return reply.status(400).send({ error: "multipart 请求缺少 boundary" });
+    }
+    const parsed = parseMultipart(rawBody, boundary);
+    if ("message" in parsed) {
+      return reply.status(400).send({ error: parsed.message });
+    }
+
+    // 只对结构化解析结果做一次语义校验，确保校验对象与 Adapter 收到的数据完全一致。
+    const validationError = validateEditMultipart(parsed, opts.security);
     if (validationError) {
       return reply.status(400).send({ error: validationError });
     }
@@ -96,21 +116,21 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
       return reply.status(501).send({ error: "当前 provider 不支持图片编辑" });
     }
 
-    const boundary = extractBoundary(req.headers["content-type"]!);
-    if (!boundary) {
-      return reply.status(400).send({ error: "multipart 请求缺少 boundary" });
-    }
-    const parsed = parseMultipart(rawBody, boundary);
-    if ("message" in parsed) {
-      return reply.status(400).send({ error: parsed.message });
-    }
-
     // mask 能力校验：带 mask 但 provider 不支持 → 明确报错
     if (parsed.mask && !adapter.capability.mask) {
       return reply.status(400).send({ error: "当前 provider 不支持遮罩局部编辑" });
     }
 
     const editRequest = toEditRequest(parsed);
+    logNormalizedImageRequest(app, {
+      operation: "edit",
+      provider: adapter.id,
+      model: editRequest.model,
+      size: editRequest.size,
+      resolution: editRequest.resolution,
+      background: editRequest.background,
+      outputFormat: editRequest.outputFormat,
+    });
     let result;
     try {
       result = await adapter.edit(editRequest, config);
@@ -193,6 +213,34 @@ function errorMessage(error: unknown): string {
   return "未知错误";
 }
 
+function logNormalizedImageRequest(
+  app: FastifyInstance,
+  request: {
+    operation: "generate" | "edit";
+    provider: string;
+    model: string;
+    size: string;
+    resolution?: string;
+    background: string;
+    outputFormat: string;
+  },
+): void {
+  if (process.env.GPT_IMAGE_STUDIO_DEBUG_REQUESTS !== "1") return;
+  app.log.info(
+    {
+      event: "companion.image_request_normalized",
+      operation: request.operation,
+      provider: request.provider,
+      model: request.model,
+      size: request.size,
+      resolution: request.resolution,
+      background: request.background,
+      output_format: request.outputFormat,
+    },
+    "normalized image request",
+  );
+}
+
 function isJsonRequest(contentType: string | undefined): boolean {
   return contentType?.toLowerCase().split(";")[0]?.trim() === "application/json";
 }
@@ -217,28 +265,31 @@ function validateGenerationBody(body: Record<string, unknown>): string | null {
   return null;
 }
 
-export function validateEditMultipart(body: Buffer, security: CompanionSecurityConfig): string | null {
-  const text = body.toString("latin1");
-  const imagePartNames = [...text.matchAll(/name="image(?:\[\])?"/g)];
-  if (imagePartNames.length === 0) {
+export function validateEditMultipart(
+  parsed: ParsedEditBody,
+  security: CompanionSecurityConfig,
+): string | null {
+  if (parsed.images.length === 0) {
     return "编辑请求至少需要一张引用图片";
   }
-  if (imagePartNames.length > security.maxEditImages) {
+  if (parsed.images.length > security.maxEditImages) {
     return `编辑请求最多支持 ${security.maxEditImages} 张引用图片`;
   }
 
-  const partHeaders = text.match(/Content-Disposition:[\s\S]*?(?=\r\n\r\n)/g) ?? [];
-  for (const header of partHeaders) {
-    if (!/name="(?:image(?:\[\])?|mask)"/.test(header)) continue;
-    const mime = /Content-Type:\s*([^\r\n]+)/i.exec(header)?.[1]?.trim().toLowerCase();
-    if (!mime) {
+  const files = parsed.mask ? [...parsed.images, parsed.mask] : parsed.images;
+  for (const file of files) {
+    if (!file.mimeType) {
       return "图片 part 缺少 Content-Type";
     }
-    if (/name="mask"/.test(header) && mime !== "image/png") {
+    if (file.blob.length === 0) {
+      return "图片 part 不能为空";
+    }
+
+    if (file === parsed.mask && file.mimeType !== "image/png") {
       return "mask 必须是 image/png";
     }
-    if (/name="image(?:\[\])?"/.test(header) && !security.allowedEditImageMimeTypes.includes(mime)) {
-      return `不支持的图片类型：${mime}`;
+    if (file !== parsed.mask && !security.allowedEditImageMimeTypes.includes(file.mimeType)) {
+      return `不支持的图片类型：${file.mimeType}`;
     }
   }
 

@@ -5,7 +5,8 @@ import type { EditImage } from "./types.js";
  * 文本字段（model/prompt/size/background/output_format + stream/partial_images 等）
  * 全部进 fields；图片进 images[]；mask 单独。
  *
- * 这层只负责「把 multipart 拆开」，不做语义校验（校验在 validateEditMultipart）。
+ * 这层负责「把 multipart 拆开」以及识别文件字段的结构边界；
+ * 图片数量、大小和 MIME 等请求语义校验由 route 层在解析完成后统一执行。
  */
 export type ParsedEditBody = {
   images: EditImage[];
@@ -25,8 +26,8 @@ export type ParseMultipartError = { message: string };
  *   header 全是 ASCII，latin1 安全。
  * - part 正文用 Buffer.slice 保留原始字节（图片二进制不能转字符串）。
  *
- * 与 routes/images.ts 现有 validateEditMultipart 的 latin1 文本扫描思路一致，
- * 区别是这里要真正切出字节，不只是正则匹配 header。
+ * 文件字段只允许 image、image[] 和 mask。未知文件字段直接返回解析错误，
+ * 避免 route 层的校验口径与 Adapter 实际收到的数据不一致。
  */
 export function parseMultipart(
   raw: Buffer,
@@ -88,19 +89,30 @@ export function parseMultipart(
 
     const filenameMatch = /filename="([^"]*)"/.exec(disposition);
     const mimeMatch = /Content-Type:\s*([^\r\n]+)/i.exec(headerText);
-    const mimeType = mimeMatch?.[1]?.trim().toLowerCase() ?? "application/octet-stream";
+    const mimeType = mimeMatch?.[1]
+      ?.split(";", 1)[0]
+      ?.trim()
+      .toLowerCase() ?? "";
 
     if (filenameMatch) {
-      // 文件 part
+      // 文件 part。未知文件字段不能被当成引用图接收。
+      if (name !== "image" && name !== "image[]" && name !== "mask") {
+        return { message: `不支持的文件字段：${name}` };
+      }
+
       const image: EditImage = {
         blob: Buffer.from(body),
         name: filenameMatch[1],
-        mimeType,
+        // 缺失 Content-Type 时保留为空字符串，交给统一校验返回明确错误。
+        mimeType: mimeMatch ? mimeType : "",
       };
       if (name === "mask") {
+        if (mask) {
+          return { message: "mask 只能有一个" };
+        }
         mask = image;
       } else {
-        // image / image[] / 任意带 filename 的 part 都当图片收
+        // image / image[] 都是合法的引用图字段。
         images.push(image);
       }
     } else {
