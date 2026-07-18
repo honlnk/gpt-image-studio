@@ -2,18 +2,24 @@ import {
   buildDashScopeGenerationUrl,
   dataUrlFromImage,
   parseDashScopeResponse,
-} from "./dashscope.js";
+} from "../dashscope.js";
 import type {
   OpenAIImageEditRequest,
   OpenAIImageRequest,
   OpenAIImageResult,
   ProviderAdapter,
-  ProviderCapability,
   ProviderConfig,
-  ResolutionOption,
   SizeConstraints,
-} from "./types.js";
-import { urlToB64 } from "./urlToB64.js";
+} from "../types.js";
+import { urlToB64 } from "../urlToB64.js";
+import { getProviderProfile } from "../providerProfiles.js";
+import { postJson } from "../providerHttp.js";
+import { getDefaultModel } from "../../providerPresets.js";
+
+const WAN_PROFILE = getProviderProfile("wan")!;
+// Wan 的能力按 model 动态变化：标准模型 vs pro 模型。数据集中在配置表，
+// 这里取出 pro 变体供 getSizeConstraints/getResolutionOptions/generate 共用。
+const WAN_PRO_VARIANT = WAN_PROFILE.variants![0];
 
 /**
  * 通义万相 Wan 2.7 adapter。
@@ -24,79 +30,35 @@ import { urlToB64 } from "./urlToB64.js";
  * 本 adapter 选用 wan2.7-image 作为默认模型。若用户在 login 时选择
  * wan2.7-image-pro，/auth/status 会回流 pro 的文生图 4K 能力；
  * 但图像编辑仍按官方限制最高 2K，超过 2K 时直接报错提醒。
- */
-
-/**
- * Wan 2.7 官方尺寸规则（wan2.7-image）：
- * - size 支持 1K/2K 或 `宽*高`
- * - 所有场景总像素需在 768*768 至 2048*2048 之间
- * - 宽高比范围为 1:8 至 8:1
- * - 默认分辨率为 2K（2048*2048）
  *
- * SizeConstraints 需要单边 min/max 供 Web 通用校验逻辑使用。官方规则是
- * 总像素 + 宽高比，这里的单边 min/max 是由 768*768 / 2048*2048 推导出的
- * 保守 UI 边界。
+ * 能力数据（静态 + pro 变体）见 providerProfiles.ts 的 wan 条目。
  */
-const STANDARD_SIZE_CONSTRAINTS: SizeConstraints = {
-  step: 1,
-  min: 768,
-  max: Math.floor((2048 * 2048) / 768),
-  maxPixels: 2048 * 2048,
-  minPixels: 768 * 768,
-  maxAspectRatio: 8,
-  defaultSize: "2048x2048",
-};
 
-const PRO_TEXT_SIZE_CONSTRAINTS: SizeConstraints = {
-  step: 1,
-  min: 768,
-  max: Math.floor((4096 * 4096) / 768),
-  maxPixels: 4096 * 4096,
-  minPixels: 768 * 768,
-  maxAspectRatio: 8,
-  defaultSize: "2048x2048",
-};
+/** Wan 标准模型 size 约束（从配置表读，normalizeWanSize 默认参数和 generate 共用）。 */
+const STANDARD_SIZE_CONSTRAINTS: SizeConstraints = WAN_PROFILE.sizeConstraints;
 
-const CAPABILITY: ProviderCapability = {
-  generate: true,
-  edit: true,
-  mask: false,
-  backgrounds: ["auto"],
-  outputFormats: ["png"],
-};
-
-const STANDARD_RESOLUTION_OPTIONS: readonly ResolutionOption[] = [
-  { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
-  { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
-];
-
-const PRO_TEXT_RESOLUTION_OPTIONS: readonly ResolutionOption[] = [
-  ...STANDARD_RESOLUTION_OPTIONS,
-  { value: "4k", label: "4K", targetPixels: 4096 * 2304 },
-];
-
-const DEFAULT_WAN_MODEL = "wan2.7-image";
-const PRO_WAN_MODEL = "wan2.7-image-pro";
-const MAX_EDIT_IMAGES = 9;
+const DEFAULT_MODEL = getDefaultModel("wan")!;
+const EDIT_CONSTRAINTS = WAN_PROFILE.editConstraints;
+const MAX_EDIT_IMAGES = EDIT_CONSTRAINTS?.maxImages;
 
 export const wanAdapter: ProviderAdapter = {
   id: "wan",
-  capability: CAPABILITY,
-  sizeConstraints: STANDARD_SIZE_CONSTRAINTS,
-  resolutionOptions: STANDARD_RESOLUTION_OPTIONS,
+  capability: WAN_PROFILE.capability,
+  sizeConstraints: WAN_PROFILE.sizeConstraints,
+  resolutionOptions: WAN_PROFILE.resolutionOptions,
 
   getSizeConstraints(config: ProviderConfig) {
-    return isWanProModel(config.model) ? PRO_TEXT_SIZE_CONSTRAINTS : STANDARD_SIZE_CONSTRAINTS;
+    return isWanProModel(config.model) ? WAN_PRO_VARIANT.sizeConstraints : WAN_PROFILE.sizeConstraints;
   },
 
   getResolutionOptions(config: ProviderConfig) {
     return isWanProModel(config.model)
-      ? PRO_TEXT_RESOLUTION_OPTIONS
-      : STANDARD_RESOLUTION_OPTIONS;
+      ? WAN_PRO_VARIANT.resolutionOptions
+      : WAN_PROFILE.resolutionOptions;
   },
 
   describe(config: ProviderConfig) {
-    return { label: config.model ?? DEFAULT_WAN_MODEL, providerId: "wan" };
+    return { label: config.model ?? DEFAULT_MODEL, providerId: "wan" };
   },
 
   async generate(
@@ -104,41 +66,33 @@ export const wanAdapter: ProviderAdapter = {
     config: ProviderConfig,
   ): Promise<OpenAIImageResult> {
     const apiUrl = buildDashScopeGenerationUrl(config.apiBaseUrl);
-    const model = config.model ?? DEFAULT_WAN_MODEL;
+    const model = config.model ?? DEFAULT_MODEL;
     const size = normalizeWanSize(
       request.size,
-      isWanProModel(model) ? PRO_TEXT_SIZE_CONSTRAINTS : STANDARD_SIZE_CONSTRAINTS,
+      isWanProModel(model) ? WAN_PRO_VARIANT.sizeConstraints : STANDARD_SIZE_CONSTRAINTS,
     );
 
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          "Content-Type": "application/json",
+    const response = await postJson(
+      apiUrl,
+      { Authorization: `Bearer ${config.apiKey}` },
+      {
+        model,
+        input: {
+          messages: [
+            {
+              role: "user",
+              content: [{ text: request.prompt }],
+            },
+          ],
         },
-        body: JSON.stringify({
-          model,
-          input: {
-            messages: [
-              {
-                role: "user",
-                content: [{ text: request.prompt }],
-              },
-            ],
-          },
-          parameters: {
-            size,
-            n: 1,
-            watermark: false,
-            thinking_mode: true,
-          },
-        }),
-      });
-    } catch {
-      throw new Error(UPSTREAM_DISCONNECT_MESSAGE);
-    }
+        parameters: {
+          size,
+          n: 1,
+          watermark: false,
+          thinking_mode: true,
+        },
+      },
+    );
 
     const imageUrl = await parseDashScopeResponse(
       response,
@@ -155,50 +109,46 @@ export const wanAdapter: ProviderAdapter = {
     if (request.images.length === 0) {
       throw new Error("Wan 图像编辑需要至少一张参考图。");
     }
-    if (request.images.length > MAX_EDIT_IMAGES) {
+    if (MAX_EDIT_IMAGES !== undefined && request.images.length > MAX_EDIT_IMAGES) {
       throw new Error(`Wan 图像编辑最多支持 ${MAX_EDIT_IMAGES} 张参考图。`);
     }
-    if (isExplicitWanEdit4K(request)) {
-      throw new Error("Wan 图像编辑不支持 4K 分辨率，请切换到 2K 或更低后重试。");
+    const unsupportedResolution = getUnsupportedWanEditResolution(request);
+    if (unsupportedResolution) {
+      const maxResolution = getMaxEditResolutionLabel();
+      throw new Error(
+        `Wan 图像编辑不支持 ${unsupportedResolution} 分辨率，请切换到 ${maxResolution} 或更低后重试。`,
+      );
     }
 
     const apiUrl = buildDashScopeGenerationUrl(config.apiBaseUrl);
-    const model = config.model ?? DEFAULT_WAN_MODEL;
+    const model = config.model ?? DEFAULT_MODEL;
     const size = normalizeWanSize(request.size, STANDARD_SIZE_CONSTRAINTS);
 
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          "Content-Type": "application/json",
+    const response = await postJson(
+      apiUrl,
+      { Authorization: `Bearer ${config.apiKey}` },
+      {
+        model,
+        input: {
+          messages: [
+            {
+              role: "user",
+              content: [
+                ...request.images.map((image) => ({
+                  image: dataUrlFromImage(image),
+                })),
+                { text: request.prompt },
+              ],
+            },
+          ],
         },
-        body: JSON.stringify({
-          model,
-          input: {
-            messages: [
-              {
-                role: "user",
-                content: [
-                  ...request.images.map((image) => ({
-                    image: dataUrlFromImage(image),
-                  })),
-                  { text: request.prompt },
-                ],
-              },
-            ],
-          },
-          parameters: {
-            size,
-            n: 1,
-            watermark: false,
-          },
-        }),
-      });
-    } catch {
-      throw new Error(UPSTREAM_DISCONNECT_MESSAGE);
-    }
+        parameters: {
+          size,
+          n: 1,
+          watermark: false,
+        },
+      },
+    );
 
     const imageUrl = await parseDashScopeResponse(
       response,
@@ -208,9 +158,6 @@ export const wanAdapter: ProviderAdapter = {
     return { b64Json, mimeType };
   },
 };
-
-const UPSTREAM_DISCONNECT_MESSAGE =
-  "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。";
 
 /**
  * 把 OpenAI 形状的 size 规整成 DashScope Wan 接口使用的 `宽*高`。
@@ -310,22 +257,62 @@ function toDashScopeSize(size: string): string {
 }
 
 function isWanProModel(model?: string): boolean {
-  return model === PRO_WAN_MODEL;
+  return model === WAN_PRO_VARIANT.modelId;
 }
 
-function isExplicitWanEdit4K(request: OpenAIImageEditRequest): boolean {
-  if (request.resolution?.trim().toLowerCase() === "4k") return true;
-  return isClearly4KSize(request.size);
+function getUnsupportedWanEditResolution(
+  request: OpenAIImageEditRequest,
+): string | null {
+  const editOptions = EDIT_CONSTRAINTS?.resolutionOptions;
+  if (!editOptions) return null;
+
+  const normalizedResolution = request.resolution?.trim().toLowerCase();
+  if (normalizedResolution) {
+    const knownOption = getKnownWanResolutionOptions().find(
+      (option) => option.value.toLowerCase() === normalizedResolution,
+    );
+    if (
+      knownOption &&
+      !editOptions.some(
+        (option) => option.value.toLowerCase() === normalizedResolution,
+      )
+    ) {
+      return knownOption.label;
+    }
+  }
+
+  return isClearlyBeyondEditSize(request.size)
+    ? getLargestWanResolutionLabel()
+    : null;
 }
 
-function isClearly4KSize(size: string): boolean {
+function isClearlyBeyondEditSize(size: string): boolean {
   const trimmed = size.trim().toLowerCase();
-  if (trimmed === "4k") return true;
   const match = /^(\d+)\s*[x×*]\s*(\d+)$/i.exec(trimmed);
   if (!match) return false;
-  // Web 端比例计算和上游返回尺寸可能产生几个像素的 2K 取整误差。
-  // 只有明显超过 2K 时才视为 4K 意图；其余具体尺寸交给 normalizeWanSize 规整。
-  return Number(match[1]) * Number(match[2]) > STANDARD_SIZE_CONSTRAINTS.maxPixels * 1.05;
+  const maxEditPixels = Math.max(
+    ...(EDIT_CONSTRAINTS?.resolutionOptions?.map((option) => option.targetPixels) ?? [
+      STANDARD_SIZE_CONSTRAINTS.maxPixels,
+    ]),
+  );
+  // Web 端比例计算和上游返回尺寸可能产生几个像素的取整误差。
+  // 只有明显超过编辑档位上限时才拒绝，其余具体尺寸交给 normalizeWanSize 规整。
+  return Number(match[1]) * Number(match[2]) > maxEditPixels * 1.05;
+}
+
+function getKnownWanResolutionOptions() {
+  const options = [...WAN_PROFILE.resolutionOptions, ...WAN_PRO_VARIANT.resolutionOptions];
+  return options.filter(
+    (option, index) => options.findIndex((candidate) => candidate.value === option.value) === index,
+  );
+}
+
+function getLargestWanResolutionLabel(): string {
+  return getKnownWanResolutionOptions().at(-1)?.label ?? "更低";
+}
+
+function getMaxEditResolutionLabel(): string {
+  return EDIT_CONSTRAINTS?.resolutionOptions?.at(-1)?.label ?? "更低";
 }
 
 function alignToStep(value: number, constraints: SizeConstraints): number {

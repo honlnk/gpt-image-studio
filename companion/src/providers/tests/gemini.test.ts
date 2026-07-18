@@ -4,8 +4,8 @@ import {
   buildGeminiRequestBody,
   geminiAdapter,
   normalizeGeminiBaseUrl,
-} from "./gemini.js";
-import type { OpenAIImageEditRequest, OpenAIImageRequest, ProviderConfig } from "./types.js";
+} from "../adapters/gemini.js";
+import type { OpenAIImageEditRequest, OpenAIImageRequest, ProviderConfig } from "../types.js";
 
 const CONFIG: ProviderConfig = {
   provider: "gemini",
@@ -124,6 +124,12 @@ describe("buildGeminiRequestBody (generate)", () => {
     const body = buildGeminiRequestBody("test", "1:1", "2k");
     const imageConfig = (body.generationConfig as { responseFormat: { image: { imageSize: string } } }).responseFormat.image;
     expect(imageConfig.imageSize).toBe("2K");
+  });
+
+  it("passes 512 imageSize through unchanged (512 → 512)", () => {
+    const body = buildGeminiRequestBody("test", "1:1", "512");
+    const imageConfig = (body.generationConfig as { responseFormat: { image: { imageSize: string } } }).responseFormat.image;
+    expect(imageConfig.imageSize).toBe("512");
   });
 
   it("omits responseFormat when no aspectRatio and no resolution", () => {
@@ -349,8 +355,9 @@ describe("geminiAdapter static metadata", () => {
     });
   });
 
-  it("declares resolution options [1k, 2k, 4k]", () => {
+  it("declares resolution options [512, 1k, 2k, 4k]", () => {
     expect(geminiAdapter.resolutionOptions.map((o) => o.value)).toEqual([
+      "512",
       "1k",
       "2k",
       "4k",

@@ -1,7 +1,12 @@
 /**
  * DashScope multimodal-generation helpers shared by Alibaba-family providers
  * such as Qwen-Image and Wan.
+ *
+ * 通用工具（safeJsonParse / extractErrorMessage）复用 providerHttp.ts，
+ * 这里只保留 DashScope 形状特有的 output.choices[].message.content[].image 提取逻辑。
  */
+
+import { extractErrorMessage, safeJsonParse } from "./providerHttp.js";
 
 export type DashScopeContentItem = {
   text?: string;
@@ -24,16 +29,16 @@ export async function parseDashScopeResponse(
   missingImageMessage: string,
 ): Promise<string> {
   const text = await response.text();
-  const payload = text ? safeJsonParse(text) : null;
+  const payload = safeJsonParse(text);
 
   if (!response.ok) {
-    const detail = extractDashScopeErrorMessage(payload);
+    const detail = extractErrorMessage(payload);
     throw new Error(detail ?? `请求失败：HTTP ${response.status}`);
   }
 
   const imageUrl = extractDashScopeImageUrl(payload);
   if (!imageUrl) {
-    throw new Error(extractDashScopeErrorMessage(payload) ?? missingImageMessage);
+    throw new Error(extractErrorMessage(payload) ?? missingImageMessage);
   }
   return imageUrl;
 }
@@ -48,24 +53,4 @@ export function extractDashScopeImageUrl(payload: DashScopePayload | null): stri
     }
   }
   return null;
-}
-
-export function extractDashScopeErrorMessage(payload: DashScopePayload | null): string | null {
-  if (!payload) return null;
-  if (typeof payload.message === "string") return payload.message;
-  if (typeof payload.code === "string" && typeof payload.message === "string") {
-    return `${payload.code}: ${payload.message}`;
-  }
-  const err = payload.error;
-  if (typeof err === "string") return err;
-  if (err && typeof err.message === "string") return err.message;
-  return null;
-}
-
-function safeJsonParse(text: string): DashScopePayload | null {
-  try {
-    return JSON.parse(text) as DashScopePayload;
-  } catch {
-    return null;
-  }
 }

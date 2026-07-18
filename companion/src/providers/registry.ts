@@ -1,11 +1,11 @@
 import type { ProviderAdapter, ProviderConfig } from "./types.js";
-import { openaiAdapter } from "./openai.js";
-import { glmAdapter } from "./glm.js";
-import { doubaoAdapter } from "./doubao.js";
-import { qwenAdapter } from "./qwen.js";
-import { wanAdapter } from "./wan.js";
-import { grokAdapter } from "./grok.js";
-import { geminiAdapter } from "./gemini.js";
+import { openaiAdapter } from "./adapters/openai.js";
+import { glmAdapter } from "./adapters/glm.js";
+import { doubaoAdapter } from "./adapters/doubao.js";
+import { grokAdapter } from "./adapters/grok.js";
+import { qwenAdapter } from "./adapters/qwen.js";
+import { wanAdapter } from "./adapters/wan.js";
+import { geminiAdapter } from "./adapters/gemini.js";
 
 /**
  * 已注册的 adapter 表。key = provider id（与 credentials.json 的 provider 字段对齐）。

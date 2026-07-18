@@ -1,0 +1,29 @@
+{
+  "preset": {
+    "label": "OpenAI 兼容（gpt-image-2 / 中转站）",
+    "defaultBaseUrl": "https://api.packyapi.com/v1/images",
+    "defaultModel": "gpt-image-2",
+    "order": 10
+  },
+  "capability": {
+    "generate": true,
+    "edit": true,
+    "mask": true,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "webp", "jpeg"]
+  },
+  "sizeConstraints": {
+    "step": 16,
+    "min": 16,
+    "max": 3840,
+    "maxPixels": 8294400,
+    "minPixels": 655360,
+    "maxAspectRatio": 3,
+    "defaultSize": "1024x1024"
+  },
+  "resolutionOptions": [
+    { "value": "1k", "label": "1K", "targetPixels": 1048576 },
+    { "value": "2k", "label": "2K", "targetPixels": 4194304 },
+    { "value": "4k", "label": "4K", "targetPixels": 8294400 }
+  ]
+}

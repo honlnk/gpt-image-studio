@@ -1,0 +1,29 @@
+{
+  "preset": {
+    "label": "豆包 Seedream（火山方舟 ByteDance）",
+    "defaultBaseUrl": "https://ark.cn-beijing.volces.com/api/v3/images",
+    "defaultModel": "doubao-seedream-5-0-pro-260628",
+    "order": 30
+  },
+  "capability": {
+    "generate": true,
+    "edit": true,
+    "mask": false,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "jpeg"]
+  },
+  "sizeConstraints": {
+    "step": 1,
+    "min": 512,
+    "max": 4096,
+    "maxPixels": 16777216,
+    "minPixels": 3686400,
+    "maxAspectRatio": 16,
+    "defaultSize": "2048x2048"
+  },
+  "resolutionOptions": [
+    { "value": "2k", "label": "2K", "targetPixels": 4194304 },
+    { "value": "3k", "label": "3K", "targetPixels": 4665600 },
+    { "value": "4k", "label": "4K", "targetPixels": 8847360 }
+  ]
+}

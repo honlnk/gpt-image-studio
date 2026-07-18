@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractBoundary, parseMultipart } from "./multipart.js";
+import { extractBoundary, parseMultipart } from "../multipart.js";
 
 /** 构造一个真实的 multipart/form-data Buffer，模拟 web 发出的编辑请求。 */
 function buildMultipart(parts: Array<{

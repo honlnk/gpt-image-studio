@@ -4,12 +4,12 @@ import {
   buildGrokGenerateBody,
   grokAdapter,
   normalizeGrokBaseUrl,
-} from "./grok.js";
+} from "../adapters/grok.js";
 import type {
   OpenAIImageEditRequest,
   OpenAIImageRequest,
   ProviderConfig,
-} from "./types.js";
+} from "../types.js";
 
 const CONFIG: ProviderConfig = {
   provider: "grok",

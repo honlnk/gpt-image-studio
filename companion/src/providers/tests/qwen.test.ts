@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-vi.mock("./urlToB64.js", () => ({ urlToB64: vi.fn() }));
+vi.mock("../urlToB64.js", () => ({ urlToB64: vi.fn() }));
 
-import { normalizeQwenSize, qwenAdapter } from "./qwen.js";
-import { urlToB64 } from "./urlToB64.js";
-import type { ProviderConfig, SizeConstraints } from "./types.js";
+import { normalizeQwenSize, qwenAdapter } from "../adapters/qwen.js";
+import { urlToB64 } from "../urlToB64.js";
+import type { ProviderConfig, SizeConstraints } from "../types.js";
 
 const urlToB64Mock = vi.mocked(urlToB64);
 

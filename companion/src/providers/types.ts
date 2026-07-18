@@ -77,6 +77,37 @@ export type ResolutionOption = {
 };
 
 /**
+ * adapter 翻译专用的私有配置，不回流 web。
+ *
+ * 与 resolutionOptions/sizeConstraints 的区别：那两个字段会通过 /auth/status 回流给 web
+ * 供 UI 渲染；本字段只被 companion 内部的 adapter 读取，用于协议翻译。物理隔离确保
+ * 翻译细节不泄漏到 web 端。
+ *
+ * 各字段全部可选，provider 按自己的协议差异按需声明。OpenAI 兼容家族（用 WxH 像素）
+ * 通常不需要此字段；Gemini/Grok 这类用枚举值传 size/resolution 的才需要。
+ */
+export type ProviderAdapterConfig = {
+  /**
+   * 该 provider 官方支持的 aspect_ratio 枚举（如 Gemini/Grok）。
+   * adapter 据此判断 web 发来的比例是否合法——在枚举内则传给上游，否则不传（让上游自选）。
+   * 未声明时 adapter 自行处理（如 WxH 家族不认 aspect_ratio，无需此字段）。
+   */
+  supportedAspectRatios?: readonly string[];
+  /**
+   * 分辨率档位到上游实际值的映射。
+   * key = web 档位 value（如 "1k"），val = 发给上游的值（如 Gemini 的 "1K"）。
+   * 未声明时 adapter 直接用 web 档位 value 透传。
+   */
+  resolutionMap?: Readonly<Record<string, string>>;
+  /**
+   * 该 provider 官方支持的 resolution 枚举白名单（如 Grok 只有 1k/2k）。
+   * 与 resolutionMap 互斥：resolutionMap 带"值映射"，这里只带"合法性校验"。
+   * web 发来的档位若不在此列则不传给上游。
+   */
+  supportedResolutions?: readonly string[];
+};
+
+/**
  * OpenAI 形状的文生图请求。adapter.generate 的入参。
  * 来自 web 的请求体（route 层已做 HTTP 边界校验）。
  *

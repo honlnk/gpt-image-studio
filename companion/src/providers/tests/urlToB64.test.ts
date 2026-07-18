@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   ImageDownloadResponse,
   ImageRequest,
-} from "./urlToB64.js";
-import { urlToB64 } from "./urlToB64.js";
+} from "../urlToB64.js";
+import { urlToB64 } from "../urlToB64.js";
 
 const PNG = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01,

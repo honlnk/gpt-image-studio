@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { doubaoAdapter, normalizeDoubaoSize } from "./doubao.js";
-import type { ProviderConfig, SizeConstraints } from "./types.js";
+import { doubaoAdapter, normalizeDoubaoSize } from "../adapters/doubao.js";
+import type { ProviderConfig, SizeConstraints } from "../types.js";
 
 const CONSTRAINTS: SizeConstraints = {
   step: 1,

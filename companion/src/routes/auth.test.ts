@@ -334,8 +334,9 @@ describe("/auth/status provider info backflow", () => {
       backgrounds: ["auto", "opaque"],
       outputFormats: ["png", "jpeg", "webp"],
     });
-    // Gemini 档位：[1k, 2k, 4k]（Gemini 3 系列）
+    // Gemini 档位：[512, 1k, 2k, 4k]
     expect(body.resolutionOptions.map((o: { value: string }) => o.value)).toEqual([
+      "512",
       "1k",
       "2k",
       "4k",

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
-import { openaiAdapter } from "./openai.js";
-import type { ProviderConfig } from "./types.js";
+import { openaiAdapter } from "../adapters/openai.js";
+import type { ProviderConfig } from "../types.js";
 
 const CONFIG: ProviderConfig = {
   provider: "openai",

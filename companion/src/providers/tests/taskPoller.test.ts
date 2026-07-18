@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runAsyncTask } from "./taskPoller.js";
+import { runAsyncTask } from "../taskPoller.js";
 
 function makeResult() {
   return { b64Json: "Z29vZC1pbWFnZQ==", revisedPrompt: undefined };

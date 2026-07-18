@@ -1,0 +1,54 @@
+{
+  "preset": {
+    "label": "通义万相 Wan（阿里云百炼 DashScope）",
+    "defaultBaseUrl": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+    "defaultModel": "wan2.7-image",
+    "order": 50
+  },
+  "capability": {
+    "generate": true,
+    "edit": true,
+    "mask": false,
+    "backgrounds": ["auto"],
+    "outputFormats": ["png"]
+  },
+  "sizeConstraints": {
+    "step": 1,
+    "min": 768,
+    "max": 5461,
+    "maxPixels": 4194304,
+    "minPixels": 589824,
+    "maxAspectRatio": 8,
+    "defaultSize": "2048x2048"
+  },
+  "resolutionOptions": [
+    { "value": "1k", "label": "1K", "targetPixels": 1048576 },
+    { "value": "2k", "label": "2K", "targetPixels": 4194304 }
+  ],
+  "editConstraints": {
+    "maxImages": 9,
+    "resolutionOptions": [
+      { "value": "1k", "label": "1K", "targetPixels": 1048576 },
+      { "value": "2k", "label": "2K", "targetPixels": 4194304 }
+    ]
+  },
+  "variants": [
+    {
+      "modelId": "wan2.7-image-pro",
+      "sizeConstraints": {
+        "step": 1,
+        "min": 768,
+        "max": 21845,
+        "maxPixels": 16777216,
+        "minPixels": 589824,
+        "maxAspectRatio": 8,
+        "defaultSize": "2048x2048"
+      },
+      "resolutionOptions": [
+        { "value": "1k", "label": "1K", "targetPixels": 1048576 },
+        { "value": "2k", "label": "2K", "targetPixels": 4194304 },
+        { "value": "4k", "label": "4K", "targetPixels": 9437184 }
+      ]
+    }
+  ]
+}

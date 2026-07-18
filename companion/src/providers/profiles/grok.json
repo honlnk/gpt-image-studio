@@ -1,0 +1,35 @@
+{
+  "preset": {
+    "label": "Grok Imagine（xAI）",
+    "defaultBaseUrl": "https://api.x.ai/v1/images",
+    "defaultModel": "grok-imagine-image",
+    "order": 60
+  },
+  "capability": {
+    "generate": true,
+    "edit": true,
+    "mask": false,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "jpeg", "webp"]
+  },
+  "sizeConstraints": {
+    "step": 1,
+    "min": 512,
+    "max": 4096,
+    "maxPixels": 16777216,
+    "minPixels": 0,
+    "maxAspectRatio": null,
+    "defaultSize": "1024x1024"
+  },
+  "resolutionOptions": [
+    { "value": "1k", "label": "1K", "targetPixels": 1048576 },
+    { "value": "2k", "label": "2K", "targetPixels": 4194304 }
+  ],
+  "adapterConfig": {
+    "supportedAspectRatios": [
+      "1:1", "3:4", "4:3", "9:16", "16:9", "2:3", "3:2",
+      "9:19.5", "19.5:9", "9:20", "20:9", "1:2", "2:1"
+    ],
+    "supportedResolutions": ["1k", "2k"]
+  }
+}

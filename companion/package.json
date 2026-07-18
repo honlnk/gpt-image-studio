@@ -30,7 +30,7 @@
   "scripts": {
     "dev": "tsx src/main.ts serve --channel dev",
     "prepack": "pnpm build",
-    "build": "tsc",
+    "build": "tsc && cp -r src/providers/profiles dist/providers/profiles",
     "serve": "node dist/main.js serve",
     "serve:dev": "node dist/main.js serve --channel dev",
     "start": "node dist/main.js start",

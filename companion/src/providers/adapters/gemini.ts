@@ -3,11 +3,18 @@ import type {
   OpenAIImageRequest,
   OpenAIImageResult,
   ProviderAdapter,
-  ProviderCapability,
   ProviderConfig,
-  ResolutionOption,
-  SizeConstraints,
-} from "./types.js";
+} from "../types.js";
+import { getProviderProfile } from "../providerProfiles.js";
+import {
+  extractErrorMessage,
+  postJson,
+  safeJsonParse,
+} from "../providerHttp.js";
+import { getDefaultModel } from "../../providerPresets.js";
+
+const GEMINI_PROFILE = getProviderProfile("gemini")!;
+const DEFAULT_MODEL = getDefaultModel("gemini")!;
 
 /**
  * Gemini Image（Google）adapter。
@@ -34,96 +41,31 @@ import type {
  *
  * Gemini 不支持 mask 局部重绘（capability.mask=false），带 mask 的请求由 route 层返回 400。
  *
- * 协议来源：Google 官方文档 ai.google.dev/gemini-api/docs/generate-content/image-generation
- * 的 REST curl 示例（generateContent 版本，非 Interactions API）。
+ * 能力数据（capability / sizeConstraints / resolutionOptions）见
+ * providerProfiles.ts 的 gemini 条目。协议来源：Google 官方文档
+ * ai.google.dev/gemini-api/docs/generate-content/image-generation。
  */
-
-/** Gemini 的尺寸边界（单边像素，仅作 web UI 校验用）。实际尺寸由 aspectRatio + imageSize 决定。 */
-const SIZE_CONSTRAINTS: SizeConstraints = {
-  step: 1,
-  min: 512,
-  max: 4096,
-  maxPixels: 4096 * 4096,
-  minPixels: 0,
-  maxAspectRatio: null, // Gemini 用 aspectRatio 枚举约束
-  defaultSize: "1024x1024",
-};
 
 /**
- * Gemini 能力声明。
- * - edit=true：generateContent 支持 inline_data 输入做图生图/多图融合。
- * - mask=false：Gemini 无 mask 局部重绘概念。
- * - backgrounds 去 transparent：Gemini 图片生成不支持透明背景。
+ * Gemini 官方支持的 aspectRatio / imageSize 枚举见 profiles/gemini.json 的
+ * adapterConfig（supportedAspectRatios + resolutionMap），本文件只放翻译算法。
  */
-const CAPABILITY: ProviderCapability = {
-  generate: true,
-  edit: true,
-  mask: false,
-  backgrounds: ["auto", "opaque"],
-  outputFormats: ["png", "jpeg", "webp"],
-};
-
-/**
- * Gemini 支持的分辨率档位。
- * Gemini 3 系列支持 1K/2K/4K；512(0.5K) 仅 Gemini 3.1 Flash Image 支持，不在此声明。
- */
-const RESOLUTION_OPTIONS: readonly ResolutionOption[] = [
-  { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
-  { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
-  { value: "4k", label: "4K", targetPixels: 4096 * 4096 },
-];
-
-/**
- * Gemini 官方支持的 aspectRatio 枚举（来自 generate-content/image-generation 文档）。
- * web 发来的比例若不在此列则不传 aspectRatio，让 Gemini 用默认（1:1 或匹配输入图）。
- */
-const SUPPORTED_ASPECT_RATIOS = new Set([
-  "1:1",
-  "1:4",
-  "1:8",
-  "2:3",
-  "3:2",
-  "3:4",
-  "4:1",
-  "4:3",
-  "4:5",
-  "5:4",
-  "8:1",
-  "9:16",
-  "16:9",
-  "21:9",
-]);
-
-/**
- * Gemini 支持的 imageSize 枚举（小写输入 → 大写输出）。
- * 映射：web 的 "1k"/"2k"/"4k" → Gemini 的 "1K"/"2K"/"4K"。
- */
-const RESOLUTION_TO_IMAGE_SIZE: Record<string, string> = {
-  "1k": "1K",
-  "2k": "2K",
-  "4k": "4K",
-};
-
-/** Gemini 默认 base url（Google Generative Language API）。login 时可被覆盖。 */
-const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
-/** Gemini 默认 model。login 时可填自定义（如 gemini-3.1-flash-image）。 */
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-image";
 
 export const geminiAdapter: ProviderAdapter = {
   id: "gemini",
-  capability: CAPABILITY,
-  sizeConstraints: SIZE_CONSTRAINTS,
-  resolutionOptions: RESOLUTION_OPTIONS,
+  capability: GEMINI_PROFILE.capability,
+  sizeConstraints: GEMINI_PROFILE.sizeConstraints,
+  resolutionOptions: GEMINI_PROFILE.resolutionOptions,
 
   describe(config: ProviderConfig) {
-    return { label: config.model ?? DEFAULT_GEMINI_MODEL, providerId: "gemini" };
+    return { label: config.model ?? DEFAULT_MODEL, providerId: "gemini" };
   },
 
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,
   ): Promise<OpenAIImageResult> {
-    const model = config.model ?? DEFAULT_GEMINI_MODEL;
+    const model = config.model ?? DEFAULT_MODEL;
     const apiUrl = buildGeminiGenerateContentUrl(config.apiBaseUrl, model);
     const body = buildGeminiRequestBody(
       request.prompt,
@@ -132,19 +74,11 @@ export const geminiAdapter: ProviderAdapter = {
       /* images */ undefined,
     );
 
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "x-goog-api-key": config.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      throw new Error(UPSTREAM_DISCONNECT_MESSAGE);
-    }
+    const response = await postJson(
+      apiUrl,
+      { "x-goog-api-key": config.apiKey },
+      body,
+    );
 
     return parseGeminiResponse(response);
   },
@@ -157,7 +91,7 @@ export const geminiAdapter: ProviderAdapter = {
       throw new Error("Gemini 图片编辑需要至少一张参考图。");
     }
 
-    const model = config.model ?? DEFAULT_GEMINI_MODEL;
+    const model = config.model ?? DEFAULT_MODEL;
     const apiUrl = buildGeminiGenerateContentUrl(config.apiBaseUrl, model);
     const body = buildGeminiRequestBody(
       request.prompt,
@@ -166,26 +100,15 @@ export const geminiAdapter: ProviderAdapter = {
       request.images,
     );
 
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "x-goog-api-key": config.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      throw new Error(UPSTREAM_DISCONNECT_MESSAGE);
-    }
+    const response = await postJson(
+      apiUrl,
+      { "x-goog-api-key": config.apiKey },
+      body,
+    );
 
     return parseGeminiResponse(response);
   },
 };
-
-const UPSTREAM_DISCONNECT_MESSAGE =
-  "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。";
 
 /**
  * 构建 Gemini generateContent 请求体。
@@ -248,11 +171,13 @@ export function buildGeminiRequestBody(
  * 从 web 发来的 size 字段读取 aspectRatio。
  * - 比例格式（"16:9"）且在 Gemini 支持枚举内 → 返回该值。
  * - WxH / auto / 不支持的值 → 返回 null（让 Gemini 用默认或匹配输入图）。
+ * 枚举集来自 profiles/gemini.json 的 adapterConfig.supportedAspectRatios。
  */
 function readAspectRatio(size: string): string | null {
   const trimmed = size.trim();
   if (trimmed === "auto" || trimmed === "") return null;
-  if (trimmed.includes(":") && SUPPORTED_ASPECT_RATIOS.has(trimmed)) {
+  const supported = GEMINI_PROFILE.adapterConfig?.supportedAspectRatios;
+  if (supported && trimmed.includes(":") && supported.includes(trimmed)) {
     return trimmed;
   }
   return null;
@@ -260,12 +185,12 @@ function readAspectRatio(size: string): string | null {
 
 /**
  * 从 request.resolution 读档位，转成 Gemini 的 imageSize（大写）。
- * web 发 "2k" → Gemini 要 "2K"。
+ * web 发 "2k" → Gemini 要 "2K"。映射表来自 adapterConfig.resolutionMap。
  */
 function readImageSize(raw: string | undefined): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim().toLowerCase();
-  return RESOLUTION_TO_IMAGE_SIZE[trimmed] ?? null;
+  return GEMINI_PROFILE.adapterConfig?.resolutionMap?.[trimmed] ?? null;
 }
 
 /**
@@ -356,21 +281,4 @@ function extractInlineData(
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
-}
-
-function safeJsonParse(text: string): Record<string, any> | null {
-  try {
-    return JSON.parse(text) as Record<string, any>;
-  } catch {
-    return null;
-  }
-}
-
-function extractErrorMessage(payload: Record<string, any> | null): string | null {
-  if (!payload) return null;
-  const err = payload.error;
-  if (typeof err === "string") return err;
-  if (err && typeof err.message === "string") return err.message;
-  if (typeof payload.message === "string") return payload.message;
-  return null;
 }

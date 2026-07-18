@@ -5,7 +5,7 @@ import {
   assertPublicIpAddress,
   createPublicOnlyLookup,
   type DnsLookupAll,
-} from "./outboundAddressPolicy.js";
+} from "../outboundAddressPolicy.js";
 
 describe("assertPublicImageUrl", () => {
   it("accepts HTTPS URLs with public literal addresses", () => {

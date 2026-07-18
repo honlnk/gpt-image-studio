@@ -1,0 +1,42 @@
+{
+  "preset": {
+    "label": "Gemini Image（Google）",
+    "defaultBaseUrl": "https://generativelanguage.googleapis.com/v1beta",
+    "defaultModel": "gemini-2.5-flash-image",
+    "order": 70
+  },
+  "capability": {
+    "generate": true,
+    "edit": true,
+    "mask": false,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "jpeg", "webp"]
+  },
+  "sizeConstraints": {
+    "step": 1,
+    "min": 512,
+    "max": 4096,
+    "maxPixels": 16777216,
+    "minPixels": 0,
+    "maxAspectRatio": null,
+    "defaultSize": "1024x1024"
+  },
+  "resolutionOptions": [
+    { "value": "512", "label": "512", "targetPixels": 262144 },
+    { "value": "1k", "label": "1K", "targetPixels": 1048576 },
+    { "value": "2k", "label": "2K", "targetPixels": 4194304 },
+    { "value": "4k", "label": "4K", "targetPixels": 16777216 }
+  ],
+  "adapterConfig": {
+    "supportedAspectRatios": [
+      "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
+      "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"
+    ],
+    "resolutionMap": {
+      "512": "512",
+      "1k": "1K",
+      "2k": "2K",
+      "4k": "4K"
+    }
+  }
+}

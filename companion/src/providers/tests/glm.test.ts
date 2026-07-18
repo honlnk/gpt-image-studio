@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-vi.mock("./urlToB64.js", () => ({ urlToB64: vi.fn() }));
+vi.mock("../urlToB64.js", () => ({ urlToB64: vi.fn() }));
 
-import { glmAdapter, normalizeGlmSize } from "./glm.js";
-import { urlToB64 } from "./urlToB64.js";
-import type { ProviderConfig, SizeConstraints } from "./types.js";
+import { glmAdapter, normalizeGlmSize } from "../adapters/glm.js";
+import { urlToB64 } from "../urlToB64.js";
+import type { ProviderConfig, SizeConstraints } from "../types.js";
 
 const urlToB64Mock = vi.mocked(urlToB64);
 

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { CompanionAuthStatus } from "../types.js";
 import { getActiveCredential } from "../credentials.js";
 import { resolveAdapter } from "../providers/registry.js";
-import { openaiAdapter } from "../providers/openai.js";
+import { openaiAdapter } from "../providers/adapters/openai.js";
 import type { ProviderConfig } from "../providers/types.js";
 
 /** 无凭据时回流的默认能力/约束/档位，取 OpenAI（web 默认 UI 行为）。 */

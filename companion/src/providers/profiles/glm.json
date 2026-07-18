@@ -1,0 +1,28 @@
+{
+  "preset": {
+    "label": "GLM-Image（智谱 Zhipu）",
+    "defaultBaseUrl": "https://open.bigmodel.cn/api/paas/v4/images",
+    "defaultModel": "glm-image",
+    "order": 20
+  },
+  "capability": {
+    "generate": true,
+    "edit": false,
+    "mask": false,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "jpeg"]
+  },
+  "sizeConstraints": {
+    "step": 32,
+    "min": 512,
+    "max": 2048,
+    "maxPixels": 4194304,
+    "minPixels": 0,
+    "maxAspectRatio": null,
+    "defaultSize": "1280x1280"
+  },
+  "resolutionOptions": [
+    { "value": "1k", "label": "1K", "targetPixels": 1048576 },
+    { "value": "2k", "label": "2K", "targetPixels": 4194304 }
+  ]
+}
