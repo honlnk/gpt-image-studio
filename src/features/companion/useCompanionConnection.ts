@@ -22,6 +22,8 @@ type UseCompanionConnectionInput = {
   onClearAccessKey: () => void;
   /** 回流 provider 元信息（model/capability/sizeConstraints）驱动 UI。 */
   onApplyProviderInfo: (status: CompanionAuthStatus | null) => void;
+  /** 切回浏览器直连时恢复 OpenAI 默认能力和固定模型。 */
+  onApplyDirectProviderInfo: () => void;
   /** 用户粘贴密钥连接成功时持久化 accessKey（view model 写 settingsStore）。 */
   onAccessKeyAcquired: (key: string) => void;
 };
@@ -40,6 +42,12 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
   const connectError = ref("");
   const connecting = ref(false);
 
+  function applyProviderInfoForActiveMode(status: CompanionAuthStatus | null) {
+    if (input.connectionMode.value === "localCompanion") {
+      input.onApplyProviderInfo(status);
+    }
+  }
+
   async function checkStatus() {
     const health = await checkCompanionHealth(input.companionUrl.value);
     companionHealth.value = health;
@@ -47,7 +55,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
 
     if (!health || !input.companionAccessKey.value) {
       companionAuthStatus.value = null;
-      input.onApplyProviderInfo(null);
+      applyProviderInfoForActiveMode(null);
       return;
     }
 
@@ -58,12 +66,12 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
 
     if (authResult.ok) {
       companionAuthStatus.value = authResult.status;
-      input.onApplyProviderInfo(authResult.status);
+      applyProviderInfoForActiveMode(authResult.status);
       return;
     }
 
     companionAuthStatus.value = null;
-    input.onApplyProviderInfo(null);
+    applyProviderInfoForActiveMode(null);
     if (authResult.invalidToken) {
       input.onClearAccessKey();
       connectError.value =
@@ -108,7 +116,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
       }
 
       companionAuthStatus.value = status;
-      input.onApplyProviderInfo(status);
+      applyProviderInfoForActiveMode(status);
     } catch {
       input.onClearAccessKey();
       connectError.value = "连接失败，请确认 Companion 在线且密钥正确。";
@@ -124,7 +132,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
   function disconnect() {
     input.onClearAccessKey();
     companionAuthStatus.value = null;
-    input.onApplyProviderInfo(null);
+    applyProviderInfoForActiveMode(null);
     connectError.value = "";
   }
 
@@ -133,7 +141,11 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
   watch(
     () => input.connectionMode.value,
     (mode) => {
-      if (mode === "localCompanion") void checkStatus();
+      if (mode === "localCompanion") {
+        void checkStatus();
+      } else {
+        input.onApplyDirectProviderInfo();
+      }
     },
     { immediate: true },
   );

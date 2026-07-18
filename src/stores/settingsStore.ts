@@ -323,30 +323,40 @@ export const useSettingsStore = defineStore("settings", () => {
   /**
    * 写入 companion /auth/status 回流的 provider 元信息。
    * status 为 null（离线/未配对/失配）时重置为 OpenAI 默认 capability + 约束，
-   * 保证 UI 行为回到 gpt-image-2 默认。
+   * 但保留上次 Companion model，避免临时离线时模型标签闪烁。
    */
+  function resetProviderUiDefaults() {
+    providerCapability.value = {
+      ...DEFAULT_PROVIDER_CAPABILITY,
+      backgrounds: [...DEFAULT_PROVIDER_CAPABILITY.backgrounds],
+      outputFormats: [...DEFAULT_PROVIDER_CAPABILITY.outputFormats],
+    };
+    sizeStep.value = DEFAULT_SIZE_STEP;
+    minCustomDimension.value = DEFAULT_MIN_CUSTOM_DIMENSION;
+    maxCustomDimension.value = DEFAULT_MAX_CUSTOM_DIMENSION;
+    maxCustomPixels.value = DEFAULT_MAX_CUSTOM_PIXELS;
+    minCustomPixels.value = DEFAULT_MIN_CUSTOM_PIXELS;
+    maxAspectRatio.value = DEFAULT_MAX_ASPECT_RATIO;
+    resolutionOptions.value = DEFAULT_RESOLUTION_OPTIONS.map((o) => ({ ...o }));
+
+    if (!DEFAULT_PROVIDER_CAPABILITY.backgrounds.includes(background.value)) {
+      background.value = DEFAULT_PROVIDER_CAPABILITY.backgrounds[0] ?? "auto";
+    }
+    if (!DEFAULT_PROVIDER_CAPABILITY.outputFormats.includes(outputFormat.value)) {
+      outputFormat.value = DEFAULT_PROVIDER_CAPABILITY.outputFormats[0] ?? "png";
+    }
+
+    const defaultValues = DEFAULT_RESOLUTION_OPTIONS.map((o) => o.value);
+    if (!defaultValues.includes(sizeResolution.value)) {
+      sizeResolution.value = defaultValues[0] ?? "1k";
+    }
+    const ratio = normalizeSizePreset(activeSizePreset.value);
+    if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
+  }
+
   function applyProviderInfo(status: CompanionAuthStatus | null) {
     if (!status || !status.ready) {
-      providerCapability.value = {
-        ...DEFAULT_PROVIDER_CAPABILITY,
-        backgrounds: [...DEFAULT_PROVIDER_CAPABILITY.backgrounds],
-        outputFormats: [...DEFAULT_PROVIDER_CAPABILITY.outputFormats],
-      };
-      sizeStep.value = DEFAULT_SIZE_STEP;
-      minCustomDimension.value = DEFAULT_MIN_CUSTOM_DIMENSION;
-      maxCustomDimension.value = DEFAULT_MAX_CUSTOM_DIMENSION;
-      maxCustomPixels.value = DEFAULT_MAX_CUSTOM_PIXELS;
-      minCustomPixels.value = DEFAULT_MIN_CUSTOM_PIXELS;
-      maxAspectRatio.value = DEFAULT_MAX_ASPECT_RATIO;
-      resolutionOptions.value = DEFAULT_RESOLUTION_OPTIONS.map((o) => ({ ...o }));
-      // 离线时若当前选中档不在默认列表（如刚从豆包切回 direct，还停在 3k），回退第一个。
-      const defaultValues = DEFAULT_RESOLUTION_OPTIONS.map((o) => o.value);
-      if (!defaultValues.includes(sizeResolution.value)) {
-        sizeResolution.value = defaultValues[0] ?? "1k";
-      }
-      const ratio = normalizeSizePreset(activeSizePreset.value);
-      if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
-      // 离线时 model 不回退——保留用户上次生效的 model，避免 UI 闪烁
+      resetProviderUiDefaults();
       return;
     }
 
@@ -384,6 +394,12 @@ export const useSettingsStore = defineStore("settings", () => {
     if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
   }
 
+  /** 切回浏览器直连时恢复完整的 OpenAI 默认状态，包括固定模型。 */
+  function applyDirectProviderInfo() {
+    resetProviderUiDefaults();
+    model.value = FIXED_IMAGE_MODEL;
+  }
+
   function applySettings(settings: AppSettings) {
     const defaults = normalizeGenerationParams(settings.defaults);
     connectionMode.value = settings.connectionMode;
@@ -393,8 +409,8 @@ export const useSettingsStore = defineStore("settings", () => {
     apiMode.value = settings.apiMode;
     streamImages.value = settings.streamImages;
     streamPartialImages.value = settings.streamPartialImages;
-    // model 不再强制写死：优先用持久化的值，companion 回流时会覆盖。
-    // 兜底 FIXED_IMAGE_MODEL（兼容旧持久化数据无 model 字段的情况）。
+    // localCompanion 先恢复上次模型，随后由 /auth/status 覆盖；direct 在函数末尾
+    // 通过 applyDirectProviderInfo 强制恢复 FIXED_IMAGE_MODEL。
     model.value = settings.model || FIXED_IMAGE_MODEL;
     promptMode.value = settings.promptMode;
     promptWordbanks.value = normalizePromptWordbanks(settings.promptWordbanks);
@@ -426,6 +442,9 @@ export const useSettingsStore = defineStore("settings", () => {
     quality.value = defaults.quality;
     background.value = normalizeBackground(defaults.background);
     outputFormat.value = defaults.outputFormat;
+    if (connectionMode.value === "direct") {
+      applyDirectProviderInfo();
+    }
   }
 
   function currentSettings(): AppSettings {
@@ -587,6 +606,7 @@ export const useSettingsStore = defineStore("settings", () => {
     apiBaseUrl,
     apiBaseUrlMode,
     apiKey,
+    applyDirectProviderInfo,
     applyProviderInfo,
     providerCapability,
     autoRetryOnNetworkError,

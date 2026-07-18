@@ -158,6 +158,62 @@ describe("settingsStore capability-driven UI", () => {
     expect(s.model).toBe("glm-image");
   });
 
+  it("restores OpenAI model and UI defaults when switching to direct mode", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(
+      makeStatus({
+        model: "glm-image",
+        capability: {
+          generate: true,
+          edit: false,
+          mask: false,
+          backgrounds: ["auto"],
+          outputFormats: ["png"],
+        },
+        sizeConstraints: {
+          step: 32,
+          min: 512,
+          max: 2048,
+          maxPixels: 4194304,
+          minPixels: 0,
+          maxAspectRatio: null,
+          defaultSize: "1280x1280",
+        },
+        resolutionOptions: [
+          { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+          { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+        ],
+      }),
+    );
+
+    s.applyDirectProviderInfo();
+
+    expect(s.model).toBe("gpt-image-2");
+    expect(s.providerCapability.edit).toBe(true);
+    expect(s.providerCapability.mask).toBe(true);
+    expect(s.sizeStep).toBe(16);
+    expect(s.minCustomDimension).toBe(16);
+    expect(s.maxCustomDimension).toBe(3840);
+    expect(s.sizeResolutionOptions.map((option) => option.value)).toEqual([
+      "1k",
+      "2k",
+      "4k",
+    ]);
+  });
+
+  it("does not restore a persisted Companion model while hydrating direct mode", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(makeStatus({ model: "glm-image" }));
+    const persisted = s.currentSettings();
+    persisted.connectionMode = "direct";
+
+    s.applySettings(persisted);
+
+    expect(s.model).toBe("gpt-image-2");
+    expect(s.providerCapability.edit).toBe(true);
+    expect(s.sizeStep).toBe(16);
+  });
+
   it("defaults to OpenAI size constraints (16-3840, step 16, 4K visible)", () => {
     const s = useSettingsStore();
     expect(s.sizeStep).toBe(16);

@@ -32,6 +32,7 @@ export const useCompanionStore = defineStore("companion", () => {
       settings.companionAccessKey = "";
     },
     onApplyProviderInfo: settings.applyProviderInfo,
+    onApplyDirectProviderInfo: settings.applyDirectProviderInfo,
     onAccessKeyAcquired: (key) => {
       settings.companionAccessKey = key;
     },

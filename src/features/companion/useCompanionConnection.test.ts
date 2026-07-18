@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { effectScope, ref } from "vue";
+import { effectScope, nextTick, ref } from "vue";
 import type { Ref } from "vue";
 import { useCompanionConnection } from "./useCompanionConnection";
 import type {
@@ -76,6 +76,7 @@ function setupComposable(options: Options = {}) {
   const companionAccessKey = ref(options.companionAccessKey ?? "test-key-1");
   const onClearAccessKey = vi.fn();
   const onApplyProviderInfo = vi.fn();
+  const onApplyDirectProviderInfo = vi.fn();
   const onAccessKeyAcquired = vi.fn();
 
   const result = scope.run(() =>
@@ -85,6 +86,7 @@ function setupComposable(options: Options = {}) {
       companionAccessKey,
       onClearAccessKey,
       onApplyProviderInfo,
+      onApplyDirectProviderInfo,
       onAccessKeyAcquired,
     }),
   )!;
@@ -95,6 +97,7 @@ function setupComposable(options: Options = {}) {
     refs: { connectionMode, companionUrl, companionAccessKey },
     onClearAccessKey,
     onApplyProviderInfo,
+    onApplyDirectProviderInfo,
     onAccessKeyAcquired,
   };
 }
@@ -129,10 +132,27 @@ describe("useCompanionConnection", () => {
   it("does not probe when connectionMode is direct", async () => {
     mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
 
-    setupComposable({ connectionMode: "direct" });
+    const { onApplyDirectProviderInfo } = setupComposable({
+      connectionMode: "direct",
+    });
 
     await new Promise((r) => setTimeout(r, 10));
     expect(mocks.checkCompanionHealth).not.toHaveBeenCalled();
+    expect(onApplyDirectProviderInfo).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads Companion status in direct mode without applying it to the workbench", async () => {
+    const status = makeStatus({ provider: "glm", model: "glm-image" });
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatusResult.mockResolvedValue({ ok: true, status });
+
+    const { result, onApplyProviderInfo } = setupComposable({
+      connectionMode: "direct",
+    });
+    await result.checkStatus();
+
+    expect(result.companionAuthStatus.value).toEqual(status);
+    expect(onApplyProviderInfo).not.toHaveBeenCalled();
   });
 
   it("re-probes when switching to localCompanion", async () => {
@@ -146,6 +166,26 @@ describe("useCompanionConnection", () => {
     await vi.waitFor(() => {
       expect(mocks.checkCompanionHealth).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("restores direct defaults when switching away from localCompanion", async () => {
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatusResult.mockResolvedValue({
+      ok: true,
+      status: makeStatus({ provider: "glm", model: "glm-image" }),
+    });
+
+    const { refs, onApplyProviderInfo, onApplyDirectProviderInfo } =
+      setupComposable();
+    await vi.waitFor(() => {
+      expect(onApplyProviderInfo).toHaveBeenCalledWith(
+        expect.objectContaining({ model: "glm-image" }),
+      );
+    });
+
+    refs.connectionMode.value = "direct";
+    await nextTick();
+    expect(onApplyDirectProviderInfo).toHaveBeenCalledTimes(1);
   });
 
   it("clears access key when auth/status returns 401 (invalidToken)", async () => {
@@ -175,6 +215,21 @@ describe("useCompanionConnection", () => {
     expect(onApplyProviderInfo).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "openai" }),
     );
+  });
+
+  it("connects in direct mode without applying Companion provider info", async () => {
+    const status = makeStatus({ provider: "glm", model: "glm-image" });
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatus.mockResolvedValue(status);
+
+    const { result, onApplyProviderInfo } = setupComposable({
+      connectionMode: "direct",
+      companionAccessKey: "",
+    });
+
+    await result.connectWithKey("valid-uuid-key");
+    expect(result.companionAuthStatus.value).toEqual(status);
+    expect(onApplyProviderInfo).not.toHaveBeenCalled();
   });
 
   it("clears access key and reports error when key is invalid", async () => {
