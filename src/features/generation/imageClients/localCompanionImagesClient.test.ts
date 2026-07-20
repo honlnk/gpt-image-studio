@@ -45,7 +45,7 @@ describe("localCompanionImagesClient.generate — mimeType reading", () => {
     const result = await client.generate({
       prompt: "a cat",
       params: {
-        size: "1024x1024",
+        size: "custom",
         resolution: "1k",
         width: 1024,
         height: 1024,
@@ -73,7 +73,7 @@ describe("localCompanionImagesClient.generate — mimeType reading", () => {
     const result = await client.generate({
       prompt: "a cat",
       params: {
-        size: "1024x1024",
+        size: "custom",
         resolution: "1k",
         width: 1024,
         height: 1024,
@@ -98,7 +98,7 @@ describe("localCompanionImagesClient.generate — mimeType reading", () => {
       client.generate({
         prompt: "a cat",
         params: {
-          size: "1024x1024",
+          size: "custom",
           resolution: "1k",
           width: 1024,
           height: 1024,
@@ -122,7 +122,7 @@ describe("localCompanionImagesClient.generate — mimeType reading", () => {
       client.generate({
         prompt: "a cat",
         params: {
-          size: "1024x1024",
+          size: "custom",
           resolution: "1k",
           width: 1024,
           height: 1024,
@@ -149,7 +149,7 @@ describe("localCompanionImagesClient.edit — mimeType reading", () => {
     const result = await client.edit({
       prompt: "make it blue",
       params: {
-        size: "1024x1024",
+        size: "custom",
         resolution: "1k",
         width: 1024,
         height: 1024,
