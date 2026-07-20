@@ -137,6 +137,56 @@ GLM、Qwen 和 Wan 返回图片 URL 后，Companion 仍会立即下载并转为 
 - 下载完成后仍需要在 32 MiB 边界内聚合 Buffer 并转换 base64，内存占用是有上限的，
   但不是零拷贝。
 
+### Provider 取消传播与错误分类
+
+状态：已于 2026-07-20 修复，实现在 `companion/src/providers/providerErrors.ts`、
+`companion/src/providers/providerHttp.ts`、`companion/src/routes/images.ts`。
+
+此前所有 provider 主请求的 fetch 都是裸调用，没有任何超时和取消机制；网络层异常
+统一被一句 `UPSTREAM_DISCONNECT_MESSAGE`（"通常是提示词不合规，触发了内容审核策略"）
+吞掉，导致 DNS 失败、TLS 错误、连接重置、真实的客户端断开全部显示成"提示词不合规"，
+让用户改提示词修不了真实问题。本次整改分两件事：
+
+**取消传播（review 第二批第 3 项的取消部分）**：
+
+- 浏览器刷新/关页面时，Fastify 在 `req.raw` 上触发 `close` 事件。
+- route 层 `withClientSignal` 监听该事件，构造 `AbortController`，在
+  `!reply.raw.headersSent` 时调用 `abort()`，让 signal 一路传到 provider fetch，
+  立即取消上游请求，释放凭据/连接。
+- `ProviderAdapter.generate/edit` 接口加可选第三参 `{ signal?: AbortSignal }`，
+  各 adapter 透传到 `postJson` / `postMultipart`；GLM/Qwen/Wan 还透传给 `urlToB64`
+  下载器，避免 API 已返回后下载继续烧流量。
+- finally 里 `off('close', listener)`，避免 EventEmitter 泄漏。
+- `headersSent` 检查避免正常响应完成后误触发 abort。
+
+**主请求超时按决策不实现**：生图任务（尤其 gpt-image-2）正常可能耗时 5+ 分钟，
+设硬超时会误杀长任务；用户刷新浏览器即可触发取消传播，是更自然的取消入口。
+`timeout` category 仍保留在分类表里，未来加超时机制不用改响应 shape。
+
+**错误分类（review 第二批第 4 项）**：
+
+- 新增 `providerErrors.ts`：按 errno / DOMException name / HTTP 状态分类成
+  12 个 category（`aborted` / `timeout` / `dns` / `tls` / `reset` / `refused` /
+  `network` / `http_4xx` / `rate_limited` / `http_5xx` / `content_policy` / `unknown`）。
+- 删除 `UPSTREAM_DISCONNECT_MESSAGE` 这句误导文案。`reset` category 保留"可能是
+  审核"的猜测——因为 ECONNRESET 确实是部分 provider 审核的真实表征——但局限到
+  这一类，不再扩散到所有网络异常。
+- HTTP 层 `buildHttpErrorFromResponse` 优先用上游 `error.message`，缺失时按
+  category 给中文兜底文案（如"Provider 触发限流，请稍后重试"）。
+- `content_policy` category 保留但不主动触发：当前没有 provider 真返回可识别的
+  审核字段，留作未来检测真实审核响应的扩展位。
+- route 502 响应体从 `{ error: string }` 扩成 `{ error: string, category? }`，
+  Web 端 `localCompanionImagesClient.ts` 现有读取天然兼容（向后兼容），后续可按
+  category 做差异化 UI（dns 引导检查 apiBaseUrl、rate_limited 退避重试等）。
+
+**合并 multipart helper**：`openai.ts` 和 `openaiCompatible.ts` 此前有字节级重复
+的 `fetch + try/catch` multipart 样板，本次借 `postMultipart` helper 顺手合并。
+
+测试：新增 `providerErrors.test.ts`（47 个分类单元测试）、扩展 `images.test.ts`
+（8 个 `withClientSignal` + `errorPayload` 单元测试）、扩展 `images.integration.test.ts`
+（9 个端到端分类集成测试，覆盖 ENOTFOUND / ECONNREFUSED / AbortError / 4xx / 429 /
+5xx 等场景）。9 处 adapter 测试的旧文案断言同步改为按 errno → category 断言。
+
 ## 剩余主要问题
 
 ### P1：Grok 和 Gemini 分辨率字段契约错位
@@ -361,8 +411,9 @@ Provider 配置突然消失，且缺少可诊断日志。
 
 1. ~~实现受限 URL 下载器。~~ 已完成。
 2. ~~增加响应大小和类型限制。~~ 已完成。
-3. 增加统一 Provider 主请求超时和取消传播。
-4. 改进 Provider 主请求的网络错误分类。
+3. ~~增加统一 Provider 主请求超时和取消传播。~~ 已完成（2026-07-20，取消传播部分；
+   主请求超时按决策不实现，详见上文「已完成整改：Provider 取消传播与错误分类」）。
+4. ~~改进 Provider 主请求的网络错误分类。~~ 已完成（2026-07-20）。
 
 ### 第三批：完善能力协议
 
@@ -392,3 +443,18 @@ Provider 配置突然消失，且缺少可诊断日志。
 - 新增 `companionKnownFields.contract.test.ts`（3 个测试）兜底 Web↔Companion 常量漂移。
 - `images.integration.test.ts` 从 13 个测试扩展到 25 个，覆盖每个已知字段的
   generate / edit 两条路径。
+
+2026-07-20 Provider 取消传播与错误分类后：
+
+- `pnpm typecheck:companion` 通过。
+- `pnpm typecheck` 通过（已修复此前预存在的 5 个 `SizeRatio` 测试错误）。
+- `pnpm test` 通过，共 42 个测试文件、496 个测试。
+- 新增 `providerErrors.test.ts`（47 个测试）：覆盖 errno / DOMException name /
+  TLS code / Node fetch 包装 cause / HTTP 状态码的全部分类路径。
+- 扩展 `images.test.ts`（9 → 17 个测试）：新增 `withClientSignal` 的 4 个场景
+  （断开触发 abort、正常完成不误触发、headersSent 后不触发、listener 不泄漏）
+  与 `errorPayload` 的 4 个 shape 断言。
+- 扩展 `images.integration.test.ts`（25 → 34 个测试）：新增端到端分类集成测试，
+  覆盖 ENOTFOUND / ECONNREFUSED / AbortError / 400 / 401 / 429 / 500 / 503 等
+  场景的 category 字段断言。
+- 9 处 adapter 测试断言从硬编码文案改为 `category` 字段断言，避免文案微调再连锁改测试。
