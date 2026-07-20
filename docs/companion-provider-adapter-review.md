@@ -235,6 +235,42 @@ Web 发出的"已知字段"要正确到达 Adapter，依赖两份需要手工同
   上的显式类型化字段（如本次的 `resolution`），`extra` 只保留真正透传型字段
   （`quality` / `stream` 等），减少"逃逸口袋"。
 
+#### 已完成整改：已知字段契约收敛（软共享 + 端到端契约测试）
+
+状态：已于 2026-07-20 修复。实现在：
+
+- `companion/src/shared/knownFields.ts`（Companion 侧单一源）
+- `src/types/companion.ts` 的 `COMPANION_GENERATE_FIELDS` / `COMPANION_EDIT_FIELDS`（Web 侧镜像）
+- `src/types/companionKnownFields.contract.test.ts`（两端对齐契约测试）
+- `companion/src/routes/images.integration.test.ts`（覆盖每个已知字段的端到端契约）
+
+**方案选择：软共享（镜像常量 + 契约测试），不引入 Web 对 companion 包的构建依赖。**
+
+理由：Companion 走 tsc + NodeNext，Web 走 Vite，让 Web 直接 import companion 包会引入
+跨构建系统的依赖耦合，为一个字符串常量数组付出这个工程代价不划算。软共享保留两份
+清单，但通过契约测试把「无声漂移」转化为「CI 报错」——这正是本节原本痛点
+（"无测试能在 CI 阶段拦截"）的直接修复。
+
+三处手工同步现在的 CI 保护：
+
+1. **Web 加字段** — `buildParams` 用 `satisfies Partial<Record<CompanionGenerateField, string>>`
+   做编译期约束，硬编码字段名不在白名单里会编译失败。
+2. **Companion 加白名单** — `companionKnownFields.contract.test.ts` 读 companion 源文件，
+   断言 Web 镜像常量与 Companion `KNOWN_*` 字段集合完全一致；任一端漏改，CI 失败。
+3. **route 提取字段 → adapter 读取** — `images.integration.test.ts` 的 `it.each` 覆盖
+   每个已知字段，从 Web 真实请求形状（JSON / multipart）经 route 到 OpenAI adapter
+   上游请求的完整链路；用非默认值断言，route 漏提取字段时测试失败。
+
+取舍与剩余风险：
+
+- 契约测试用正则提取 companion 源文件里的 `as const` 数组，格式变更（改成对象键、
+  移除 `as const` 等）需要同步更新测试正则。这是软共享的固有代价，也是「两端同步」
+  承诺的一部分。
+- 本节"长期方向"（把所有已知字段建模为 `OpenAIImageRequest` 的显式类型化字段，
+  `extra` 只保留真正透传型字段）仍未落地。当前 `quality` / `stream` 等仍走 extra
+  透传，是合理的设计——它们不需要 adapter 翻译。只有当未来某字段需要 route 提取
+  但又不想加进白名单时，才需要推进这个长期方向。
+
 ### P2：上游主请求没有超时和取消传播
 
 各 Adapter 的主 `fetch` 没有传入 `AbortSignal`。上游长时间不返回时，Companion 请求会
@@ -313,12 +349,13 @@ Provider 配置突然消失，且缺少可诊断日志。
 
 ### 第一批：修复真实请求契约
 
-1. 统一 `resolution` 字段。
-2. 为 Grok/Gemini 增加 route 级集成测试。
-3. 让结果携带真实 MIME，并修正能力声明。
-4. 结构化 multipart 后再校验。
-5. 收敛 Web 与 Companion 之间的已知字段定义（共享常量 + 端到端契约测试），
-   消除两份手写字段清单的漂移风险。
+1. ~~统一 `resolution` 字段。~~ 已完成。
+2. ~~为 Grok/Gemini 增加 route 级集成测试。~~ 已完成。
+3. ~~让结果携带真实 MIME，并修正能力声明。~~ 已完成。
+4. ~~结构化 multipart 后再校验。~~ 已完成。
+5. ~~收敛 Web 与 Companion 之间的已知字段定义（共享常量 + 端到端契约测试），
+   消除两份手写字段清单的漂移风险。~~ 已完成（2026-07-20，软共享方案，
+   详见上文「已完成整改：已知字段契约收敛」）。
 
 ### 第二批：收紧 Companion 出站网络
 
@@ -346,3 +383,12 @@ Provider 配置突然消失，且缺少可诊断日志。
 
 现有测试对 Adapter 内部翻译覆盖较多，但跨越 Web 参数、HTTP route 和 Adapter 的端到端
 契约测试不足。后续测试重点应从“手工构造 Adapter 理想输入”转向“使用 Web 实际请求形状”。
+
+2026-07-20 已知字段契约收敛后：
+
+- `pnpm typecheck:companion` 通过。
+- `pnpm test` 通过，共 41 个测试文件、432 个测试。
+- `pnpm typecheck` 仍有 5 个 `SizeRatio` 预存在错误（与本次整改无关）。
+- 新增 `companionKnownFields.contract.test.ts`（3 个测试）兜底 Web↔Companion 常量漂移。
+- `images.integration.test.ts` 从 13 个测试扩展到 25 个，覆盖每个已知字段的
+  generate / edit 两条路径。

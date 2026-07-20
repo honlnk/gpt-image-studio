@@ -1,6 +1,9 @@
 import { applyPromptRewriteGuard } from "../../../services/imagesApi";
 import { buildImagePrompt } from "../../../services/promptBuilder";
 import type { PromptMode, PromptWordbanks } from "../../../types/studio";
+import type {
+  CompanionGenerateField,
+} from "../../../types/companion";
 import type { ImageClient, ImageClientResult } from "./imageClient";
 
 type CompanionClientConfig = {
@@ -100,12 +103,17 @@ function buildParams(params: {
       ? `${params.width}x${params.height}`
       : params.size;
 
+  // 编译期断言：这里发出的字段名必须在 COMPANION_GENERATE_FIELDS 白名单里，
+  // 否则 Companion route 层会把它们当作未知字段塞进 extra，导致能力静默失效。
+  // 字段名漂移由 companionKnownFields.contract.test.ts 兜底。
+  // 用 Partial + satisfies：key 必须属于白名单，但不要求全覆盖
+  // （model / prompt 在调用点单独传，不在这里）。
   return {
     size,
     companion_resolution: params.resolution,
     background: params.background,
     output_format: params.outputFormat,
-  };
+  } satisfies Partial<Record<CompanionGenerateField, string>>;
 }
 
 async function extractB64Json(response: Response): Promise<ImageClientResult> {

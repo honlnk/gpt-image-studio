@@ -9,28 +9,14 @@ import type {
 import { resolveAdapter } from "../providers/registry.js";
 import { extractBoundary, parseMultipart } from "../providers/multipart.js";
 import type { ParsedEditBody } from "../providers/multipart.js";
+import {
+  KNOWN_EDIT_FIELDS,
+  KNOWN_GENERATE_FIELDS,
+} from "../shared/knownFields.js";
 
 type ImagesRoutesOptions = {
   security: CompanionSecurityConfig;
 };
-
-/** web 发的已知文本字段名（其余字段进 extra 透传）。 */
-const KNOWN_GENERATE_FIELDS = [
-  "model",
-  "prompt",
-  "size",
-  "companion_resolution",
-  "background",
-  "output_format",
-];
-const KNOWN_EDIT_FIELDS = [
-  "model",
-  "prompt",
-  "size",
-  "companion_resolution",
-  "background",
-  "output_format",
-];
 
 export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptions) {
   app.post("/images/generations", async (req, reply) => {
@@ -163,7 +149,7 @@ function toProviderConfig(creds: {
 function toGenerateRequest(body: Record<string, unknown>): OpenAIImageRequest {
   const extra: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
-    if (!KNOWN_GENERATE_FIELDS.includes(key)) {
+    if (!(KNOWN_GENERATE_FIELDS as readonly string[]).includes(key)) {
       extra[key] = value;
     }
   }
@@ -186,7 +172,7 @@ function toEditRequest(parsed: {
 }): OpenAIImageEditRequest {
   const editExtra: Record<string, string> = {};
   for (const [key, value] of Object.entries(parsed.fields)) {
-    if (!KNOWN_EDIT_FIELDS.includes(key)) {
+    if (!(KNOWN_EDIT_FIELDS as readonly string[]).includes(key)) {
       editExtra[key] = value;
     }
   }

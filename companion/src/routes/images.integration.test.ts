@@ -445,6 +445,148 @@ describe("images routes integration — edit", () => {
   });
 });
 
+/**
+ * 已知字段契约（review P1 第 5 项）：每个 COMPANION_GENERATE_FIELDS 里声明的字段，
+ * 从 Web 真实请求形状出发，经过 route → OpenAI adapter 后，必须出现在上游请求的正确位置。
+ *
+ * 防的是「字段名漂移导致静默失效」：如果 Web 加了字段、Companion 的 KNOWN 清单漏同步，
+ * 该字段会被 route 当作 unknown 塞进 extra，结果要么被 OpenAI adapter 重复展开，
+ * 要么根本到不了 provider。本测试用 it.each 强制覆盖每一个已知字段。
+ */
+describe("images routes integration — known fields contract", () => {
+  /**
+   * 对每个已知字段：发 OpenAI happy-path 请求，断言上游收到的 body 里
+   * 该字段的值正确出现在 OpenAI 标准位置（而非原始 companion_xxx 形态或 extra 透传）。
+   *
+   * 注意 `companion_resolution` 的特殊性：OpenAI adapter 不向上游发 resolution，
+   * 所以这条断言的是"它被 route 识别为已知字段、翻译成 request.resolution"
+   * （即没有原样作为 companion_resolution 落入 extra 又透传到上游）。
+   */
+  const generateCases: Array<[string, string, (body: Record<string, unknown>) => void]> = [
+    ["model", "gpt-image-2", (b) => expect(b.model).toBe("gpt-image-2")],
+    ["prompt", "a cat", (b) => expect(b.prompt).toBe("a cat")],
+    // 用非默认值：route 漏提取 size 时会用 "1024x1024" 默认值，断言会失败
+    ["size", "1536x1024", (b) => expect(b.size).toBe("1536x1024")],
+    [
+      "companion_resolution",
+      "1k",
+      (b) => {
+        // OpenAI adapter 不向上游发 resolution，但 companion_resolution 也不能
+        // 作为 unknown 字段透传——那说明 route 没识别它，会导致 resolution 能力静默失效。
+        expect(b.companion_resolution).toBeUndefined();
+        expect(b.resolution).toBeUndefined();
+      },
+    ],
+    ["background", "transparent", (b) => expect(b.background).toBe("transparent")],
+    ["output_format", "webp", (b) => expect(b.output_format).toBe("webp")],
+  ];
+
+  it.each(generateCases)(
+    "generate: known field %s flows from web shape to OpenAI upstream",
+    async (_label, value, assert) => {
+      const app = await setupWithCredentials({
+        apiBaseUrl: "https://up.example.com/v1/images",
+        apiKey: "sk-test",
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_url: string, init: RequestInit) => {
+          const body = JSON.parse(String(init.body));
+          assert(body);
+          return new Response(
+            JSON.stringify({ data: [{ b64_json: "QUJD" }] }),
+            { status: 200 },
+          );
+        }),
+      );
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/images/generations",
+        headers: { "content-type": "application/json" },
+        payload: {
+          model: "gpt-image-2",
+          prompt: "a cat",
+          size: "1536x1024",
+          companion_resolution: "1k",
+          background: "transparent",
+          output_format: "webp",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      await app.close();
+    },
+  );
+
+  /**
+   * 编辑路径同理：已知字段经 multipart → route → OpenAI adapter 后必须正确到达上游。
+   *
+   * OpenAI edit adapter 把字段重新打包成 multipart 发到上游。本测试对每个已知字段
+   * 断言「它在上游 multipart body 里以正确的字段名出现」——如果 route 把某字段
+   * 误判为 unknown 塞进 editExtra，OpenAI adapter 会原样透传该 key（包括
+   * companion_resolution 这种本应被翻译的字段），从而暴露字段名漂移。
+   */
+  const editCases: Array<[string, string, (upstreamText: string) => void]> = [
+    ["model", "gpt-image-2", (t) => expect(t).toMatch(/name="model"\r\n\r\ngpt-image-2/)],
+    ["prompt", "edit it", (t) => expect(t).toMatch(/name="prompt"\r\n\r\nedit it/)],
+    // 用非默认值：route 漏提取时会用 "1024x1024" 默认值，断言会失败
+    ["size", "1536x1024", (t) => expect(t).toMatch(/name="size"\r\n\r\n1536x1024/)],
+    [
+      "companion_resolution",
+      "1k",
+      // companion_resolution 必须被 route 翻译成 request.resolution，不能原样
+      // 作为 editExtra 透传——否则字段名漂移会导致 resolution 能力在 edit 路径静默失效。
+      (t) => expect(t).not.toContain("companion_resolution"),
+    ],
+    ["background", "opaque", (t) => expect(t).toMatch(/name="background"\r\n\r\nopaque/)],
+    // 用非默认值 webp：route 漏提取时会用 "png" 默认值，断言会失败
+    ["output_format", "webp", (t) => expect(t).toMatch(/name="output_format"\r\n\r\nwebp/)],
+  ];
+
+  it.each(editCases)(
+    "edit: known field %s flows from web multipart to OpenAI upstream",
+    async (_label, _value, assert) => {
+      const app = await setupWithCredentials({
+        apiBaseUrl: "https://up.example.com/v1/images",
+        apiKey: "sk-test",
+      });
+      let upstreamText = "";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_url: string, init: RequestInit) => {
+          upstreamText = Buffer.from(init.body as Uint8Array).toString("latin1");
+          return new Response(JSON.stringify({ data: [{ b64_json: "QUJD" }] }), {
+            status: 200,
+          });
+        }),
+      );
+
+      const multipart = makeWebEditMultipart({
+        model: "gpt-image-2",
+        prompt: "edit it",
+        size: "1536x1024",
+        companion_resolution: "1k",
+        background: "opaque",
+        output_format: "webp",
+      });
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/images/edits",
+        headers: {
+          "content-type": `multipart/form-data; boundary=${multipart.boundary}`,
+        },
+        payload: multipart.body,
+      });
+
+      expect(res.statusCode).toBe(200);
+      assert(upstreamText);
+      await app.close();
+    },
+  );
+});
+
 describe("provider config passthrough", () => {
   it("defaults to openai when provider field is absent (toProviderConfig fallback)", async () => {
     // toProviderConfig 对缺省 provider 回退 openai；CredentialEntry.provider 恒有值，

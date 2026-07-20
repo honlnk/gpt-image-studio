@@ -125,3 +125,37 @@ export type CompanionLogsTailResponse = {
   logFile: string | null;
   date: string;
 };
+
+// ---- Web ↔ Companion 已知字段镜像（软共享）----
+//
+// 这份常量与 companion/src/shared/knownFields.ts 是一份手工镜像。
+// 没有让 Web 直接 import companion 包，是为了避免引入对 companion 构建
+// 产物的依赖（companion 走 tsc + NodeNext，Web 走 Vite）。
+//
+// 由 src/types/companionKnownFields.contract.test.ts 在 CI 阶段断言
+// 两份常量的字段集合完全一致——漂移会直接让测试失败，不再无声失效。
+// 新增字段时两端必须同步修改。详见
+// docs/companion-provider-adapter-review.md P1 第 5 项。
+
+/** 文生图（POST /images/generations）请求体里的已知字段名集合。 */
+export const COMPANION_GENERATE_FIELDS = [
+  "model",
+  "prompt",
+  "size",
+  "companion_resolution",
+  "background",
+  "output_format",
+] as const;
+
+/** 图片编辑（POST /images/edits）请求里允许的已知文本字段名集合。 */
+export const COMPANION_EDIT_FIELDS = [
+  "model",
+  "prompt",
+  "size",
+  "companion_resolution",
+  "background",
+  "output_format",
+] as const;
+
+export type CompanionGenerateField = (typeof COMPANION_GENERATE_FIELDS)[number];
+export type CompanionEditField = (typeof COMPANION_EDIT_FIELDS)[number];
