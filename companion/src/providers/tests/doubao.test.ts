@@ -167,9 +167,12 @@ describe("doubaoAdapter.generate", () => {
   });
 
   it("throws upstream disconnect when fetch throws", async () => {
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => Promise.reject(new Error("ECONNRESET"))),
+      vi.fn(async () => Promise.reject(networkError)),
     );
     await expect(
       doubaoAdapter.generate(
@@ -183,7 +186,7 @@ describe("doubaoAdapter.generate", () => {
         },
         CONFIG,
       ),
-    ).rejects.toThrow("服务器主动断开了连接");
+    ).rejects.toMatchObject({ category: "reset" });
   });
 
   it("throws upstream error message on non-2xx", async () => {
@@ -327,10 +330,13 @@ describe("doubaoAdapter.edit", () => {
     ).rejects.toThrow("参考图");
   });
 
-  it("throws upstream disconnect when fetch throws", async () => {
+  it("classifies fetch throw as reset category", async () => {
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => Promise.reject(new Error("ECONNRESET"))),
+      vi.fn(async () => Promise.reject(networkError)),
     );
     await expect(
       doubaoAdapter.edit(
@@ -346,7 +352,7 @@ describe("doubaoAdapter.edit", () => {
         },
         CONFIG,
       ),
-    ).rejects.toThrow("服务器主动断开了连接");
+    ).rejects.toMatchObject({ category: "reset" });
   });
 });
 

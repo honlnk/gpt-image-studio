@@ -136,7 +136,10 @@ describe("wanAdapter.generate", () => {
 
     expect(result.b64Json).toBe(imageBytes.toString("base64"));
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/wan.png");
+    // signal 透传：未传 options 时 urlToB64 收到 { signal: undefined }
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/wan.png", {
+      signal: undefined,
+    });
   });
 
   it("allows 4K size for wan2.7-image-pro text-to-image", async () => {
@@ -260,7 +263,10 @@ describe("wanAdapter.edit", () => {
 
     expect(result.b64Json).toBe(imageBytes.toString("base64"));
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/wan.png");
+    // signal 透传：未传 options 时 urlToB64 收到 { signal: undefined }
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/wan.png", {
+      signal: undefined,
+    });
   });
 
   it("throws when no reference image provided", async () => {

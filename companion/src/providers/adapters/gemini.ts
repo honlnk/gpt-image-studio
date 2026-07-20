@@ -3,6 +3,7 @@ import type {
   OpenAIImageRequest,
   OpenAIImageResult,
   ProviderAdapter,
+  ProviderCallOptions,
   ProviderConfig,
 } from "../types.js";
 import { getProviderProfile } from "../providerProfiles.js";
@@ -11,6 +12,7 @@ import {
   postJson,
   safeJsonParse,
 } from "../providerHttp.js";
+import { buildHttpErrorFromResponse } from "../providerErrors.js";
 import { getDefaultModel } from "../../providerPresets.js";
 
 const GEMINI_PROFILE = getProviderProfile("gemini")!;
@@ -64,6 +66,7 @@ export const geminiAdapter: ProviderAdapter = {
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     const model = config.model ?? DEFAULT_MODEL;
     const apiUrl = buildGeminiGenerateContentUrl(config.apiBaseUrl, model);
@@ -78,6 +81,7 @@ export const geminiAdapter: ProviderAdapter = {
       apiUrl,
       { "x-goog-api-key": config.apiKey },
       body,
+      options,
     );
 
     return parseGeminiResponse(response);
@@ -86,6 +90,7 @@ export const geminiAdapter: ProviderAdapter = {
   async edit(
     request: OpenAIImageEditRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     if (request.images.length === 0) {
       throw new Error("Gemini 图片编辑需要至少一张参考图。");
@@ -104,6 +109,7 @@ export const geminiAdapter: ProviderAdapter = {
       apiUrl,
       { "x-goog-api-key": config.apiKey },
       body,
+      options,
     );
 
     return parseGeminiResponse(response);
@@ -228,8 +234,8 @@ async function parseGeminiResponse(response: Response): Promise<OpenAIImageResul
   const payload = text ? safeJsonParse(text) : null;
 
   if (!response.ok) {
-    const detail = extractErrorMessage(payload) ?? `Gemini 请求失败：HTTP ${response.status}`;
-    throw new Error(detail);
+    const detail = extractErrorMessage(payload);
+    throw buildHttpErrorFromResponse(response.status, detail);
   }
 
   const candidates = payload?.candidates;

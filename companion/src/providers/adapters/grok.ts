@@ -23,6 +23,7 @@ import type {
   OpenAIImageRequest,
   OpenAIImageResult,
   ProviderAdapter,
+  ProviderCallOptions,
   ProviderConfig,
 } from "../types.js";
 import { getProviderProfile } from "../providerProfiles.js";
@@ -49,6 +50,7 @@ export const grokAdapter: ProviderAdapter = {
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     const apiUrl = `${normalizeGrokBaseUrl(config.apiBaseUrl)}/generations`;
     const model = config.model ?? getDefaultModel("grok")!;
@@ -58,6 +60,7 @@ export const grokAdapter: ProviderAdapter = {
       apiUrl,
       { Authorization: `Bearer ${config.apiKey}` },
       body,
+      options,
     );
 
     return parseImagesResponse(response, "Grok");
@@ -66,6 +69,7 @@ export const grokAdapter: ProviderAdapter = {
   async edit(
     request: OpenAIImageEditRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     if (request.images.length === 0) {
       throw new Error("Grok 图片编辑需要至少一张参考图。");
@@ -79,6 +83,7 @@ export const grokAdapter: ProviderAdapter = {
       apiUrl,
       { Authorization: `Bearer ${config.apiKey}` },
       body,
+      options,
     );
 
     return parseImagesResponse(response, "Grok");

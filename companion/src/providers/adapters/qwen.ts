@@ -8,6 +8,7 @@ import type {
   OpenAIImageRequest,
   OpenAIImageResult,
   ProviderAdapter,
+  ProviderCallOptions,
   ProviderConfig,
   SizeConstraints,
 } from "../types.js";
@@ -49,6 +50,7 @@ export const qwenAdapter: ProviderAdapter = {
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     const apiUrl = buildDashScopeGenerationUrl(config.apiBaseUrl);
     const model = config.model ?? DEFAULT_MODEL;
@@ -69,19 +71,23 @@ export const qwenAdapter: ProviderAdapter = {
         },
         parameters: { size },
       },
+      options,
     );
 
     const imageUrl = await parseDashScopeResponse(
       response,
       "Qwen-Image 响应中没有 output.choices[0].message.content[].image",
     );
-    const { b64Json, mimeType } = await urlToB64(imageUrl);
+    const { b64Json, mimeType } = await urlToB64(imageUrl, {
+      signal: options?.signal,
+    });
     return { b64Json, mimeType };
   },
 
   async edit(
     request: OpenAIImageEditRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     if (request.images.length === 0) {
       throw new Error("Qwen-Image 图像编辑需要至少一张参考图。");
@@ -114,13 +120,16 @@ export const qwenAdapter: ProviderAdapter = {
         },
         parameters: { size },
       },
+      options,
     );
 
     const imageUrl = await parseDashScopeResponse(
       response,
       "Qwen-Image 编辑响应中没有 output.choices[0].message.content[].image",
     );
-    const { b64Json, mimeType } = await urlToB64(imageUrl);
+    const { b64Json, mimeType } = await urlToB64(imageUrl, {
+      signal: options?.signal,
+    });
     return { b64Json, mimeType };
   },
 };

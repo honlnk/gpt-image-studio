@@ -255,10 +255,13 @@ describe("geminiAdapter.generate", () => {
     expect(result.b64Json).toBe("c25ha2VfY2FzZQ==");
   });
 
-  it("throws upstream disconnect when fetch throws", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("ECONNRESET"))));
-    await expect(geminiAdapter.generate(baseGenerateRequest(), CONFIG)).rejects.toThrow(
-      "服务器主动断开了连接",
+  it("classifies fetch throw as reset category", async () => {
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(networkError)));
+    await expect(geminiAdapter.generate(baseGenerateRequest(), CONFIG)).rejects.toMatchObject(
+      { category: "reset" },
     );
   });
 
@@ -336,10 +339,13 @@ describe("geminiAdapter.edit", () => {
     ).rejects.toThrow("参考图");
   });
 
-  it("throws upstream disconnect when fetch throws", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("ECONNRESET"))));
-    await expect(geminiAdapter.edit(baseEditRequest(), CONFIG)).rejects.toThrow(
-      "服务器主动断开了连接",
+  it("classifies fetch throw as reset category", async () => {
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(networkError)));
+    await expect(geminiAdapter.edit(baseEditRequest(), CONFIG)).rejects.toMatchObject(
+      { category: "reset" },
     );
   });
 });

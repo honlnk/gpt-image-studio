@@ -145,12 +145,15 @@ describe("images routes integration — generate", () => {
     await app.close();
   });
 
-  it("returns disconnect message with 502 when fetch throws", async () => {
+  it("classifies ECONNRESET as reset category with 502", async () => {
     const app = await setupWithCredentials({
       apiBaseUrl: "https://up.example.com/v1/images",
       apiKey: "sk-test",
     });
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("ECONNRESET"))));
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(networkError)));
     const res = await app.inject({
       method: "POST",
       url: "/images/generations",
@@ -158,7 +161,10 @@ describe("images routes integration — generate", () => {
       payload: { model: "gpt-image-2", prompt: "x" },
     });
     expect(res.statusCode).toBe(502);
-    expect(res.json().error).toContain("服务器主动断开");
+    const body = res.json();
+    expect(body.category).toBe("reset");
+    // reset 文案保留了"可能是审核"的猜测，但局限到这一类
+    expect(body.error).toContain("断开了连接");
     await app.close();
   });
 
@@ -609,6 +615,160 @@ describe("provider config passthrough", () => {
       payload: { model: "gpt-image-2", prompt: "x" },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+/**
+ * 错误分类端到端契约（review P2 第 4 项）：route 层必须按 errno / HTTP 状态把异常
+ * 翻译成 category 字段回传给 Web，让前端能做差异化处理（如 dns 引导检查 apiBaseUrl，
+ * rate_limited 自动退避）。本测试用 it.each 覆盖每一类典型场景。
+ *
+ * 与 providerErrors.test.ts（单元层）的区别：本测试走完整的 route → adapter → postJson
+ * 链路，确认错误从 fetch 抛出到 502 body 之间没有被错误归因。
+ */
+describe("images routes integration — error classification", () => {
+  /**
+   * 网络层分类：模拟 Node fetch 在不同 errno 下抛错，验证 502 body 的 category 正确。
+   */
+  const networkCases: Array<{
+    label: string;
+    error: unknown;
+    expectedCategory: string;
+  }> = [
+    {
+      label: "ENOTFOUND → dns",
+      error: Object.assign(new Error("getaddrinfo ENOTFOUND up.example.com"), {
+        code: "ENOTFOUND",
+      }),
+      expectedCategory: "dns",
+    },
+    {
+      label: "ECONNREFUSED → refused",
+      error: Object.assign(new Error("connect ECONNREFUSED"), {
+        code: "ECONNREFUSED",
+      }),
+      expectedCategory: "refused",
+    },
+    {
+      label: "AbortError → aborted",
+      error: new DOMException("aborted", "AbortError"),
+      expectedCategory: "aborted",
+    },
+  ];
+
+  it.each(networkCases)(
+    "classifies network error: $label",
+    async ({ error, expectedCategory }) => {
+      const app = await setupWithCredentials({
+        apiBaseUrl: "https://up.example.com/v1/images",
+        apiKey: "sk-test",
+      });
+      vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(error)));
+      const res = await app.inject({
+        method: "POST",
+        url: "/images/generations",
+        headers: { "content-type": "application/json" },
+        payload: { model: "gpt-image-2", prompt: "x" },
+      });
+      expect(res.statusCode).toBe(502);
+      expect(res.json().category).toBe(expectedCategory);
+      await app.close();
+    },
+  );
+
+  /**
+   * HTTP 层分类：上游返回非 2xx，route 应按状态码归类 4xx / 429 / 5xx。
+   * message 优先取上游 error.message，缺失时用 category 兜底文案。
+   */
+  const httpCases: Array<{
+    label: string;
+    status: number;
+    body: unknown;
+    expectedCategory: string;
+    expectedErrorSubstring?: string;
+  }> = [
+    {
+      label: "400 with detail → http_4xx, message from upstream",
+      status: 400,
+      body: { error: { message: "Invalid size" } },
+      expectedCategory: "http_4xx",
+      expectedErrorSubstring: "Invalid size",
+    },
+    {
+      label: "401 no detail → http_4xx, fallback message",
+      status: 401,
+      body: {},
+      expectedCategory: "http_4xx",
+    },
+    {
+      label: "429 → rate_limited",
+      status: 429,
+      body: { error: { message: "Too Many Requests" } },
+      expectedCategory: "rate_limited",
+      expectedErrorSubstring: "Too Many Requests",
+    },
+    {
+      label: "500 → http_5xx, fallback message",
+      status: 500,
+      body: {},
+      expectedCategory: "http_5xx",
+    },
+    {
+      label: "503 with detail → http_5xx, message from upstream",
+      status: 503,
+      body: { error: { message: "Maintenance" } },
+      expectedCategory: "http_5xx",
+      expectedErrorSubstring: "Maintenance",
+    },
+  ];
+
+  it.each(httpCases)(
+    "classifies HTTP: $label",
+    async ({ status, body, expectedCategory, expectedErrorSubstring }) => {
+      const app = await setupWithCredentials({
+        apiBaseUrl: "https://up.example.com/v1/images",
+        apiKey: "sk-test",
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          new Response(JSON.stringify(body), { status }),
+        ),
+      );
+      const res = await app.inject({
+        method: "POST",
+        url: "/images/generations",
+        headers: { "content-type": "application/json" },
+        payload: { model: "gpt-image-2", prompt: "x" },
+      });
+      expect(res.statusCode).toBe(502);
+      const responseBody = res.json();
+      expect(responseBody.category).toBe(expectedCategory);
+      if (expectedErrorSubstring) {
+        expect(responseBody.error).toContain(expectedErrorSubstring);
+      }
+      await app.close();
+    },
+  );
+
+  it("does not add category on route-layer validation errors (400)", async () => {
+    // route 的早期校验（缺 prompt 等）不走 adapter，错误不带 category。
+    // 验证响应 shape 与向后兼容：category 只在 502 出现。
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://up.example.com/v1/images",
+      apiKey: "sk-test",
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: { model: "gpt-image-2" }, // 缺 prompt
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.error).toContain("缺少 prompt");
+    expect(body.category).toBeUndefined();
     await app.close();
   });
 });

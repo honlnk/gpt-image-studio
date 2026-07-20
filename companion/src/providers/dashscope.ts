@@ -7,6 +7,7 @@
  */
 
 import { extractErrorMessage, safeJsonParse } from "./providerHttp.js";
+import { buildHttpErrorFromResponse } from "./providerErrors.js";
 
 export type DashScopeContentItem = {
   text?: string;
@@ -33,7 +34,7 @@ export async function parseDashScopeResponse(
 
   if (!response.ok) {
     const detail = extractErrorMessage(payload);
-    throw new Error(detail ?? `请求失败：HTTP ${response.status}`);
+    throw buildHttpErrorFromResponse(response.status, detail);
   }
 
   const imageUrl = extractDashScopeImageUrl(payload);

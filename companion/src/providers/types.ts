@@ -178,6 +178,15 @@ export type ProviderConfig = {
 };
 
 /**
+ * generate/edit 的可选第三参。
+ * `signal` 透传自 route 层：浏览器断开时 route 构造的 AbortController.abort()，
+ * 让 provider 的上游 fetch 同步取消。不传时上游请求按 fetch 默认行为进行。
+ */
+export type ProviderCallOptions = {
+  signal?: AbortSignal;
+};
+
+/**
  * Provider adapter 接口。输入输出都是 OpenAI 形状。
  *
  * - describe() 返回给人看的展示信息（/auth/status 的 accountLabel 等）。
@@ -188,6 +197,9 @@ export type ProviderConfig = {
  *   web 删除写死档位 + maxPixels 运行时过滤后，直接渲染本字段。
  * - getSizeConstraints/getResolutionOptions 可选：用于 Wan 这类能力会随 model
  *   变化的 provider。未提供时使用静态字段。
+ *
+ * generate/edit 的第三参 `options` 可选，承载 AbortSignal 等调用元数据；
+ * 现有调用方不传仍合法，因此接口向后兼容。
  */
 export type ProviderAdapter = {
   readonly id: string;
@@ -203,10 +215,12 @@ export type ProviderAdapter = {
   generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult>;
 
   edit?(
     request: OpenAIImageEditRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult>;
 };

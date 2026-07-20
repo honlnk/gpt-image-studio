@@ -257,14 +257,17 @@ describe("grokAdapter.generate", () => {
     );
   });
 
-  it("throws upstream disconnect when fetch throws", async () => {
+  it("classifies fetch throw as reset category", async () => {
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => Promise.reject(new Error("ECONNRESET"))),
+      vi.fn(async () => Promise.reject(networkError)),
     );
     await expect(
       grokAdapter.generate(baseGenerateRequest(), CONFIG),
-    ).rejects.toThrow("服务器主动断开了连接");
+    ).rejects.toMatchObject({ category: "reset" });
   });
 
   it("throws upstream error message on non-2xx", async () => {
@@ -360,13 +363,16 @@ describe("grokAdapter.edit", () => {
     ).rejects.toThrow("参考图");
   });
 
-  it("throws upstream disconnect when fetch throws", async () => {
+  it("classifies fetch throw as reset category", async () => {
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => Promise.reject(new Error("ECONNRESET"))),
+      vi.fn(async () => Promise.reject(networkError)),
     );
-    await expect(grokAdapter.edit(baseEditRequest(), CONFIG)).rejects.toThrow(
-      "服务器主动断开了连接",
+    await expect(grokAdapter.edit(baseEditRequest(), CONFIG)).rejects.toMatchObject(
+      { category: "reset" },
     );
   });
 });

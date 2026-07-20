@@ -19,13 +19,14 @@ import type {
   OpenAIImageRequest,
   OpenAIImageResult,
   ProviderAdapter,
+  ProviderCallOptions,
   ProviderConfig,
 } from "../types.js";
 import { getProviderProfile } from "../providerProfiles.js";
 import {
   parseImagesResponse,
   postJson,
-  UPSTREAM_DISCONNECT_MESSAGE,
+  postMultipart,
 } from "../providerHttp.js";
 import { getDefaultModel } from "../../providerPresets.js";
 
@@ -44,6 +45,7 @@ export const openaiAdapter: ProviderAdapter = {
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     const apiUrl = `${config.apiBaseUrl.replace(/\/+$/, "")}/generations`;
     // 透传：model/prompt + 已知字段 + web 发出的所有其余字段（quality/stream/...）。
@@ -58,6 +60,7 @@ export const openaiAdapter: ProviderAdapter = {
         background: request.background,
         output_format: request.outputFormat,
       },
+      options,
     );
     return parseImagesResponse(response, "OpenAI");
   },
@@ -65,24 +68,20 @@ export const openaiAdapter: ProviderAdapter = {
   async edit(
     request: OpenAIImageEditRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     const apiUrl = `${config.apiBaseUrl.replace(/\/+$/, "")}/edits`;
     const form = buildEditMultipart(request);
 
-    // multipart 请求不走 postJson（Content-Type 不同）
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          "Content-Type": `multipart/form-data; boundary=${form.boundary}`,
-        },
-        body: new Uint8Array(form.body),
-      });
-    } catch {
-      throw new Error(UPSTREAM_DISCONNECT_MESSAGE);
-    }
+    const response = await postMultipart(
+      apiUrl,
+      {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": `multipart/form-data; boundary=${form.boundary}`,
+      },
+      new Uint8Array(form.body),
+      options,
+    );
 
     return parseImagesResponse(response, "OpenAI");
   },

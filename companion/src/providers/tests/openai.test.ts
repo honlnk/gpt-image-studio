@@ -124,8 +124,12 @@ describe("openaiAdapter error handling", () => {
     ).rejects.toThrow("bad prompt");
   });
 
-  it("throws disconnect message when fetch throws", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("ECONNRESET"))));
+  it("classifies fetch throw as reset category", async () => {
+    // 真实 Node fetch 在 ECONNRESET 时抛带 code 的 Error，这里模拟该形态
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(networkError)));
     await expect(
       openaiAdapter.generate(
         {
@@ -138,7 +142,7 @@ describe("openaiAdapter error handling", () => {
         },
         CONFIG,
       ),
-    ).rejects.toThrow("服务器主动断开了连接");
+    ).rejects.toMatchObject({ category: "reset" });
   });
 
   it("throws when 2xx response has no b64_json", async () => {

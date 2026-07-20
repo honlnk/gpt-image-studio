@@ -44,6 +44,7 @@ import type {
   OpenAIImageRequest,
   OpenAIImageResult,
   ProviderAdapter,
+  ProviderCallOptions,
   ProviderConfig,
   SizeConstraints,
 } from "./types.js";
@@ -52,9 +53,10 @@ import {
   extractErrorMessage,
   parseImagesResponse,
   postJson,
+  postMultipart,
   safeJsonParse,
-  UPSTREAM_DISCONNECT_MESSAGE,
 } from "./providerHttp.js";
+import { buildHttpErrorFromResponse } from "./providerErrors.js";
 import { getDefaultModel } from "../providerPresets.js";
 import { urlToB64 } from "./urlToB64.js";
 
@@ -143,6 +145,7 @@ export function createOpenAICompatibleAdapter(
   async function generate(
     request: OpenAIImageRequest,
     providerConfig: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     const apiUrl = `${providerConfig.apiBaseUrl.replace(/\/+$/, "")}/generations`;
     const model = providerConfig.model ?? getDefaultModel(config.id)!;
@@ -152,9 +155,10 @@ export function createOpenAICompatibleAdapter(
       apiUrl,
       { Authorization: `Bearer ${providerConfig.apiKey}` },
       buildGenerateBody(request, model, size, config),
+      options,
     );
 
-    return parseResponse(response, config, config.id);
+    return parseResponse(response, config, config.id, options);
   }
 
   // edit 按模式决定是否实现
@@ -204,11 +208,15 @@ function buildGenerateBody(
  * 按 responseShape 解析响应。
  * data_b64：取 data[0].b64_json（标准 OpenAI 形状）
  * data_url：取 data[0].url，urlToB64 下载转换
+ *
+ * `options.signal` 在 data_url 分支下也透传给 urlToB64——客户端取消时，
+ * 不但要中止 API 请求，还要中止后续的图片下载（API 已返回后下载仍会烧流量）。
  */
 async function parseResponse(
   response: Response,
   config: OpenAICompatibleConfig,
   providerLabel: string,
+  options?: ProviderCallOptions,
 ): Promise<OpenAIImageResult> {
   if (config.responseShape === "data_b64") {
     // parseImagesResponse 内部已处理错误提取 + MIME 嗅探
@@ -219,7 +227,7 @@ async function parseResponse(
   const payload = safeJsonParse(await response.text());
   if (!response.ok) {
     const detail = extractErrorMessage(payload);
-    throw new Error(detail ?? `请求失败：HTTP ${response.status}`);
+    throw buildHttpErrorFromResponse(response.status, detail);
   }
   const url = payload?.data?.[0]?.url;
   if (!url) {
@@ -227,7 +235,9 @@ async function parseResponse(
       extractErrorMessage(payload) ?? `${providerLabel} 响应中没有 data[0].url`,
     );
   }
-  const { b64Json, mimeType } = await urlToB64(url);
+  const { b64Json, mimeType } = await urlToB64(url, {
+    signal: options?.signal,
+  });
   return { b64Json, mimeType };
 }
 
@@ -240,6 +250,7 @@ function createImageFieldEdit(
   return async function edit(
     request: OpenAIImageEditRequest,
     providerConfig: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     const reference = request.images[0];
     if (!reference) {
@@ -261,9 +272,10 @@ function createImageFieldEdit(
         image: imageDataUrl,
         ...config.requiredFields,
       },
+      options,
     );
 
-    return parseResponse(response, config, config.id);
+    return parseResponse(response, config, config.id, options);
   };
 }
 
@@ -276,27 +288,24 @@ function createMultipartEdit(
   return async function edit(
     request: OpenAIImageEditRequest,
     providerConfig: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
     const apiUrl = `${providerConfig.apiBaseUrl.replace(/\/+$/, "")}/edits`;
     const model = providerConfig.model ?? getDefaultModel(config.id)!;
     const size = config.normalizeSize(request.size, constraints);
     const form = buildMultipartBody(model, request, size, config);
 
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${providerConfig.apiKey}`,
-          "Content-Type": `multipart/form-data; boundary=${form.boundary}`,
-        },
-        body: new Uint8Array(form.body),
-      });
-    } catch {
-      throw new Error(UPSTREAM_DISCONNECT_MESSAGE);
-    }
+    const response = await postMultipart(
+      apiUrl,
+      {
+        Authorization: `Bearer ${providerConfig.apiKey}`,
+        "Content-Type": `multipart/form-data; boundary=${form.boundary}`,
+      },
+      new Uint8Array(form.body),
+      options,
+    );
 
-    return parseResponse(response, config, config.id);
+    return parseResponse(response, config, config.id, options);
   };
 }
 

@@ -119,7 +119,10 @@ describe("qwenAdapter.generate", () => {
 
     expect(result.b64Json).toBe(imageBytes.toString("base64"));
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/qwen.png");
+    // signal 透传：未传 options 时 urlToB64 收到 { signal: undefined }
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/qwen.png", {
+      signal: undefined,
+    });
   });
 
   it("throws upstream error message on non-2xx", async () => {
@@ -212,7 +215,10 @@ describe("qwenAdapter.edit", () => {
 
     expect(result.b64Json).toBe(imageBytes.toString("base64"));
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/qwen.png");
+    // signal 透传：未传 options 时 urlToB64 收到 { signal: undefined }
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/qwen.png", {
+      signal: undefined,
+    });
   });
 
   it("throws when no reference image provided", async () => {

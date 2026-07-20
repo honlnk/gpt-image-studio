@@ -144,13 +144,19 @@ describe("glmAdapter.generate", () => {
     expect(result.b64Json).toBe(
       Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
     );
-    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/img.png");
+    // signal 透传：未传 options 时 urlToB64 收到 { signal: undefined }
+    expect(urlToB64Mock).toHaveBeenCalledWith("https://cdn.example.com/img.png", {
+      signal: undefined,
+    });
   });
 
-  it("throws upstream disconnect when fetch throws", async () => {
+  it("classifies fetch throw as reset category", async () => {
+    const networkError = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => Promise.reject(new Error("ECONNRESET"))),
+      vi.fn(async () => Promise.reject(networkError)),
     );
     await expect(
       glmAdapter.generate(
@@ -164,7 +170,7 @@ describe("glmAdapter.generate", () => {
         },
         CONFIG,
       ),
-    ).rejects.toThrow("服务器主动断开了连接");
+    ).rejects.toMatchObject({ category: "reset" });
   });
 
   it("throws upstream error message on non-2xx", async () => {

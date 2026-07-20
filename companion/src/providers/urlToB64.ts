@@ -60,6 +60,12 @@ export type UrlToB64Options = {
   requestImpl?: ImageRequest;
   /** 测试注入点。生产环境只允许解析到公网地址。 */
   lookup?: LookupFunction;
+  /**
+   * 外部取消信号（如客户端断开）。与 timeoutMs 的内部超时信号合并后传给 request。
+   * 触发时下载立即中止；当前实现下会作为网络错误走重试逻辑（重试时仍会再被 signal 触发，
+   * 最终作为 AbortError 类异常抛出）。
+   */
+  signal?: AbortSignal;
 };
 
 /**
@@ -101,8 +107,9 @@ export async function urlToB64(
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      const signal = composeDownloadSignal(options.signal, timeoutMs);
       const downloaded = await downloadImage(initialUrl, {
-        signal: AbortSignal.timeout(timeoutMs),
+        signal,
         lookup,
         maxBytes,
         maxRedirects,
@@ -115,7 +122,7 @@ export async function urlToB64(
         throw new Error(`下载图片失败：${errorMessage(error)}`, { cause: error });
       }
       if (attempt < maxRetries) {
-        await sleep(backoffMs(attempt));
+        await sleep(backoffMs(attempt), options.signal);
       }
     }
   }
@@ -341,6 +348,10 @@ function isRetryable(error: unknown): boolean {
   ) {
     return false;
   }
+  // 外部取消（客户端断开）触发的 abort 立即失败，不重试——重试只会让取消生效更晚。
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return false;
+  }
   if (error instanceof RetryableDownloadError) {
     return true;
   }
@@ -369,8 +380,40 @@ function formatBytes(bytes: number): string {
   return `${Math.ceil(bytes / (1024 * 1024))} MiB`;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * 合并外部取消信号与 timeout 超时信号。
+ *
+ * - 外部 signal（客户端断开）触发时下载立即中止，且错误归类为 AbortError（不重试）。
+ * - timeout signal 触发时归类为 ESOCKETTIMEDOUT（可重试）。
+ *
+ * AbortSignal.any 在 Node ≥ 20 可用，与 companion 的 engines.node 要求一致。
+ */
+function composeDownloadSignal(
+  external: AbortSignal | undefined,
+  timeoutMs: number,
+): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  if (external === undefined) return timeoutSignal;
+  if (external.aborted) return external;
+  return AbortSignal.any([external, timeoutSignal]);
+}
+
+function sleep(ms: number, externalSignal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (externalSignal?.aborted) {
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      externalSignal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+    };
+    externalSignal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 /** 指数退避：300ms → 600ms → ... */

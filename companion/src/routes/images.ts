@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getActiveCredential } from "../credentials.js";
 import type { CompanionSecurityConfig } from "../securityConfig.js";
 import type {
@@ -13,6 +13,10 @@ import {
   KNOWN_EDIT_FIELDS,
   KNOWN_GENERATE_FIELDS,
 } from "../shared/knownFields.js";
+import {
+  ProviderCallError,
+  type ProviderErrorCategory,
+} from "../providers/providerErrors.js";
 
 type ImagesRoutesOptions = {
   security: CompanionSecurityConfig;
@@ -53,9 +57,11 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
     });
     let result;
     try {
-      result = await adapter.generate(request, config);
+      result = await withClientSignal(req, reply, (signal) =>
+        adapter.generate(request, config, { signal }),
+      );
     } catch (error) {
-      return reply.status(502).send({ error: errorMessage(error) });
+      return reply.status(502).send(errorPayload(error));
     }
 
     return reply.send({
@@ -117,11 +123,14 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
       background: editRequest.background,
       outputFormat: editRequest.outputFormat,
     });
+    const edit = adapter.edit;
     let result;
     try {
-      result = await adapter.edit(editRequest, config);
+      result = await withClientSignal(req, reply, (signal) =>
+        edit(editRequest, config, { signal }),
+      );
     } catch (error) {
-      return reply.status(502).send({ error: errorMessage(error) });
+      return reply.status(502).send(errorPayload(error));
     }
 
     return reply.send({
@@ -194,9 +203,51 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return "未知错误";
+/**
+ * 把异常转成回传给 Web 的 502 响应体。
+ *
+ * ProviderCallError（分类错误）→ 带 `category` 字段；其他 Error → 只带 `error`。
+ * Web 端按向后兼容读 `payload.error` 即可，`category` 是给未来差异化处理用的。
+ */
+export function errorPayload(error: unknown): { error: string; category?: ProviderErrorCategory } {
+  if (error instanceof ProviderCallError) {
+    return { error: error.message, category: error.category };
+  }
+  if (error instanceof Error && error.message) {
+    return { error: error.message };
+  }
+  return { error: "未知错误" };
+}
+
+/**
+ * 在客户端断开时取消 provider 调用。
+ *
+ * 监听 `req.raw` 的 'close' 事件（浏览器刷新/关页面/网络断开都会触发），
+ * 当 reply 还没开始写响应头时调用 controller.abort()，让 AbortSignal 一路
+ * 透传到 provider 的 fetch，立即取消上游请求，释放凭据/连接。
+ *
+ * `headersSent` 检查避免正常响应完成后误触发 abort——这种情况下 abort 已无意义，
+ * 而且会污染日志、误导调试。
+ *
+ * finally 里 off 掉 listener，防止 EventEmitter 在请求结束后仍持有引用导致泄漏。
+ */
+export async function withClientSignal<T>(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  fn: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const onClose = () => {
+    if (!reply.raw.headersSent) {
+      controller.abort();
+    }
+  };
+  req.raw.on("close", onClose);
+  try {
+    return await fn(controller.signal);
+  } finally {
+    req.raw.off("close", onClose);
+  }
 }
 
 function logNormalizedImageRequest(
