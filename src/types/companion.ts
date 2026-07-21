@@ -47,6 +47,13 @@ export type CompanionAuthStatus = {
    * web 不再写死 1K/2K/4K、不再用 maxPixels 运行时过滤，直接渲染本字段。
    */
   resolutionOptions: CompanionResolutionOption[];
+  /**
+   * 凭据文件损坏标志（P3-A）。companion 检测到 credentials.json 损坏时返 200 +
+   * corrupt:true + error（含备份路径）。正常情况下三字段均不出现。
+   * web 据此在 connectError 通道展示损坏原因。
+   */
+  corrupt?: boolean;
+  error?: string;
 };
 
 export type CompanionAuthStatusResult =

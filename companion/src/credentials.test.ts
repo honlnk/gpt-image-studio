@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -146,5 +146,178 @@ describe("credentials store CRUD", () => {
     const { addCredential } = await loadModules();
     const entry = addCredential({ ...sampleInput, label: "我的豆包" });
     expect(entry.label).toBe("我的豆包");
+  });
+});
+
+/**
+ * 凭据文件损坏处理（P3-A）。
+ *
+ * 此前的 loadStore 把 JSON 解析失败/结构损坏全部 catch 成空 store，导致：
+ * 1. 用户看到"所有 Provider 配置突然消失"——实际上是文件坏了，不是真的没配置。
+ * 2. 后续任何 addCredential/updateCredential 等"读-改-写"会覆盖原始损坏文件，数据永久丢失。
+ *
+ * 现在的行为：损坏文件被备份到 credentials.json.corrupt-{ts}.json，
+ * loadStore 抛 CredentialStoreError，让 route 层把明确原因回传给 Web/CLI。
+ */
+describe("credentials store corruption handling", () => {
+  /** 把任意内容写进 credentials.json 模拟损坏。 */
+  function writeCorruptFile(content: string): string {
+    const file = join(tempDir, "credentials.json");
+    writeFileSync(file, content, "utf-8");
+    return file;
+  }
+
+  /** 找到 tempDir 里的备份文件路径（credentials.json.corrupt-*.json）。 */
+  function findBackupFile(): string | undefined {
+    return readdirSync(tempDir).find((name) => name.startsWith("credentials.json.corrupt-"));
+  }
+
+  it("throws CredentialStoreError when JSON is unparseable", async () => {
+    const { loadStore, CredentialStoreError } = await loadModules();
+    writeCorruptFile("}{not valid json");
+    // 注意：loadStore 第一次调用会备份并删除原文件，第二次调就找不到文件了。
+    // 所以这里用一次 try/catch 同时验证类型和文案。
+    try {
+      loadStore();
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(CredentialStoreError);
+      expect((e as Error).message).toMatch(/无法解析/);
+    }
+  });
+
+  it("backs up corrupt JSON file before throwing", async () => {
+    const { loadStore } = await loadModules();
+    const corruptContent = "}{broken";
+    writeCorruptFile(corruptContent);
+
+    expect(() => loadStore()).toThrow();
+    const backup = findBackupFile();
+    expect(backup).toBeDefined();
+    expect(readFileSync(join(tempDir, backup!), "utf-8")).toBe(corruptContent);
+    // 原文件应已被 rename 走（不再存在于原路径）
+    expect(existsSync(join(tempDir, "credentials.json"))).toBe(false);
+  });
+
+  it("rejects non-array entries as CRED_INVALID_STRUCTURE", async () => {
+    const { loadStore, CredentialStoreError } = await loadModules();
+    writeCorruptFile(JSON.stringify({ entries: "not-an-array", activeId: null }));
+    try {
+      loadStore();
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(CredentialStoreError);
+      expect((e as Error).message).toMatch(/entries 不是数组/);
+    }
+  });
+
+  it("rejects entry with missing required field", async () => {
+    const { loadStore } = await loadModules();
+    // 缺 apiKey 字段
+    writeCorruptFile(
+      JSON.stringify({
+        entries: [
+          {
+            id: "x",
+            label: "test",
+            provider: "openai",
+            apiBaseUrl: "https://example.com",
+            model: "gpt-image-2",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        activeId: "x",
+      }),
+    );
+    expect(() => loadStore()).toThrow(/apiKey 缺失或不是非空 string/);
+  });
+
+  it("rejects entry with empty string field", async () => {
+    const { loadStore } = await loadModules();
+    // apiKey 为空串
+    writeCorruptFile(
+      JSON.stringify({
+        entries: [
+          {
+            id: "x",
+            label: "test",
+            provider: "openai",
+            apiBaseUrl: "https://example.com",
+            apiKey: "",
+            model: "gpt-image-2",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        activeId: "x",
+      }),
+    );
+    expect(() => loadStore()).toThrow(/apiKey 缺失或不是非空 string/);
+  });
+
+  it("silently falls back to first entry when activeId is orphaned", async () => {
+    const { loadStore } = await loadModules();
+    const validEntry = {
+      id: "real-id",
+      label: "real",
+      provider: "openai",
+      apiBaseUrl: "https://example.com",
+      apiKey: "sk-real",
+      model: "gpt-image-2",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    writeCorruptFile(
+      JSON.stringify({
+        entries: [validEntry],
+        activeId: "nonexistent-id", // 孤儿
+      }),
+    );
+    // 不抛错
+    const store = loadStore();
+    expect(store.activeId).toBe("real-id"); // 回退到首条
+    expect(store.entries).toHaveLength(1);
+  });
+
+  it("addCredential after corruption does NOT overwrite the backup", async () => {
+    const { loadStore, addCredential, listCredentials } = await loadModules();
+    const corruptContent = "}{broken";
+    writeCorruptFile(corruptContent);
+
+    // 损坏后 addCredential：loadStore 会先备份+抛错，addCredential 拿不到旧 store，
+    // 应该以空 store 为起点创建新 entry（loadStore 的备份逻辑清空了原文件路径）。
+    // 注意：addCredential 内部调 loadStore，loadStore 抛错会冒泡。
+    // 这里的契约是：损坏后用户必须先看到错误，重新配置才生效。
+    // 验证：原损坏内容仍在备份文件里，没被覆盖。
+    expect(() => addCredential(sampleInput)).toThrow();
+
+    const backup = findBackupFile();
+    expect(backup).toBeDefined();
+    expect(readFileSync(join(tempDir, backup!), "utf-8")).toBe(corruptContent);
+  });
+
+  it("CRED_PARSE_FAILED code is set on parse errors", async () => {
+    const { loadStore, CredentialStoreError } = await loadModules();
+    writeCorruptFile("}{broken");
+    try {
+      loadStore();
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(CredentialStoreError);
+      expect((e as InstanceType<typeof CredentialStoreError>).code).toBe("CRED_PARSE_FAILED");
+    }
+  });
+
+  it("CRED_INVALID_STRUCTURE code is set on structure errors", async () => {
+    const { loadStore, CredentialStoreError } = await loadModules();
+    writeCorruptFile(JSON.stringify({ entries: "not-array" }));
+    try {
+      loadStore();
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(CredentialStoreError);
+      expect((e as InstanceType<typeof CredentialStoreError>).code).toBe("CRED_INVALID_STRUCTURE");
+    }
   });
 });

@@ -37,6 +37,13 @@ export type CompanionAuthStatus = {
     label: string;
     targetPixels: number;
   }[];
+  /**
+   * 凭据文件损坏标志（P3-A）。corrupt=true 时凭据文件已被备份并清空，
+   * 用户需重新配置 provider；error 是中文可读原因（含备份文件路径）。
+   * web 据此在 connectError 通道展示损坏原因。正常情况下两字段均不出现。
+   */
+  corrupt?: boolean;
+  error?: string;
 };
 
 // ---- 凭证管理（Web 面板专用）----

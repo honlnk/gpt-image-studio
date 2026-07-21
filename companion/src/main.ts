@@ -6,8 +6,8 @@ import { Option, program } from "commander";
 import type { CompanionHealthResponse } from "./types.js";
 import type { CredentialEntry, CredentialInput } from "./credentials.js";
 import {
+  CredentialStoreError,
   listCredentials,
-  getActiveCredential,
   addCredential,
   updateCredential,
   removeCredential,
@@ -30,6 +30,41 @@ const require = createRequire(import.meta.url);
 const packageJson = require("../package.json") as { version: string };
 const COMPANION_VERSION = packageJson.version;
 const DEFAULT_PORT = "19750";
+
+/**
+ * 包住 CLI action 函数，统一处理凭据文件损坏。
+ *
+ * loadStore 损坏时抛 CredentialStoreError（已备份损坏文件）。CLI 层不崩栈，
+ * 只打印可读错误信息 + 设 exitCode=1，让用户知道发生了什么、原文件备份在哪。
+ * 覆盖 sync 和 async 两种 action 签名。
+ */
+function withCredentialStoreErrorCLI<TArgs extends unknown[]>(
+  fn: (...args: TArgs) => unknown,
+): (...args: TArgs) => void {
+  return (...args: TArgs) => {
+    try {
+      const result = fn(...args);
+      if (result instanceof Promise) {
+        result.catch((e) => {
+          if (e instanceof CredentialStoreError) {
+            console.error(e.message);
+            process.exitCode = 1;
+          } else {
+            console.error(e);
+            process.exitCode = 1;
+          }
+        });
+      }
+    } catch (e) {
+      if (e instanceof CredentialStoreError) {
+        console.error(e.message);
+        process.exitCode = 1;
+      } else {
+        throw e;
+      }
+    }
+  };
+}
 
 type ServeLikeOptions = {
   port: string;
@@ -146,7 +181,7 @@ const providerCmd = program
 providerCmd
   .command("list")
   .description("列出所有 provider 配置")
-  .action(() => {
+  .action(withCredentialStoreErrorCLI(() => {
     const store = listCredentials();
     if (store.entries.length === 0) {
       console.log("暂无 provider 配置，用 gpt-image-studio provider add 添加。");
@@ -164,12 +199,12 @@ providerCmd
       console.log("");
     });
     console.log("=".repeat(60));
-  });
+  }));
 
 providerCmd
   .command("show <id>")
   .description("查看单条配置详情")
-  .action((id: string) => {
+  .action(withCredentialStoreErrorCLI((id: string) => {
     const store = listCredentials();
     const entry = store.entries.find((e) => e.id === id);
     if (!entry) {
@@ -185,12 +220,12 @@ providerCmd
     console.log(`  API Key:  ${entry.apiKey}`);
     console.log(`  创建时间: ${entry.createdAt}`);
     console.log(`  更新时间: ${entry.updatedAt}`);
-  });
+  }));
 
 providerCmd
   .command("add")
   .description("交互式新增 provider 配置")
-  .action(async () => {
+  .action(withCredentialStoreErrorCLI(async () => {
     const input = await promptCredentialInput();
     if (!input) return;
     const entry = addCredential(input);
@@ -198,12 +233,12 @@ providerCmd
     console.log("配置已保存。");
     printEntrySummary(entry);
     console.log(`  ID: ${entry.id}`);
-  });
+  }));
 
 providerCmd
   .command("edit <id>")
   .description("编辑指定 provider 配置")
-  .action(async (id: string) => {
+  .action(withCredentialStoreErrorCLI(async (id: string) => {
     const store = listCredentials();
     const existing = store.entries.find((e) => e.id === id);
     if (!existing) {
@@ -218,31 +253,31 @@ providerCmd
       console.log("配置已更新。");
       printEntrySummary(entry);
     }
-  });
+  }));
 
 providerCmd
   .command("remove <id>")
   .description("删除指定 provider 配置")
-  .action((id: string) => {
+  .action(withCredentialStoreErrorCLI((id: string) => {
     const removed = removeCredential(id);
     if (removed) {
       console.log("配置已删除。");
     } else {
       console.log(`未找到 ID 为 ${id} 的配置。`);
     }
-  });
+  }));
 
 providerCmd
   .command("activate <id>")
   .description("将指定配置设为激活")
-  .action((id: string) => {
+  .action(withCredentialStoreErrorCLI((id: string) => {
     const ok = activateCredential(id);
     if (ok) {
       console.log("已设为激活。");
     } else {
       console.log(`未找到 ID 为 ${id} 的配置。`);
     }
-  });
+  }));
 
 // ==================== status 命令 ====================
 
@@ -250,7 +285,6 @@ program
   .command("status")
   .description("查看 companion 状态")
   .action(async () => {
-    const active = getActiveCredential();
     const accessKey = getAccessKey();
 
     console.log("=".repeat(50));
@@ -259,15 +293,28 @@ program
     console.log("");
     console.log(`版本:    v${COMPANION_VERSION}`);
 
-    if (active) {
-      const preset = PROVIDER_PRESETS.find((p) => p.id === active.provider);
-      console.log(`凭据:    已配置（${listCredentials().entries.length} 条，当前激活：${active.label}）`);
-      console.log(`  Provider: ${preset ? preset.label : active.provider}`);
-      console.log(`  Model:    ${active.model || "(未设置)"}`);
-      console.log(`  Base URL: ${active.apiBaseUrl}`);
-      console.log(`  API Key:  ${active.apiKey}`);
-    } else {
-      console.log("凭据:    未配置（运行 gpt-image-studio provider add 添加配置）");
+    // 凭据状态：损坏时单独 catch 并展示原因，不阻断后续服务/密钥状态输出。
+    // getActiveCredential 内部已 catch CredentialStoreError 返 null，但这里需要
+    // 显式探测损坏以展示原因；用 listCredentials 一次性拿 count + active。
+    try {
+      const store = listCredentials();
+      const active = store.activeId ? store.entries.find((e) => e.id === store.activeId) ?? null : null;
+      if (active) {
+        const preset = PROVIDER_PRESETS.find((p) => p.id === active.provider);
+        console.log(`凭据:    已配置（${store.entries.length} 条，当前激活：${active.label}）`);
+        console.log(`  Provider: ${preset ? preset.label : active.provider}`);
+        console.log(`  Model:    ${active.model || "(未设置)"}`);
+        console.log(`  Base URL: ${active.apiBaseUrl}`);
+        console.log(`  API Key:  ${active.apiKey}`);
+      } else {
+        console.log("凭据:    未配置（运行 gpt-image-studio provider add 添加配置）");
+      }
+    } catch (e) {
+      if (e instanceof CredentialStoreError) {
+        console.log(`凭据:    ${e.message}`);
+      } else {
+        throw e;
+      }
     }
 
     const managed = readManagedProcessInfo();

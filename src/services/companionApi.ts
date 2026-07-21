@@ -66,7 +66,16 @@ export async function listCompanionCredentials(
   const res = await fetch(`${url}/credentials`, {
     signal: AbortSignal.timeout(3000),
   });
-  if (!res.ok) throw new Error("无法获取凭据列表");
+  if (!res.ok) {
+    // 凭据文件损坏时 companion 返 500 + { error, corrupt:true }；读 error 给用户可读原因。
+    // 其他非 200（罕见）退回通用文案。和 add/updateCredential 的错误读取模式一致。
+    let message = "无法获取凭据列表";
+    try {
+      const data = (await res.json()) as { error?: string };
+      message = data.error || message;
+    } catch {}
+    throw new Error(message);
+  }
   return await res.json();
 }
 

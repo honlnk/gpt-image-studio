@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+import { CredentialStoreError } from "../credentials.js";
 
 let authRoutes: typeof import("./auth.js").authRoutes;
 
@@ -8,12 +9,22 @@ beforeEach(() => vi.resetModules());
 afterEach(() => vi.doUnmock("../credentials.js"));
 
 /**
- * mock getActiveCredential：返回 CredentialEntry 或 null。
+ * mock getActiveCredential + listCredentials：返回 CredentialEntry 或 null。
  * 测试只关心 /auth/status 的回流，不碰真实文件系统。
+ *
+ * auth route 同时调 listCredentials（探测损坏 + 拿 entries count）和
+ * getActiveCredential（拿激活 entry），两者都 mock 成相同的 creds 值——
+ * listCredentials 返完整 store（creds 为 null 时空 store，否则单 entry store）。
+ * CredentialStoreError 类被 auth.ts import 用于 instanceof 判断，直接提供真实类。
  */
 async function makeApp(creds: unknown) {
   vi.doMock("../credentials.js", () => ({
     getActiveCredential: () => creds,
+    listCredentials: () =>
+      creds
+        ? { entries: [creds], activeId: (creds as { id: string }).id }
+        : { entries: [], activeId: null },
+    CredentialStoreError,
   }));
   authRoutes = (await import("./auth.js")).authRoutes;
   const app: FastifyInstance = Fastify();

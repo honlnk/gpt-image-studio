@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type {
   CompanionCredentialsListResponse,
   CompanionCredentialInput,
@@ -10,6 +10,7 @@ import type { ProviderPreset } from "../providerPresets.js";
 import { PROVIDER_PRESETS } from "../providerPresets.js";
 import { loopbackGuard } from "../middleware/loopback.js";
 import {
+  CredentialStoreError,
   listCredentials,
   addCredential,
   updateCredential,
@@ -42,8 +43,12 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     return PROVIDER_PRESETS;
   });
 
-  app.get<{ Reply: CompanionCredentialsListResponse }>("/credentials", async () => {
-    return listCredentials();
+  app.get<{ Reply: CompanionCredentialsListResponse }>("/credentials", async (_req, reply) => {
+    try {
+      return listCredentials();
+    } catch (error) {
+      return handleStoreError(error, reply);
+    }
   });
 
   app.post<{
@@ -55,8 +60,12 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     if (error) {
       return reply.status(400).send({ error } as never);
     }
-    const entry = addCredential(input);
-    return { ok: true, entry };
+    try {
+      const entry = addCredential(input);
+      return { ok: true, entry };
+    } catch (e) {
+      return handleStoreError(e, reply);
+    }
   });
 
   app.put<{
@@ -69,34 +78,63 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     if (error) {
       return reply.status(400).send({ error } as never);
     }
-    const entry = updateCredential(req.params.id, input);
-    if (!entry) {
-      return reply.status(404).send({ error: "凭据不存在" } as never);
+    try {
+      const entry = updateCredential(req.params.id, input);
+      if (!entry) {
+        return reply.status(404).send({ error: "凭据不存在" } as never);
+      }
+      return { ok: true, entry };
+    } catch (e) {
+      return handleStoreError(e, reply);
     }
-    return { ok: true, entry };
   });
 
   app.delete<{
     Params: { id: string };
     Reply: CompanionCredentialDeleteResponse;
   }>("/credentials/:id", async (req, reply) => {
-    const removed = removeCredential(req.params.id);
-    if (!removed) {
-      return reply.status(404).send({ error: "凭据不存在" } as never);
+    try {
+      const removed = removeCredential(req.params.id);
+      if (!removed) {
+        return reply.status(404).send({ error: "凭据不存在" } as never);
+      }
+      return { ok: true };
+    } catch (e) {
+      return handleStoreError(e, reply);
     }
-    return { ok: true };
   });
 
   app.post<{
     Params: { id: string };
     Reply: CompanionCredentialActivateResponse;
   }>("/credentials/:id/activate", async (req, reply) => {
-    const ok = activateCredential(req.params.id);
-    if (!ok) {
-      return reply.status(404).send({ error: "凭据不存在" } as never);
+    try {
+      const ok = activateCredential(req.params.id);
+      if (!ok) {
+        return reply.status(404).send({ error: "凭据不存在" } as never);
+      }
+      return { ok: true, activeId: req.params.id };
+    } catch (e) {
+      return handleStoreError(e, reply);
     }
-    return { ok: true, activeId: req.params.id };
   });
+}
+
+/**
+ * 把 CredentialStoreError 转成 500 + { error, corrupt: true } 响应。
+ *
+ * 凭据文件损坏时 loadStore 抛 CredentialStoreError（已备份损坏文件并给出可读文案）；
+ * 这里只在 route 边界兜底一次，让 Web 端 credError 通道能展示具体原因。
+ * 非 CredentialStoreError 重新抛出，交给 Fastify 默认错误处理器。
+ *
+ * 返回值用 `as never` 绕过 Fastify 的 Reply 类型约束——和现有 400 错误响应的
+ * `{ error } as never` 同一模式：错误响应的 shape 不在正常 Reply 类型里。
+ */
+function handleStoreError(error: unknown, reply: FastifyReply): never {
+  if (error instanceof CredentialStoreError) {
+    return reply.status(500).send({ error: error.message, corrupt: true }) as never;
+  }
+  throw error;
 }
 
 function parseInput(body: unknown): CompanionCredentialInput {
