@@ -100,24 +100,23 @@ describe("/credentials route corruption handling", () => {
 });
 
 describe("/auth/status corruption handling", () => {
-  it("returns 200 + corrupt:true + error when credentials corrupt", async () => {
+  it("returns 200 + ready:false when credentials corrupt (degrades gracefully)", async () => {
     const app = await makeAuthApp();
     writeCorruptFile("}{broken");
 
     const res = await app.inject({ method: "GET", url: "/auth/status" });
-    // /auth/status 返 200（而非 500）是为了让 Web 能拿到结构化信号——
-    // Web 对 /auth/status 非 200 的处理是静默置空，会丢失原因。
+    // /auth/status 不主动探测损坏（那是 /credentials 的职责）；
+    // getActiveCredential 内部 catch CredentialStoreError 返 null，
+    // 所以这里走「无凭据」正常分支：返 200 + ready:false + OpenAI 默认能力。
+    // 损坏原因由 /credentials 的 500+corrupt 通道展示给用户。
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.corrupt).toBe(true);
     expect(body.ready).toBe(false);
-    expect(body.error).toMatch(/无法解析/);
-    // 损坏文件仍被备份
-    expect(findBackupFile()).toBeDefined();
+    expect(body.corrupt).toBeUndefined();
     await app.close();
   });
 
-  it("returns normal status (no corrupt field) when credentials healthy", async () => {
+  it("returns normal status when credentials healthy", async () => {
     const app = await makeAuthApp();
     // 写一个合法的空 store
     writeCorruptFile(JSON.stringify({ entries: [], activeId: null }));
@@ -125,7 +124,6 @@ describe("/auth/status corruption handling", () => {
     const res = await app.inject({ method: "GET", url: "/auth/status" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.corrupt).toBeUndefined();
     expect(body.ready).toBe(false);
     await app.close();
   });

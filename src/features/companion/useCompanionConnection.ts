@@ -65,12 +65,6 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
     );
 
     if (authResult.ok) {
-      // 凭据文件损坏时 /auth/status 返 200 + corrupt:true + error（含备份路径）。
-      // companionAuthStatus 仍正常 set（ready:false），但额外把损坏原因塞进
-      // connectError，让用户在连接区红字看到具体原因——和 credError 通道互补。
-      if (authResult.status.corrupt && authResult.status.error) {
-        connectError.value = authResult.status.error;
-      }
       companionAuthStatus.value = authResult.status;
       applyProviderInfoForActiveMode(authResult.status);
       return;

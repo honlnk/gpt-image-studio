@@ -219,22 +219,23 @@ GLM、Qwen 和 Wan 返回图片 URL 后，Companion 仍会立即下载并转为 
 - `/credentials` 所有 5 个 route handler 用 `handleStoreError(reply, fn)` 统一 catch
   `CredentialStoreError`，返 `500 + { error, corrupt: true }`；非 CredentialStoreError
   重新抛出交给 Fastify 默认处理器。
-- `/auth/status` 返 **200 + `corrupt: true` + `error`**（而非 500）：Web 端
-  `getCompanionAuthStatusResult` 对非 200 的处理是「静默置空」，会丢失原因；返 200 +
-  结构化字段让 Web 能在 `connectError` 通道展示损坏原因。`/credentials` 的 500+corrupt
-  与 `/auth/status` 的 200+corrupt 互为双保险——任一通道都能让用户看到原因。
-- `CompanionAuthStatus` 类型加可选 `corrupt?: boolean` + `error?: string` 字段（向后兼容）。
-- `getActiveCredential` 内部 catch `CredentialStoreError` 返 null，让 `images` route
-  走现有「无凭据返 503」路径，不需要每个调用方都处理损坏异常。
+- `/auth/status` **不主动探测损坏**：`getActiveCredential` 内部 catch
+  `CredentialStoreError` 返 null，让本路由走「无凭据」正常分支（ready:false + OpenAI
+  默认能力）。损坏原因由 `/credentials` 的 500+corrupt 通道展示。
+  - 取舍：曾考虑让 `/auth/status` 也返 `200 + corrupt:true` 做双保险，但真实运行测试
+    发现——浏览器打开页面时 `/credentials` 和 `/auth/status` 几乎同时被调，先到的那个
+    会把损坏文件备份走，后到的就拿不到损坏信号了（文件已不在）。双保险在真实时序下
+    不成立，所以简化为单通道：损坏信号只在 `/credentials` 的 500+corrupt 里。
+- `getActiveCredential` 内部 catch 让 `images` route 也走现有「无凭据返 503」路径，
+  不需要每个调用方都处理损坏异常。
 
 **Web 端最小改动**（不改 UI 结构）：
 
 - `listCompanionCredentials` 像 `addCompanionCredential` 那样读 response body 的
-  `error` 字段，复用现有 `credError` 红字通道展示损坏原因。
-- `useCompanionConnection.checkStatus` 在 `authResult.status.corrupt` 时把 `error`
-  塞进 `connectError`，让连接区红字也能看到损坏原因。
-- 不加专门的损坏态告警区块（P3+ 的事）；用户通过现有红字通道看到原因 + 备份路径
-  + 知道该重新配置。
+  `error` 字段，复用现有 `credError` 红字通道展示损坏原因（"凭据文件损坏，已备份到 X，
+  请重新配置 provider"）。
+- 不加专门的损坏态告警区块（P3+ 的事）；用户通过现有 `credError` 红字看到原因 +
+  备份路径 + 知道该重新配置。
 
 **CLI 错误展示**：
 
@@ -538,6 +539,6 @@ Provider 配置突然消失，且缺少可诊断日志。~~
   回退、addCredential 不覆盖备份、两个 code 值（`CRED_PARSE_FAILED` /
   `CRED_INVALID_STRUCTURE`）。
 - 新增 `credentials.integration.test.ts`（5 个测试）：`/credentials` 返 500+corrupt、
-  `/auth/status` 返 200+corrupt、健康文件不触发 corrupt 字段。
-- `auth.test.ts` mock 同步覆盖 `listCredentials`（auth route 改为调 listCredentials
-  而非 getActiveCredential 探测损坏）。
+  `/auth/status` 损坏时优雅降级返 200+ready:false、健康文件正常。
+- 端到端手动验证（真实 companion + curl）：损坏文件被备份、POST /credentials 不覆盖
+  损坏文件、CLI provider list/status 显示可读错误、恢复后新配置正常生效、备份保留。
