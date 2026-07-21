@@ -187,6 +187,73 @@ GLM、Qwen 和 Wan 返回图片 URL 后，Companion 仍会立即下载并转为 
 （9 个端到端分类集成测试，覆盖 ENOTFOUND / ECONNREFUSED / AbortError / 4xx / 429 /
 5xx 等场景）。9 处 adapter 测试的旧文案断言同步改为按 errno → category 断言。
 
+### 凭据文件损坏不再静默视为空配置
+
+状态：已于 2026-07-21 修复（P3-A），实现在 `companion/src/credentials.ts`、
+`companion/src/routes/credentials.ts`、`companion/src/routes/auth.ts`、
+`companion/src/main.ts`、Web 侧 `src/services/companionApi.ts` +
+`src/features/companion/useCompanionConnection.ts`。
+
+此前 `loadStore` 把 JSON 解析失败、结构不合法、entry 字段缺失全部吞进空 `catch {}`
+返 `emptyStore()`，用户看到的现象是「所有 Provider 配置突然消失」——实际上是文件
+坏了，不是真的没配置。更严重的是：后续任何 `addCredential`/`updateCredential` 等
+「读-改-写」操作会 load 到空 store 后再 save，**把损坏的原始文件彻底覆盖**，数据
+不可恢复。本次整改让损坏可诊断、数据不丢失、用户能立即恢复：
+
+**损坏检测与备份**：
+
+- `loadStore` 不再返空 store；JSON 不可解析或结构不合法时，先把损坏文件备份到
+  `credentials.json.corrupt-{timestamp}.json`（rename，跨设备退回 copy+unlink），
+  再抛 `CredentialStoreError`（`CRED_PARSE_FAILED` / `CRED_INVALID_STRUCTURE`，
+  对齐 `ProviderCallError` 范式：自定义 Error 子类 + `this.name` + ES2022 `cause`）。
+- `validateStore` 严格校验每个 entry 的 8 个字段（id/label/provider/apiBaseUrl/
+  apiKey/model/createdAt/updatedAt）全部存在且为非空 string。任一缺失视为损坏——
+  这些字段都由 `addCredential`/`updateCredential` 自动写入，缺失意味着文件被外部
+  编辑过，这类文件风险高，宁可误判也不要漏过（项目凭据格式已强转，不存在遗留旧格式）。
+- 孤儿 `activeId`（指向不存在的 entry）不视为损坏，load 时静默回退到首条
+  （和 `removeCredential` 回退逻辑一致），记 warn 日志。
+- 抛错而非返 result 类型：让「读-改-写」链路自然中止，route 层只在边界 catch 一次。
+
+**route 层错误响应**：
+
+- `/credentials` 所有 5 个 route handler 用 `handleStoreError(reply, fn)` 统一 catch
+  `CredentialStoreError`，返 `500 + { error, corrupt: true }`；非 CredentialStoreError
+  重新抛出交给 Fastify 默认处理器。
+- `/auth/status` 返 **200 + `corrupt: true` + `error`**（而非 500）：Web 端
+  `getCompanionAuthStatusResult` 对非 200 的处理是「静默置空」，会丢失原因；返 200 +
+  结构化字段让 Web 能在 `connectError` 通道展示损坏原因。`/credentials` 的 500+corrupt
+  与 `/auth/status` 的 200+corrupt 互为双保险——任一通道都能让用户看到原因。
+- `CompanionAuthStatus` 类型加可选 `corrupt?: boolean` + `error?: string` 字段（向后兼容）。
+- `getActiveCredential` 内部 catch `CredentialStoreError` 返 null，让 `images` route
+  走现有「无凭据返 503」路径，不需要每个调用方都处理损坏异常。
+
+**Web 端最小改动**（不改 UI 结构）：
+
+- `listCompanionCredentials` 像 `addCompanionCredential` 那样读 response body 的
+  `error` 字段，复用现有 `credError` 红字通道展示损坏原因。
+- `useCompanionConnection.checkStatus` 在 `authResult.status.corrupt` 时把 `error`
+  塞进 `connectError`，让连接区红字也能看到损坏原因。
+- 不加专门的损坏态告警区块（P3+ 的事）；用户通过现有红字通道看到原因 + 备份路径
+  + 知道该重新配置。
+
+**CLI 错误展示**：
+
+- 6 个 credentials 子命令（list/show/add/edit/remove/activate）+ status 命令用
+  `withCredentialStoreErrorCLI(fn)` 统一 catch，打印可读错误信息 + 设 `exitCode=1`，
+  不崩栈。status 命令单独处理：凭据部分损坏时打印原因但不阻断后续服务/密钥状态输出。
+
+测试：新增 `credentials.test.ts` 的「corruption handling」describe block（8 个单元测试：
+JSON 不可解析、结构不合法、entry 缺字段、entry 空串字段、孤儿 activeId 回退、
+addCredential 不覆盖备份、两个 code 值）；新增 `credentials.integration.test.ts`
+（5 个集成测试：`/credentials` 返 500+corrupt、`/auth/status` 返 200+corrupt、
+健康文件不触发 corrupt 字段）；`auth.test.ts` mock 同步覆盖 `listCredentials`。
+
+剩余取舍：
+
+- 备份文件堆积（用户反复触发损坏）不做自动清理，避免误删用户想保留的备份。
+- `accessKey.ts` 的空 catch 不改——access key 损坏时 `loadOrCreateAccessKey` 自动
+  重新生成（行为合理），不像 credentials 损坏会丢用户数据。
+
 ## 剩余主要问题
 
 ### P1：Grok 和 Gemini 分辨率字段契约错位
@@ -380,11 +447,13 @@ type ProviderCapability = {
 
 ### P3：凭据文件损坏被静默视为空配置
 
-`loadStore` 在 JSON 解析失败或结构不合法时直接返回空 Store。用户看到的现象会像是所有
-Provider 配置突然消失，且缺少可诊断日志。
+~~`loadStore` 在 JSON 解析失败或结构不合法时直接返回空 Store。用户看到的现象会像是所有
+Provider 配置突然消失，且缺少可诊断日志。~~
 
-建议保留损坏文件，记录脱敏错误，并向 CLI/Web 返回“凭据文件无法读取”的明确状态，
-不要自动把数据损坏表现为首次使用。
+~~建议保留损坏文件，记录脱敏错误，并向 CLI/Web 返回“凭据文件无法读取”的明确状态，
+不要自动把数据损坏表现为首次使用。~~
+
+已完成（2026-07-21），详见上文「已完成整改：凭据文件损坏不再静默视为空配置」。
 
 ### P3：公共设施存在维护漂移
 
@@ -458,3 +527,17 @@ Provider 配置突然消失，且缺少可诊断日志。
   覆盖 ENOTFOUND / ECONNREFUSED / AbortError / 400 / 401 / 429 / 500 / 503 等
   场景的 category 字段断言。
 - 9 处 adapter 测试断言从硬编码文案改为 `category` 字段断言，避免文案微调再连锁改测试。
+
+2026-07-21 凭据文件损坏处理（P3-A）后：
+
+- `pnpm typecheck:companion` 通过。
+- `pnpm typecheck` 通过。
+- `pnpm test` 通过，共 43 个测试文件、510 个测试。
+- 扩展 `credentials.test.ts`（13 → 21 个测试）：新增「corruption handling」
+  describe block，覆盖 JSON 不可解析、结构不合法、entry 缺字段/空串、孤儿 activeId
+  回退、addCredential 不覆盖备份、两个 code 值（`CRED_PARSE_FAILED` /
+  `CRED_INVALID_STRUCTURE`）。
+- 新增 `credentials.integration.test.ts`（5 个测试）：`/credentials` 返 500+corrupt、
+  `/auth/status` 返 200+corrupt、健康文件不触发 corrupt 字段。
+- `auth.test.ts` mock 同步覆盖 `listCredentials`（auth route 改为调 listCredentials
+  而非 getActiveCredential 探测损坏）。
