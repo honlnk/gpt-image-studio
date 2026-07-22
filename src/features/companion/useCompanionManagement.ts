@@ -7,12 +7,15 @@ import {
   updateCompanionCredential,
   removeCompanionCredential,
   activateCompanionCredential,
+  resetEmptyCredentialStore,
+  restoreBackupCredentialStore,
   getCompanionLogs,
 } from "../../services/companionApi";
 import type {
   CompanionProviderPreset,
   CompanionCredentialEntry,
   CompanionCredentialInput,
+  CompanionCorruptionEvent,
   CompanionLogsTailResponse,
 } from "../../types/companion";
 
@@ -47,6 +50,16 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
   const credError = ref("");
   const logsError = ref("");
 
+  /**
+   * 凭据文件损坏事件。loadCredentials 收到 /credentials 的 500+corrupt 时设置，
+   * 让 UI 渲染异常面板（隐藏 API 凭据/日志面板）。
+   * reset/restore 成功后清空；restore 失败时 message 被覆盖为「恢复失败：xxx」，
+   * 保留非空让用户继续看到异常面板。
+   */
+  const corruptEvent = ref<CompanionCorruptionEvent | null>(null);
+  const loadingReset = ref(false);
+  const loadingRestore = ref(false);
+
   async function loadPresets() {
     loadingPresets.value = true;
     try {
@@ -65,8 +78,16 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
       const data = await listCompanionCredentials(input.companionUrl.value);
       credentialList.value = Array.isArray(data.entries) ? data.entries : [];
       activeCredentialId.value = data.activeId ?? null;
+      // 成功加载 → 清除损坏事件（可能是 companion 端已恢复，或本来就是正常的）
+      corruptEvent.value = null;
     } catch (e) {
-      credError.value = e instanceof Error ? e.message : "无法获取凭据列表";
+      // 区分「凭据文件损坏」与「普通加载失败」：前者走异常面板，后者走 credError 红字。
+      // listCompanionCredentials 在响应是 corrupt:true 时给 error attach corrupt 属性。
+      if (e instanceof Error && (e as Error & { corrupt?: boolean }).corrupt) {
+        corruptEvent.value = { message: e.message };
+      } else {
+        credError.value = e instanceof Error ? e.message : "无法获取凭据列表";
+      }
     } finally {
       loadingCredentials.value = false;
     }
@@ -129,6 +150,46 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
   }
 
   /**
+   * 重置成空配置：写合法空 store + 清除损坏事件。
+   * 成功后重新 loadCredentials + onCredentialsChanged；失败时把错误信息覆盖到 corruptEvent，
+   * 让用户在异常面板原地看到「重置失败：xxx」，可继续尝试从备份恢复。
+   */
+  async function resetCredentialStore() {
+    loadingReset.value = true;
+    try {
+      await resetEmptyCredentialStore(input.companionUrl.value);
+      corruptEvent.value = null;
+      await loadCredentials();
+      input.onCredentialsChanged();
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : "重置凭据失败";
+      corruptEvent.value = { message: `重置失败：${reason}` };
+    } finally {
+      loadingReset.value = false;
+    }
+  }
+
+  /**
+   * 从最近备份恢复：companion 找最新的 credentials.json.corrupt-{ts}.json 尝试恢复。
+   * 成功后重新 loadCredentials + onCredentialsChanged；失败时把错误信息覆盖到 corruptEvent，
+   * 保留异常面板让用户改试「重置成空配置」。
+   */
+  async function restoreCredentialBackup() {
+    loadingRestore.value = true;
+    try {
+      await restoreBackupCredentialStore(input.companionUrl.value);
+      corruptEvent.value = null;
+      await loadCredentials();
+      input.onCredentialsChanged();
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : "恢复备份失败";
+      corruptEvent.value = { message: `恢复失败：${reason}` };
+    } finally {
+      loadingRestore.value = false;
+    }
+  }
+
+  /**
    * 从服务端同步 activeId——add/remove 后服务端可能自动切换激活项，
    * 本地不能盲猜，拉一次最准确。
    */
@@ -172,12 +233,17 @@ export function useCompanionManagement(input: UseCompanionManagementInput) {
     logsLoading,
     credError,
     logsError,
+    corruptEvent,
+    loadingReset,
+    loadingRestore,
     loadPresets,
     loadCredentials,
     addCredential,
     updateCredential,
     removeCredential,
     activateCredential,
+    resetCredentialStore,
+    restoreCredentialBackup,
     loadLogs,
   };
 }

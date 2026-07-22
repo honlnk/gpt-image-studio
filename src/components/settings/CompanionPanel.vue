@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from "vue";
 import type {
   CompanionAuthStatus,
+  CompanionCorruptionEvent,
   CompanionCredentialEntry,
   CompanionCredentialInput,
   CompanionHealthResponse,
@@ -31,6 +32,10 @@ const props = defineProps<{
   logsLoading: boolean;
   credError: string;
   logsError: string;
+  // 凭据文件损坏事件 + 恢复动作 loading。
+  corruptEvent: CompanionCorruptionEvent | null;
+  loadingReset: boolean;
+  loadingRestore: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -45,6 +50,9 @@ const emit = defineEmits<{
   "remove-credential": [id: string];
   "activate-credential": [id: string];
   "load-logs": [params: { lines?: number; date?: string }];
+  // 凭据损坏恢复动作。
+  "reset-credential-store": [];
+  "restore-credential-backup": [];
 }>();
 
 // ---- 凭据表单本地态 ----
@@ -66,6 +74,35 @@ const deleteDialog = ref<{
   tone: "danger";
 } | null>(null);
 const pendingDeleteId = ref<string | null>(null);
+
+// ---- 重置成空配置的二次确认 ----
+// 破坏性操作（丢弃损坏历史，无法找回已写入的新状态），需要二次确认；
+// 从备份恢复是非破坏的补救动作，不需要确认。
+const resetDialog = ref<{
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone: "danger";
+} | null>(null);
+
+function askResetEmpty() {
+  resetDialog.value = {
+    title: "重置成空配置",
+    description:
+      "将丢弃当前损坏的凭据文件，写入一份干净的空配置。之前备份的 .corrupt-*.json 文件会保留在配置目录中，可手动找回。确定继续吗？",
+    confirmLabel: "重置成空配置",
+    tone: "danger",
+  };
+}
+
+function onResetDialogConfirm() {
+  resetDialog.value = null;
+  emit("reset-credential-store");
+}
+
+function onResetDialogCancel() {
+  resetDialog.value = null;
+}
 
 // ---- 连接密钥输入本地态 ----
 const accessKeyInput = ref("");
@@ -202,6 +239,11 @@ onMounted(() => {
 <template>
   <section aria-labelledby="companionPanelTitle" class="space-y-6">
     <ConfirmDialog :dialog="deleteDialog" @cancel="onDialogCancel" @confirm="onDialogConfirm" />
+    <ConfirmDialog
+      :dialog="resetDialog"
+      @cancel="onResetDialogCancel"
+      @confirm="onResetDialogConfirm"
+    />
 
     <div>
       <h3 id="companionPanelTitle" class="text-base font-semibold text-gray-900">Companion</h3>
@@ -301,8 +343,45 @@ onMounted(() => {
       <p v-if="connectError" class="text-xs text-red-600">{{ connectError }}</p>
     </div>
 
-    <!-- ③ 凭据列表（仅在线） -->
-    <div v-if="companionOnline" class="rounded-lg border border-gray-200 p-4 space-y-3">
+    <!-- ②.5 凭据异常（仅损坏时） -->
+    <div
+      v-if="companionOnline && corruptEvent"
+      class="rounded-lg border border-red-300 bg-red-50 p-4 space-y-3"
+    >
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-medium text-red-800">⚠️ 凭据文件异常</span>
+      </div>
+      <p class="text-xs leading-relaxed text-red-700">
+        {{ corruptEvent.message }}
+      </p>
+      <p class="text-xs text-red-600">
+        可以尝试从备份恢复；若备份也坏了，或不需要历史配置，可重置成空配置后重新添加。
+      </p>
+      <div class="flex flex-wrap gap-2 pt-1">
+        <button
+          class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
+          type="button"
+          :disabled="loadingRestore || loadingReset"
+          @click="emit('restore-credential-backup')"
+        >
+          {{ loadingRestore ? "恢复中…" : "从备份恢复" }}
+        </button>
+        <button
+          class="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-100 disabled:opacity-50 cursor-pointer"
+          type="button"
+          :disabled="loadingRestore || loadingReset"
+          @click="askResetEmpty"
+        >
+          {{ loadingReset ? "重置中…" : "重置成空配置" }}
+        </button>
+      </div>
+    </div>
+
+    <!-- ③ 凭据列表（仅在线 + 未损坏） -->
+    <div
+      v-if="companionOnline && !corruptEvent"
+      class="rounded-lg border border-gray-200 p-4 space-y-3"
+    >
       <div class="flex items-center justify-between">
         <h4 class="text-sm font-medium text-gray-700">API 凭据</h4>
         <button
@@ -472,8 +551,11 @@ onMounted(() => {
       <p v-if="credError" class="text-xs text-red-600">{{ credError }}</p>
     </div>
 
-    <!-- ④ 日志查看（仅在线 + 已配对） -->
-    <div v-if="companionOnline && companionConnected" class="rounded-lg border border-gray-200 p-4 space-y-3">
+    <!-- ④ 日志查看（仅在线 + 已配对 + 未损坏） -->
+    <div
+      v-if="companionOnline && companionConnected && !corruptEvent"
+      class="rounded-lg border border-gray-200 p-4 space-y-3"
+    >
       <h4 class="text-sm font-medium text-gray-700">日志</h4>
       <div class="flex flex-wrap items-center gap-2">
         <input

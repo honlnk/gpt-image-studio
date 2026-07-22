@@ -94,6 +94,14 @@ export type CompanionCredentialsListResponse = {
   activeId: string | null;
 };
 
+/**
+ * 凭据文件损坏事件（来自 /credentials 的 500+corrupt 响应）。
+ * message 是中文可读原因 + 备份文件路径。Web 据此渲染异常面板。
+ */
+export type CompanionCorruptionEvent = {
+  message: string;
+};
+
 /** POST /credentials、PUT /credentials/:id 的请求体。 */
 export type CompanionCredentialInput = {
   label?: string;

@@ -67,14 +67,17 @@ export async function listCompanionCredentials(
     signal: AbortSignal.timeout(3000),
   });
   if (!res.ok) {
-    // 凭据文件损坏时 companion 返 500 + { error, corrupt:true }；读 error 给用户可读原因。
-    // 其他非 200（罕见）退回通用文案。和 add/updateCredential 的错误读取模式一致。
+    // 凭据文件损坏时 companion 返 500 + { error, corrupt:true }；读 error 给用户可读原因，
+    // 并在 Error 上 attach corrupt 标记，让上层 loadCredentials 能区分「损坏」与「普通失败」。
+    // 其他非 200（罕见）退回通用文案，不带 corrupt 标记。
     let message = "无法获取凭据列表";
+    let corrupt = false;
     try {
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; corrupt?: boolean };
       message = data.error || message;
+      corrupt = data.corrupt === true;
     } catch {}
-    throw new Error(message);
+    throw Object.assign(new Error(message), { corrupt });
   }
   return await res.json();
 }
@@ -136,6 +139,38 @@ export async function activateCompanionCredential(
 ): Promise<void> {
   const res = await fetch(`${url}/credentials/${id}/activate`, { method: "POST" });
   if (!res.ok) throw new Error("激活凭据失败");
+}
+
+/**
+ * 重置成空配置：写合法空 store + 清除损坏事件。
+ * 失败时读 response body 的 error 给可读原因（如「重置凭据失败」+ 具体原因）。
+ */
+export async function resetEmptyCredentialStore(url: string): Promise<void> {
+  const res = await fetch(`${url}/credentials/reset-empty`, { method: "POST" });
+  if (!res.ok) {
+    let message = "重置凭据失败";
+    try {
+      const data = (await res.json()) as { error?: string };
+      message = data.error || message;
+    } catch {}
+    throw new Error(message);
+  }
+}
+
+/**
+ * 从最近备份恢复：companion 找最新的 credentials.json.corrupt-{ts}.json 尝试恢复。
+ * 成功时 void；失败时（如备份本身也坏了）抛 Error，message 含失败原因。
+ */
+export async function restoreBackupCredentialStore(url: string): Promise<void> {
+  const res = await fetch(`${url}/credentials/restore-backup`, { method: "POST" });
+  if (!res.ok) {
+    let message = "恢复备份失败";
+    try {
+      const data = (await res.json()) as { error?: string };
+      message = data.error || message;
+    } catch {}
+    throw new Error(message);
+  }
 }
 
 // ---- 日志查看（GET /logs/tail，需连接密钥）----

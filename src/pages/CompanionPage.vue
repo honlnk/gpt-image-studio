@@ -26,6 +26,9 @@ const {
   logsLoading,
   credError,
   logsError,
+  corruptEvent,
+  loadingReset,
+  loadingRestore,
   companionOnline,
   companionHealth,
   companionAuthStatus,
@@ -76,6 +79,9 @@ onMounted(() => {
         :logs-loading="logsLoading"
         :cred-error="credError"
         :logs-error="logsError"
+        :corrupt-event="corruptEvent"
+        :loading-reset="loadingReset"
+        :loading-restore="loadingRestore"
         @check-status="companion.checkStatus"
         @connect-with-key="companion.connectWithKey"
         @disconnect-companion="companion.disconnect"
@@ -85,6 +91,8 @@ onMounted(() => {
         @update-credential="companion.updateCredential"
         @remove-credential="companion.removeCredential"
         @activate-credential="companion.activateCredential"
+        @reset-credential-store="companion.resetCredentialStore"
+        @restore-credential-backup="companion.restoreCredentialBackup"
         @load-logs="companion.loadLogs"
       />
     </main>

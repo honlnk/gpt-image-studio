@@ -67,12 +67,17 @@ export const useCompanionStore = defineStore("companion", () => {
     logsLoading: management.logsLoading,
     credError: management.credError,
     logsError: management.logsError,
+    corruptEvent: management.corruptEvent,
+    loadingReset: management.loadingReset,
+    loadingRestore: management.loadingRestore,
     loadPresets: management.loadPresets,
     loadCredentials: management.loadCredentials,
     addCredential: management.addCredential,
     updateCredential: management.updateCredential,
     removeCredential: management.removeCredential,
     activateCredential: management.activateCredential,
+    resetCredentialStore: management.resetCredentialStore,
+    restoreCredentialBackup: management.restoreCredentialBackup,
     loadLogs: management.loadLogs,
   };
 });
