@@ -229,13 +229,14 @@ GLM、Qwen 和 Wan 返回图片 URL 后，Companion 仍会立即下载并转为 
 - `getActiveCredential` 内部 catch 让 `images` route 也走现有「无凭据返 503」路径，
   不需要每个调用方都处理损坏异常。
 
-**Web 端最小改动**（不改 UI 结构）：
+**Web 端最小改动**（本批只走通用错误通道，UI 重构见下一小节）：
 
 - `listCompanionCredentials` 像 `addCompanionCredential` 那样读 response body 的
   `error` 字段，复用现有 `credError` 红字通道展示损坏原因（"凭据文件损坏，已备份到 X，
   请重新配置 provider"）。
-- 不加专门的损坏态告警区块（P3+ 的事）；用户通过现有 `credError` 红字看到原因 +
-  备份路径 + 知道该重新配置。
+- 真实运行测试发现：单纯靠 `credError` 红字不够——浏览器会连续发多次 `/credentials`，
+  第一次拿到 500+corrupt 后第二次拿到 200 空列表，`credError` 被清空，用户看不到提示。
+  解决方案在下一小节：内存事件缓存 + 独立异常面板 + 两个恢复动作。
 
 **CLI 错误展示**：
 
@@ -254,6 +255,108 @@ addCredential 不覆盖备份、两个 code 值）；新增 `credentials.integra
 - 备份文件堆积（用户反复触发损坏）不做自动清理，避免误删用户想保留的备份。
 - `accessKey.ts` 的空 catch 不改——access key 损坏时 `loadOrCreateAccessKey` 自动
   重新生成（行为合理），不像 credentials 损坏会丢用户数据。
+
+### 凭据损坏：内存事件缓存 + 独立异常面板 + 两个恢复动作
+
+状态：已于 2026-07-22 修复，实现在 `companion/src/credentials.ts`、
+`companion/src/routes/credentials.ts`、Web 侧 `src/services/companionApi.ts` +
+`src/features/companion/useCompanionManagement.ts` + `src/stores/companionStore.ts` +
+`src/components/settings/CompanionPanel.vue`。本批整改紧接上一节 P3-A，解决真实运行
+测试中暴露的两个 UX 缺陷。
+
+**缺陷一：损坏信号在并发请求下丢失（时序竞态）**
+
+浏览器打开 Companion 管理页或工作区设置页时，`/credentials` 和 `/auth/status` 几乎
+同时被调，且 Web 端 `loadCredentials` 可能在 watch / 重试等多处触发——实际不是一次
+请求，是连续多次。P3-A 实现的「备份后移走损坏文件」让损坏信号在时间上是**一次性**的：
+
+```
+请求 1 → loadStore 发现文件坏 → 备份走 → 抛 CredentialStoreError → route 返 500+corrupt ✅
+请求 2 → loadStore 发现文件不存在 → 写空 store → 抛 null → route 返 200 空列表 ❌（信号丢失）
+```
+
+`credError` 在 `loadCredentials` 开头被清空，请求 2 返回 200 后红字消失，用户只看到
+「凭据未配置，点新增」，根本不知道文件坏了。真实测试中用户反馈「我好像没有看到任何
+红字」即源自此问题。
+
+解决方案：**进程级内存事件缓存**（`companion/src/credentials.ts`）。
+
+- `loadStore` 备份后调用 `recordCorruptionEvent(message, backupPath)` 把事件存到
+  模块级 `lastCorruptionEvent` 变量。
+- `consumeCorruptionEvent()` 返回当前事件（**不清除**）——GET `/credentials` 在 store
+  正常加载后调用，若存在未消费事件，仍返 500+corrupt 让每次刷新都能看到。
+- `clearCorruptionEvent()` 显式清除——只在 `addCredential` 成功后调用，语义是
+  「用户已重新配置 provider，损坏翻篇」。
+- 进程重启后事件消失：重启场景下文件已是干净状态（被 P3-A 备份走或被 reset 清掉），
+  不需要再提示历史损坏。
+
+为什么事件只在 `addCredential` 而不是 `loadStore` 成功后清除：避免「用户首次损坏
+→重启 companion→ 事件丢失 →但备份仍在文件系统」时丢失 UX 引导。`addCredential`
+是用户**主动重新配置**的明确信号，更适合作为「翻篇」的触发点。
+
+**缺陷二：损坏态下凭据/日志面板无意义但仍在显示**
+
+P3-A 只加了红字提示，凭据列表（空）和日志面板照常显示。用户在损坏态下看到的画面
+信息密度过高：连接状态 + 一行红字 + 空 API 凭据 + 空日志，且「新增凭据」按钮就放在
+损坏原因旁边——容易诱导用户在没看红字的情况下点新增，错过「其实有备份可恢复」的
+路径。
+
+解决方案：**损坏态下 UI 重构**（`src/components/settings/CompanionPanel.vue`）。
+
+- 损坏时**隐藏** API 凭据面板 + 日志面板（`v-if="companionOnline && !corruptEvent"`）。
+- **保留**连接状态面板（companion 确实在线，这个信号是对的）。
+- **新增**独立的红色边框「凭据异常」面板，紧跟连接面板下方，包含：
+  - ⚠️ 标题 + 损坏原因（含备份路径，从 `/credentials` 的 500+corrupt 响应体透传）
+  - 一行引导：「可以尝试从备份恢复，或重置成空配置后重新添加。」
+  - 两个横排按钮：**从备份恢复**（次要样式）/ **重置成空配置**（红色边框 + 二次确认）
+- 异常面板只在 `companionOnline && corruptEvent` 时渲染，正常状态完全不出现。
+
+**两个恢复端点**（`companion/src/routes/credentials.ts`）：
+
+- `POST /credentials/restore-backup` → `restoreLatestBackup()`：扫描 `CONFIG_DIR`
+  下所有 `credentials.json.corrupt-{ts}.json`，按时间戳排序取最近一个，解析 + 严格
+  校验通过后覆盖 `credentials.json`，**成功后删除该备份**（避免下次再损坏时恢复到
+  已恢复过的旧备份），其他历史备份保留。
+- `POST /credentials/reset-empty` → `resetEmptyStore()`：写一个合法的空 store
+  （`{entries:[], activeId:null}`）+ 清除事件，语义是「放弃损坏历史，回到首次使用
+  状态」。备份文件保留（用户可能后悔，想手动恢复）。
+
+两个端点失败时都走 `handleStoreError` 返 500+corrupt，事件保留，异常面板不消失。
+
+**corrupt 信号从 API 层透传到 composable**：
+
+`listCompanionCredentials` 此前 catch 后只 `throw new Error(message)`，丢失了
+`corrupt: true` 标记。改造为用 `Object.assign(new Error(msg), { corrupt: true })`
+在 Error 实例上附加 `corrupt` 属性——不破坏现有返回类型（仍是
+`Promise<CompanionCredentialsListResponse>`），只在非 ok 时让 Error 带 extra 属性。
+`useCompanionManagement.loadCredentials` catch 时读 `error.corrupt` 决定 set
+`corruptEvent`（异常面板）还是 `credError`（普通加载错误）。
+
+**恢复失败时原地反馈，不跳走**：
+
+`resetCredentialStore` / `restoreCredentialBackup` 失败时不 throw 到外面，而是把
+错误信息覆盖到 `corruptEvent.value.message`——保持 `corruptEvent` 非空，用户继续看到
+异常面板，但 message 变成「恢复失败：备份文件 X 仍无法解析，可改用重置成空配置」。
+这样用户能在**原地**继续尝试另一个按钮，不需要刷新或重新触发损坏。
+
+**端到端手动验证（真实 companion + 浏览器）**：
+
+| 场景 | 实际行为 | 是否符合预期 |
+| --- | --- | --- |
+| 正常状态 | 凭据面板 + 日志面板正常显示，无异常面板 | ✅ |
+| 损坏后刷新 | 凭据/日志面板消失，红色异常面板出现 + 两个按钮 | ✅ |
+| 「从备份恢复」对坏备份 | 失败 + 原地提示「仍无法解析…可改用重置成空配置」 | ✅ |
+| 「重置成空配置」 | 弹二次确认 → 确认 → 异常面板消失，列表变空 | ✅ |
+| 新增凭据后 | 异常面板消失，凭据列表显示新增项 | ✅ |
+
+剩余取舍：
+
+- **多备份选择不做**：默认恢复最近一个。多备份场景下用户想找更早的备份，可直接进
+  `~/.gpt-image-studio/` 目录手动操作。
+- **备份列表查看 UI 不做**：同上，目录可直接看。
+- **不持久化 corruptEvent 到 localStorage**：刷新页面时通过重新 GET `/credentials`
+  拿 companion 的内存事件即可——companion 进程不重启的话事件还在。这样也避免了
+  「Web 端缓存了事件但 companion 已重启 / 文件已被外部修复」时的状态不一致。
 
 ## 剩余主要问题
 
@@ -542,3 +645,20 @@ Provider 配置突然消失，且缺少可诊断日志。~~
   `/auth/status` 损坏时优雅降级返 200+ready:false、健康文件正常。
 - 端到端手动验证（真实 companion + curl）：损坏文件被备份、POST /credentials 不覆盖
   损坏文件、CLI provider list/status 显示可读错误、恢复后新配置正常生效、备份保留。
+
+2026-07-22 凭据损坏：内存事件缓存 + 异常面板 + 恢复端点后：
+
+- `pnpm typecheck:companion` 通过。
+- `pnpm typecheck` 通过。
+- `pnpm test` 通过，共 43 个测试文件、527 个测试。
+- 扩展 `credentials.test.ts`（21 → 33 个测试）：新增「event cache persistence」
+  （事件在多次 consume 间保留、addCredential 后清除、模块重载后消失）和
+  「recovery actions」（resetEmptyStore 写空 store 清事件、restoreLatestBackup
+  成功恢复最近备份并删除该备份、无备份时抛错、备份也损坏时抛错且原状不变）。
+- 扩展 `credentials.integration.test.ts`（5 → 10 个测试）：新增 `/credentials`
+  重复请求持续返 500+corrupt（验证事件缓存）、`addCredential` 后 corrupt 信号消失、
+  POST `/credentials/reset-empty` 成功后 GET 返 200 空列表、
+  POST `/credentials/restore-backup` 成功后 GET 返恢复的列表、恢复失败时事件保留。
+- 端到端手动验证（真实 companion + 浏览器）：损坏后凭据/日志面板消失 + 红色异常面板
+  出现 + 两个按钮可见；「从备份恢复」对坏备份失败时原地提示；「重置成空配置」
+  弹二次确认后成功清空；新增凭据后异常面板消失。
