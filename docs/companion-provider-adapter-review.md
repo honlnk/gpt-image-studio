@@ -620,13 +620,62 @@ Web 发出的"已知字段"要正确到达 Adapter，依赖两份需要手工同
 ### P2：未知 Provider 静默回退 OpenAI
 
 Registry 对缺少 Provider 字段和未知 Provider ID 都回退到 OpenAI Adapter。兼容历史凭据
-缺少字段是合理的，但拼写错误或已删除 Provider 也会被当作 OpenAI 请求发送。
+缺少字段是合理的，但拼写错误或已删除的 Provider 也会被当作 OpenAI 请求发送。
 
 建议：
 
 - 仅在 Provider 字段缺失时回退 OpenAI。
 - 保存凭据时校验 Provider ID 必须已注册。
 - 运行时遇到明确但未知的 ID 时返回配置错误。
+
+#### 已完成整改：未知 Provider 显式报错
+
+状态：已于 2026-07-22 修复，实现在 `companion/src/providers/registry.ts`、
+`companion/src/routes/credentials.ts`、`companion/src/routes/images.ts`、
+`companion/src/routes/auth.ts`。
+
+**核心改动**：
+
+- `resolveAdapter` 签名从 `ProviderAdapter` 改为 `ProviderAdapter | null`：
+  - 已知 id → 返对应 adapter（不变）。
+  - 未知 id（拼写错 / 已删除 / 还没实现）→ 返 **null**，由调用方决定如何报错。
+  - 字段缺失（`config.provider === undefined`）→ 仍回退 openai（兼容老 `credentials.json`，
+    符合本节建议）。注意 `validateStore` 已强制 entry.provider 非空，此分支实际是防御性兜底。
+- 删除原 `console.warn + REGISTRY[DEFAULT_PROVIDER_ID]` 静默回退——那会让 `/auth/status`
+  上报错的 capability（误导 UI），images route 用错的请求形状发到用户的 apiBaseUrl。
+- 新增 `isRegisteredProvider(id)` 辅助函数，供 credentials 写入校验复用（语义比
+  `listProviderIds().includes` 更清晰）。
+- **写入端校验**：`validateInput` 新增检查——明确传了 provider 但不在注册表里 → 返
+  400 + 错误信息含已注册列表。`provider` 字段缺失（undefined）不校验，走 addCredential
+  内部的"缺失 → openai"默认分支。
+- **运行时拦截**：images generate/edit route 检测到 null adapter 时返 **503 + 明确错误**
+  （"凭据配置的 provider X 未注册，请检查或重新配置。已注册的有：a, b, c"），
+  **不再发请求到上游**——避免用错的请求形状打到用户的 apiBaseUrl 造成难懂的上游错误。
+- **`/auth/status` 降级**：检测到 null adapter 时返 **200 + ready:false**（和"无凭据"
+  分支形状一致），让 Web UI 走"未就绪"渲染。不在 `/auth/status` 加 error 字段——这是
+  连接健康检查端点，Web 等它决定连接是否在线，加 error 字段会要求 Web 新增展示通道，
+  且会绕过已建好的 `/credentials` + `corruptEvent` 异常展示体系。真正的"配置错误"提示
+  由 images route 在用户真发起请求时返 503 给出。
+
+**取舍**：
+
+- **不引入 `ProviderId` 联合类型**：`provider` 字段保持 `string`，由 `isRegisteredProvider`
+  在运行时校验。理由：避免跨包类型耦合（companion 走 tsc+NodeNext，Web 走 Vite），和
+  「已知字段契约收敛」选择软共享的理由一致。
+- **不改 CLI `promptCredentialInput`**：CLI 已经用 `PROVIDER_PRESETS` 数字选项约束，
+  无法产生未知 id，不需要改。
+- **不动 `toProviderConfig` 的 `creds.provider ?? "openai"` 防御性兜底**：保留作为
+  防御性死代码（测试 `images.integration.test.ts` 仍依赖它）。真正拦截点在 resolveAdapter。
+
+**测试覆盖**：
+
+- 新增 `companion/src/providers/tests/registry.test.ts`（10 个测试）：覆盖已知 id 返
+  adapter、未知 id 返 null、`undefined` 走默认、`isRegisteredProvider` 正反例、
+  遍历 `listProviderIds()` 确认每个注册 id 都能解析（防未来加 provider 时遗漏注册）。
+- 扩展 `credentials.integration.test.ts`（10 → 13 个测试）：新增 POST 未知 provider 返
+  400 + 已注册列表、POST 不传 provider 走默认 openai、PUT 改成未知 provider 返 400。
+- 扩展 `images.integration.test.ts`（34 → 36 个测试）：新增 generate / edit 两条路径
+  在未知 provider 下返 503、fetch 不被调用（验证上游请求不发出去）。
 
 ### P2：能力协议没有表达参考图限制
 
@@ -705,7 +754,7 @@ Provider 配置突然消失，且缺少可诊断日志。~~
 
 1. 增加最大参考图数量和大小。
 2. 将 Gemini 等 Provider 改为模型动态能力。
-3. 未知 Provider 改为显式配置错误。
+3. ~~未知 Provider 改为显式配置错误。~~ 已完成（2026-07-22，详见上文「已完成整改：未知 Provider 显式报错」）。
 4. 补充各 Provider 的端到端契约测试。
 
 其中“参考图大小”应按 Provider/模型分别配置，不能用一个全局字节数覆盖所有模型。
@@ -775,3 +824,16 @@ Provider 配置突然消失，且缺少可诊断日志。~~
 - 端到端手动验证（真实 companion + 浏览器）：损坏后凭据/日志面板消失 + 红色异常面板
   出现 + 两个按钮可见；「从备份恢复」对坏备份失败时原地提示；「重置成空配置」
   弹二次确认后成功清空；新增凭据后异常面板消失。
+
+2026-07-22 未知 Provider 显式报错后：
+
+- `pnpm typecheck:companion` 通过。
+- `pnpm typecheck` 通过。
+- `pnpm test` 通过，共 44 个测试文件、542 个测试。
+- 新增 `companion/src/providers/tests/registry.test.ts`（10 个测试）：覆盖已知 id
+  返 adapter、未知 id 返 null、`undefined` 走默认、`isRegisteredProvider` 正反例、
+  遍历 `listProviderIds()` 确认每个注册 id 都能解析。
+- 扩展 `credentials.integration.test.ts`（10 → 13 个测试）：新增 POST 未知 provider
+  返 400、POST 不传 provider 走默认、PUT 改成未知 provider 返 400。
+- 扩展 `images.integration.test.ts`（34 → 36 个测试）：新增 generate / edit 两条路径
+  在未知 provider 下返 503、fetch 不被调用。

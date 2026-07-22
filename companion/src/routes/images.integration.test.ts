@@ -772,3 +772,60 @@ describe("images routes integration — error classification", () => {
     await app.close();
   });
 });
+
+describe("images routes integration — unknown provider returns 503", () => {
+  it("generate returns 503 when credential has unknown provider id", async () => {
+    // 模拟「凭据文件被外部改坏成拼写错的 provider」或「老版 companion 写入时未校验」
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://up.example.com/v1/images",
+      apiKey: "sk-test",
+      provider: "opneai", // typo
+    });
+    // fetch 不应该被调用——resolveAdapter 返 null 后 route 直接 503
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: { model: "gpt-image-2", prompt: "a cat", size: "1024x1024" },
+    });
+    expect(res.statusCode).toBe(503);
+    const body = res.json();
+    expect(body.error).toContain("opneai");
+    expect(body.error).toMatch(/未注册/);
+    expect(body.error).toMatch(/已注册的有/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("edit returns 503 when credential has unknown provider id", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://up.example.com/v1/images",
+      apiKey: "sk-test",
+      provider: "fake-provider",
+    });
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const multipart = makeWebEditMultipart({
+      model: "gpt-image-2",
+      prompt: "edit this",
+      size: "1024x1024",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${multipart.boundary}` },
+      payload: multipart.body,
+    });
+    expect(res.statusCode).toBe(503);
+    const responseBody = res.json();
+    expect(responseBody.error).toContain("fake-provider");
+    expect(responseBody.error).toMatch(/未注册/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+});

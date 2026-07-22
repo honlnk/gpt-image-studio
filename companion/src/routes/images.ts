@@ -6,7 +6,7 @@ import type {
   OpenAIImageRequest,
   ProviderConfig,
 } from "../providers/types.js";
-import { resolveAdapter } from "../providers/registry.js";
+import { resolveAdapter, listProviderIds } from "../providers/registry.js";
 import { extractBoundary, parseMultipart } from "../providers/multipart.js";
 import type { ParsedEditBody } from "../providers/multipart.js";
 import {
@@ -41,6 +41,12 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
 
     const config = toProviderConfig(creds);
     const adapter = resolveAdapter(config);
+    if (!adapter) {
+      const valid = listProviderIds().sort().join(", ");
+      return reply.status(503).send({
+        error: `凭据配置的 provider "${creds.provider}" 未注册，请检查或重新配置。已注册的有：${valid}`,
+      });
+    }
     if (!adapter.capability.generate) {
       return reply.status(501).send({ error: "当前 provider 不支持文生图" });
     }
@@ -104,6 +110,12 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
 
     const config = toProviderConfig(creds);
     const adapter = resolveAdapter(config);
+    if (!adapter) {
+      const valid = listProviderIds().sort().join(", ");
+      return reply.status(503).send({
+        error: `凭据配置的 provider "${creds.provider}" 未注册，请检查或重新配置。已注册的有：${valid}`,
+      });
+    }
     if (!adapter.capability.edit || !adapter.edit) {
       return reply.status(501).send({ error: "当前 provider 不支持图片编辑" });
     }

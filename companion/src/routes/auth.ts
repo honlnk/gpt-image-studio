@@ -39,6 +39,22 @@ export async function authRoutes(app: FastifyInstance) {
     };
     const adapter = resolveAdapter(config);
 
+    // provider 未注册（拼写错 / 已删除）：走和「无凭据」一致的降级——返 ready:false +
+    // OpenAI 默认能力让 UI 能正常渲染。真正的「配置错误」提示由 images route 在用户
+    // 发起请求时返 503 给出（/auth/status 是连接健康检查端点，不在这里加 error 字段）。
+    if (!adapter) {
+      return {
+        provider: creds.provider, // 保留真实 provider 让用户能看到自己填的是什么
+        mode: "api_key" as const,
+        ready: false,
+        accountLabel: creds.label,
+        model: creds.model,
+        capability: OPENAI_DEFAULT_CAPABILITY,
+        sizeConstraints: OPENAI_DEFAULT_SIZE_CONSTRAINTS,
+        resolutionOptions: OPENAI_DEFAULT_RESOLUTION_OPTIONS,
+      };
+    }
+
     return {
       provider: adapter.id,
       mode: "api_key" as const,

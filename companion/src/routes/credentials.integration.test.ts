@@ -262,3 +262,82 @@ describe("/credentials/reset-empty and /restore-backup routes", () => {
     await app.close();
   });
 });
+
+describe("/credentials provider validation", () => {
+  it("POST /credentials rejects unknown provider id with 400 + registered list", async () => {
+    const app = await makeCredentialsApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/credentials",
+      payload: {
+        provider: "opneai", // typo
+        label: "typo test",
+        apiBaseUrl: "https://x",
+        apiKey: "y",
+        model: "m",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.error).toContain("opneai");
+    expect(body.error).toMatch(/已注册的有/);
+    // 错误信息里应包含至少几个已知 provider，方便用户对照
+    expect(body.error).toContain("openai");
+    await app.close();
+  });
+
+  it("POST /credentials without provider field succeeds (defaults to openai)", async () => {
+    const app = await makeCredentialsApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/credentials",
+      payload: {
+        // provider 字段缺失，addCredential 内部 fallback 到 "openai"
+        label: "no provider",
+        apiBaseUrl: "https://x",
+        apiKey: "y",
+        model: "m",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.entry.provider).toBe("openai");
+    await app.close();
+  });
+
+  it("PUT /credentials/:id rejects updating to unknown provider", async () => {
+    const app = await makeCredentialsApp();
+    // 先正常加一个 openai 凭据
+    const addRes = await app.inject({
+      method: "POST",
+      url: "/credentials",
+      payload: {
+        provider: "openai",
+        label: "ok",
+        apiBaseUrl: "https://x",
+        apiKey: "y",
+        model: "m",
+      },
+    });
+    expect(addRes.statusCode).toBe(200);
+    const id = addRes.json().entry.id;
+
+    // 改成未知 provider 应该被拒绝（其他必填字段保持合法值，
+    // 避免 validateInput 的 apiBaseUrl/apiKey 非空检查先撞车）
+    const updateRes = await app.inject({
+      method: "PUT",
+      url: `/credentials/${id}`,
+      payload: {
+        provider: "fake-provider",
+        apiBaseUrl: "https://x",
+        apiKey: "y",
+      },
+    });
+    expect(updateRes.statusCode).toBe(400);
+    const body = updateRes.json();
+    expect(body.error).toContain("fake-provider");
+    expect(body.error).toMatch(/已注册的有/);
+    await app.close();
+  });
+});

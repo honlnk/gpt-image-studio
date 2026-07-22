@@ -20,6 +20,7 @@ import {
   resetEmptyStore,
   restoreLatestBackup,
 } from "../credentials.js";
+import { isRegisteredProvider, listProviderIds } from "../providers/registry.js";
 
 /**
  * 凭证管理路由（Web 面板 + CLI 共用）：多配置 CRUD + 激活切换。
@@ -192,5 +193,14 @@ function parseInput(body: unknown): CompanionCredentialInput {
 function validateInput(input: CompanionCredentialInput): string | null {
   if (!input.apiBaseUrl.trim()) return "apiBaseUrl 不能为空";
   if (!input.apiKey.trim()) return "apiKey 不能为空";
+  // 明确传了 provider 但不在注册表里 → 拒绝（拼写错 / 已删除的 provider 不能静默存下来）
+  if (
+    input.provider !== undefined &&
+    input.provider.trim() !== "" &&
+    !isRegisteredProvider(input.provider.trim())
+  ) {
+    const valid = listProviderIds().sort().join(", ");
+    return `未知的 provider "${input.provider.trim()}"，已注册的有：${valid}`;
+  }
   return null;
 }

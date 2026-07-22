@@ -23,30 +23,28 @@ const REGISTRY: Record<string, ProviderAdapter> = {
   deepinfra: deepinfraAdapter,
 };
 
-/** 默认 provider。credentials 缺 provider 字段、或 provider 未注册时回退到它。 */
+/** 默认 provider。credentials 缺 provider 字段时回退到它（兼容老 credentials.json）。 */
 const DEFAULT_PROVIDER_ID = "openai";
 
 /**
  * 从 ProviderConfig 解析对应的 adapter。
  *
- * - 无 provider 字段 → 默认 openai（兼容老 credentials.json，现有用户零感知）。
- * - provider 未注册（拼写错 / 还没实现的 provider）→ 回退 openai + 记录，
- *   不直接抛错，避免 companion 启动或单次请求硬失败。
- *   这种情况下 capability 是 openai 的全能力，行为退化但不中断。
+ * - 无 provider 字段（空串）→ 默认 openai（兼容老 credentials.json，现有用户零感知）。
+ * - provider 未注册（拼写错 / 已删除 / 还没实现）→ 返 null，由调用方决定如何报错。
+ *   不再静默回退 openai——那会让 /auth/status 上报错的 capability，images route 用错的
+ *   请求形状发到用户的 apiBaseUrl，用户只看到难懂的上游错误。
  *
  * 真正的「该 provider 不支持编辑」这类错误由 route 层按 capability 判断返回，
  * 不在这里抛——因为 resolveAdapter 的职责只是「选出 adapter」，不含语义判断。
  */
-export function resolveAdapter(config: ProviderConfig): ProviderAdapter {
+export function resolveAdapter(config: ProviderConfig): ProviderAdapter | null {
   const id = config.provider ?? DEFAULT_PROVIDER_ID;
-  const adapter = REGISTRY[id];
-  if (adapter) return adapter;
+  return REGISTRY[id] ?? null;
+}
 
-  console.warn(
-    `[companion] 未注册的 provider "${id}"，回退到默认 "${DEFAULT_PROVIDER_ID}"。` +
-      `若是有意为之，请在 registry.ts 注册对应 adapter。`,
-  );
-  return REGISTRY[DEFAULT_PROVIDER_ID];
+/** provider id 是否已注册（供 credentials 写入校验、CLI 校验等使用）。 */
+export function isRegisteredProvider(id: string): boolean {
+  return id in REGISTRY;
 }
 
 /** 列出所有已注册 provider id（供 CLI providers 命令、login 选项等使用）。 */
