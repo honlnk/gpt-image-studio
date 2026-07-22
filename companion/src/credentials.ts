@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -38,6 +38,55 @@ export class CredentialStoreError extends Error {
     this.name = "CredentialStoreError";
     this.code = code;
   }
+}
+
+/**
+ * 凭据损坏事件（内存缓存，进程级）。
+ *
+ * 为什么需要这个：loadStore 检测到损坏时会备份并移走原文件，损坏信号是「一次性」的——
+ * 后续 loadStore 会发现文件不存在，返空 store 走正常路径，损坏信息丢失。
+ * 但 Web 端可能连续发多次 /credentials（页面初始化、watch 触发等），第一次拿到 500+corrupt
+ * 后，第二次只拿到 200 空列表，credError 被清空，用户根本看不到损坏提示。
+ *
+ * 内存缓存把损坏事件提升为「进程内持久状态」：
+ * - 备份后记录事件（message + backupPath + timestamp）
+ * - /credentials GET 在 store 正常时检查是否有未消费事件，有则仍返 500+corrupt
+ * - addCredential 成功后清除事件（语义：用户已重新配置，损坏翻篇）
+ * - 进程重启后事件消失（可接受：重启意味着用户主动介入，此时文件已是干净状态）
+ *
+ * 不持久化到磁盘：损坏事件是临时 UX 信号，不是业务数据；且进程重启场景下
+ * 「文件不存在」本身就是干净的初始状态，不需要再提示历史损坏。
+ */
+type CorruptionEvent = {
+  message: string;
+  backupPath: string;
+  timestamp: number;
+};
+
+let lastCorruptionEvent: CorruptionEvent | null = null;
+
+/** 记录一次损坏事件（loadStore 备份后调用）。 */
+function recordCorruptionEvent(message: string, backupPath: string): void {
+  lastCorruptionEvent = { message, backupPath, timestamp: Date.now() };
+}
+
+/**
+ * 读取并消费未确认的损坏事件。
+ *
+ * 语义：route 层 GET /credentials 在 store 正常加载后调用此函数；
+ * 若有事件，仍返 500+corrupt 让 Web 能看到，事件保留（不清除）——
+ * 因为 Web 端可能再次刷新页面，需要再次看到。
+ *
+ * 事件只在 addCredential 成功后通过 clearCorruptionEvent 显式清除，
+ * 语义是「用户已重新配置 provider，损坏翻篇」。
+ */
+export function consumeCorruptionEvent(): CorruptionEvent | null {
+  return lastCorruptionEvent;
+}
+
+/** 清除损坏事件（addCredential 成功后调用）。 */
+export function clearCorruptionEvent(): void {
+  lastCorruptionEvent = null;
 }
 
 export type CredentialEntry = {
@@ -93,20 +142,17 @@ export function loadStore(): CredentialsStore {
     parsed = JSON.parse(readFileSync(CREDENTIALS_FILE, "utf-8"));
   } catch (cause) {
     const backup = backupCorruptFile();
-    throw new CredentialStoreError(
-      `凭据文件无法解析（JSON 格式错误），已备份到 ${backup}。请检查文件或重新配置 provider。`,
-      "CRED_PARSE_FAILED",
-      { cause },
-    );
+    const message = `凭据文件无法解析（JSON 格式错误），已备份到 ${backup}。请检查文件或重新配置 provider。`;
+    recordCorruptionEvent(message, backup);
+    throw new CredentialStoreError(message, "CRED_PARSE_FAILED", { cause });
   }
 
   const validation = validateStore(parsed);
   if (!validation.ok) {
     const backup = backupCorruptFile();
-    throw new CredentialStoreError(
-      `凭据文件结构不合法：${validation.reason}，已备份到 ${backup}。请重新配置 provider。`,
-      "CRED_INVALID_STRUCTURE",
-    );
+    const message = `凭据文件结构不合法：${validation.reason}，已备份到 ${backup}。请重新配置 provider。`;
+    recordCorruptionEvent(message, backup);
+    throw new CredentialStoreError(message, "CRED_INVALID_STRUCTURE");
   }
 
   const store = normalizeActiveId(validation.store);
@@ -205,6 +251,80 @@ function backupCorruptFile(): string {
   return backup;
 }
 
+/**
+ * 列出 CONFIG_DIR 下的所有凭据备份文件名，按时间戳降序（最近的在前）。
+ *
+ * 备份文件名格式：credentials.json.corrupt-{timestamp}.json。
+ * timestamp 是 Date.now() 毫秒数，字典序与数值序一致（同位数时），
+ * 所以字符串排序即可，不需要转数字。
+ */
+function listBackupFiles(): string[] {
+  return readdirSync(CONFIG_DIR)
+    .filter((name) => /^credentials\.json\.corrupt-\d+\.json$/.test(name))
+    .sort()
+    .reverse();
+}
+
+/**
+ * 重置成空配置：写一个合法的空 store（首次使用状态），清除损坏事件。
+ *
+ * 语义：用户放弃损坏历史，回到干净起点。后续如想真的加凭据走正常新增流程。
+ * 不删备份文件——用户可能后悔，保留让他手动恢复。
+ */
+export function resetEmptyStore(): void {
+  saveStore(emptyStore());
+  clearCorruptionEvent();
+}
+
+/**
+ * 从最近的备份恢复凭据 store。
+ *
+ * 找 CONFIG_DIR 下时间戳最大的 credentials.json.corrupt-{ts}.json，尝试解析+校验。
+ * 成功则覆盖 credentials.json + 清除事件 + 删掉这个备份（已恢复，不再需要）；
+ * 失败则抛 CredentialStoreError（message 含失败原因），原状完全不变（备份文件保留，
+ * 事件保留，用户可改试 resetEmptyStore）。
+ *
+ * @returns 恢复成功时返回的 store
+ */
+export function restoreLatestBackup(): CredentialsStore {
+  const backups = listBackupFiles();
+  if (backups.length === 0) {
+    throw new CredentialStoreError("没有找到备份文件，无法恢复", "CRED_INVALID_STRUCTURE");
+  }
+  const latestName = backups[0]; // 最近的在前
+  const latestPath = join(CONFIG_DIR, latestName);
+  const content = readFileSync(latestPath, "utf-8");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (cause) {
+    throw new CredentialStoreError(
+      `备份文件 ${latestName} 仍无法解析（JSON 格式错误），无法恢复。可改用「重置成空配置」。`,
+      "CRED_PARSE_FAILED",
+      { cause },
+    );
+  }
+  const validation = validateStore(parsed);
+  if (!validation.ok) {
+    throw new CredentialStoreError(
+      `备份文件 ${latestName} 结构不合法：${validation.reason}，无法恢复。可改用「重置成空配置」。`,
+      "CRED_INVALID_STRUCTURE",
+    );
+  }
+
+  const store = normalizeActiveId(validation.store);
+  saveStore(store);
+  clearCorruptionEvent();
+  // 恢复成功后删掉这个备份——已恢复，不再需要；其他历史备份保留
+  try {
+    unlinkSync(latestPath);
+  } catch {
+    // 删失败不影响恢复结果
+  }
+  return store;
+}
+
 export function saveStore(store: CredentialsStore): void {
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
@@ -237,7 +357,12 @@ export function getActiveCredential(): CredentialEntry | null {
   return store.entries.find((e) => e.id === store.activeId) ?? null;
 }
 
-/** 新增一条配置；首条自动设为激活。 */
+/**
+ * 新增一条配置；首条自动设为激活。
+ *
+ * 成功后清除损坏事件（clearCorruptionEvent）——语义是「用户已重新配置 provider，
+ * 损坏翻篇」，后续 /credentials 返正常空列表，不再提示历史损坏。
+ */
 export function addCredential(input: CredentialInput): CredentialEntry {
   const store = loadStore();
   const now = new Date().toISOString();
@@ -255,6 +380,7 @@ export function addCredential(input: CredentialInput): CredentialEntry {
   // 首条自动激活；已有激活项则不抢占。
   if (!store.activeId) store.activeId = entry.id;
   saveStore(store);
+  clearCorruptionEvent();
   return entry;
 }
 

@@ -97,6 +97,63 @@ describe("/credentials route corruption handling", () => {
     expect(body.corrupt).toBe(true);
     await app.close();
   });
+
+  /**
+   * 损坏事件持久性：Web 端连续刷新页面会发多次 GET /credentials，
+   * 每次都应看到损坏提示（500+corrupt），直到用户重新添加凭据。
+   */
+  it("GET /credentials keeps returning 500+corrupt across repeated requests after corruption", async () => {
+    const app = await makeCredentialsApp();
+    writeCorruptFile("}{broken");
+
+    // 模拟 Web 端连续 3 次刷新（每次都会 GET /credentials）
+    for (let i = 0; i < 3; i++) {
+      const res = await app.inject({ method: "GET", url: "/credentials" });
+      expect(res.statusCode).toBe(500);
+      const body = res.json();
+      expect(body.corrupt).toBe(true);
+      expect(body.error).toMatch(/无法解析/);
+    }
+    await app.close();
+  });
+
+  /**
+   * 恢复闭环：损坏 → 多次看到提示 → addCredential → 后续 GET 返正常空列表。
+   */
+  it("GET /credentials returns to normal 200 after addCredential recovers from corruption", async () => {
+    const app = await makeCredentialsApp();
+    writeCorruptFile("}{broken");
+
+    // 损坏后第一次 GET：500+corrupt
+    const corruptRes = await app.inject({ method: "GET", url: "/credentials" });
+    expect(corruptRes.statusCode).toBe(500);
+    expect(corruptRes.json().corrupt).toBe(true);
+
+    // 用户看到提示后重新添加凭据（文件已被备份走，addCredential 在干净状态创建）
+    const addRes = await app.inject({
+      method: "POST",
+      url: "/credentials",
+      headers: { "content-type": "application/json" },
+      payload: {
+        label: "恢复后的新配置",
+        provider: "openai",
+        apiBaseUrl: "https://api.example.com",
+        apiKey: "sk-recovered",
+        model: "gpt-image-2",
+      },
+    });
+    expect(addRes.statusCode).toBe(200);
+    expect(addRes.json().ok).toBe(true);
+
+    // 后续 GET：返正常列表（不再 corrupt）
+    const afterRes = await app.inject({ method: "GET", url: "/credentials" });
+    expect(afterRes.statusCode).toBe(200);
+    const afterBody = afterRes.json();
+    expect(afterBody.corrupt).toBeUndefined();
+    expect(afterBody.entries).toHaveLength(1);
+    expect(afterBody.entries[0].label).toBe("恢复后的新配置");
+    await app.close();
+  });
 });
 
 describe("/auth/status corruption handling", () => {
@@ -125,6 +182,83 @@ describe("/auth/status corruption handling", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.ready).toBe(false);
+    await app.close();
+  });
+});
+
+describe("/credentials/reset-empty and /restore-backup routes", () => {
+  /** 写一个合法的备份文件（模拟之前 loadStore 备份的）。 */
+  function writeValidBackupFile(timestamp: number, entries: unknown[]): string {
+    const name = `credentials.json.corrupt-${timestamp}.json`;
+    writeFileSync(
+      join(tempDir, name),
+      JSON.stringify({ entries, activeId: (entries[0] as { id?: string })?.id ?? null }),
+      "utf-8",
+    );
+    return name;
+  }
+
+  it("POST /credentials/reset-empty writes clean empty store and clears corruption event", async () => {
+    const app = await makeCredentialsApp();
+    writeCorruptFile("}{broken");
+
+    // 触发一次损坏（生成事件 + 备份）
+    const corruptRes = await app.inject({ method: "GET", url: "/credentials" });
+    expect(corruptRes.statusCode).toBe(500);
+
+    // reset-empty 后
+    const resetRes = await app.inject({ method: "POST", url: "/credentials/reset-empty" });
+    expect(resetRes.statusCode).toBe(200);
+    expect(resetRes.json().ok).toBe(true);
+
+    // 后续 GET /credentials 返正常空列表（事件已清除）
+    const afterRes = await app.inject({ method: "GET", url: "/credentials" });
+    expect(afterRes.statusCode).toBe(200);
+    expect(afterRes.json()).toEqual({ entries: [], activeId: null });
+    await app.close();
+  });
+
+  it("POST /credentials/restore-backup restores from latest backup", async () => {
+    const app = await makeCredentialsApp();
+    // 写一个合法备份（模拟之前 loadStore 备份的有效凭据）
+    writeValidBackupFile(1000, [
+      {
+        id: "restored-id",
+        label: "恢复的配置",
+        provider: "openai",
+        apiBaseUrl: "https://api.example.com",
+        apiKey: "sk-restored",
+        model: "gpt-image-2",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    const restoreRes = await app.inject({ method: "POST", url: "/credentials/restore-backup" });
+    expect(restoreRes.statusCode).toBe(200);
+    const body = restoreRes.json();
+    expect(body.ok).toBe(true);
+    expect(body.entries).toBe(1);
+
+    // GET /credentials 返恢复的列表
+    const afterRes = await app.inject({ method: "GET", url: "/credentials" });
+    expect(afterRes.json().entries[0].id).toBe("restored-id");
+    await app.close();
+  });
+
+  it("POST /credentials/restore-backup returns 500 when backup is also corrupt", async () => {
+    const app = await makeCredentialsApp();
+    // 写一个损坏的备份
+    writeFileSync(
+      join(tempDir, "credentials.json.corrupt-1000.json"),
+      "}{also-broken",
+      "utf-8",
+    );
+
+    const restoreRes = await app.inject({ method: "POST", url: "/credentials/restore-backup" });
+    expect(restoreRes.statusCode).toBe(500);
+    const body = restoreRes.json();
+    expect(body.error).toMatch(/仍无法解析/);
     await app.close();
   });
 });

@@ -11,11 +11,14 @@ import { PROVIDER_PRESETS } from "../providerPresets.js";
 import { loopbackGuard } from "../middleware/loopback.js";
 import {
   CredentialStoreError,
+  consumeCorruptionEvent,
   listCredentials,
   addCredential,
   updateCredential,
   removeCredential,
   activateCredential,
+  resetEmptyStore,
+  restoreLatestBackup,
 } from "../credentials.js";
 
 /**
@@ -45,7 +48,18 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
 
   app.get<{ Reply: CompanionCredentialsListResponse }>("/credentials", async (_req, reply) => {
     try {
-      return listCredentials();
+      const store = listCredentials();
+      // store 正常加载后，检查是否有未消费的损坏事件。
+      // 场景：Web 端连续发多次 /credentials，第一次触发损坏备份，后续请求文件已不在，
+      // 返正常空列表——若不检查事件，credError 会被后续 200 清空，用户看不到损坏提示。
+      // 事件在 addCredential 成功后清除（语义：用户已重新配置，损坏翻篇）。
+      const event = consumeCorruptionEvent();
+      if (event) {
+        // 复用 handleStoreError 的 reply 发送逻辑（返 never，绕过 Reply 类型约束）
+        reply.status(500);
+        return { error: event.message, corrupt: true } as never;
+      }
+      return store;
     } catch (error) {
       return handleStoreError(error, reply);
     }
@@ -114,6 +128,33 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
         return reply.status(404).send({ error: "凭据不存在" } as never);
       }
       return { ok: true, activeId: req.params.id };
+    } catch (e) {
+      return handleStoreError(e, reply);
+    }
+  });
+
+  /**
+   * 重置成空配置：写合法空 store + 清除损坏事件。
+   * 用户看到凭据损坏提示后选择「重置成空配置」时调用——放弃损坏历史，回到首次使用状态。
+   */
+  app.post("/credentials/reset-empty", async (_req, reply) => {
+    try {
+      resetEmptyStore();
+      return { ok: true };
+    } catch (e) {
+      return handleStoreError(e, reply);
+    }
+  });
+
+  /**
+   * 从最近备份恢复：找最新的 credentials.json.corrupt-{ts}.json 尝试恢复。
+   * 成功 → 覆盖 credentials.json + 清除事件 + 删掉已恢复的备份。
+   * 失败（备份也坏了）→ 抛 CredentialStoreError，原状不变，用户可改试 reset-empty。
+   */
+  app.post("/credentials/restore-backup", async (_req, reply) => {
+    try {
+      const store = restoreLatestBackup();
+      return { ok: true, entries: store.entries.length, activeId: store.activeId };
     } catch (e) {
       return handleStoreError(e, reply);
     }
