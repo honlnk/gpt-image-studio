@@ -1590,3 +1590,72 @@ describe("images routes integration — provider edit happy path", () => {
     await app.close();
   });
 });
+
+/**
+ * 回归守护：真实 HTTP 连接下，正常的异步 generate 请求不应被 withClientSignal 误判为取消。
+ *
+ * app.inject 走的是 mock HTTP，不会触发真实 socket 的 close 事件时序，因此无法复现
+ * 「监听 req.raw 的 close 事件 → 请求体读完后立即触发 → async handler 还在 await
+ * provider fetch 时就被 abort」的 bug。这里用真实端口 + http.request 发请求，
+ * fetch 带人为延迟（模拟真实上游耗时），验证请求正常返回 200 而非 502/aborted。
+ */
+describe("images routes integration — withClientSignal does not abort normal requests", () => {
+  it("returns 200 for a slow upstream (socket close timing)", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://up.example.com/v1/images",
+      apiKey: "sk-test",
+    });
+    let fetchSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        fetchSignal = init.signal;
+        // 模拟上游耗时（>50ms），期间 if socket close 事件过早触发就会被 abort
+        await new Promise((r) => setTimeout(r, 80));
+        return new Response(
+          JSON.stringify({ data: [{ b64_json: "QUJD" }] }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const address = app.server.address();
+    if (typeof address !== "object" || address === null) {
+      throw new Error("server did not bind");
+    }
+    const { port } = address;
+
+    const responseBody = await new Promise<string>((resolve, reject) => {
+      const http = require("node:http");
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port,
+          path: "/images/generations",
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "content-length": Buffer.byteLength('{"model":"gpt-image-2","prompt":"a cat","size":"1024x1024"}'),
+          },
+        },
+        (res) => {
+          let body = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk) => { body += chunk; });
+          res.on("end", () => resolve(body));
+        },
+      );
+      req.on("error", reject);
+      req.write('{"model":"gpt-image-2","prompt":"a cat","size":"1024x1024"}');
+      req.end();
+    });
+
+    const parsed = JSON.parse(responseBody);
+    expect(parsed.data?.[0]?.b64_json).toBe("QUJD");
+    // abort 不应被触发——signal 必须保持未 abort
+    expect(fetchSignal?.aborted).toBe(false);
+
+    await app.close();
+  });
+});

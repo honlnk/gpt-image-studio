@@ -117,16 +117,19 @@ describe("companion image route validation", () => {
  * withClientSignal 单元测试：验证浏览器断开时 AbortController.abort() 被触发，
  * 让 signal 一路传到 provider fetch；正常完成时不应误触发 abort。
  *
- * 用 EventEmitter 模拟 req.raw（Node IncomingMessage 是 EventEmitter 子类），
- * 用普通对象模拟 reply.raw.headersSent。
+ * 用 EventEmitter 模拟 req.raw.socket（Node Socket 是 EventEmitter 子类），
+ * 用可变对象模拟 reply.raw.writableEnded。真实场景下 socket 的 'close' 只在
+ * 底层连接关闭时触发（keep-alive 复用时不触发），`req.raw` 的 'close' 则会在
+ * 请求体读完后就触发——后者会导致正常 async 请求被误判为取消。
  */
-type MockReq = { raw: EventEmitter };
-type MockReply = { raw: { headersSent: boolean } };
+type MockSocket = EventEmitter;
+type MockReq = { raw: { socket: MockSocket } };
+type MockReply = { raw: { writableEnded: boolean } };
 
 function makeMocks(): { req: MockReq; reply: MockReply } {
   return {
-    req: { raw: new EventEmitter() },
-    reply: { raw: { headersSent: false } },
+    req: { raw: { socket: new EventEmitter() } },
+    reply: { raw: { writableEnded: false } },
   };
 }
 
@@ -136,7 +139,7 @@ describe("withClientSignal — abort propagation", () => {
     let signalReceived: AbortSignal | undefined;
     const pending = withClientSignal(req as never, reply as never, async (signal) => {
       signalReceived = signal;
-      // 阻塞直到外部 emit close
+      // 阻塞直到外部 emit close（模拟客户端断开，socket 关闭）
       return new Promise<string>((resolve) => {
         signal.addEventListener("abort", () => resolve("aborted"), { once: true });
       });
@@ -146,37 +149,39 @@ describe("withClientSignal — abort propagation", () => {
     expect(signalReceived).toBeDefined();
     expect(signalReceived!.aborted).toBe(false);
 
-    // 模拟浏览器断开
-    req.raw.emit("close");
+    // 模拟 socket 关闭（客户端断开）
+    req.raw.socket.emit("close");
     const result = await pending;
     expect(result).toBe("aborted");
     expect(signalReceived!.aborted).toBe(true);
   });
 
-  it("does NOT abort when request completes normally before close", async () => {
+  it("does NOT abort when async fn completes before socket closes", async () => {
+    // 回归守护：真实场景下 provider 调用是 async 的（fetch 需要时间），
+    // fn 正常 resolve 后 finally 会 off 掉 listener，之后 socket close 不应再 abort。
     const { req, reply } = makeMocks();
     let signalAborted = false;
     const result = await withClientSignal(req as never, reply as never, async (signal) => {
       signal.addEventListener("abort", () => { signalAborted = true; });
+      // 模拟 provider 调用（有延迟但正常完成）
+      await new Promise((r) => setTimeout(r, 5));
       return "ok";
     });
     expect(result).toBe("ok");
     expect(signalAborted).toBe(false);
-    // close 后也不应再触发 abort（listener 已被 off）
-    // 模拟"请求结束后客户端断开"
-    reply.raw.headersSent = true;
-    req.raw.emit("close");
+    // fn 完成后 listener 已被 off，模拟连接关闭不应再触发 abort
+    req.raw.socket.emit("close");
     expect(signalAborted).toBe(false);
   });
 
-  it("does not abort if headers already sent when close fires", async () => {
+  it("does not abort if response already written when socket closes", async () => {
     const { req, reply } = makeMocks();
     let signalAborted = false;
     const pending = withClientSignal(req as never, reply as never, async (signal) => {
       signal.addEventListener("abort", () => { signalAborted = true; });
-      // 模拟 reply 已开始发送（headersSent=true）后才 close
-      reply.raw.headersSent = true;
-      req.raw.emit("close");
+      // 模拟 reply 已完整写出（writableEnded=true）后 socket 才 close
+      reply.raw.writableEnded = true;
+      req.raw.socket.emit("close");
       return new Promise<string>((resolve) => {
         // 给 abort handler 一个机会运行（不会运行）
         setTimeout(() => resolve("done"), 5);
@@ -187,11 +192,11 @@ describe("withClientSignal — abort propagation", () => {
     expect(signalAborted).toBe(false);
   });
 
-  it("removes the close listener after completion (no EventEmitter leak)", async () => {
+  it("removes the socket close listener after completion (no EventEmitter leak)", async () => {
     const { req, reply } = makeMocks();
     await withClientSignal(req as never, reply as never, async () => "ok");
     // 完成后 listener 应被 off，剩余 close listener 数为 0
-    expect(req.raw.listenerCount("close")).toBe(0);
+    expect(req.raw.socket.listenerCount("close")).toBe(0);
   });
 });
 

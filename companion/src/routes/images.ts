@@ -258,12 +258,18 @@ export function errorPayload(error: unknown): { error: string; category?: Provid
 /**
  * 在客户端断开时取消 provider 调用。
  *
- * 监听 `req.raw` 的 'close' 事件（浏览器刷新/关页面/网络断开都会触发），
- * 当 reply 还没开始写响应头时调用 controller.abort()，让 AbortSignal 一路
- * 透传到 provider 的 fetch，立即取消上游请求，释放凭据/连接。
+ * 监听 **socket** 的 'close' 事件（浏览器刷新/关页面/网络断开都会触发），
+ * 当响应尚未完整写出（`writableEnded` 为 false）时调用 controller.abort()，
+ * 让 AbortSignal 一路透传到 provider 的 fetch，立即取消上游请求，释放凭据/连接。
  *
- * `headersSent` 检查避免正常响应完成后误触发 abort——这种情况下 abort 已无意义，
- * 而且会污染日志、误导调试。
+ * 为什么监听 socket 而非 `req.raw`：Node 的 `IncomingMessage` 在请求体被完整
+ * 读取后就会 emit 'close'（即使连接本身保活），这在 async handler await 期间
+ * 会过早触发，导致正常请求被误判为取消。socket 的 'close' 只在底层连接真正
+ * 关闭时才触发——keep-alive 连接复用时不会触发，客户端中途断开才会触发。
+ *
+ * `writableEnded` 检查避免正常响应完成后误触发 abort——响应已写完时 socket close
+ *（连接关闭或 keep-alive 回收）不应再 abort，此时 abort 已无意义，而且会污染日志、
+ * 误导调试。
  *
  * finally 里 off 掉 listener，防止 EventEmitter 在请求结束后仍持有引用导致泄漏。
  */
@@ -273,16 +279,17 @@ export async function withClientSignal<T>(
   fn: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
   const controller = new AbortController();
+  const socket = req.raw.socket;
   const onClose = () => {
-    if (!reply.raw.headersSent) {
+    if (!reply.raw.writableEnded) {
       controller.abort();
     }
   };
-  req.raw.on("close", onClose);
+  socket.on("close", onClose);
   try {
     return await fn(controller.signal);
   } finally {
-    req.raw.off("close", onClose);
+    socket.off("close", onClose);
   }
 }
 
