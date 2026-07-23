@@ -59,10 +59,6 @@ export const wanAdapter: ProviderAdapter = {
       : WAN_PROFILE.resolutionOptions;
   },
 
-  describe(config: ProviderConfig) {
-    return { label: config.model ?? DEFAULT_MODEL, providerId: "wan" };
-  },
-
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,

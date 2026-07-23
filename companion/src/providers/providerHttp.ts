@@ -9,7 +9,7 @@
  * 不放这里的内容（各 adapter 的独有算法）：
  *   - normalize*Size 尺寸规整（边界条件各异，不可合并）
  *   - buildBody / parseResponse（协议形状不同）
- *   - DEFAULT_*_BASE_URL / DEFAULT_*_MODEL（连接信息，归 providerPresets.ts）
+ *   - 连接默认值（baseUrl / model，归 providerPresets.ts / profiles/*.json）
  *
  * parseImagesResponse 是例外——它解析的是 OpenAI Images API 标准响应形状
  * data[0].b64_json，属于"协议标准"而非"provider 差异"，因此与 HTTP 工具放一起，

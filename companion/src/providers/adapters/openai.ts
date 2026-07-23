@@ -38,10 +38,6 @@ export const openaiAdapter: ProviderAdapter = {
   sizeConstraints: OPENAI_PROFILE.sizeConstraints,
   resolutionOptions: OPENAI_PROFILE.resolutionOptions,
 
-  describe(config: ProviderConfig) {
-    return { label: config.model ?? getDefaultModel("openai")!, providerId: "openai" };
-  },
-
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,

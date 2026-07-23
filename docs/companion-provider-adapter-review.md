@@ -775,12 +775,33 @@ Provider 配置突然消失，且缺少可诊断日志。~~
 
 ### P3：公共设施存在维护漂移
 
-- `taskPoller` 当前没有 Provider 使用，注释仍描述 Wan 等异步流程。
-- 多个 Adapter 的 `DEFAULT_*_BASE_URL` 常量没有实际参与 URL 构造。
-- `describe()` 当前价值有限。
-- DashScope 错误解析先返回 `message`，导致 `code: message` 组合分支不可达。
+~~`taskPoller` 当前没有 Provider 使用，注释仍描述 Wan 等异步流程。~~
+~~多个 Adapter 的 `DEFAULT_*_BASE_URL` 常量没有实际参与 URL 构造。~~
+~~`describe()` 当前价值有限。~~
+~~DashScope 错误解析先返回 `message`，导致 `code: message` 组合分支不可达。~~
 
-这些问题不会立即造成严重故障，但会增加后续维护者判断真实协议的成本。
+~~这些问题不会立即造成严重故障，但会增加后续维护者判断真实协议的成本。~~
+
+#### 已完成整改：清理死代码与过时注释
+
+状态：已于 2026-07-22 修复。
+
+审查时列出的 4 项中，2 项在后续重构中已自然解决，2 项为真实死代码，本次删除：
+
+- **taskPoller（死代码，已删除）**：`runAsyncTask` 从未被任何 adapter / route 调用，
+  仅被自己的测试文件 import。注释描述的"Wan 异步接口"已过时——Wan 实际走同步 DashScope
+  `multimodal-generation/generation` 接口。删除 `taskPoller.ts` + `taskPoller.test.ts`。
+  未来接入异步 provider 时重新实现即可，无需保留未使用的预制件。
+- **`DEFAULT_*_BASE_URL`（已不存在）**：审查时描述的问题在后续 providerPresets 重构中
+  已解决——所有 adapter 使用运行时 `config.apiBaseUrl`，无任何默认 URL 常量声明。
+  唯一残留是 `providerHttp.ts` 一行历史注释提及 `DEFAULT_*_BASE_URL`，本次顺手清理。
+- **`describe()`（死代码，已删除）**：`ProviderAdapter.describe()` 返回
+  `{label, providerId}`，但生产代码 0 调用（`/auth/status` 的 accountLabel 直接用
+  `creds.label`，不调 adapter.describe）。删除接口定义 + 7 个 adapter 实现 + 3 个
+  测试用例。
+- **DashScope `code: message` 不可达分支（已修复）**：`providerHttp.ts` 的
+  `extractErrorMessage` 已在早期重构中把 `code + message` 组合判断放在顶层 `message`
+  之前，分支可达且有测试覆盖。本次确认无需改动。
 
 ## 建议整改顺序
 
@@ -916,3 +937,16 @@ Provider 配置突然消失，且缺少可诊断日志。~~
 - 所有 8 个 provider 的 generate + edit 端到端链路（Web 请求 → route 提取 → adapter
   翻译 → 上游请求体形状）均有覆盖。adapter 内部翻译逻辑仍由各自单元测试 exhaustive 覆盖，
   集成测试只验证接线主体形状，不重复 exhaustive 断言。
+
+2026-07-22 P3 公共设施维护漂移清理后：
+
+- `pnpm typecheck:companion` 通过。
+- `pnpm typecheck` 通过。
+- `pnpm test` 通过，共 43 个测试文件、550 个测试。
+- 删除 `companion/src/providers/taskPoller.ts` + `taskPoller.test.ts`（5 个测试，
+  死代码：`runAsyncTask` 从未被任何 adapter / route 调用）。
+- 删除 `ProviderAdapter.describe()` 接口定义 + 7 个 adapter 实现 + 3 个测试用例
+  （grok / deepinfra / gemini 各 1 个，生产代码 0 调用）。
+- 清理 `providerHttp.ts` 和 `openaiCompatible.ts` 的过时注释。
+- review 列出的 4 项 P3 中，DEFAULT_*_BASE_URL 和 DashScope code:message 死代码
+  两项在早期重构中已自然解决，本次确认后标记完成。

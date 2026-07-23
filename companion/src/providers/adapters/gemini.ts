@@ -59,10 +59,6 @@ export const geminiAdapter: ProviderAdapter = {
   sizeConstraints: GEMINI_PROFILE.sizeConstraints,
   resolutionOptions: GEMINI_PROFILE.resolutionOptions,
 
-  describe(config: ProviderConfig) {
-    return { label: config.model ?? DEFAULT_MODEL, providerId: "gemini" };
-  },
-
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,

@@ -44,10 +44,6 @@ export const qwenAdapter: ProviderAdapter = {
   resolutionOptions: QWEN_PROFILE.resolutionOptions,
   editConstraints: QWEN_PROFILE.editConstraints,
 
-  describe(config: ProviderConfig) {
-    return { label: config.model ?? DEFAULT_MODEL, providerId: "qwen" };
-  },
-
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,

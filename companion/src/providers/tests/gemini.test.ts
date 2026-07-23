@@ -369,11 +369,4 @@ describe("geminiAdapter static metadata", () => {
       "4k",
     ]);
   });
-
-  it("describe returns model or default", () => {
-    expect(geminiAdapter.describe(CONFIG).label).toBe("gemini-2.5-flash-image");
-    expect(geminiAdapter.describe({ ...CONFIG, model: undefined }).label).toBe(
-      "gemini-2.5-flash-image",
-    );
-  });
 });

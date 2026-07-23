@@ -43,10 +43,6 @@ export const grokAdapter: ProviderAdapter = {
   sizeConstraints: GROK_PROFILE.sizeConstraints,
   resolutionOptions: GROK_PROFILE.resolutionOptions,
 
-  describe(config: ProviderConfig) {
-    return { label: config.model ?? getDefaultModel("grok")!, providerId: "grok" };
-  },
-
   async generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,

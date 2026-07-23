@@ -163,13 +163,6 @@ describe("deepinfraAdapter static metadata", () => {
       defaultSize: "1024x1024",
     });
   });
-
-  it("declares describe() label with provider id", () => {
-    expect(deepinfraAdapter.describe(CONFIG)).toEqual({
-      label: "black-forest-labs/FLUX-1.1-pro",
-      providerId: "deepinfra",
-    });
-  });
 });
 
 describe("normalizeDeepInfraSize", () => {

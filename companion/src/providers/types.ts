@@ -204,7 +204,6 @@ export type ProviderCallOptions = {
 /**
  * Provider adapter 接口。输入输出都是 OpenAI 形状。
  *
- * - describe() 返回给人看的展示信息（/auth/status 的 accountLabel 等）。
  * - generate() 文生图，所有 provider 必须实现。
  * - edit() 图片编辑，可选；未实现时 capability.edit 应为 false，
  *   route 层据此返回 501。
@@ -226,8 +225,6 @@ export type ProviderAdapter = {
   readonly editConstraints?: ProviderEditConstraints;
   getSizeConstraints?(config: ProviderConfig): SizeConstraints;
   getResolutionOptions?(config: ProviderConfig): readonly ResolutionOption[];
-
-  describe(config: ProviderConfig): { label: string; providerId: string };
 
   generate(
     request: OpenAIImageRequest,

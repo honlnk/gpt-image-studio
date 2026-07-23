@@ -394,11 +394,4 @@ describe("grokAdapter static metadata", () => {
       "2k",
     ]);
   });
-
-  it("describe returns model or default", () => {
-    expect(grokAdapter.describe(CONFIG).label).toBe("grok-imagine-image");
-    expect(grokAdapter.describe({ ...CONFIG, model: undefined }).label).toBe(
-      "grok-imagine-image",
-    );
-  });
 });

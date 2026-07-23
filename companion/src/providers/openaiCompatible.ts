@@ -111,7 +111,7 @@ export type OpenAICompatibleConfig = {
 /**
  * 用配置创建一个 OpenAI 兼容 adapter。
  *
- * 返回的 ProviderAdapter 已实现 describe/generate/edit（edit 按 editMode 决定是否提供），
+ * 返回的 ProviderAdapter 已实现 generate/edit（edit 按 editMode 决定是否提供），
  * 能力数据（capability/sizeConstraints/resolutionOptions）从 profiles/{id}.json 读取。
  */
 export function createOpenAICompatibleAdapter(
@@ -134,13 +134,6 @@ export function createOpenAICompatibleAdapter(
     sizeConstraints: PROFILE.sizeConstraints,
     resolutionOptions: PROFILE.resolutionOptions,
     editConstraints: PROFILE.editConstraints,
-
-    describe(providerConfig: ProviderConfig) {
-      return {
-        label: providerConfig.model ?? getDefaultModel(config.id)!,
-        providerId: config.id,
-      };
-    },
   };
 
   async function generate(
