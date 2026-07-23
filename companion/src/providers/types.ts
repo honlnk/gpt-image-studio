@@ -77,6 +77,19 @@ export type ResolutionOption = {
 };
 
 /**
+ * Provider 图片编辑专属限制；未声明时由全局安全配置兜底。
+ *
+ * 定义在 types.ts（而非 providerProfiles.ts）是因为 ProviderAdapter 接口也持有它，
+ * 避免两个文件互相 import 形成循环依赖。
+ */
+export type ProviderEditConstraints = {
+  /** 上游允许的最大参考图数量。 */
+  maxImages?: number;
+  /** 编辑支持的分辨率档位；可少于文生图档位（如 Wan Pro 不支持编辑 4K）。 */
+  resolutionOptions?: readonly ResolutionOption[];
+};
+
+/**
  * adapter 翻译专用的私有配置，不回流 web。
  *
  * 与 resolutionOptions/sizeConstraints 的区别：那两个字段会通过 /auth/status 回流给 web
@@ -207,6 +220,8 @@ export type ProviderAdapter = {
   readonly sizeConstraints: SizeConstraints;
   /** 该 provider 支持的分辨率档位，companion 声明、web 渲染。 */
   readonly resolutionOptions: readonly ResolutionOption[];
+  /** Provider 专属编辑限制（maxImages 等）；未声明时由全局安全配置兜底。 */
+  readonly editConstraints?: ProviderEditConstraints;
   getSizeConstraints?(config: ProviderConfig): SizeConstraints;
   getResolutionOptions?(config: ProviderConfig): readonly ResolutionOption[];
 

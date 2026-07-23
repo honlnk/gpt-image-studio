@@ -42,6 +42,7 @@ export const qwenAdapter: ProviderAdapter = {
   capability: QWEN_PROFILE.capability,
   sizeConstraints: QWEN_PROFILE.sizeConstraints,
   resolutionOptions: QWEN_PROFILE.resolutionOptions,
+  editConstraints: QWEN_PROFILE.editConstraints,
 
   describe(config: ProviderConfig) {
     return { label: config.model ?? DEFAULT_MODEL, providerId: "qwen" };

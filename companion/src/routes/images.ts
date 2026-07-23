@@ -125,6 +125,15 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
       return reply.status(400).send({ error: "当前 provider 不支持遮罩局部编辑" });
     }
 
+    // Provider 专属参考图数量上限（比全局 maxEditImages 更细，如豆包 10 张、qwen 3 张）。
+    // 声明在 adapter.editConstraints.maxImages；未声明时 fallback 到全局安全配置兜底。
+    const providerMaxImages = adapter.editConstraints?.maxImages;
+    if (providerMaxImages !== undefined && parsed.images.length > providerMaxImages) {
+      return reply.status(400).send({
+        error: `当前 provider 编辑最多支持 ${providerMaxImages} 张参考图`,
+      });
+    }
+
     const editRequest = toEditRequest(parsed);
     logNormalizedImageRequest(app, {
       operation: "edit",

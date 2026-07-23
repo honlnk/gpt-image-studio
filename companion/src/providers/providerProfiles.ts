@@ -21,6 +21,7 @@ import { dirname, join } from "node:path";
 import type {
   ProviderAdapterConfig,
   ProviderCapability,
+  ProviderEditConstraints,
   ResolutionOption,
   SizeConstraints,
 } from "./types.js";
@@ -33,14 +34,6 @@ export type ProfileVariant = {
   resolutionOptions: readonly ResolutionOption[];
   /** 该 model 的编辑专属限制（未声明的字段继承 provider 级 editConstraints）。 */
   editConstraints?: ProviderEditConstraints;
-};
-
-/** Provider 图片编辑专属限制；未声明时由全局安全配置兜底。 */
-export type ProviderEditConstraints = {
-  /** 上游允许的最大参考图数量。 */
-  maxImages?: number;
-  /** 编辑支持的分辨率档位；可少于文生图档位（如 Wan Pro 不支持编辑 4K）。 */
-  resolutionOptions?: readonly ResolutionOption[];
 };
 
 /** Provider 的展示和默认连接信息，供 Web 设置面板和 CLI 共用。 */

@@ -133,6 +133,7 @@ export function createOpenAICompatibleAdapter(
     capability: PROFILE.capability,
     sizeConstraints: PROFILE.sizeConstraints,
     resolutionOptions: PROFILE.resolutionOptions,
+    editConstraints: PROFILE.editConstraints,
 
     describe(providerConfig: ProviderConfig) {
       return {
@@ -252,15 +253,21 @@ function createImageFieldEdit(
     providerConfig: ProviderConfig,
     options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
-    const reference = request.images[0];
-    if (!reference) {
+    const images = request.images;
+    if (images.length === 0) {
       throw new Error(`${config.id} 图生图需要至少一张参考图。`);
     }
 
     const apiUrl = `${providerConfig.apiBaseUrl.replace(/\/+$/, "")}/generations`;
     const model = providerConfig.model ?? getDefaultModel(config.id)!;
     const size = config.normalizeSize(request.size, constraints);
-    const imageDataUrl = `data:${reference.mimeType};base64,${reference.blob.toString("base64")}`;
+
+    // 上游 image 字段类型为 string / string[]：1 张传单值（向后兼容），
+    // ≥2 张传数组，与豆包 Seedream 官方文档一致。
+    const imageDataUrls = images.map(
+      (img) => `data:${img.mimeType};base64,${img.blob.toString("base64")}`,
+    );
+    const image = imageDataUrls.length === 1 ? imageDataUrls[0] : imageDataUrls;
 
     const response = await postJson(
       apiUrl,
@@ -269,7 +276,7 @@ function createImageFieldEdit(
         model,
         prompt: request.prompt,
         size,
-        image: imageDataUrl,
+        image,
         ...config.requiredFields,
       },
       options,

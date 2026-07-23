@@ -126,21 +126,34 @@ Qwen 走 DashScope multimodal-generation 接口，参考图通过 `messages.cont
 
 ## 与代码实现的差异
 
-### 已确认的 bug：豆包 adapter 只取第一张图
+### ✅ 已修复：豆包 adapter 多图支持
 
-`companion/src/providers/openaiCompatible.ts` 中豆包走 `editMode: "image_field"`，代码写死只取第一张：
+此前 `createImageFieldEdit` 只取 `request.images[0]`，静默丢弃其余参考图。
+现已修复为：1 张传 `image: dataUrl`（单值，向后兼容），≥2 张传 `image: [dataUrl, ...]`（数组），
+与豆包官方 `image` 字段 `string / string[]` 类型一致。
 
-```ts
-const reference = request.images[0];  // 只取第一张，其余丢弃
-```
+同时在 `profiles/doubao.json` 声明 `editConstraints.maxImages: 10`，route 层在 adapter 解析后
+按 provider 上限校验，超限返回 400「当前 provider 编辑最多支持 10 张参考图」。
 
-但豆包官方文档明确 `image` 字段类型为 `string / string[]`，支持 2-10 张（5.0 pro）或 2-14 张（lite / 4.5 / 4.0）。
-当前实现静默丢弃了第 2 张及以后的参考图，与官方能力不符。
+详见 `companion/src/providers/openaiCompatible.ts` 的 `createImageFieldEdit` 和
+`companion/src/routes/images.ts` edit 路由的 per-provider 校验。
 
-### 数据已回流但 Web 端看不到的 provider
+### Provider 专属上限已由 route 层强制执行
 
-`ProviderEditConstraints.maxImages` 在 `qwen.json`（3）和 `wan.json`（9）中已声明，
-但该字段不出现在 `/auth/status` 响应中，Web 端无法在用户贴图时实时限制数量。
+`ProviderEditConstraints.maxImages` 现已在三个 provider profile 中声明：
+
+| Provider | maxImages | 说明 |
+| --- | --- | --- |
+| 豆包 Seedream | 10 | route 层校验，超限返 400 |
+| Qwen-Image | 3 | route 层校验 + adapter 内 throw 双重兜底 |
+| Wan | 9 | route 层校验 + adapter 内 throw 双重兜底 |
+
+route 层校验（`images.ts` edit 路由）在 adapter 解析后、调用 adapter.edit 之前拦截，
+返回 400「当前 provider 编辑最多支持 N 张参考图」。adapter 内部的 `throw` 作为防御性兜底保留。
+
+**注意**：`maxImages` 仍**不回流 Web**（不出现在 `/auth/status`）。
+Web 端无 per-provider 实时数量提示，用户传超限图片时由 Companion 在请求阶段拒绝。
+未来若要支持 capability-driven UI，可通过 `/auth/status` 暴露 `editConstraints`。
 
 ### Web 端的通用限制
 

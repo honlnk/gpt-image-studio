@@ -452,6 +452,132 @@ describe("images routes integration — edit", () => {
 });
 
 /**
+ * Provider 专属参考图数量上限（豆包 editConstraints.maxImages = 10）。
+ * 校验落在 route 层，返回 400（而非 adapter 内部 throw 变 502）。
+ */
+describe("images routes integration — provider edit image limit", () => {
+  /**
+   * 构造带 N 张 image[] 的 doubao 编辑请求。
+   * doubao 走 image_field 模式（/generations + JSON image 字段），
+   * 1 张传单值、≥2 张传数组——这里验证数组形状和多图不再被静默丢弃。
+   */
+  function makeDoubaoEditBody(imageCount: number): { boundary: string; body: Buffer } {
+    const boundary = "----doubao-boundary";
+    const crlf = "\r\n";
+    const imgBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const textParts = [
+      `--${boundary}${crlf}Content-Disposition: form-data; name="model"${crlf}${crlf}doubao-seedream-5-0-pro-250528${crlf}`,
+      `--${boundary}${crlf}Content-Disposition: form-data; name="prompt"${crlf}${crlf}edit it${crlf}`,
+    ];
+    const chunks: Buffer[] = [
+      Buffer.from(textParts.join(""), "utf8"),
+    ];
+    for (let i = 0; i < imageCount; i++) {
+      chunks.push(
+        Buffer.from(
+          `--${boundary}${crlf}Content-Disposition: form-data; name="image[]"; filename="img${i}.png"${crlf}Content-Type: image/png${crlf}${crlf}`,
+          "utf8",
+        ),
+        imgBytes,
+        Buffer.from(crlf, "utf8"),
+      );
+    }
+    chunks.push(Buffer.from(`--${boundary}--${crlf}`, "utf8"));
+    return { boundary, body: Buffer.concat(chunks) };
+  }
+
+  it("rejects doubao edit with 11 images (exceeds maxImages=10)", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://ark.example.com/api/v3/images",
+      apiKey: "sk-doubao",
+      provider: "doubao",
+    });
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { boundary, body } = makeDoubaoEditBody(11);
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain("最多支持 10 张参考图");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("sends image[] array to doubao upstream when ≥2 images", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://ark.example.com/api/v3/images",
+      apiKey: "sk-doubao",
+      provider: "doubao",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({ data: [{ b64_json: "UVdY" }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const { boundary, body } = makeDoubaoEditBody(2);
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    // ≥2 张 → image 字段应为数组
+    expect(Array.isArray(seen[0].image)).toBe(true);
+    expect((seen[0].image as unknown[]).length).toBe(2);
+    await app.close();
+  });
+
+  it("sends single image value (not array) to doubao upstream when 1 image", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://ark.example.com/api/v3/images",
+      apiKey: "sk-doubao",
+      provider: "doubao",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({ data: [{ b64_json: "UVdY" }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const { boundary, body } = makeDoubaoEditBody(1);
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    // 1 张 → image 字段应为 string（data URL），向后兼容
+    expect(typeof seen[0].image).toBe("string");
+    await app.close();
+  });
+});
+
+/**
  * 已知字段契约（review P1 第 5 项）：每个 COMPANION_GENERATE_FIELDS 里声明的字段，
  * 从 Web 真实请求形状出发，经过 route → OpenAI adapter 后，必须出现在上游请求的正确位置。
  *

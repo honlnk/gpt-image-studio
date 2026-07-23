@@ -47,6 +47,7 @@ export const wanAdapter: ProviderAdapter = {
   capability: WAN_PROFILE.capability,
   sizeConstraints: WAN_PROFILE.sizeConstraints,
   resolutionOptions: WAN_PROFILE.resolutionOptions,
+  editConstraints: WAN_PROFILE.editConstraints,
 
   getSizeConstraints(config: ProviderConfig) {
     return isWanProModel(config.model) ? WAN_PRO_VARIANT.sizeConstraints : WAN_PROFILE.sizeConstraints;

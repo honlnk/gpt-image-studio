@@ -25,5 +25,8 @@
     { "value": "2k", "label": "2K", "targetPixels": 4194304 },
     { "value": "3k", "label": "3K", "targetPixels": 4665600 },
     { "value": "4k", "label": "4K", "targetPixels": 8847360 }
-  ]
+  ],
+  "editConstraints": {
+    "maxImages": 10
+  }
 }
