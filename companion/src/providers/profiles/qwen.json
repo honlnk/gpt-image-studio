@@ -26,6 +26,7 @@
     { "value": "2k", "label": "2K", "targetPixels": 4194304 }
   ],
   "editConstraints": {
-    "maxImages": 3
+    "maxImages": 3,
+    "maxImageBytes": 10485760
   }
 }

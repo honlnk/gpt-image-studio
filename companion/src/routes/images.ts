@@ -134,6 +134,21 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
       });
     }
 
+    // Provider 专属单张参考图大小上限（如豆包 30MB、qwen/wan 10MB、openai 50MB）。
+    // 声明在 adapter.editConstraints.maxImageBytes；未声明时由全局 body 上限兜底。
+    const providerMaxImageBytes = adapter.editConstraints?.maxImageBytes;
+    if (providerMaxImageBytes !== undefined) {
+      const oversized = parsed.images.find(
+        (img) => img.blob.length > providerMaxImageBytes,
+      );
+      if (oversized) {
+        const limitMB = (providerMaxImageBytes / 1024 / 1024).toFixed(0);
+        return reply.status(400).send({
+          error: `单张参考图大小超过当前 provider 上限 ${limitMB}MB`,
+        });
+      }
+    }
+
     const editRequest = toEditRequest(parsed);
     logNormalizedImageRequest(app, {
       operation: "edit",

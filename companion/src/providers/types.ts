@@ -85,6 +85,8 @@ export type ResolutionOption = {
 export type ProviderEditConstraints = {
   /** 上游允许的最大参考图数量。 */
   maxImages?: number;
+  /** 上游允许的单张参考图最大字节数。 */
+  maxImageBytes?: number;
   /** 编辑支持的分辨率档位；可少于文生图档位（如 Wan Pro 不支持编辑 4K）。 */
   resolutionOptions?: readonly ResolutionOption[];
 };

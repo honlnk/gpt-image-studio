@@ -140,19 +140,23 @@ Qwen 走 DashScope multimodal-generation 接口，参考图通过 `messages.cont
 
 ### Provider 专属上限已由 route 层强制执行
 
-`ProviderEditConstraints.maxImages` 现已在三个 provider profile 中声明：
+`ProviderEditConstraints` 现已在多个 provider profile 中声明数量上限（`maxImages`）和单张大小上限（`maxImageBytes`）：
 
-| Provider | maxImages | 说明 |
-| --- | --- | --- |
-| 豆包 Seedream | 10 | route 层校验，超限返 400 |
-| Qwen-Image | 3 | route 层校验 + adapter 内 throw 双重兜底 |
-| Wan | 9 | route 层校验 + adapter 内 throw 双重兜底 |
+| Provider | maxImages | maxImageBytes | 说明 |
+| --- | --- | --- | --- |
+| OpenAI | — | 50MB（52428800） | route 层校验，超限返 400 |
+| 豆包 Seedream | 10 | 30MB（31457280） | route 层校验，超限返 400 |
+| Qwen-Image | 3 | 10MB（10485760） | route 层校验 + adapter 内 throw 双重兜底 |
+| Wan | 9 | 10MB（10485760） | route 层校验 + adapter 内 throw 双重兜底 |
 
-route 层校验（`images.ts` edit 路由）在 adapter 解析后、调用 adapter.edit 之前拦截，
-返回 400「当前 provider 编辑最多支持 N 张参考图」。adapter 内部的 `throw` 作为防御性兜底保留。
+route 层校验（`images.ts` edit 路由）在 adapter 解析后、调用 adapter.edit 之前拦截：
+- 数量超限 → 400「当前 provider 编辑最多支持 N 张参考图」
+- 单张超限 → 400「单张参考图大小超过当前 provider 上限 NMB」
 
-**注意**：`maxImages` 仍**不回流 Web**（不出现在 `/auth/status`）。
-Web 端无 per-provider 实时数量提示，用户传超限图片时由 Companion 在请求阶段拒绝。
+adapter 内部的 `throw` 作为防御性兜底保留。
+
+**注意**：`editConstraints` 仍**不回流 Web**（不出现在 `/auth/status`）。
+Web 端无 per-provider 实时提示，用户传超限图片时由 Companion 在请求阶段拒绝。
 未来若要支持 capability-driven UI，可通过 `/auth/status` 暴露 `editConstraints`。
 
 ### Web 端的通用限制

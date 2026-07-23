@@ -578,6 +578,57 @@ describe("images routes integration — provider edit image limit", () => {
 });
 
 /**
+ * Provider 专属单张参考图大小上限（editConstraints.maxImageBytes）。
+ * 校验落在 route 层，返回 400（而非等上游拒绝变 502）。
+ */
+describe("images routes integration — provider edit image size limit", () => {
+  /** 构造带单张大体积 image[] 的编辑请求。 */
+  function makeOversizedEditBody(imageBytes: Buffer): { boundary: string; body: Buffer } {
+    const boundary = "----size-boundary";
+    const crlf = "\r\n";
+    const textParts = [
+      `--${boundary}${crlf}Content-Disposition: form-data; name="model"${crlf}${crlf}test-model${crlf}`,
+      `--${boundary}${crlf}Content-Disposition: form-data; name="prompt"${crlf}${crlf}edit it${crlf}`,
+    ];
+    const body = Buffer.concat([
+      Buffer.from(textParts.join(""), "utf8"),
+      Buffer.from(
+        `--${boundary}${crlf}Content-Disposition: form-data; name="image[]"; filename="big.png"${crlf}Content-Type: image/png${crlf}${crlf}`,
+        "utf8",
+      ),
+      imageBytes,
+      Buffer.from(crlf + `--${boundary}--${crlf}`, "utf8"),
+    ]);
+    return { boundary, body };
+  }
+
+  it("rejects qwen edit with oversized single image (>10MB)", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://dashscope.example.com",
+      apiKey: "sk-qwen",
+      provider: "qwen",
+    });
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    // 11 MB > qwen 的 10MB 上限
+    const bigImage = Buffer.alloc(11 * 1024 * 1024, 0x89);
+    const { boundary, body } = makeOversizedEditBody(bigImage);
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain("单张参考图大小超过当前 provider 上限 10MB");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+/**
  * 已知字段契约（review P1 第 5 项）：每个 COMPANION_GENERATE_FIELDS 里声明的字段，
  * 从 Web 真实请求形状出发，经过 route → OpenAI adapter 后，必须出现在上游请求的正确位置。
  *

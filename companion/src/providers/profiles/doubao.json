@@ -27,6 +27,7 @@
     { "value": "4k", "label": "4K", "targetPixels": 8847360 }
   ],
   "editConstraints": {
-    "maxImages": 10
+    "maxImages": 10,
+    "maxImageBytes": 31457280
   }
 }

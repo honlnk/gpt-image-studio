@@ -27,6 +27,7 @@
   ],
   "editConstraints": {
     "maxImages": 9,
+    "maxImageBytes": 10485760,
     "resolutionOptions": [
       { "value": "1k", "label": "1K", "targetPixels": 1048576 },
       { "value": "2k", "label": "2K", "targetPixels": 4194304 }

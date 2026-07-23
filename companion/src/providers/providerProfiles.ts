@@ -225,6 +225,18 @@ function validateEditConstraints(
     }
     result.maxImages = raw.maxImages;
   }
+  if (raw.maxImageBytes !== undefined) {
+    if (
+      typeof raw.maxImageBytes !== "number" ||
+      !Number.isSafeInteger(raw.maxImageBytes) ||
+      raw.maxImageBytes < 1
+    ) {
+      throw new Error(
+        `profiles/${providerId}.json: "editConstraints.maxImageBytes" 必须是正整数`,
+      );
+    }
+    result.maxImageBytes = raw.maxImageBytes;
+  }
   if (raw.resolutionOptions !== undefined) {
     result.resolutionOptions = validateResolutionOptions(
       `${providerId} (editConstraints)`,
