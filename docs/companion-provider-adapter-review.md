@@ -711,6 +711,58 @@ type ProviderCapability = {
 > `ProviderEditConstraints` 和 `/auth/status` 回流；在此之前 Companion 只保留整体请求体
 > 的通用安全上限，不把 32 MiB/48 MiB 当作 Provider 能力。
 
+#### 已完成整改：per-provider 参考图数量与单张大小校验
+
+状态：已于 2026-07-22 修复，实现在 `companion/src/providers/types.ts`、
+`companion/src/providers/providerProfiles.ts`、`companion/src/providers/openaiCompatible.ts`、
+`companion/src/routes/images.ts`、各 provider profile JSON。
+
+**核心改动**：
+
+- `ProviderEditConstraints` 新增 `maxImageBytes?: number` 字段（types.ts），
+  `validateEditConstraints` 同步加正整数校验（providerProfiles.ts）。
+- `ProviderAdapter` 接口新增可选 `editConstraints?` 字段（types.ts），让 route 层
+  能读到 provider 专属的 `maxImages` / `maxImageBytes`。为避免循环依赖，
+  `ProviderEditConstraints` 类型从 providerProfiles.ts 迁移到 types.ts。
+- 各 adapter 暴露 `editConstraints`：openaiCompatible 工厂的 baseAdapter 从
+  `PROFILE.editConstraints` 取值（doubao/glm/deepinfra 自动覆盖）；qwen / wan
+  独立 adapter 显式挂上 `editConstraints`。
+- **route 层 per-provider 校验**（`images.ts` edit 路由，adapter 解析后、adapter.edit
+  调用前）：
+  - `adapter.editConstraints?.maxImages` → 超限返 **400**「当前 provider 编辑最多支持 N 张参考图」
+  - `adapter.editConstraints?.maxImageBytes` → 单张 `blob.length` 超限返 **400**「单张参考图大小超过当前 provider 上限 NMB」
+- 未声明 `editConstraints` 的 provider（grok / gemini / deepinfra）跳过 per-provider 校验，
+  由全局 `maxEditImages=16` + `maxEditBodyBytes=50MB` 兜底。
+
+**各 provider 声明的限制**：
+
+| Provider | maxImages | maxImageBytes | 来源 |
+| --- | --- | --- | --- |
+| OpenAI | — | 50MB | 官方文档 |
+| 豆包 Seedream | 10 | 30MB | 官方文档 |
+| Qwen-Image | 3 | 10MB | 官方文档 |
+| Wan | 9 | 10MB | 302.ai 转述 |
+| Grok / Gemini / DeepInfra | — | — | 未确认，不加 |
+
+详见 `docs/provider-reference-image-limits.md`。
+
+**豆包多图 adapter 修复**：
+
+此前 `createImageFieldEdit`（openaiCompatible.ts）只取 `request.images[0]`，静默丢弃其余
+参考图——与豆包官方 `image` 字段 `string / string[]` 类型矛盾。修复为：1 张传
+`image: dataUrl`（单值，向后兼容），≥2 张传 `image: [dataUrl, ...]`（数组）。
+否则 maxImages=10 与只用 images[0] 自相矛盾。
+
+**取舍**：
+
+- **不回流 Web**：`editConstraints` 仍不出现在 `/auth/status`。Web 端无 per-provider
+  实时提示，用户传超限图片时由 Companion 在请求阶段拒绝（返 400）。未来若要支持
+  capability-driven UI（用户贴图时实时限制），可通过 `/auth/status` 暴露
+  `editConstraints`。
+- **不给 doubao 加 min=2 硬拦**：官方说 2-10，但 Web 现有单图编辑流程不应被 Companion
+  破坏。若豆包上游真要求 ≥2，由上游 API 报错兜底（502），Companion 不额外加 min gate。
+- **grok / gemini / deepinfra 不加 maxImageBytes**：无官方文档明确的单张限制，不加猜测值。
+
 ### P3：凭据文件损坏被静默视为空配置
 
 ~~`loadStore` 在 JSON 解析失败或结构不合法时直接返回空 Store。用户看到的现象会像是所有
@@ -752,12 +804,10 @@ Provider 配置突然消失，且缺少可诊断日志。~~
 
 ### 第三批：完善能力协议
 
-1. 增加最大参考图数量和大小。
+1. ~~增加最大参考图数量和大小。~~ 已完成（2026-07-22，详见上文「已完成整改：per-provider 参考图数量与单张大小校验」）。
 2. 将 Gemini 等 Provider 改为模型动态能力。
 3. ~~未知 Provider 改为显式配置错误。~~ 已完成（2026-07-22，详见上文「已完成整改：未知 Provider 显式报错」）。
 4. 补充各 Provider 的端到端契约测试。
-
-其中“参考图大小”应按 Provider/模型分别配置，不能用一个全局字节数覆盖所有模型。
 
 ## 测试基线
 
@@ -837,3 +887,14 @@ Provider 配置突然消失，且缺少可诊断日志。~~
   返 400、POST 不传 provider 走默认、PUT 改成未知 provider 返 400。
 - 扩展 `images.integration.test.ts`（34 → 36 个测试）：新增 generate / edit 两条路径
   在未知 provider 下返 503、fetch 不被调用。
+
+2026-07-22 per-provider 参考图数量与单张大小校验后：
+
+- `pnpm typecheck:companion` 通过。
+- `pnpm typecheck` 通过。
+- `pnpm test` 通过，共 44 个测试文件、546 个测试。
+- 扩展 `images.integration.test.ts`（36 → 39 个测试）：新增 doubao 11 张参考图 → 400
+  （数量超限）、doubao 2 张参考图 → image 字段为数组（多图不再静默丢弃）、doubao 1 张
+  参考图 → image 字段为单值（向后兼容）、qwen 11MB 单张图片 → 400（单张超限）。
+- `ProviderEditConstraints` 类型从 providerProfiles.ts 迁移到 types.ts（避免循环依赖），
+  新增 `maxImageBytes` 字段。
