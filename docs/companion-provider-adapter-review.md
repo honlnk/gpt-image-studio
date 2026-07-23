@@ -807,7 +807,7 @@ Provider 配置突然消失，且缺少可诊断日志。~~
 1. ~~增加最大参考图数量和大小。~~ 已完成（2026-07-22，详见上文「已完成整改：per-provider 参考图数量与单张大小校验」）。
 2. 将 Gemini 等 Provider 改为模型动态能力。
 3. ~~未知 Provider 改为显式配置错误。~~ 已完成（2026-07-22，详见上文「已完成整改：未知 Provider 显式报错」）。
-4. 补充各 Provider 的端到端契约测试。
+4. ~~补充各 Provider 的端到端契约测试。~~ 已完成（2026-07-22，所有 8 个 provider 的 generate + edit happy-path 均有集成测试覆盖，详见测试基线）。
 
 ## 测试基线
 
@@ -898,3 +898,21 @@ Provider 配置突然消失，且缺少可诊断日志。~~
   参考图 → image 字段为单值（向后兼容）、qwen 11MB 单张图片 → 400（单张超限）。
 - `ProviderEditConstraints` 类型从 providerProfiles.ts 迁移到 types.ts（避免循环依赖），
   新增 `maxImageBytes` 字段。
+
+2026-07-22 各 Provider 端到端契约测试补全（第三批第 4 项）后：
+
+- `pnpm typecheck:companion` 通过。
+- `pnpm typecheck` 通过。
+- `pnpm test` 通过，共 44 个测试文件、558 个测试。
+- 扩展 `images.integration.test.ts`（39 → 52 个测试）：新增两个 describe block——
+  「provider generate happy path」（7 个测试：doubao strict 裁剪、glm url 下载、
+  qwen DashScope 星号分隔 size、wan n/watermark 参数、deepinfra passthrough、
+  grok aspect_ratio/resolution 枚举、gemini generateContent 形状）和
+  「provider edit happy path」（5 个测试：qwen/wan DashScope edit 图片 dataURL、
+  deepinfra multipart 透传、gemini inline_data parts、glm 返 501）。
+- 此前完全无集成测试覆盖的 provider：wan、glm、deepinfra 现已补全。
+  qwen 此前只有路由级 maxImageBytes 拒绝测试，现补了 generate + edit happy-path。
+  doubao generate 此前无覆盖，现补了 strict 模式字段裁剪验证。
+- 所有 8 个 provider 的 generate + edit 端到端链路（Web 请求 → route 提取 → adapter
+  翻译 → 上游请求体形状）均有覆盖。adapter 内部翻译逻辑仍由各自单元测试 exhaustive 覆盖，
+  集成测试只验证接线主体形状，不重复 exhaustive 断言。

@@ -1006,3 +1006,587 @@ describe("images routes integration — unknown provider returns 503", () => {
     await app.close();
   });
 });
+
+/**
+ * 各 Provider 的 generate happy-path 端到端测试。
+ *
+ * 防的是「route → adapter 接线断裂」：已有 adapter 单元测试覆盖 adapter 内部翻译，
+ * 已有 OpenAI 集成测试覆盖 route 提取，但 doubao/glm/qwen/wan/deepinfra 的
+ * 「Web 真实请求 → route 提取 → adapter 翻译 → 上游请求体」完整链路此前无覆盖。
+ * 这里只验证字段翻译的主体形状（不重复 adapter 单元测试的 exhaustive 字段断言）。
+ */
+describe("images routes integration — provider generate happy path", () => {
+  /**
+   * 带 urlToB64 mock 的 setup：GLM/Qwen/Wan 返回图片 URL 后需要下载，
+   * 集成测试不起真实网络，mock 成带 magic bytes 的 PNG b64。
+   */
+  async function setupWithUrlDownload(creds: {
+    apiBaseUrl: string;
+    apiKey: string;
+    provider?: string;
+    model?: string;
+  }) {
+    const pngB64 = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+    vi.doMock("../providers/urlToB64.js", () => ({
+      urlToB64: vi.fn().mockResolvedValue({ b64Json: pngB64, mimeType: "image/png" }),
+    }));
+    return setupWithCredentials(creds);
+  }
+
+  afterEach(() => {
+    vi.doUnmock("../providers/urlToB64.js");
+  });
+
+  it("doubao: strict mode strips extra, sends model/prompt/size + requiredFields", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://ark.example.com/api/v3/images",
+      apiKey: "sk-doubao",
+      provider: "doubao",
+      model: "doubao-seedream-5-0-pro-250528",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({ data: [{ b64_json: "UVdY" }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "doubao-seedream-5-0-pro-250528",
+        prompt: "一只猫",
+        size: "2048x2048",
+        companion_resolution: "2k",
+        background: "auto",
+        quality: "high",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    // strict 模式：只发 model/prompt/size + requiredFields，裁掉 background/output_format/extra
+    expect(seen[0]).toMatchObject({
+      model: "doubao-seedream-5-0-pro-250528",
+      prompt: "一只猫",
+      size: "2048x2048",
+      response_format: "b64_json",
+      watermark: false,
+    });
+    expect(seen[0].background).toBeUndefined();
+    expect(seen[0].quality).toBeUndefined();
+    await app.close();
+  });
+
+  it("glm: strict mode, fetches url → b64 via urlToB64", async () => {
+    const app = await setupWithUrlDownload({
+      apiBaseUrl: "https://glm.example.com/api/paas/v4/images",
+      apiKey: "sk-glm",
+      provider: "glm",
+      model: "glm-image",
+    });
+    const seen: { url: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        seen.push({ url, body: JSON.parse(init.body as string) });
+        return new Response(
+          JSON.stringify({ data: [{ url: "https://cdn.example.com/img.png" }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "glm-image",
+        prompt: "一只猫",
+        size: "1024x1024",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen[0].url).toBe("https://glm.example.com/api/paas/v4/images/generations");
+    // strict：只有 model/prompt/size
+    expect(seen[0].body).toEqual({
+      model: "glm-image",
+      prompt: "一只猫",
+      size: "1024x1024",
+    });
+    await app.close();
+  });
+
+  it("qwen: DashScope multimodal shape with star-separated size", async () => {
+    const app = await setupWithUrlDownload({
+      apiBaseUrl: "https://dashscope.example.com/api/v1/services/aigc/multimodal-generation",
+      apiKey: "sk-qwen",
+      provider: "qwen",
+      model: "qwen-image-2.0-pro",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({
+            output: {
+              choices: [{ message: { content: [{ image: "https://cdn.example.com/q.png" }] } }],
+            },
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "qwen-image-2.0-pro",
+        prompt: "一块写着中文的牌子",
+        size: "2048x2048",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      model: "qwen-image-2.0-pro",
+      input: {
+        messages: [{ role: "user", content: [{ text: "一块写着中文的牌子" }] }],
+      },
+      parameters: { size: "2048*2048" },
+    });
+    await app.close();
+  });
+
+  it("wan: DashScope with n/watermark/thinking_mode params", async () => {
+    const app = await setupWithUrlDownload({
+      apiBaseUrl: "https://dashscope.example.com/api/v1/services/aigc/multimodal-generation",
+      apiKey: "sk-wan",
+      provider: "wan",
+      model: "wan2.7-image",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({
+            output: {
+              choices: [{ message: { content: [{ image: "https://cdn.example.com/w.png" }] } }],
+            },
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "wan2.7-image",
+        prompt: "一张电影感城市夜景",
+        size: "2048x2048",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    const params = seen[0].parameters as Record<string, unknown>;
+    expect(seen[0].model).toBe("wan2.7-image");
+    expect(params.size).toBe("2048*2048");
+    expect(params.n).toBe(1);
+    expect(params.watermark).toBe(false);
+    await app.close();
+  });
+
+  it("deepinfra: passthrough mode sends all fields + response_format", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://deepinfra.example.com/v1/openai/images",
+      apiKey: "sk-di",
+      provider: "deepinfra",
+      model: "black-forest-labs/FLUX-1.1-pro",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({ data: [{ b64_json: "UVdY", revised_prompt: "rp" }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "black-forest-labs/FLUX-1.1-pro",
+        prompt: "a cat",
+        size: "1024x1024",
+        background: "auto",
+        output_format: "png",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    // passthrough：model/prompt/size/background/output_format + response_format 全在
+    expect(seen[0]).toMatchObject({
+      model: "black-forest-labs/FLUX-1.1-pro",
+      prompt: "a cat",
+      background: "auto",
+      output_format: "png",
+      response_format: "b64_json",
+    });
+    await app.close();
+  });
+
+  it("grok: aspect_ratio + resolution instead of pixel size", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://grok.example.com/v1/images",
+      apiKey: "sk-grok",
+      provider: "grok",
+      model: "grok-imagine-image",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({ data: [{ b64_json: "UVdY" }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "grok-imagine-image",
+        prompt: "画一张图",
+        size: "16:9",
+        companion_resolution: "2k",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      model: "grok-imagine-image",
+      prompt: "画一张图",
+      response_format: "b64_json",
+      aspect_ratio: "16:9",
+      resolution: "2k",
+    });
+    // 不发 pixel size
+    expect(seen[0].size).toBeUndefined();
+    await app.close();
+  });
+
+  it("gemini: generateContent endpoint with contents/generationConfig shape", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://gemini.example.com",
+      apiKey: "sk-gemini",
+      provider: "gemini",
+      model: "gemini-2.5-flash-image",
+    });
+    const seen: { url: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        seen.push({ url, body: JSON.parse(init.body as string) });
+        return new Response(
+          JSON.stringify({
+            candidates: [{
+              content: {
+                parts: [{
+                  inlineData: {
+                    mimeType: "image/png",
+                    data: "UVdY",
+                  },
+                }],
+              },
+            }],
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: {
+        model: "gemini-2.5-flash-image",
+        prompt: "画一张图",
+        size: "16:9",
+        companion_resolution: "2k",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    // generateContent 端点
+    expect(seen[0].url).toContain(":generateContent");
+    expect(seen[0].body).toMatchObject({
+      contents: [{ parts: [{ text: "画一张图" }] }],
+    });
+    await app.close();
+  });
+});
+
+/**
+ * 各 Provider 的 edit happy-path 端到端测试。
+ * 补此前缺口的 provider：glm 不支持编辑（501），qwen/wan/deepinfra/gemini 此前无 edit 集成测试。
+ */
+describe("images routes integration — provider edit happy path", () => {
+  async function setupWithUrlDownload(creds: {
+    apiBaseUrl: string;
+    apiKey: string;
+    provider?: string;
+    model?: string;
+  }) {
+    const pngB64 = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+    vi.doMock("../providers/urlToB64.js", () => ({
+      urlToB64: vi.fn().mockResolvedValue({ b64Json: pngB64, mimeType: "image/png" }),
+    }));
+    return setupWithCredentials(creds);
+  }
+
+  afterEach(() => {
+    vi.doUnmock("../providers/urlToB64.js");
+  });
+
+  /** 构造单图编辑 multipart。 */
+  function makeSingleImageEdit(imageBytes: Buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47])): {
+    boundary: string;
+    body: Buffer;
+  } {
+    const boundary = "----edit-boundary";
+    const crlf = "\r\n";
+    const chunks: Buffer[] = [
+      Buffer.from(
+        `--${boundary}${crlf}Content-Disposition: form-data; name="model"${crlf}${crlf}test-model${crlf}` +
+        `--${boundary}${crlf}Content-Disposition: form-data; name="prompt"${crlf}${crlf}edit it${crlf}` +
+        `--${boundary}${crlf}Content-Disposition: form-data; name="image[]"; filename="ref.png"${crlf}Content-Type: image/png${crlf}${crlf}`,
+        "utf8",
+      ),
+      imageBytes,
+      Buffer.from(crlf + `--${boundary}--${crlf}`, "utf8"),
+    ];
+    return { boundary, body: Buffer.concat(chunks) };
+  }
+
+  it("qwen: edit sends image data URL in messages content before text", async () => {
+    const app = await setupWithUrlDownload({
+      apiBaseUrl: "https://dashscope.example.com/api/v1/services/aigc/multimodal-generation",
+      apiKey: "sk-qwen",
+      provider: "qwen",
+      model: "qwen-image-2.0-pro",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({
+            output: {
+              choices: [{ message: { content: [{ image: "https://cdn.example.com/q.png" }] } }],
+            },
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const { boundary, body } = makeSingleImageEdit();
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    // DashScope edit：content = [image dataURL, text]
+    const content = (seen[0].input as { messages: { content: unknown[] }[] }).messages[0].content;
+    expect(content).toHaveLength(2);
+    expect((content[0] as { image: string }).image).toMatch(/^data:image\/png;base64,/);
+    expect((content[1] as { text: string }).text).toBe("edit it");
+    await app.close();
+  });
+
+  it("wan: edit sends image data URL in messages content", async () => {
+    const app = await setupWithUrlDownload({
+      apiBaseUrl: "https://dashscope.example.com/api/v1/services/aigc/multimodal-generation",
+      apiKey: "sk-wan",
+      provider: "wan",
+      model: "wan2.7-image",
+    });
+    const seen: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.push(JSON.parse(init.body as string));
+        return new Response(
+          JSON.stringify({
+            output: {
+              choices: [{ message: { content: [{ image: "https://cdn.example.com/w.png" }] } }],
+            },
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const { boundary, body } = makeSingleImageEdit();
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    const content = (seen[0].input as { messages: { content: unknown[] }[] }).messages[0].content;
+    expect((content[0] as { image: string }).image).toMatch(/^data:image\/png;base64,/);
+    expect((content[1] as { text: string }).text).toBe("edit it");
+    await app.close();
+  });
+
+  it("deepinfra: edit sends multipart image[] to upstream /edits", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://deepinfra.example.com/v1/openai/images",
+      apiKey: "sk-di",
+      provider: "deepinfra",
+      model: "black-forest-labs/FLUX-kontext",
+    });
+    const seen: { url: string; contentType: string; body: Buffer }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        seen.push({
+          url,
+          contentType: (init.headers as Record<string, string>)["Content-Type"],
+          body: Buffer.from(init.body as Uint8Array),
+        });
+        return new Response(
+          JSON.stringify({ data: [{ b64_json: "UVdY" }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const { boundary, body } = makeSingleImageEdit();
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toBe("https://deepinfra.example.com/v1/openai/images/edits");
+    // 上游收到的应是 multipart，含 image[]
+    const upstreamText = seen[0].body.toString("latin1");
+    expect(upstreamText).toContain('name="image[]"');
+    expect(upstreamText).toContain('name="model"');
+    expect(upstreamText).toContain('name="prompt"');
+    await app.close();
+  });
+
+  it("gemini: edit sends inline_data parts in contents", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://gemini.example.com",
+      apiKey: "sk-gemini",
+      provider: "gemini",
+      model: "gemini-2.5-flash-image",
+    });
+    const seen: { url: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        seen.push({ url, body: JSON.parse(init.body as string) });
+        return new Response(
+          JSON.stringify({
+            candidates: [{
+              content: {
+                parts: [{
+                  inlineData: { mimeType: "image/png", data: "UVdY" },
+                }],
+              },
+            }],
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const { boundary, body } = makeSingleImageEdit();
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    // edit：contents[0].parts 应含 text + inline_data
+    const parts = (seen[0].body.contents as { parts: Record<string, unknown>[] }[])[0].parts;
+    const hasInlineData = parts.some((p) => "inline_data" in p);
+    expect(hasInlineData).toBe(true);
+    const hasText = parts.some((p) => "text" in p);
+    expect(hasText).toBe(true);
+    await app.close();
+  });
+
+  it("glm: edit returns 501 (not supported)", async () => {
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://glm.example.com/api/paas/v4/images",
+      apiKey: "sk-glm",
+      provider: "glm",
+      model: "glm-image",
+    });
+
+    const { boundary, body } = makeSingleImageEdit();
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/edits",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(501);
+    expect(res.json().error).toContain("不支持图片编辑");
+    await app.close();
+  });
+});
