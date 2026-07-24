@@ -6,7 +6,7 @@
  * 而是 aspect_ratio（比例枚举）+ resolution（1k/2k 档位枚举）两个独立字段。
  *
  *   文生图：POST {base}/v1/images/generations（aspect_ratio + resolution 枚举翻译）
- *   图片编辑：POST {base}/v1/images/edits（image_url 形状，单图 image / 多图 images 互斥）
+ *   图片编辑：POST {base}/v1/images/edits（JSON body + image_url 形状，单图 image / 多图 images 互斥）
  *   响应：data[0].b64_json
  *
  * Grok edits 不支持 mask 局部重绘（capability.mask=false），带 mask 的请求由 route 层返回 400。
@@ -15,20 +15,21 @@
  * ImageAspectRatio / ImageResolution schema。
  *
  * 能力数据（capability/sizeConstraints/resolutionOptions）统一在
- * providerProfiles.ts + profiles/grok.json，本文件只放 size 翻译逻辑。
+ * providerProfiles.ts + profiles/grok.json，本文件只放 size 翻译与 body 构造逻辑。
+ *
+ * 工厂扩展点用法：
+ *   - normalizeBaseUrl：补全 /v1/images 路径段
+ *   - buildGenerateBody：完全自定义 generate body（aspect_ratio + resolution 而非 size）
+ *   - buildEditRequest：完全自定义 edit 请求（JSON body + image_url 形状，走 /edits 但非 multipart）
  */
 
 import type {
   OpenAIImageEditRequest,
   OpenAIImageRequest,
-  OpenAIImageResult,
-  ProviderAdapter,
-  ProviderCallOptions,
   ProviderConfig,
 } from "../types.js";
 import { getProviderProfile } from "../providerProfiles.js";
-import { parseImagesResponse, postJson } from "../providerHttp.js";
-import { getDefaultModel } from "../../providerPresets.js";
+import { createOpenAICompatibleAdapter } from "../openaiCompatible.js";
 
 const GROK_PROFILE = getProviderProfile("grok")!;
 
@@ -37,54 +38,19 @@ const GROK_PROFILE = getProviderProfile("grok")!;
  * adapterConfig（supportedAspectRatios + supportedResolutions），本文件只放翻译算法。
  */
 
-export const grokAdapter: ProviderAdapter = {
+export const grokAdapter = createOpenAICompatibleAdapter({
   id: "grok",
-  capability: GROK_PROFILE.capability,
-  sizeConstraints: GROK_PROFILE.sizeConstraints,
-  resolutionOptions: GROK_PROFILE.resolutionOptions,
-
-  async generate(
-    request: OpenAIImageRequest,
-    config: ProviderConfig,
-    options?: ProviderCallOptions,
-  ): Promise<OpenAIImageResult> {
-    const apiUrl = `${normalizeGrokBaseUrl(config.apiBaseUrl)}/generations`;
-    const model = config.model ?? getDefaultModel("grok")!;
-    const body = buildGrokGenerateBody(request, model);
-
-    const response = await postJson(
-      apiUrl,
-      { Authorization: `Bearer ${config.apiKey}` },
-      body,
-      options,
-    );
-
-    return parseImagesResponse(response, "Grok");
-  },
-
-  async edit(
-    request: OpenAIImageEditRequest,
-    config: ProviderConfig,
-    options?: ProviderCallOptions,
-  ): Promise<OpenAIImageResult> {
-    if (request.images.length === 0) {
-      throw new Error("Grok 图片编辑需要至少一张参考图。");
-    }
-
-    const apiUrl = `${normalizeGrokBaseUrl(config.apiBaseUrl)}/edits`;
-    const model = config.model ?? getDefaultModel("grok")!;
-    const body = buildGrokEditBody(request, model);
-
-    const response = await postJson(
-      apiUrl,
-      { Authorization: `Bearer ${config.apiKey}` },
-      body,
-      options,
-    );
-
-    return parseImagesResponse(response, "Grok");
-  },
-};
+  fieldMode: "strict",
+  requiredFields: { response_format: "b64_json" },
+  responseShape: "data_b64",
+  editMode: "none",
+  // grok 不用 size 字段，generate/edit body 由 buildGenerateBody / buildEditRequest 接管，
+  // normalizeSize 仅作为工厂配置的必填项占位（不会被调用到）。
+  normalizeSize: (size) => size,
+  normalizeBaseUrl: normalizeGrokBaseUrl,
+  buildGenerateBody: buildGrokGenerateBody,
+  buildEditRequest: buildGrokEditRequest,
+});
 
 /**
  * 构建 Grok 文生图请求体。
@@ -112,14 +78,15 @@ export function buildGrokGenerateBody(
 }
 
 /**
- * 构建 Grok 编辑请求体。
+ * 构建 Grok 编辑请求（JSON body + image_url 形状，走 /edits 端点）。
  * - 单图 → image 字段；多图 → images 字段（互斥）。
  * - 图片以 { type:"image_url", url:"data:<mime>;base64,<b64>" } 形状传递。
  */
-export function buildGrokEditBody(
+export function buildGrokEditRequest(
   request: OpenAIImageEditRequest,
+  providerConfig: ProviderConfig,
   model: string,
-): Record<string, unknown> {
+): { apiUrl: string; body: Record<string, unknown> } {
   const imageUrls = request.images.map((img) => ({
     type: "image_url" as const,
     url: `data:${img.mimeType};base64,${img.blob.toString("base64")}`,
@@ -143,7 +110,8 @@ export function buildGrokEditBody(
   const resolution = readGrokResolution(request.resolution);
   if (resolution) body.resolution = resolution;
 
-  return body;
+  const apiUrl = `${normalizeGrokBaseUrl(providerConfig.apiBaseUrl)}/edits`;
+  return { apiUrl, body };
 }
 
 function readGrokAspectRatio(size: string): string | null {

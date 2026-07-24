@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  buildGrokEditBody,
+  buildGrokEditRequest,
   buildGrokGenerateBody,
   grokAdapter,
   normalizeGrokBaseUrl,
@@ -152,14 +152,15 @@ describe("buildGrokGenerateBody", () => {
   });
 });
 
-describe("buildGrokEditBody", () => {
-  it("uses image field for single image", () => {
-    const body = buildGrokEditBody(baseEditRequest(), "grok-imagine-image");
-    expect(body.image).toEqual({
+describe("buildGrokEditRequest", () => {
+  it("uses image field for single image and returns apiUrl", () => {
+    const result = buildGrokEditRequest(baseEditRequest(), CONFIG, "grok-imagine-image");
+    expect(result.apiUrl).toBe("https://api.x.ai/v1/images/edits");
+    expect(result.body.image).toEqual({
       type: "image_url",
       url: expect.stringMatching(/^data:image\/png;base64,/),
     });
-    expect(body.images).toBeUndefined();
+    expect(result.body.images).toBeUndefined();
   });
 
   it("uses images field for multiple images", () => {
@@ -177,10 +178,10 @@ describe("buildGrokEditBody", () => {
         },
       ],
     });
-    const body = buildGrokEditBody(request, "grok-imagine-image");
-    expect(Array.isArray(body.images)).toBe(true);
-    expect(body.images).toHaveLength(2);
-    expect(body.image).toBeUndefined();
+    const result = buildGrokEditRequest(request, CONFIG, "grok-imagine-image");
+    expect(Array.isArray(result.body.images)).toBe(true);
+    expect(result.body.images).toHaveLength(2);
+    expect(result.body.image).toBeUndefined();
   });
 
   it("image url is base64 data URL without prefix in b64", () => {
@@ -193,8 +194,8 @@ describe("buildGrokEditBody", () => {
         },
       ],
     });
-    const body = buildGrokEditBody(request, "grok-imagine-image");
-    const url = (body.image as { url: string }).url;
+    const result = buildGrokEditRequest(request, CONFIG, "grok-imagine-image");
+    const url = (result.body.image as { url: string }).url;
     // data URL 形状：data:image/png;base64,<base64>
     expect(url).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/);
   });

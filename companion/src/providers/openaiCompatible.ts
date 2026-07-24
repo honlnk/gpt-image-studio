@@ -19,22 +19,17 @@
  *   - responseShape：响应是 data[].b64_json 还是 data[].url
  *   - editMode：edit 走 multipart 端点 / image 字段 / 不支持
  *   - normalizeSize：size 规整函数（各家算法不同，见下文说明）
+ *   - buildGenerateBody（可选）：完全自定义 generate body（grok 的 aspect_ratio+resolution）
+ *   - buildEditRequest（可选）：完全自定义 edit 请求（grok 的 JSON image_url 形状）
+ *   - normalizeBaseUrl（可选）：baseUrl 规整（grok 的 /v1/images 路径补全）
  *
- * === 为什么 size 是函数注入而不是配置枚举 ===
+ * === 为什么 size / body 是函数注入而不是配置枚举 ===
  *
- * size 是 provider 差异最大的维度：GLM 要对齐 32 倍数，豆包要双像素约束，
- * Grok 要翻译成 aspect_ratio 枚举，Together 要拆成 width+height 两个整数。
+ * size 和请求体是 provider 差异最大的维度：GLM 要对齐 32 倍数，豆包要双像素约束，
+ * Grok 要翻译成 aspect_ratio+resolution 枚举，OpenAI 要原样透传含 quality/stream。
  * 做成枚举要么覆盖不全（每加一种就改工厂），要么枚举值爆炸。
  * 函数注入让每个 provider 保留自己的算法，工厂只负责调用——遵循
  * providerProfiles.ts 的原则：「数据值的不同」配置化，「算法的不同」留代码。
- *
- * === 为什么不覆盖 openai / grok ===
- *
- * openai 是纯透传型（extra 字段原样转发，含 quality/stream 等），与工厂的
- * "组装请求体"模式天然冲突——透传需要保留 web 发来的全部未知字段，而工厂的
- * strict 模式恰恰相反。grok 的 size→aspect_ratio+resolution 枚举翻译是高度
- * 自定义逻辑，且 edit 用 image_url 形状，不适合任何 editMode 枚举。
- * 这两个 adapter 保持手写，不强塞进工厂。
  *
  * 详见 docs/companion-providers-plan.md「OpenAI 兼容工厂」一节。
  */
@@ -104,8 +99,47 @@ export type OpenAICompatibleConfig = {
    * size 规整函数。把 web 发来的 OpenAI 形状 size（如 "1024x1024"/"16:9"/"auto"）
    * 转成该 provider 合法的 size 字符串。各 provider 的算法保留在自己的 adapter 文件，
    * 工厂只调用。constraints 从 profiles/{id}.json 的 sizeConstraints 传入。
+   *
+   * 注意：当 buildGenerateBody 被声明时，normalizeSize 不会被 generate 调用
+   *（body 完全由 buildGenerateBody 接管）。但 multipart edit 模式仍会调用它。
    */
   normalizeSize: (size: string, constraints: SizeConstraints) => string;
+
+  /**
+   * 可选：完全自定义文生图请求体构造。
+   *
+   * 未声明时走工厂默认（buildGenerateBody 按 fieldMode 组装 size 字段）。
+   * 声明时完全接管 generate body——用于 grok 这种不用 size 字段而用
+   * aspect_ratio + resolution 的 provider。
+   */
+  buildGenerateBody?: (
+    request: OpenAIImageRequest,
+    model: string,
+  ) => Record<string, unknown>;
+
+  /**
+   * 可选：完全自定义 edit 请求构造（含端点、格式、body）。
+   *
+   * 未声明时按 editMode 走工厂默认路径（multipart / image_field / none）。
+   * 声明时完全接管 edit——用于 grok 这种 JSON body + image_url 形状的 edit，
+   * 它走 /edits 端点但用 JSON 而非 multipart，图片以 {type:"image_url",url:...} 传递。
+   */
+  buildEditRequest?: (
+    request: OpenAIImageEditRequest,
+    providerConfig: ProviderConfig,
+    model: string,
+  ) => {
+    apiUrl: string;
+    body: Record<string, unknown>;
+  };
+
+  /**
+   * 可选：baseUrl 规整函数。
+   *
+   * 未声明时直接用 apiBaseUrl（去尾部斜杠）+ /generations 或 /edits。
+   * 声明时先规整再拼接——用于 grok 的 /v1/images 路径补全。
+   */
+  normalizeBaseUrl?: (apiBaseUrl: string) => string;
 };
 
 /**
@@ -141,29 +175,52 @@ export function createOpenAICompatibleAdapter(
     providerConfig: ProviderConfig,
     options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
-    const apiUrl = `${providerConfig.apiBaseUrl.replace(/\/+$/, "")}/generations`;
+    const base = resolveBaseUrl(config, providerConfig.apiBaseUrl);
+    const apiUrl = `${base}/generations`;
     const model = providerConfig.model ?? getDefaultModel(config.id)!;
-    const size = config.normalizeSize(request.size, PROFILE.sizeConstraints);
+
+    // buildGenerateBody 声明时完全接管 body（grok 的 aspect_ratio+resolution）；
+    // 否则走工厂默认（normalizeSize → buildGenerateBody 按 fieldMode 组装 size 字段）。
+    const body = config.buildGenerateBody
+      ? config.buildGenerateBody(request, model)
+      : (() => {
+          const size = config.normalizeSize(request.size, PROFILE.sizeConstraints);
+          return buildGenerateBody(request, model, size, config);
+        })();
 
     const response = await postJson(
       apiUrl,
       { Authorization: `Bearer ${providerConfig.apiKey}` },
-      buildGenerateBody(request, model, size, config),
+      body,
       options,
     );
 
     return parseResponse(response, config, config.id, options);
   }
 
-  // edit 按模式决定是否实现
+  // edit：buildEditRequest 声明时走自定义路径；否则按 editMode 走工厂默认。
   const edit =
-    config.editMode === "none"
-      ? undefined
-      : config.editMode === "image_field"
-        ? createImageFieldEdit(config, PROFILE.sizeConstraints)
-        : createMultipartEdit(config, PROFILE.sizeConstraints);
+    config.buildEditRequest
+      ? createCustomEdit(config)
+      : config.editMode === "none"
+        ? undefined
+        : config.editMode === "image_field"
+          ? createImageFieldEdit(config, PROFILE.sizeConstraints)
+          : createMultipartEdit(config, PROFILE.sizeConstraints);
 
   return { ...baseAdapter, generate, edit };
+}
+
+/**
+ * 规整 baseUrl：声明了 normalizeBaseUrl 时先规整（grok 的 /v1/images 补全），
+ * 否则只去尾部斜杠。
+ */
+function resolveBaseUrl(
+  config: OpenAICompatibleConfig,
+  apiBaseUrl: string,
+): string {
+  if (config.normalizeBaseUrl) return config.normalizeBaseUrl(apiBaseUrl);
+  return apiBaseUrl.replace(/\/+$/, "");
 }
 
 /**
@@ -213,8 +270,8 @@ async function parseResponse(
   options?: ProviderCallOptions,
 ): Promise<OpenAIImageResult> {
   if (config.responseShape === "data_b64") {
-    // parseImagesResponse 内部已处理错误提取 + MIME 嗅探
-    return parseImagesResponse(response, providerLabel);
+    // parseImagesResponse 内部已处理错误提取 + MIME 嗅探 + url 兜底下载
+    return parseImagesResponse(response, providerLabel, options);
   }
 
   // data_url：glm 风格，响应是 data[0].url（有时效），需下载转 b64
@@ -251,7 +308,7 @@ function createImageFieldEdit(
       throw new Error(`${config.id} 图生图需要至少一张参考图。`);
     }
 
-    const apiUrl = `${providerConfig.apiBaseUrl.replace(/\/+$/, "")}/generations`;
+    const apiUrl = `${resolveBaseUrl(config, providerConfig.apiBaseUrl)}/generations`;
     const model = providerConfig.model ?? getDefaultModel(config.id)!;
     const size = config.normalizeSize(request.size, constraints);
 
@@ -290,7 +347,7 @@ function createMultipartEdit(
     providerConfig: ProviderConfig,
     options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
-    const apiUrl = `${providerConfig.apiBaseUrl.replace(/\/+$/, "")}/edits`;
+    const apiUrl = `${resolveBaseUrl(config, providerConfig.apiBaseUrl)}/edits`;
     const model = providerConfig.model ?? getDefaultModel(config.id)!;
     const size = config.normalizeSize(request.size, constraints);
     const form = buildMultipartBody(model, request, size, config);
@@ -302,6 +359,32 @@ function createMultipartEdit(
         "Content-Type": `multipart/form-data; boundary=${form.boundary}`,
       },
       new Uint8Array(form.body),
+      options,
+    );
+
+    return parseResponse(response, config, config.id, options);
+  };
+}
+
+// ===== edit 模式：custom（完全自定义 JSON body，grok 的 image_url 形状）=====
+
+function createCustomEdit(config: OpenAICompatibleConfig) {
+  return async function edit(
+    request: OpenAIImageEditRequest,
+    providerConfig: ProviderConfig,
+    options?: ProviderCallOptions,
+  ): Promise<OpenAIImageResult> {
+    if (request.images.length === 0) {
+      throw new Error(`${config.id} 图生图需要至少一张参考图。`);
+    }
+
+    const model = providerConfig.model ?? getDefaultModel(config.id)!;
+    const { apiUrl, body } = config.buildEditRequest!(request, providerConfig, model);
+
+    const response = await postJson(
+      apiUrl,
+      { Authorization: `Bearer ${providerConfig.apiKey}` },
+      body,
       options,
     );
 

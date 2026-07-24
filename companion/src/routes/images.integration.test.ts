@@ -1659,3 +1659,52 @@ describe("images routes integration — withClientSignal does not abort normal r
     await app.close();
   });
 });
+
+/**
+ * 回归守护：openai provider 的上游返回 URL（而非 b64_json）时，parseImagesResponse
+ * 的 URL 兜底分支应自动下载转换成 base64。
+ *
+ * 模拟 PackyCode 场景：请求里带了 response_format:b64_json 但上游无视它，
+ * 返回 { data: [{ url: "https://..." }] }。parseImagesResponse 现在会兜底
+ * 取 url 并调 urlToB64 下载，而不是报"没有 data[0].b64_json"。
+ */
+describe("images routes integration — openai URL fallback (parseImagesResponse url 兜底)", () => {
+  afterEach(() => {
+    vi.doUnmock("../providers/urlToB64.js");
+  });
+
+  it("downloads url when upstream returns url instead of b64_json", async () => {
+    const pngB64 = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+    vi.doMock("../providers/urlToB64.js", () => ({
+      urlToB64: vi.fn().mockResolvedValue({ b64Json: pngB64, mimeType: "image/png" }),
+    }));
+
+    const app = await setupWithCredentials({
+      apiBaseUrl: "https://up.example.com/v1/images",
+      apiKey: "sk-test",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ url: "https://cdn.example.com/image.png" }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/images/generations",
+      headers: { "content-type": "application/json" },
+      payload: { model: "gpt-image-2", prompt: "a cat", size: "1024x1024" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].b64_json).toBe(pngB64);
+    expect(res.json().data[0].mime_type).toBe("image/png");
+    await app.close();
+  });
+});
