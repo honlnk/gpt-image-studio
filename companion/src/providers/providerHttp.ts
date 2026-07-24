@@ -26,6 +26,7 @@ import {
   buildHttpErrorFromResponse,
   classifyNetworkError,
 } from "./providerErrors.js";
+import { urlToB64 } from "./urlToB64.js";
 
 const DEBUG_REQUEST_LOGS = process.env.GPT_IMAGE_STUDIO_DEBUG_REQUESTS === "1";
 
@@ -184,15 +185,19 @@ function logSafeProviderRequest(url: string, body: unknown): void {
 /**
  * 解析 OpenAI Images API 风格的响应，统一输出 { b64Json }。
  *
- * 200 取 data[0].b64_json，非 2xx 抛带上游 error.message 的错。
- * 响应不带 MIME，对 base64 做签名嗅探得到真实格式。
+ * 优先取 data[0].b64_json（标准 OpenAI 形状）；找不到时兜底取 data[0].url，
+ * 调 urlToB64 下载转换——应对 PackyCode 等中转无视 response_format:b64_json
+ * 仍返回 url 的情况。非 2xx 抛带上游 error.message 的错。
  *
- * 由 OpenAI 兼容家族（openai / grok）共用——两者响应都是标准 data[0].b64_json 形状。
- * GLM 返回 url 而非 b64_json（协议不同），不走这里；Doubao 走自己的内联解析。
+ * b64_json 分支对 base64 做签名嗅探得到真实 MIME；url 分支由 urlToB64 返回
+ * Content-Type + magic bytes 双校验的 mimeType。
+ *
+ * 由 OpenAI 兼容家族（openai / grok / doubao / deepinfra 的 data_b64 分支）共用。
  */
 export async function parseImagesResponse(
   response: Response,
   providerLabel: string,
+  options?: ProviderRequestOptions,
 ): Promise<OpenAIImageResult> {
   const text = await response.text();
   const payload = text ? safeJsonParse(text) : null;
@@ -204,15 +209,25 @@ export async function parseImagesResponse(
 
   const item = payload?.data?.[0];
   const b64Json = item?.b64_json;
-  if (!b64Json) {
-    throw new Error(
-      extractErrorMessage(payload) ??
-        `${providerLabel} 响应中没有 data[0].b64_json。`,
-    );
+  if (b64Json) {
+    return {
+      b64Json,
+      revisedPrompt: item?.revised_prompt,
+      mimeType: sniffMimeTypeFromBase64(b64Json) ?? undefined,
+    };
   }
-  return {
-    b64Json,
-    revisedPrompt: item?.revised_prompt,
-    mimeType: sniffMimeTypeFromBase64(b64Json) ?? undefined,
-  };
+
+  // URL 兜底：部分中转（如 PackyCode）无视 response_format:b64_json，返回 url。
+  const url = item?.url;
+  if (typeof url === "string" && url) {
+    const { b64Json: downloaded, mimeType } = await urlToB64(url, {
+      signal: options?.signal,
+    });
+    return { b64Json: downloaded, revisedPrompt: item?.revised_prompt, mimeType };
+  }
+
+  throw new Error(
+    extractErrorMessage(payload) ??
+      `${providerLabel} 响应中没有 data[0].b64_json 或 data[0].url。`,
+  );
 }
