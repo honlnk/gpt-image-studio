@@ -6,6 +6,7 @@ import { grokAdapter } from "./adapters/grok.js";
 import { qwenAdapter } from "./adapters/qwen.js";
 import { wanAdapter } from "./adapters/wan.js";
 import { geminiAdapter } from "./adapters/gemini.js";
+import { geminiOpenaiAdapter } from "./adapters/gemini-openai.js";
 import { deepinfraAdapter } from "./adapters/deepinfra.js";
 
 /**
@@ -20,6 +21,7 @@ const REGISTRY: Record<string, ProviderAdapter> = {
   wan: wanAdapter,
   grok: grokAdapter,
   gemini: geminiAdapter,
+  "gemini-openai": geminiOpenaiAdapter,
   deepinfra: deepinfraAdapter,
 };
 
