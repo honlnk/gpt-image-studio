@@ -66,15 +66,19 @@ describe("urlToB64", () => {
     });
 
     await expect(download(makeRequest(downloadResponse))).rejects.toThrow(
-      /内容与 Content-Type image\/png 不匹配/,
+      /不是有效的 PNG\/JPEG\/WebP/,
     );
     expect(downloadResponse.destroy).toHaveBeenCalledOnce();
   });
 
-  it("rejects a MIME and image signature mismatch", async () => {
-    await expect(
-      download(makeRequest(response(JPEG, { "content-type": "image/png" }))),
-    ).rejects.toThrow(/内容与 Content-Type image\/png 不匹配/);
+  it("accepts cross-format mismatch and returns the sniffed MIME", async () => {
+    // PackyCode / Tencent COS 场景：URL 以 .png 结尾、Content-Type 声明 image/png，
+    // 但实际存储的是 JPEG。嗅探出的真实格式应覆盖 Content-Type。
+    const result = await download(
+      makeRequest(response(JPEG, { "content-type": "image/png" })),
+    );
+    expect(result.mimeType).toBe("image/jpeg");
+    expect(result.b64Json).toBe(JPEG.toString("base64"));
   });
 
   it("rejects an oversized Content-Length before reading the body", async () => {
@@ -216,7 +220,7 @@ describe("urlToB64", () => {
     }));
 
     await expect(download(requestImpl, undefined, { retries: 2 })).rejects.toThrow(
-      /内容与 Content-Type/,
+      /不是有效的 PNG\/JPEG\/WebP/,
     );
     expect(requestImpl).toHaveBeenCalledOnce();
   });

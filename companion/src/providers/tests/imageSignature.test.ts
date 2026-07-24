@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  assertSignatureMatches,
   isJpeg,
   isPng,
   isWebp,
@@ -47,20 +46,6 @@ describe("sniffImageMimeType", () => {
     expect(sniffImageMimeType(Buffer.alloc(0))).toBeNull();
     expect(sniffImageMimeType(Buffer.from([0x00, 0x01, 0x02]))).toBeNull();
     expect(sniffImageMimeType(Buffer.from("GIF89a", "ascii"))).toBeNull();
-  });
-});
-
-describe("assertSignatureMatches", () => {
-  it("passes when buffer matches declared MIME", () => {
-    expect(() => assertSignatureMatches(PNG_BYTES, "image/png")).not.toThrow();
-    expect(() => assertSignatureMatches(JPEG_BYTES, "image/jpeg")).not.toThrow();
-    expect(() => assertSignatureMatches(WEBP_BYTES, "image/webp")).not.toThrow();
-  });
-
-  it("throws when buffer does not match declared MIME", () => {
-    expect(() => assertSignatureMatches(PNG_BYTES, "image/jpeg")).toThrow(/不匹配/);
-    expect(() => assertSignatureMatches(JPEG_BYTES, "image/png")).toThrow(/不匹配/);
-    expect(() => assertSignatureMatches(WEBP_BYTES, "image/png")).toThrow(/不匹配/);
   });
 });
 

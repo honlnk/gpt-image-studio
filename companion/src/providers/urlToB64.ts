@@ -6,7 +6,7 @@ import {
   createPublicOnlyLookup,
   UnsafeOutboundAddressError,
 } from "./outboundAddressPolicy.js";
-import { assertSignatureMatches } from "./imageSignature.js";
+import { sniffImageMimeType } from "./imageSignature.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRIES = 2;
@@ -197,10 +197,19 @@ async function downloadImage(
     }
 
     try {
-      const mimeType = validateResponseHeaders(response.headers, context.maxBytes);
+      const headerMime = validateResponseHeaders(response.headers, context.maxBytes);
       const buffer = await readBoundedBody(response, context.maxBytes);
-      assertSignatureMatches(buffer, mimeType);
-      return { buffer, mimeType };
+      // 用 magic bytes 嗅探真实格式覆盖 Content-Type——部分 CDN/中转（如 PackyCode
+      // 经 Tencent COS）URL 以 .png 结尾、Content-Type 声明 image/png，但实际存储的
+      // 是 JPEG。死板地要求签名与 Content-Type 严格匹配会误杀这类场景。
+      // 安全边界仍然保留：嗅探不出合法图片签名（HTML / 可执行文件等）一律拒绝。
+      const sniffed = sniffImageMimeType(buffer);
+      if (!sniffed) {
+        throw new DownloadPolicyError(
+          `下载的图片不是有效的 PNG/JPEG/WebP（Content-Type 声明 ${headerMime}）。`,
+        );
+      }
+      return { buffer, mimeType: sniffed };
     } catch (error) {
       response.destroy(error instanceof Error ? error : undefined);
       throw error;

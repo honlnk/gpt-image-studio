@@ -51,24 +51,7 @@ export function sniffImageMimeType(buffer: Buffer): string | null {
 }
 
 /**
- * 校验 buffer 与声明的 MIME 是否一致（urlToB64 下载路径用）。
- * 不一致抛错——这是 SSRF / 内容伪装的安全边界。
- */
-export function assertSignatureMatches(
-  buffer: Buffer,
-  mimeType: string,
-): void {
-  const valid =
-    (mimeType === "image/png" && isPng(buffer)) ||
-    (mimeType === "image/jpeg" && isJpeg(buffer)) ||
-    (mimeType === "image/webp" && isWebp(buffer));
-
-  if (!valid) {
-    throw new Error(`图片内容与 Content-Type ${mimeType} 不匹配。`);
-  }
-}
-
-/**
+ * 对 base64 字符串嗅探真实图片 MIME。
  * 对 base64 字符串嗅探真实图片 MIME。
  *
  * 只解码足够判定签名的前缀（16 个 base64 字符 → 12 字节），避免对大图整段解码。
