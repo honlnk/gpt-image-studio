@@ -32,7 +32,7 @@
 四条独立的演进驱动力，对应四个阶段：
 
 1. **可后端化**：让 Companion 从"代理"升级为"真实数据后端"，存储上 OSS、表结构上 DB——为上云做准备。
-2. **可集成**：把前端做成可嵌入其他宿主项目（Vben 等）的子项目；把 Companion 做成可嵌入其他后端（RuoYi-Plus 等）的模块。
+2. **可集成**：把前端做成可嵌入其他宿主项目（Vben 等）的子项目；让 Companion 能对接其他后端（RuoYi-Plus 等），作为独立服务而非物理嵌入。
 3. **可独立**：用 Tauri 打包成正经可安装 APP，**与云完全无关**，本地完整体验。
 4. **可维护**：在整个演进过程中，保持前端业务代码（store / service / 组件）对"后端是什么"无感知。
 
@@ -63,7 +63,7 @@ Companion 自带       （行为不变）          + 文件/OSS 图片       qia
 | **一** | 在前端引入 `StudioStorage` 抽象层 | 前端 service/store 重构 | 大（一次性） |
 | **二** | Companion 从代理升级为真实数据后端（本机单用户） | Companion 后端新增存储路由 + 数据集管理 | 零（只换实现） |
 | **三** | Companion 服务化（服务器多用户）+ 前端 qiankun 嵌入 | 多租户层 + 完整 SSO + 前端打包 + Docker 化 | 零（加多租户层，不改业务 schema） |
-| **四** | Tauri APP 内置 Companion 能力 + 本地 SQLite（**暂不做详细计划**） | Tauri 壳 + Rust 侧存储 | 零 |
+| **四** | Tauri APP 内置 Companion 能力 + 本地 SQLite（**暂不实施，保留设计**） | Tauri 壳 + Rust 侧存储 | 零 |
 
 **核心原则**：阶段一是地基，**阶段二、三、四在前端业务层都应是"换实现不改接口"**。如果某个阶段被迫改动 store/service 的业务代码，说明阶段一的抽象设计有缺陷，需要回头补。
 
@@ -206,7 +206,7 @@ companion/
 
 ### 目标
 
-让 Companion 从"无状态代理"升级为"真实数据后端"。Web 端切到 Companion 模式时，**整个存储机制都走 Companion**（不只是模型调用），为后续嵌入 RuoYi-Plus、APP 内化 Companion 能力做铺垫。
+让 Companion 从"无状态代理"升级为"真实数据后端"。Web 端切到 Companion 模式时，**整个存储机制都走 Companion**（不只是模型调用），为后续对接 RuoYi-Plus（服务化，不做物理嵌入，见 D8）、APP 内化 Companion 能力做铺垫。
 
 ### 前置条件
 
@@ -456,7 +456,7 @@ Companion 收到后，把该 user_id（或 jti）加入**内存级吊销黑名�
 - 用户被管理员封禁 → 宿主调 `/admin/revoke`
 - 用户改密码 → 宿主调 `/admin/revoke`（让旧 JWT 失效，强制重新登录）
 
-一个端点解决多个安全场景。Companion 的吊销黑名单是内存级的（重启清空，但 JWT 也会很快过期，风险可控）。
+一个端点解决多个安全场景。**当前倾向**内存级黑名单（重启清空，但 JWT 有效期短，过期后自然失效，残留风险窗口可接受）——是否落盘持久化以提高 SLO 安全性，作为未决项见第十二章（安全性与性能的权衡）。
 
 #### 3. 令牌刷新
 
@@ -474,7 +474,7 @@ Companion 收到后，把该 user_id（或 jti）加入**内存级吊销黑名�
 | **用户/JWT 吊销** | 宿主 → Companion | `POST /admin/revoke`（平台级密钥鉴权） | 用户登出/封禁/改密 |
 | **OSS STS 凭证** | Companion → 宿主 | `GET /api/sts/upload-token`（宿主自定义，平台级密钥鉴权） | 用户上传图片时，Companion 拿临时凭证上传 OSS |
 
-**OSS STS 凭证机制**（D13）：
+**OSS STS 凭证机制**（D11）：
 - 平台 OSS 的长期 AccessKey **只存宿主**，Companion 永远不持有。
 - 用户上传图片时，Companion 调宿主的 STS 签发接口，拿到**短期临时凭证**（STS Token，有效期 15 分钟~1 小时）。
 - Companion 用临时凭证上传到 OSS，凭证过期后自动重新获取。
@@ -784,8 +784,6 @@ APP 不是"浏览器壳 + 外部 Companion"，而是"内置 Companion 能力 + �
 
 **理由**：摆脱浏览器限制后，没有理由再保留外部 Companion 的运行模型。
 
-**理由**：摆脱浏览器限制后，没有理由再保留外部 Companion 的运行模型。
-
 ### D5: 前端业务代码对后端无感知（贯穿全程）
 
 store / service / 组件代码不允许直接调 IndexedDB / fetch / invoke。必须通过 `StudioStorage` 或 `ImageClient` 接口。
@@ -840,7 +838,7 @@ Companion 模式下，多数据集（对应不同存储位置）的元数据管�
 阶段三实现**生产级 SSO**，三个能力全部覆盖，不是基础形态：
 
 1. **单点登录（SSO）**：宿主（IdP）签发 JWT，前端带 JWT 访问 Companion（RS），Companion 验签放行。Companion 不管理账号。
-2. **单点登出（SLO）**：宿主用户登出/封禁/改密时，调 Companion 的 `/admin/revoke` 端点（平台级密钥鉴权），Companion 把该 user_id/jti 加入内存级吊销黑名单，后续请求立即拒绝。**这是必须的后端间通信**——JWT 无状态，Companion 否则无法知道宿主那边已登出。
+2. **单点登出（SLO）**：宿主用户登出/封禁/改密时，调 Companion 的 `/admin/revoke` 端点（平台级密钥鉴权），Companion 把该 user_id/jti 加入吊销黑名单，后续请求立即拒绝。**这是必须的后端间通信**——JWT 无状态，Companion 否则无法知道宿主那边已登出。黑名单的持久化策略（纯内存 vs 落盘）作为未决项，倾向纯内存（重启清空，但 JWT 有效期短，残留风险窗口可接受）。
 3. **令牌刷新**：JWT 设短有效期（30 分钟~1 小时），过期前前端静默调宿主 refresh 接口拿新 JWT，Companion 不参与刷新。
 
 **理由**：基础 SSO（只做单点登录）有三个安全缺口——JWT 过期后的刷新、用户登出后的 SLO、改密/封禁后的吊销。这三个缺口在企业场景下都是必须补的，否则用户在宿主登出后仍能访问 Companion（安全洞）。完整 SSO 用一个 webhook 端点（`/admin/revoke`）同时解决 SLO 和吊销，代价可控。
@@ -956,7 +954,7 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 - [ ] 阶段二：OSS 凭据的录入/存储/校验流程细节（本机模式下 AccessKey 存 `credentials.json`，但前端录入 UX 和连通性测试未定）
 - [ ] 阶段二：数据集管理 UI 的形态（是否在设置里提供"数据集列表/删除/重命名"入口）
 - [ ] 阶段三：JWT 验签的具体加密方案（共享密钥对称 HS256 vs RSA 公私钥非对称 RS256；claim 字段约定）
-- [ ] 阶段三：JWT 有效期与刷新策略的具体参数（有效期多长、refresh token 是否需要、静默刷新的触发时机）
+- [ ] 阶段三：JWT 有效期与刷新策略的具体参数（有效期多长、静默刷新的触发时机；refresh token 机制已定，不再讨论是否需要）
 - [ ] 阶段三：吊销黑名单的持久化策略（纯内存重启清空 vs 落盘，权衡安全性与性能）
 - [ ] 阶段三：宿主需要开发的接口清单细化（STS 签发接口的具体契约、登出 webhook 的集成方式）
 - [ ] 阶段三：数据集在多用户场景下的语义（仍按存储位置切换，还是每用户固定一个数据集）
