@@ -131,7 +131,13 @@ Custom size validation for the generic Web UI remains conservative: 16-3840px, m
 
 ## Roadmap
 
-See `docs/roadmap.md` for the full roadmap. Current status:
+项目有两份正交的路线图：
+- `docs/roadmap.md` — **业务功能**演进（聊天 UI、图片编辑、备份、分析、提示词模式等）。
+- `docs/evolution-roadmap.md` — **架构形态**演进（存储抽象 / Companion 后端化 / 子项目化 / APP 化的四阶段纲领），待启动。
+
+任何架构层面的改动（存储后端、打包方式、运行时形态）都应以 `docs/evolution-roadmap.md` 为准；业务功能迭代以 `docs/roadmap.md` 为准。
+
+See `docs/roadmap.md` for the full business roadmap. Current status:
 - Phases 1-4: Done (chat UI, IndexedDB persistence, text-to-image, image editing with references)
 - Phase 5: Experience enhancements — core items done
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)

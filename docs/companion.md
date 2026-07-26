@@ -274,9 +274,11 @@ GPT_IMAGE_STUDIO_COMPANION_CHANNEL=dev
 
 - Companion 支持多条 Provider 配置和激活切换。
 - CLI 和受信 Web Origin 都可以管理 Provider 配置。
-- Provider API Key 保存在 Companion 本地配置文件中。
+- Provider API Key 保存在 Companion 本地配置文件中（明文 + 0600 文件权限）。
+- 凭据存储已支持损坏检测、损坏备份（`credentials.json.corrupt-<ts>.json`）和恢复（`reset-empty` / `restore-backup`）。
+- 认证已从早期一次性配对码升级为持久化连接密钥（access key，存 `~/.gpt-image-studio/access-key.json`）。
 - 普通项目备份不导出 Companion 凭据。
-- 系统 keychain 仍为后续能力。
+- 系统 keychain（macOS Keychain / Windows Credential Manager / Linux Secret Service 等操作系统级凭据加密存储）仍为后续能力，未实现。
 - ChatGPT/Codex OAuth 仍需单独评估。
 
 ChatGPT/Codex OAuth 不作为第一版本地助手目标。它涉及 OAuth token sink、refresh token 轮换、账号额度、Codex app-server 或 Codex backend 路由等更复杂边界，需要在本地助手基础稳定后再做。
@@ -469,7 +471,7 @@ PID 文件建议保存：
 
 - 支持多个 provider profile。
 - 支持 provider 选择和模型能力探测。
-- 后置：支持系统 keychain。
+- 后置：支持系统 keychain（macOS Keychain / Windows Credential Manager / Linux Secret Service 等操作系统级凭据加密存储，区别于当前的明文 + 0600 文件存储）。
 - 评估 ChatGPT/Codex OAuth。
 - 如果做 Codex OAuth，参考 OpenClaw 的 token sink、refresh lock、auth profile order 和 app-server auth bridge 思路，但不要把 token 暴露给网页。
 
