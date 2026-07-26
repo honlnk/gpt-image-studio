@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Companion 管理页</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="page-header">
+        <h1>Companion 管理页</h1>
+        <p class="page-subtitle">
+          管理本地 Companion 服务：状态、API 凭据与日志。和命令行工具完全等价，所有操作只在本机 loopback 下可用。
+        </p>
+      </header>
+
+      <!-- ① 状态总览 -->
+      <section id="status-card" class="card">
+        <div class="status-row">
+          <span id="status-dot" class="status-dot offline"></span>
+          <span id="status-text" class="status-text">检测中…</span>
+          <span id="status-version" class="status-version"></span>
+          <button id="refresh-status" class="btn-text" type="button">刷新</button>
+        </div>
+        <div id="offline-hint" class="offline-hint" hidden>
+          <p class="hint-text">Companion 离线。请检查服务是否在运行：</p>
+          <div class="hint-code">
+            <div>gpt-image-studio start</div>
+          </div>
+        </div>
+        <div id="auth-summary" class="auth-summary" hidden></div>
+      </section>
+
+      <!-- ②.5 凭据损坏恢复（损坏时才显示） -->
+      <section id="corrupt-card" class="card corrupt-card" hidden>
+        <div class="corrupt-title">⚠️ 凭据文件异常</div>
+        <p id="corrupt-message" class="corrupt-message"></p>
+        <p class="corrupt-hint">
+          可以尝试从备份恢复；若备份也坏了，或不需要历史配置，可重置成空配置后重新添加。
+        </p>
+        <div class="corrupt-actions">
+          <button id="restore-btn" class="btn-secondary" type="button">从备份恢复</button>
+          <button id="reset-btn" class="btn-danger-outline" type="button">重置成空配置</button>
+        </div>
+      </section>
+
+      <!-- ③ 凭据列表 -->
+      <section id="credentials-card" class="card" hidden>
+        <div class="card-header">
+          <h2 class="card-title">API 凭据</h2>
+          <button id="add-btn" class="btn-outline-sm" type="button">+ 新增</button>
+        </div>
+        <p id="credentials-loading" class="muted-text">加载中…</p>
+        <p id="credentials-empty" class="muted-text" hidden>暂无 provider 配置，点击「新增」添加。</p>
+
+        <!-- 新增/编辑表单 -->
+        <div id="cred-form" class="cred-form" hidden>
+          <div id="form-title" class="form-title">新增配置</div>
+          <label class="field">
+            <span class="field-label">名称</span>
+            <input id="f-label" type="text" placeholder="如：豆包测试号" />
+          </label>
+          <label class="field">
+            <span class="field-label">Provider</span>
+            <select id="f-provider"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">API Base URL</span>
+            <input id="f-baseurl" type="text" placeholder="https://..." />
+          </label>
+          <label class="field">
+            <span class="field-label">Model</span>
+            <input id="f-model" type="text" placeholder="模型 ID" />
+          </label>
+          <label class="field">
+            <span class="field-label">API Key</span>
+            <input id="f-apikey" type="password" autocomplete="off" placeholder="sk-..." />
+          </label>
+          <div class="form-actions">
+            <button id="form-submit" class="btn-primary" type="button">保存</button>
+            <button id="form-cancel" class="btn-outline" type="button">取消</button>
+          </div>
+        </div>
+
+        <!-- 凭据列表容器 -->
+        <div id="cred-list" class="cred-list"></div>
+        <p id="cred-error" class="error-text"></p>
+      </section>
+
+      <!-- ④ 日志 -->
+      <section id="logs-card" class="card" hidden>
+        <h2 class="card-title">日志</h2>
+        <div class="logs-toolbar">
+          <input id="log-date" type="date" class="date-input" />
+          <select id="log-lines" class="lines-select">
+            <option value="50">最近 50 行</option>
+            <option value="100" selected>最近 100 行</option>
+            <option value="200">最近 200 行</option>
+          </select>
+          <button id="refresh-logs" class="btn-outline-sm" type="button">刷新</button>
+        </div>
+        <p id="logs-error" class="error-text"></p>
+        <pre id="logs-pre" class="logs-pre" hidden></pre>
+        <p id="logs-empty" class="muted-text" hidden>暂无日志。</p>
+        <p id="logs-hint" class="muted-text">点击「刷新」加载日志。</p>
+      </section>
+
+      <!-- 确认对话框（删除 / 重置共用） -->
+      <div id="dialog-backdrop" class="dialog-backdrop" hidden>
+        <div class="dialog">
+          <div id="dialog-title" class="dialog-title"></div>
+          <p id="dialog-desc" class="dialog-desc"></p>
+          <div class="dialog-actions">
+            <button id="dialog-cancel" class="btn-outline" type="button">取消</button>
+            <button id="dialog-confirm" class="btn-danger" type="button">确定</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

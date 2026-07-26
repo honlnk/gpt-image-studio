@@ -6,6 +6,7 @@ import { loadOrCreateAccessKey } from "./accessKey.js";
 import { authRoutes } from "./routes/auth.js";
 import { imagesRoutes } from "./routes/images.js";
 import { credentialsRoutes } from "./routes/credentials.js";
+import { adminRoutes } from "./routes/admin.js";
 import { logsRoutes } from "./routes/logs.js";
 import { authMiddleware } from "./middleware/auth.js";
 import type { CompanionSecurityConfig } from "./securityConfig.js";
@@ -45,11 +46,13 @@ export async function startServer(opts: {
   });
 
   // 注册顺序很重要：
-  // 1) credentialsRoutes 自带 loopbackGuard，必须在 authMiddleware 之前注册，
-  //    否则 /credentials/* 会被 bearer 守卫拦成 401（凭证接口不走连接密钥）。
-  // 2) authMiddleware（bearer token 守卫）。
+  // 1) credentialsRoutes / adminRoutes 自带 loopbackGuard，必须在 authMiddleware 之前注册，
+  //    否则 /credentials/* 和 /admin* 会被 bearer 守卫拦成 401（这两类接口都不走连接密钥，
+  //    只认本机来源或显式白名单）。
+  // 2) authMiddleware（bearer token 守卫）。会显式跳过 /credentials 和 /admin 前缀。
   // 3) 其余受保护路由 + logsRoutes（日志走连接密钥，放在 authMiddleware 之后）。
   await app.register(credentialsRoutes, { allowedOrigins: opts.security.allowedOrigins });
+  await app.register(adminRoutes, { allowedOrigins: opts.security.allowedOrigins });
   await authMiddleware(app);
   await app.register(authRoutes);
   await app.register(imagesRoutes, { security: opts.security });
@@ -70,7 +73,9 @@ export async function startServer(opts: {
   opts.security.allowedOrigins.forEach((origin) => console.log(`  - ${origin}`));
   console.log("");
   console.log("=".repeat(60));
-  console.log("  连接密钥（请粘进网页 /companion 页面完成连接）");
+  console.log("  连接密钥（请粘进 Web 工作台的 Companion 连接框）");
   console.log(`  ${loadOrCreateAccessKey()}`);
+  console.log("=".repeat(60));
+  console.log(`  管理页：http://127.0.0.1:${opts.port}/admin`);
   console.log("=".repeat(60));
 }

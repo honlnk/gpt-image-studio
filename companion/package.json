@@ -30,7 +30,7 @@
   "scripts": {
     "dev": "tsx src/main.ts serve --channel dev",
     "prepack": "pnpm build",
-    "build": "tsc && cp -r src/providers/profiles dist/providers/profiles",
+    "build": "tsc && cp -r src/providers/profiles dist/providers/profiles && cp -r src/admin dist/admin",
     "serve": "node dist/main.js serve",
     "serve:dev": "node dist/main.js serve --channel dev",
     "start": "node dist/main.js start",
@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
+    "@fastify/static": "^10.1.2",
     "commander": "^13.1.0",
     "fastify": "^5.3.3"
   },

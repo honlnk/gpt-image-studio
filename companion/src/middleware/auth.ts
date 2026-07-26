@@ -4,16 +4,18 @@ import { validateAccessKey } from "../accessKey.js";
 const PUBLIC_PATHS = ["/health"];
 
 /**
- * 凭证管理路由的前缀。这些路由自带 loopback 来源校验（见 middleware/loopback.ts），
- * 不走连接密钥——因为凭证管理发生在连接之前（首次需要先填 key 才有意义连接）。
- * authMiddleware 显式跳过此前缀，把鉴权交给 credentialsRoutes 内部的 loopbackGuard。
+ * loopback 守卫前缀集合。这些路由自带 loopback 来源校验（见 middleware/loopback.ts），
+ * 不走连接密钥——
+ *   /credentials：凭证管理发生在连接之前（首次需要先填 key 才有意义连接）。
+ *   /admin：Companion 自带管理页（阶段零），同源 loopback 浏览器访问，不要求 accessKey。
+ * authMiddleware 显式跳过这些前缀，把鉴权交给各自 plugin 内部的 loopbackGuard。
  */
-const LOOPBACK_GUARDED_PREFIX = "/credentials";
+const LOOPBACK_GUARDED_PREFIXES = ["/credentials", "/admin"];
 
 export async function authMiddleware(app: FastifyInstance) {
   app.addHook("onRequest", async (req, reply) => {
     if (PUBLIC_PATHS.includes(req.url)) return;
-    if (req.url.startsWith(LOOPBACK_GUARDED_PREFIX)) return;
+    if (LOOPBACK_GUARDED_PREFIXES.some((p) => req.url.startsWith(p))) return;
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
