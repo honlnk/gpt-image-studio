@@ -2,6 +2,7 @@
 import { computed, ref, onUnmounted } from "vue";
 import type { ApiMode, ConnectionMode } from "../../types/studio";
 import { FIXED_IMAGE_MODEL } from "../../shared/models";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 const props = defineProps<{
   connectionMode: ConnectionMode;
@@ -28,6 +29,12 @@ const emit = defineEmits<{
 const apiKeyVisible = ref(false);
 const apiKeyCopyStatus = ref<"idle" | "copied" | "failed">("idle");
 let apiKeyCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
+
+// Companion 自带管理页地址（companionUrl + /admin）。阶段零之后凭据管理迁移到此处。
+const settings = useSettingsStore();
+const companionAdminUrl = computed(
+  () => settings.companionUrl.replace(/\/$/, "") + "/admin",
+);
 
 const apiModeOptions: Array<{ value: ApiMode; label: string; description: string }> = [
   { value: "images", label: "Images API", description: "直接调用 /v1/images，兼容传统图片接口。" },
@@ -150,10 +157,12 @@ onUnmounted(() => {
 
         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3">
           <div class="text-xs text-gray-500">
-            配置管理（增删改、切换激活、查看日志）已移至独立页面
+            provider 凭据（增删改、切换激活、损坏恢复、日志）由 Companion 自带管理页维护
           </div>
           <a
-            href="/companion"
+            :href="companionAdminUrl"
+            target="_blank"
+            rel="noopener noreferrer"
             class="shrink-0 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-700"
           >
             打开管理页 →

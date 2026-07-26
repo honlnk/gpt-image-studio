@@ -4,6 +4,7 @@ import { storeToRefs } from "pinia";
 import { useComposerStore } from "../../stores/composerStore";
 import { useGenerationStore } from "../../stores/generationStore";
 import { useImagesStore } from "../../stores/imagesStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type {
   Conversation,
   Message,
@@ -56,13 +57,19 @@ const composerState = useComposerStore();
 const { selectingEditImageId: selectingImageId } = storeToRefs(composerState);
 const generation = useGenerationStore();
 const images = useImagesStore();
+const settings = useSettingsStore();
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 const showQqModal = ref(false);
 
-/** 跳转到 /companion 管理页（配对/凭证/日志）。 */
-function goToCompanionPage() {
-  window.location.href = "/companion";
+/**
+ * 打开 Companion 自带的 provider 管理页（凭据 CRUD / 损坏恢复 / 日志）。
+ * 阶段零之后，provider 凭据管理迁移到 Companion 自己的 /admin 页面，
+ * Web 项目不再承载凭据管理 UI（边界正本清源，见 docs/evolution-roadmap.md 第四章）。
+ */
+function openCompanionAdmin() {
+  const base = settings.companionUrl.replace(/\/$/, "");
+  window.open(`${base}/admin`, "_blank", "noopener,noreferrer");
 }
 let dragDepth = 0;
 
@@ -213,7 +220,7 @@ function imageFilesFromTransfer(
               ? `Companion 在线${header.companionStatus.version ? ' v' + header.companionStatus.version : ''}，点击管理`
               : 'Companion 离线，点击管理'
           "
-          @click="goToCompanionPage"
+          @click="openCompanionAdmin"
         >
           <span
             class="inline-block h-2 w-2 rounded-full"
