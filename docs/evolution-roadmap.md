@@ -59,7 +59,7 @@ Companion 自带       （行为不变）          + 文件/OSS 图片       qia
 
 | 阶段 | 一句话目标 | 主要工作量在哪 | 业务代码改动 |
 |---|---|---|---|
-| **零** | Companion 自带管理页，废弃 Web 项目的 `/companion` 页面 | Companion 加静态管理页 + Web 项目清理路由 | 小（清理 Web 项目违规页面） |
+| **零** ✅ | Companion 自带管理页，废弃 Web 项目的 `/companion` 页面 | Companion 加静态管理页 + Web 项目清理路由 | 小（清理 Web 项目违规页面） |
 | **一** | 在前端引入 `StudioStorage` 抽象层 | 前端 service/store 重构 | 大（一次性） |
 | **二** | Companion 从代理升级为真实数据后端（本机单用户） | Companion 后端新增存储路由 + 数据集管理 | 零（只换实现） |
 | **三** | Companion 服务化（服务器多用户）+ 前端 qiankun 嵌入 | 多租户层 + 完整 SSO + 前端打包 + Docker 化 | 零（加多租户层，不改业务 schema） |
@@ -72,6 +72,8 @@ Companion 自带       （行为不变）          + 文件/OSS 图片       qia
 ---
 
 ## 四、阶段零：Companion 管理页边界正本清源（前置重构）
+
+> **状态：✅ 已完成（2026-07）**。Companion 自带 `/admin` 管理页（原生三件套，`127.0.0.1:19750/admin`），Web 项目 `/companion` 路由页面及相关凭据管理代码全部移除。新增 `/admin/api/status`、`/admin/api/logs` 复用 `buildAuthStatus` / `readLogsTail`（loopbackGuard 保护，不要求 accessKey）。Web 端入口（ChatWorkspace 徽标、ApiSettingsPanel 链接）改为指向 `${companionUrl}/admin`。
 
 ### 背景与动机
 
@@ -946,8 +948,8 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 
 ### 未决问题（待对应阶段启动时决策）
 
-- [ ] 阶段零：Companion 管理页的具体功能清单（对齐当前 `/companion` 页面的哪些功能，日志查看是否保留等）
-- [ ] 阶段零：Web 项目清理 `/companion` 页面后，Companion 连接状态在 Web 项目里如何展示（保留精简的状态徽标？）
+- [x] 阶段零：Companion 管理页的具体功能清单（对齐当前 `/companion` 页面的哪些功能，日志查看是否保留等）—— 已完成。功能对齐原 `/companion` 页面：状态总览、凭据 CRUD、激活切换、损坏恢复、日志查看。连接管理（accessKey 输入）未纳入管理页（管理页本身就在同源 loopback 下，无需 accessKey）。
+- [x] 阶段零：Web 项目清理 `/companion` 页面后，Companion 连接状态在 Web 项目里如何展示（保留精简的状态徽标？）—— 已完成。保留 ChatWorkspace 顶栏的 Companion 状态徽标（online/offline 圆点 + 版本号 + 点击跳转 `${companionUrl}/admin`），`useCompanionConnection` + `companionStore` 的 connection 半边完整保留。
 - [ ] 阶段二：业务 db 的 SQLite schema 细节（字段类型、索引、迁移版本管理；双层结构 D7 已定，但 7 张表的具体 DDL 未定）
 - [ ] 阶段二：`dataset_registry` 的 schema 细节（字段、配置指纹的归一化规则）
 - [ ] 阶段二：选项 A（指定目录）的目录合法性校验和权限边界（如禁止选系统目录、跨盘符等）
