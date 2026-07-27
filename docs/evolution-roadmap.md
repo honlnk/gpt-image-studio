@@ -71,7 +71,30 @@ Companion 自带       （行为不变）          + 文件/OSS 图片       qia
 
 ---
 
-## 四、阶段零：Companion 管理页边界正本清源（前置重构）
+## 四、贯穿全程的核心抽象（索引）
+
+> 本章只做**宏观索引**——列出贯穿多个阶段的四个核心抽象、它们的当前状态、以及详细设计落在哪个阶段章节。具体的接口签名、改造方案、决策细节均在对应阶段章节展开，避免本章与各阶段重复维护。
+>
+> 当某个抽象在后续阶段有新的演进时，回到对应阶段章节更新，并在下表的"演进节点"列追加指针。
+
+| 抽象 | 一句话定位 | 当前状态 | 首次详细设计 | 后续演进节点 |
+|------|------------|----------|--------------|--------------|
+| **`StudioStorage`** | 存储后端的统一抽象，承载 KV（IndexedDB）与关系型（SQLite/后端 DB）两种形态 | 接口设计已就位（§6.1），实现待 PR1 | §6.1（阶段一） | 第七章「存储形态设计」（阶段二 CompanionStorage）/ 第九章「3. NativeStorage 实现」（阶段四） |
+| **`ImageClient`** | 模型调用的统一抽象，已有 direct + localCompanion 两个实现 | 已存在并运行：接口在 `src/features/generation/imageClients/imageClient.ts`、两个实现在 `directImagesClient.ts` / `localCompanionImagesClient.ts`、装配点在 `useStudioViewModel.ts:144-204`（按 connectionMode 分叉） | 阶段一-三**不动接口本身**（只随 §6.3 装配点调整注入方式） | 第九章「6. APP 模式下 imageClient 行为」——阶段四会新增第三个实现（APP 内置 provider），触及装配点与 imageClient 接口的 capability 字段，但**不改 direct/localCompanion 两个既有实现** |
+| **运行时检测** | `isTauriRuntime()` / `isQiankunRuntime()` / `connectionMode` 三者组合决定 storage 与 imageClient 的装配 | `connectionMode` 已存在；`isTauriRuntime()` 在 §6.3 落地（仅检测不切换）；`isQiankunRuntime()` 留待阶段三 | §6.3（阶段一，部分） | 第八章「9. 运行环境感知」（阶段三 qiankun 嵌入态）/ 第九章「1. 运行时环境检测与注入」（阶段四 Tauri 切换） |
+| **Provider 适配层** | Companion 侧已存在 9 个 provider adapter，所有 provider 特定逻辑（DashScope 解析、豆包任务轮询等）留在 Companion，前端只感知 capability | 已存在并运行（`companion/src/providers/`） | 未在本文档展开（详见 `docs/companion-providers-plan.md`） | 第九章「4. APP 内置 Companion 能力 → 方案 A」（阶段四 Rust 重写时这层要重新实现） |
+
+> 注：上表「后续演进节点」使用「第N章 → 章节锚点文字」格式，不使用 `§N.x` 编号——因为阶段二/三/四章（第七/八/九章）的子节当前没有 `§N.x` 编号，悬空编号会让读者找不到落点。如后续给这些章节补编号，可统一改回 `§N.x` 形式。
+
+**贯穿全程的约束**（这些约束跨越所有阶段，是四个抽象共同遵守的原则）：
+
+- **D5（前端业务代码对后端无感知）**：store / service / 组件代码不允许直接调 IndexedDB / fetch / invoke，必须通过 `StudioStorage` 或 `ImageClient` 接口。
+- **Provider 特定逻辑留在 Companion**：前端只感知 capability 信号，不感知具体 provider 差异。
+- **运行时分叉集中在一个装配点**：`useStudioViewModel` 是唯一的 storage/imageClient 装配位置，避免散点判断。
+
+---
+
+## 五、阶段零：Companion 管理页边界正本清源（前置重构）
 
 > **状态：✅ 已完成（2026-07）**。Companion 自带 `/admin` 管理页（原生三件套，`127.0.0.1:19750/admin`），Web 项目 `/companion` 路由页面及相关凭据管理代码全部移除。新增 `/admin/api/status`、`/admin/api/logs` 复用 `buildAuthStatus` / `readLogsTail`（loopbackGuard 保护，不要求 accessKey）。Web 端入口（ChatWorkspace 徽标、ApiSettingsPanel 链接）改为指向 `${companionUrl}/admin`。
 
@@ -149,7 +172,7 @@ companion/
 
 ---
 
-## 五、阶段一：前端存储抽象层（地基）
+## 六、阶段一：前端存储抽象层（地基）
 
 ### 目标
 
@@ -204,7 +227,491 @@ companion/
 
 ---
 
-## 六、阶段二：Companion 后端化（真实数据）
+### 6.1 完整接口契约（TypeScript 签名草案）
+
+> 本节给出 `StudioStorage` 抽象在阶段一落地的接口签名、类型、语义约束（第四章仅保留宏观索引）。所有签名是阶段一的**最终目标形态**，PR1 先建接口、IndexedDbStorage 实现和契约测试套件骨架（见 §6.6）。
+
+#### 核心接口
+
+```ts
+// src/services/storage/types.ts
+
+/** 7 张业务表的 store 名，作为接口公开常量。未来直接对齐 SQLite 表名。 */
+export const STORE_NAMES = {
+  conversations: "conversations",
+  messages: "messages",
+  imageAssets: "imageAssets",
+  imageBlobs: "imageBlobs",
+  settings: "settings",
+  conversationDrafts: "conversationDrafts",
+  analyticsEvents: "analyticsEvents",
+} as const;
+
+export type StoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES];
+
+/** 图片二进制记录。收敛自当前在 imageAssets.ts / backups.ts / storageUsage.ts 三处的重复定义。 */
+export type ImageBlobRecord = {
+  key: string;
+  blob: Blob;
+};
+
+/** 后端标识。UI 顶栏据此显示"本地 IndexedDB / Companion 文件系统 / Companion OSS / APP 本地"。 */
+export type StorageBackend = "indexeddb" | "companion" | "native";
+
+/**
+ * 存储后端的统一抽象。承载 KV（IndexedDB）和关系型（SQLite/后端 DB）两种形态。
+ *
+ * 设计约束（决策 T2）：保持纯 CRUD，不支持 query by index。
+ * - list/get/put/delete/clear 是完整能力面，过滤在调用方内存做。
+ * - 阶段三若出现性能瓶颈，再扩展 query 钩子或改走 fetch 直查。
+ */
+export interface StudioStorage {
+  /** 后端标识，只读。 */
+  readonly backend: StorageBackend;
+
+  // ─── 通用 CRUD（6 张元数据表 + imageBlobs 也走这套） ───
+
+  /** 列出某 collection 的全部记录。无记录返回空数组，不抛错。 */
+  list<T>(store: StoreName): Promise<T[]>;
+
+  /** 按 keyPath 取单条。找不到返回 undefined，不抛错。 */
+  get<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined>;
+
+  /** upsert 语义：key 存在则覆盖，不存在则插入。 */
+  put<T>(store: StoreName, value: T): Promise<void>;
+
+  /** 删单条。key 不存在是 no-op，不抛错。 */
+  delete(store: StoreName, key: IDBValidKey): Promise<void>;
+
+  /** 清空单 collection 的全部记录。不影响其它 collection。 */
+  clear(store: StoreName): Promise<void>;
+
+  // ─── 图片二进制（imageBlobs 表的语义化封装） ───
+
+  /** 保存图片二进制。统一用 Blob 类型（Web 原生、阶段二 multipart 直接用、阶段四实现内部转 Uint8Array）。 */
+  saveImageBlob(key: string, blob: Blob): Promise<void>;
+
+  /** 读取图片二进制。找不到返回 undefined。imageEditRequest 等调用方依赖此语义做错误处理。 */
+  loadImageBlob(key: string): Promise<Blob | undefined>;
+
+  /** 删图片二进制。key 不存在是 no-op。 */
+  deleteImageBlob(key: string): Promise<void>;
+
+  // ─── 轻量配置（取代 localStorage，键值形态） ───
+
+  /** 读配置项。找不到返回 undefined。 */
+  readConfig<T>(key: string): Promise<T | undefined>;
+
+  /** 写配置项。upsert 语义。 */
+  writeConfig<T>(key: string, value: T): Promise<void>;
+
+  // ─── 容量估算（拆成必选 + 可选，见 §6.1 容量估算拆分说明） ───
+
+  /** 业务数据字节（imageBytes + metadataBytes）。所有后端必选，基于实际存储内容计算。 */
+  estimateStoredBytes(): Promise<{ imageBytes: number; metadataBytes: number }>;
+
+  /** 浏览器/系统配额。可选——Web 实现透传 navigator.storage.estimate()，其它后端不实现时返回 undefined。 */
+  estimateQuota?(): Promise<{ usage?: number; quota?: number }>;
+}
+```
+
+#### 错误模型
+
+```ts
+/** 存储层错误的基类。错误类型粒度作为未决问题（见第十二章「阶段一：错误类型粒度」），阶段一先采用粗粒度。 */
+export class StorageError extends Error {
+  readonly code:
+    | "KEY_NOT_FOUND" // 显式 get/delete 时报告（注：默认语义是 no-op，仅当调用方要求严格模式时抛）
+    | "QUOTA_EXCEEDED" // 配额不足（IndexedDB / 文件系统 / OSS 配额）
+    | "BACKEND_UNAVAILABLE" // 后端不可达（Companion 离线、Tauri invoke 失败）
+    | "SERIALIZATION_ERROR" // Blob/JSON 序列化失败
+    | "UNKNOWN";
+  readonly cause?: unknown;
+}
+```
+
+**语义约束清单**（契约测试套件必须覆盖，见 §6.5）：
+
+| 方法 | 语义 |
+|------|------|
+| `list` | 空表返回 `[]`，不抛错；返回顺序不保证（调用方需要排序就自己排） |
+| `get` | key 不存在返回 `undefined`，不抛 `KEY_NOT_FOUND`（与现状 `getFromStore` 一致） |
+| `put` | upsert；同一 key 反复 put 只保留最后值 |
+| `delete` | key 不存在是 no-op，不抛错（与现状 `deleteFromStore` 一致） |
+| `clear` | 只清当前 collection，不影响其它；clear 后 list 返回 `[]` |
+| `saveImageBlob` | 与 `put` 同语义（key 是 `ImageBlobRecord.key`） |
+| `loadImageBlob` | key 不存在返回 `undefined`，不抛错 |
+| `readConfig` / `writeConfig` | 与 `get`/`put` 同语义，但走独立的 config 命名空间（阶段一落到 settings 表的特殊 key 前缀） |
+
+#### 容量估算拆分说明
+
+当前 `src/services/storageUsage.ts` 把「业务数据字节」和「浏览器配额」混在一起，且 `navigator.storage.estimate()` 在 Companion/Tauri 模式下不存在。接口把它们拆开：
+
+- `estimateStoredBytes()`：**必选**。所有后端基于实际存储内容算（IndexedDB 走 list + 累加 blob.size；Companion 走后端 FS stat；Tauri 走 Rust 侧统计）。
+- `estimateQuota?()`：**可选**。Web 实现透传 `navigator.storage.estimate()`；其它后端不实现（UI 隐藏配额条）。**禁止把 `navigator.storage` 硬编码进抽象层**，它只是 Web 实现的细节。
+
+#### 事务性与原子性约束（重要）
+
+接口**不暴露事务原语**（无 `beginTransaction / commit / rollback`）。理由：
+
+- 现状 `db.ts` 本身就是每方法独立事务（`db.transaction(store, "readwrite")` 一次一开一合），没有跨方法事务，业务层也不依赖。
+- IndexedDB 的事务 API 是浏览器专属、自动提交、跨方法难以传递；Companion 的 fetch 调用天然无事务；Tauri 的 SQLite 倒是支持事务，但接口设计要照顾最小公约（IndexedDB）。
+- 加事务会让接口复杂度暴增，与阶段一"零行为变化、最小抽象"的目标相悖。
+
+**但备份/恢复有原子性需求**（`createBackupServices.restore` 是「clear 多张表 + put 批量」，中途失败会丢数据）。处理方式：
+
+- **阶段一**：在 `IndexedDbStorage` 内部把 restore 实现为「先写入临时区/全量读出做快照、再 clear、再 put、失败时回滚到快照」的应用层逻辑，**不进接口**。这与现状 `backups.ts:140-172` 的实现策略一致（先 clear 再 put，失败就失败，依赖用户保留原 ZIP）。
+- **契约测试**：明确不测「restore 中途失败的原子性」，只测「restore 成功后的最终状态正确」。原子性保障作为实现层（IndexedDbStorage 内部）的责任，不是接口契约。
+- **未决项**：是否在阶段二/三引入轻量事务（如 `withTransaction(fn)` 可选方法），见第十二章。
+
+---
+
+### 6.2 service 工厂改造方案（决策 T1 落地）
+
+> service 层采用**工厂函数注入**：每个 service 改成 `createXxxServices(storage)` 工厂，返回该域的全部函数。显式依赖、可测性高，沿用 `src/services/imageEditRequest.ts:44` 的注入范式（"resolveBlob 由调用方注入，保持本模块不直接依赖 IndexedDB"）。
+
+#### 6 个 domain service 的工厂签名草案
+
+```ts
+// src/services/conversations.ts
+export function createConversationServices(storage: StudioStorage) {
+  return {
+    list: () => storage.list<Conversation>(STORE_NAMES.conversations),
+    save: (c: Conversation) => storage.put(STORE_NAMES.conversations, c),
+    remove: (id: string) => storage.delete(STORE_NAMES.conversations, id),
+  };
+}
+export type ConversationServices = ReturnType<typeof createConversationServices>;
+
+// src/services/messages.ts
+export function createMessageServices(storage: StudioStorage) {
+  return {
+    list: () => storage.list<Message>(STORE_NAMES.messages),
+    save: (m: Message) => storage.put(STORE_NAMES.messages, m),
+    remove: (id: string) => storage.delete(STORE_NAMES.messages, id),
+  };
+}
+
+// src/services/imageAssets.ts（元数据 + blob 二进制都收敛进同一工厂）
+export function createImageAssetServices(storage: StudioStorage) {
+  return {
+    listAssets: () => storage.list<ImageAsset>(STORE_NAMES.imageAssets),
+    saveAsset: (a: ImageAsset) => storage.put(STORE_NAMES.imageAssets, a),
+    deleteAsset: (id: string) => storage.delete(STORE_NAMES.imageAssets, id),
+    saveBlob: (key: string, blob: Blob) => storage.saveImageBlob(key, blob),
+    loadBlob: (key: string) => storage.loadImageBlob(key),
+    deleteBlob: (key: string) => storage.deleteImageBlob(key),
+  };
+}
+
+// src/services/settings.ts、conversationDrafts.ts、analyticsEvents.ts 同模式
+```
+
+**收敛点**：`ImageBlobRecord` 类型（当前在 imageAssets.ts:5 / backups.ts:20 / storageUsage.ts:4 三处重复）统一从 `storage/types.ts` 导入。
+
+#### 跨多 collection 的 service（backups / storageUsage / timeFieldMigration）
+
+这三个文件**绕过业务 service 直调 db.ts**（探查报告 §1.2），是"整库操作"。改造方式：
+
+```ts
+// src/services/backups.ts（备份/恢复，需要枚举多 collection）
+export function createBackupServices(storage: StudioStorage) {
+  return {
+    create: () => /* 调 storage.list 逐 collection 枚举 */,
+    restore: (zip: Blob) => /* 调 storage.clear + storage.put 逐 collection 写回 */,
+  };
+}
+
+// src/services/storageUsage.ts（容量估算，需要枚举全部 collection 算字节）
+export function createStorageUsageServices(storage: StudioStorage) {
+  return {
+    estimate: () => /* 调 storage.estimateStoredBytes() + storage.estimateQuota?.() */,
+  };
+}
+
+// src/services/timeFieldMigration.ts（数据迁移，需要枚举 + 批量重写）
+// 注：normalizeXxxTimeFields 已是纯函数（可测），工厂只包 orchestrator。
+export function createTimeFieldMigrationServices(storage: StudioStorage) {
+  return {
+    migrate: async () => { /* list → normalize → put */ },
+  };
+}
+```
+
+**关键**：这三个 service 的"整库枚举"是合法路径，**不违反抽象**——它们调的就是 `storage.list/put`，只是跨多个 collection。
+
+#### 5 个 store 的 context 类型扩展
+
+| Store | 现有 context | 阶段一新增字段 |
+|------|--------------|----------------|
+| `generationStore` | `GenerationStoreContext`（已有 imageClient、persistConversation 等） | `imageAssets: ImageAssetServices`、`messages: MessageServices` |
+| `conversationsStore` | `ConversationsStoreContext`（已有 clearDraft、refreshStorageUsage） | `conversations: ConversationServices`、`messages: MessageServices` |
+| `imagesStore` | `ImagesStoreContext`（已有 activeConversationId、messages） | `imageAssets: ImageAssetServices`、`storageUsage: StorageUsageServices` |
+| **`settingsStore`** | **无（自给自足）** | **新增 `configureSettingsStore(context)`**，注入 `settings: SettingsServices`、`config: ConfigServices` |
+| `analyticsStore` | 无（直接用 settings 参数） | `analyticsEvents: AnalyticsEventServices` |
+
+**重点**：`settingsStore` 是 5 个 store 里**唯一没有 configure 机制的**，必须新增。它的特殊性还在于直连 localStorage（见 §6.4）。
+
+#### 6 处 feature 层 import 改造清单
+
+| feature 文件 | 当前 import | 阶段一改造 |
+|--------------|-------------|------------|
+| `useStudioRestore.ts:1-5` | loadSettings/listConversations/listMessages/listImageAssets/migrateLegacyTimeFields | 全部改成接收注入的 service 工厂 |
+| `useStudioBackup.ts:1` | createStudioBackup/restoreStudioBackup | 接收 backup 工厂 |
+| `useStudioDrafts.ts:3-8` | conversationDrafts 系列 | 接收 drafts 工厂 |
+| `useStudioViewModel.ts:19` | saveSettings（给 urlSettings 用） | 接收 settings 工厂 |
+| `useAnalyticsTracker.ts:8` | saveAnalyticsEventsBatch（模块级单例 flush） | 单例改为接收 analytics 工厂的初始化 |
+| `useCompanionConnection.ts:7` | companionApi（非存储，但同样直连） | **不在阶段一改造范围**，companionApi 是 HTTP 客户端不是存储层 |
+
+---
+
+### 6.3 运行时装配与工厂
+
+```ts
+// src/services/storage/resolveStorage.ts
+
+/** 运行时检测：是否在 Tauri webview 内。阶段一仅检测不切换，预留阶段四。 */
+export function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+/**
+ * 阶段一永远返回 IndexedDbStorage（与路线图"第一阶段永远返回 IndexedDbStorage"一致）。
+ * 阶段二会扩展为：connectionMode === "localCompanion" → CompanionStorage。
+ * 阶段四会扩展为：isTauriRuntime() → NativeStorage。
+ */
+export function resolveStorage(): StudioStorage {
+  return new IndexedDbStorage();
+}
+```
+
+**ViewModel 装配点**（`src/app/studio/useStudioViewModel.ts`，imageClient 装配精确定位 L144-204；hydrate 在 L243 接走）：
+
+```ts
+export function useStudioViewModel() {
+  // ─── 1. 解析 storage（阶段一固定 IndexedDbStorage） ───
+  const storage = resolveStorage();
+
+  // ─── 2. 创建各域 service 工厂 ───
+  const services = {
+    conversations: createConversationServices(storage),
+    messages: createMessageServices(storage),
+    imageAssets: createImageAssetServices(storage),
+    settings: createSettingsServices(storage),
+    drafts: createConversationDraftServices(storage),
+    analyticsEvents: createAnalyticsEventServices(storage),
+    backup: createBackupServices(storage),
+    storageUsage: createStorageUsageServices(storage),
+    timeFieldMigration: createTimeFieldMigrationServices(storage),
+  };
+
+  // ─── 3. 装配 imageClient（不变，仍按 connectionMode 分叉） ───
+  const directImagesClient = createDirectImagesClient({ ... });
+  const localCompanionImagesClient = createLocalCompanionImagesClient({ ... });
+
+  // ─── 4. 注入到各 store（扩展 configure*Store 的 context） ───
+  const settings = useStudioSettings({ isHydrated, services: services.settings });
+  const conversations = useStudioConversations({
+    services: { conversations: services.conversations, messages: services.messages },
+    ...
+  });
+  // ... 其余 store 同样接收 services 注入
+
+  // ─── 5. hydrate 流程（useStudioRestore 接收 services 全集） ───
+  const restore = useStudioRestore({ services, applySettings: settings.applySettings, ... });
+}
+```
+
+**关键原则**：`resolveStorage()` 是整个应用**唯一**的 storage 实例化点。所有 service 工厂共享同一个 storage 实例，store 通过 context 拿到 service 工厂的返回值。
+
+---
+
+### 6.4 companion 凭据迁移（决策 T3 落地）
+
+#### 4 个 localStorage key 的处理清单
+
+当前 `src/stores/settingsStore.ts:66-71` 定义了 4 个 key。它们的真实行为需要区分清楚（核验结论，避免表格误导）：
+
+| key | 当前真实行为（核验后） | 阶段一处理 |
+|-----|------------------------|------------|
+| `gpt-image-studio:companion-url` | companionUrl **唯一存储**：声明 L145-147 `readStorage(...)`、`watch` 写回 L601-603。**不进 IndexedDB settings 表**。 | **收编** → `storage.writeConfig("companionUrl", ...)` |
+| `gpt-image-studio:companion-access-key` | companionAccessKey **唯一存储**：声明 L148-150 `readStorage(...)`、`watch` 写回 L604-606。**不进 IndexedDB settings 表**。 | **收编** → `storage.writeConfig("companionAccessKey", ...)` |
+| `gpt-image-studio:api-key` | 启动从 localStorage 读初始值（L123），但**运行时持久化走 IndexedDB settings 表**（`saveCurrentSettings` → `saveSettings`，L519-520）。localStorage 这边**只读不写**，是老版本遗留的兜底入口。 | **废弃 localStorage 入口**：首次启动从 localStorage 读旧值 → 写入 IndexedDB settings → 清 localStorage；之后统一从 IndexedDB 读 |
+| `gpt-image-studio:api-base-url` | 同 api-key（L124 读，不写 localStorage，持久化进 IndexedDB） | 同上 |
+| `gpt-image-studio:draft-composer-text` / `draft-attachments` | 遗留 draft 迁移键（`useStudioDrafts.ts:23-26`，只读不写的一次性迁移） | **不动**：这是运行时一次性迁移逻辑，不属于 config 范畴 |
+
+> 注：companionUrl / companionAccessKey 是**唯一存储在 localStorage、不进 IndexedDB 的两个 key**——它们既不进 IndexedDB settings 表，也不进项目备份（`backups.ts` 的 `stripApiKey` 只处理 apiKey）。这是当前架构的真实缺口，§6.4 的迁移逻辑就是为修复它而设计。
+
+#### 一次性迁移逻辑
+
+```ts
+// 首次启动 detect 旧 localStorage 值
+async function migrateCompanionCredentialsFromLocalStorage(storage: StudioStorage) {
+  const companionUrl = readStorage("gpt-image-studio:companion-url");
+  const companionAccessKey = readStorage("gpt-image-studio:companion-access-key");
+  if (companionUrl) {
+    await storage.writeConfig("companionUrl", companionUrl);
+    localStorage.removeItem("gpt-image-studio:companion-url");
+  }
+  if (companionAccessKey) {
+    await storage.writeConfig("companionAccessKey", companionAccessKey);
+    localStorage.removeItem("gpt-image-studio:companion-access-key");
+  }
+}
+```
+
+**触发时机**：在 `useStudioRestore` 的 hydrate 流程最开始（早于 `migrateLegacyTimeFields`），保证后续读取都走 config。
+
+#### 备份机制更新
+
+当前 `backups.ts` 的 `stripApiKey`（L189-192）只剥 apiKey。companion 凭据收编后：
+
+- **决策**：companionUrl / companionAccessKey **进备份**，但走与 `stripApiKey` **同等级别的安全处理**（`stripCompanionCredentials`），避免敏感凭据出现在导出 ZIP 里。
+- **理由**：companionAccessKey 是本地服务的配对密钥，跨设备迁移时需要（用户在新设备重新配对 Companion 时要用到）；但与 apiKey 一样属于敏感信息，不应明文进 ZIP。
+- **未决**：是否加密存储而不是 strip？见第十二章「阶段一：companion 凭据进备份的安全处理细节」。
+
+> 注：阶段二的"选项 C：阿里云 OSS"凭据也会落到 Companion 的 `credentials.json`（路线图第七章已定），那部分**不进 Web 端备份**。本节讨论的 companionUrl/accessKey 是 Web 端连 Companion 用的，属于不同概念。
+
+---
+
+### 6.5 测试与契约保障
+
+#### 契约测试套件设计
+
+**目标**：保证「换实现不改接口」。仿 `src/types/companionKnownFields.contract.test.ts` 的「集合相等 + 防静默漂移」思想，但测**运行时行为**而非静态字段。
+
+**模式**：参数化测试。一份测试用例，对每个 StudioStorage 实现跑一遍。
+
+```ts
+// src/services/storage/storage.contract.test.ts
+
+/** 每个实现提供一个 factory，套件对 factory 跑同一份用例。 */
+export function runStudioStorageContractTests(
+  name: string,
+  createStorage: () => Promise<StudioStorage>,
+  cleanup?: () => Promise<void>,
+) {
+  describe(`StudioStorage contract: ${name}`, () => {
+    beforeEach(async () => { await cleanup?.(); });
+
+    it("list 空表返回 []，不抛错", async () => { ... });
+    it("get 找不到返回 undefined，不抛错", async () => { ... });
+    it("put 是 upsert，同 key 反复 put 只留最后值", async () => { ... });
+    it("delete 不存在的 key 是 no-op", async () => { ... });
+    it("clear 只清当前 collection，不影响其它", async () => { ... });
+    it("saveImageBlob / loadImageBlob 往返一致", async () => { ... });
+    it("loadImageBlob 找不到返回 undefined", async () => { ... });
+    it("readConfig / writeConfig 键值隔离", async () => { ... });
+    // ... 共约 30 用例，覆盖 §6.1 语义约束清单的全部条目
+  });
+}
+
+// IndexedDbStorage 专项
+describe("IndexedDbStorage contract", () => {
+  runStudioStorageContractTests("IndexedDbStorage",
+    async () => new IndexedDbStorage(),  // 配 fake-indexeddb
+    async () => { /* 清 indexedDB */ });
+});
+```
+
+**阶段二/四接入**：只需在 `CompanionStorage` / `NativeStorage` 的测试文件里加一行 `runStudioStorageContractTests(...)`，同一份用例自动覆盖。
+
+#### 测试基建补强
+
+当前测试约束（探查报告 §1.1）：node 环境 + 无 fake-indexeddb + 无 happy-dom，schema 迁移（onupgradeneeded）**零覆盖**。
+
+**引入**：
+- `fake-indexeddb`（devDependency）：让 IndexedDbStorage 实现可被真实测试
+- `happy-dom`（devDependency）：部分用例需要 `URL.createObjectURL` 等 DOM API
+
+**vitest 配置**：在 `vite.config.ts` 加 `test.environment: "happy-dom"` 或用 per-file 注释 `// @vitest-environment happy-dom` 局部启用（避免影响现有 node 环境测试）。
+
+**fake-indexeddb 行为差异风险（重要）**：fake-indexeddb 是纯 JS 实现，与浏览器真实 IndexedDB 在以下方面存在差异，**契约测试通过 ≠ 生产环境行为一致**：
+
+- **事务时序**：真实 IndexedDB 事务在任务间隙自动提交（microtask 边界），fake-indexeddb 的提交时机更接近同步，无法复现"事务在 await 中途被强制提交"的坑。
+- **版本升级回调**：`onupgradeneeded` 在 fake-indexeddb 里是同步触发的，真实浏览器是异步的；版本切换时的 schema 迁移分支覆盖在 fake 下可能假阳性。
+- **cursor 遍历语义**：`openCursor` 的请求并发模型在 fake 下退化为顺序，无法复现真实 IDB 的并发请求调度。
+- **错误类型**：fake 抛的是普通 `Error`，真实 IDB 抛 `DOMException`（子类如 `ConstraintError`、`QuotaExceededError`），错误处理代码分支覆盖有缺口。
+
+**缓解策略**：
+1. 契约测试**只断言接口语义**（list 后能 get 到、delete 后 list 为空等），**不断言 IndexedDB 特有的时序/并发行为**——这些归 IndexedDbStorage 专项测试。
+2. schema 迁移（`onupgradeneeded`）的版本分支测试，在 PR 合并前**必须 manual smoke test**（DevTools 验证 IndexedDB schema 升级正确）。
+3. 关键路径（生成、备份恢复、草稿切换）在 PR1-6 各阶段**必须 manual smoke test**，不能只靠 fake-indexeddb 测试通过就合入。
+4. 若后续阶段引入 `DOMException` 子类判错，需要在 `IndexedDbStorage.test.ts` 里手动 mock 错误类型补充分支覆盖。
+
+#### 新增测试清单（**均为阶段一需新建**，当前仓库不存在）
+
+| 测试文件（新建） | 覆盖范围 | 用例数 |
+|------------------|----------|--------|
+| `src/services/storage/storage.contract.test.ts` | 接口契约（参数化，所有实现共用） | ~30 |
+| `src/services/storage/IndexedDbStorage.test.ts` | schema 升级（DB_VERSION 1→4）、幂等建表、索引重命名、并发写、blob 大小边界 | ~15 |
+| 现有 `backups.test.ts` 等 | 改造后重跑，验证走 storage 接口后行为不变 | 既有用例不变 |
+
+---
+
+### 6.6 PR 拆分顺序
+
+> 探查发现改造面广（5 store + 6 feature 层 + 3 跨 collection service + 4 localStorage key），必须分批否则 review 不可行。每个 PR 独立可合并、typecheck/test 全绿、可独立回滚。
+
+| PR | 内容 | 依赖 | 风险 |
+|----|------|------|------|
+| **PR1** | 定义 `StudioStorage` 接口（§6.1）+ `IndexedDbStorage` 实现（搬迁 `db.ts` 逻辑）+ 引入 fake-indexeddb/happy-dom + 契约测试套件骨架（§6.5）。**db.ts 保留并存**，业务代码暂不切换。 | 无 | 低（纯新增，零行为变化） |
+| **PR2** | 6 个 domain service 改工厂（§6.2）+ 调用方迁移（store context 注入）+ **settingsStore 新增 `configureSettingsStore`** | PR1 | 中（store 改造面大，但每个 store 独立） |
+| **PR3** | backups / storageUsage / timeFieldMigration 改走 storage 接口（§6.2 跨 collection 部分） | PR2 | 低（这三个是孤立模块） |
+| **PR4** | 6 处 feature 层 import 改造 + ViewModel 装配点接入（§6.3） | PR2、PR3 | 中（hydrate 流程是关键路径） |
+| **PR5** | companion 凭据收编 + localStorage 迁移 + 备份更新（§6.4） | PR4 | 中（涉及敏感凭据，需仔细回归） |
+| **PR6** | `ImageBlobRecord` 类型收敛 + 删除并存的旧 db.ts + 文档更新 + 收尾清理 | PR1-5 | 低（收尾） |
+
+**每个 PR 的验收门槛**：
+- `pnpm typecheck` + `pnpm typecheck:companion` 0 错误
+- `pnpm test` 全绿
+- manual smoke test：生成、编辑、备份恢复、草稿、Companion 连接等核心流程正常
+
+---
+
+### 6.7 验收标准（强化版）
+
+在路线图原有验收基础上追加：
+
+- ✅ **契约测试套件**对 IndexedDbStorage 实现全绿（30+ 用例，覆盖 §6.1 语义约束清单）
+- ✅ **schema 迁移（onupgradeneeded）有测试覆盖**（fake-indexeddb，新建的 `IndexedDbStorage.test.ts`）
+- ✅ grep 确认 store/feature 层**无残留模块级静态 import**（全部走 service 工厂注入）：
+  ```bash
+  grep -rnE "from \"\.\./(\.\./)?services/(conversations|messages|imageAssets|settings|conversationDrafts|analyticsEvents|backups|storageUsage|timeFieldMigration)\"" src/stores/ src/features/ src/app/ | grep -v "create.*Services"
+  ```
+  应返回空
+- ✅ grep 确认**无残留 `localStorage.` 直连**（除 `shared/localStorage.ts` 封装和遗留 draft 键）：
+  ```bash
+  grep -rn "localStorage\." src/ | grep -v "shared/localStorage.ts" | grep -v "draft-composer-text\|draft-attachments"
+  ```
+  应返回空
+- ✅ companion 凭据在 IndexedDB settings 表中可见（DevTools 验证），备份包含它们（带 stripCompanionCredentials 处理）
+- ✅ DevTools → IndexedDB 内容与改造前一致（除新增 companion 凭据字段）
+- ✅ **运行时行为零变化**：生成、编辑、导入、备份恢复、草稿、Companion 连接、分析导出等全部功能在改造前后行为一致
+
+---
+
+### 6.8 风险与回滚
+
+#### 风险矩阵
+
+| 风险 | 严重度 | 影响 | 缓解策略 |
+|------|--------|------|----------|
+| **工厂注入改造面大**（5 store + 6 feature 层） | 高 | 中间状态可能 break，review 困难 | PR1 先建抽象层并存（db.ts 保留），PR2-6 逐步迁移，每个 PR 独立可回滚 |
+| **契约测试套件设计不当** | 中 | 漏掉边界（并发写、事务性、blob 大小） | 参考 `companionKnownFields.contract.test.ts` 的集合相等 + 补充运行时行为用例；PR1 先建骨架，后续 PR 补用例 |
+| **hydrate 流程是关键路径** | 中 | useStudioRestore 改造出错会导致启动失败 | PR4 单独聚焦 hydrate，先保留旧路径并存，新路径验证后再切换 |
+| **companion 凭据迁移丢数据** | 中 | 用户已有的 companionUrl/accessKey 丢失 | 一次性迁移逻辑加 dry-run + 备份；迁移后 localStorage 不立即清，保留一个版本周期作为兜底 |
+| **fake-indexeddb 与真实 IndexedDB 行为差异** | 中 | 测试通过但线上失败（事务时序、版本升级回调、cursor 并发、错误类型） | §6.5 已展开 4 类差异 + 4 条缓解策略；关键路径 manual smoke test；契约测试只断言语义不断言 IDB 特性 |
+
+#### 回滚策略
+
+- **每个 PR 独立可回滚**：PR1 是纯新增（回滚无副作用）；PR2-6 每个都是局部改造，可单独 revert。
+- **最坏情况**：回滚到 PR1（抽象层在但不被使用，db.ts 仍是唯一入口，业务零影响）。
+- **数据安全兜底**：companion 凭据迁移（PR5）即使回滚，localStorage 旧值未清，用户重新启动可恢复。
+
+---
+
+## 七、阶段二：Companion 后端化（真实数据）
 
 ### 目标
 
@@ -372,7 +879,7 @@ companion/
 
 ---
 
-## 七、阶段三：服务化与可嵌入（多用户 SaaS 形态）
+## 八、阶段三：服务化与可嵌入（多用户 SaaS 形态）
 
 ### 目标
 
@@ -458,7 +965,7 @@ Companion 收到后，把该 user_id（或 jti）加入**内存级吊销黑名�
 - 用户被管理员封禁 → 宿主调 `/admin/revoke`
 - 用户改密码 → 宿主调 `/admin/revoke`（让旧 JWT 失效，强制重新登录）
 
-一个端点解决多个安全场景。**当前倾向**内存级黑名单（重启清空，但 JWT 有效期短，过期后自然失效，残留风险窗口可接受）——是否落盘持久化以提高 SLO 安全性，作为未决项见第十二章（安全性与性能的权衡）。
+一个端点解决多个安全场景。**当前倾向**内存级黑名单（重启清空，但 JWT 有效期短，过期后自然失效，残留风险窗口可接受）——是否落盘持久化以提高 SLO 安全性，作为未决项见第十二章「阶段三：吊销黑名单的持久化策略」。
 
 #### 3. 令牌刷新
 
@@ -631,7 +1138,7 @@ Companion 收到后，把该 user_id（或 jti）加入**内存级吊销黑名�
 
 ---
 
-## 八、阶段四：APP 化（可独立安装）
+## 九、阶段四：APP 化（可独立安装）
 
 > **当前状态（2026-07）**：阶段四距离落地尚远，**暂时不进入实施**。本节保留下方已构思的完整设计作为长期愿景和决策锚点，等阶段一、二、三推进到合适程度后再启动。阶段一已预留 `NativeStorage` 接口骨架，确保未来 APP 模式有接入位置。
 
@@ -709,48 +1216,6 @@ Companion 收到后，把该 user_id（或 jti）加入**内存级吊销黑名�
 - 是否引入 OS keychain 加密凭据 → 阶段四启动时定
 - 是否支持 APP ↔ Web 数据互导（手动备份恢复）→ 阶段四启动时定
 - APP 管理页的形态（取决于内化方案，见 D13）→ 阶段四启动时定
-
----
-
-## 九、贯穿全程的核心抽象
-
-这四个抽象是阶段一之后所有演进的基础，必须从一开始就设计好：
-
-### 1. `StudioStorage` 接口
-
-存储后端的统一抽象。承载 KV（IndexedDB）和关系型（SQLite/后端 DB）两种形态。
-
-```
-list / get / put / delete / clear       ← 通用 CRUD
-saveImageBlob / loadImageBlob / deleteImageBlob  ← 图片二进制
-readConfig / writeConfig                ← 轻量配置
-estimateUsage                           ← 容量估算
-backend: "indexeddb" | "companion" | "native"    ← 后端标识
-```
-
-**三个实现**：IndexedDbStorage（阶段一）/ CompanionStorage（阶段二）/ NativeStorage（阶段四）
-
-### 2. `ImageClient` 接口（已存在）
-
-模型调用的统一抽象。已有 direct + localCompanion 两个实现，运行时按 connectionMode 分叉。
-
-**阶段四演进**：新增 APP 模式分支（强制走内置 provider，不连外部 Companion）。
-
-### 3. 运行时检测
-
-```
-isTauriRuntime()    → 是否在 Tauri webview 内
-isQiankunRuntime()  → 是否在 qiankun 子应用容器内
-connectionMode      → direct / localCompanion
-```
-
-三者组合决定 storage 与 imageClient 的装配。
-
-### 4. Provider 适配层（Companion 侧）
-
-已存在 9 个 provider adapter。**关键约束**：所有 provider 特定逻辑（DashScope 解析、豆包任务轮询等）必须留在 Companion，前端只感知 capability。
-
-**阶段四风险**：如果选方案 A（Rust 重写），这层要重新实现，工作量大。
 
 ---
 
@@ -887,6 +1352,34 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 
 **理由**：CDN 嵌入对中小用户最友好（零运维），自部署覆盖私有化需求。两种模式共用同一份构建产物（qiankun 兼容改造后同时支持独立运行和嵌入）。CDN 模式若遇 GitHub Pages 限制，可平滑降级到自部署。
 
+### 阶段一技术决策（T 系列，§6.x 引用）
+
+> T 系列是阶段一实施层面的技术选型决策，与 D 系列（架构形态决策）正交。在 §6.1-§6.5 中被反复引用，集中记录于此便于回溯。
+
+### T1: service 层采用工厂函数注入（阶段一）
+
+每个 domain service 改成 `createXxxServices(storage: StudioStorage)` 工厂，返回该域的全部函数。store 通过 `configure*Store(context)` 接收 service 工厂的返回值，不再模块级静态 import。
+
+**理由**：显式依赖、可测性高，沿用 `src/services/imageEditRequest.ts:44` 已验证的注入范式（"resolveBlob 由调用方注入，保持本模块不直接依赖 IndexedDB"）。相比"全局 provider"方案，工厂注入避免了隐式依赖、让测试可以直接传 mock storage；相比"service 内部直读 storage 单例"方案，工厂注入让 service 的存储依赖在签名上一目了然。
+
+**代价**：5 个 store + 6 处 feature 层的 import 都要改造（见 §6.2 改造清单），改造面大但通过 §6.6 的 PR 拆分顺序控制风险。
+
+### T2: StudioStorage 接口保持纯 CRUD，不支持 query by index（阶段一）
+
+接口只暴露 `list / get / put / delete / clear` 五个 CRUD 方法，不支持按索引查询。所有按字段过滤的需求（如 messages 按 conversationId 过滤），都在调用方内存做。
+
+**理由**：与现状完全一致（现有 `db.ts` 也只有 CRUD，过滤在 service 层），阶段一零行为变化。引入 query 钩子会带来三件事：①接口复杂度上升；②每个实现（IndexedDB/Companion/Native）都要支持 query 语义；③契约测试要覆盖 query 行为。阶段一直接用户（单设备）场景下，纯 CRUD + 内存过滤的性能完全够用。
+
+**何时扩展**：阶段三服务器多用户场景下，若某 collection 数据量暴增导致 `list` 全表加载成为瓶颈，再考虑扩展 query 钩子，或让 Companion 模式直接走 fetch + 服务端查询。
+
+### T3: companion 凭据收编进 StudioStorage.config（阶段一）
+
+`companionUrl` / `companionAccessKey` 从 localStorage 迁移到 `StudioStorage.readConfig / writeConfig`，修复当前"唯一存储在 localStorage、不进 IndexedDB、不进项目备份"的隐性缺口。
+
+**理由**：阶段一的目标就是"所有存储走 StudioStorage 抽象"。companionUrl/accessKey 作为运行时配置，留在 localStorage 等于在抽象层外开了个例外，破坏 D5（前端业务代码对后端无感知）。收编后它们能享受统一的迁移、备份、跨设备同步路径。
+
+**安全考量**：companionAccessKey 是本地 Companion 的配对密钥，敏感程度低于 apiKey（apiKey 是云端 provider 的凭证，companionAccessKey 只能访问本机 loopback 服务）。但仍按与 apiKey 同等级别的 `stripCompanionCredentials` 处理，导出 ZIP 时剥离。是否加密存储而非 strip，作为未决项（见第十二章）。
+
 ---
 
 ## 十一、阶段依赖图
@@ -929,7 +1422,7 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 - **阶段二** → 阶段三的**硬前置**（Companion 必须先成为完整后端才能服务化）
 - **阶段四** → 只依赖阶段一（不依赖阶段二、三），但阶段二的存储接口验证会让阶段四更稳
 
-**可并行**：阶段二完成核心后，阶段三（服务化 + 前端嵌入）和阶段四（APP）可以并行推进。阶段四当前暂不实施，但设计内容已保存在第八章作为长期愿景；阶段一会预留 `NativeStorage` 接口骨架确保未来可接入。
+**可并行**：阶段二完成核心后，阶段三（服务化 + 前端嵌入）和阶段四（APP）可以并行推进。阶段四当前暂不实施，但设计内容已保存在第九章作为长期愿景；阶段一会预留 `NativeStorage` 接口骨架确保未来可接入。
 
 **阶段零的特殊性**：阶段零与存储演进主线正交，理论上可以和阶段一并行，但建议**先做阶段零**——在一个边界干净的状态下开始架构演进，避免后续阶段带着违规代码往前走。
 
@@ -950,6 +1443,10 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 
 - [x] 阶段零：Companion 管理页的具体功能清单（对齐当前 `/companion` 页面的哪些功能，日志查看是否保留等）—— 已完成。功能对齐原 `/companion` 页面：状态总览、凭据 CRUD、激活切换、损坏恢复、日志查看。连接管理（accessKey 输入）未纳入管理页（管理页本身就在同源 loopback 下，无需 accessKey）。
 - [x] 阶段零：Web 项目清理 `/companion` 页面后，Companion 连接状态在 Web 项目里如何展示（保留精简的状态徽标？）—— 已完成。保留 ChatWorkspace 顶栏的 Companion 状态徽标（online/offline 圆点 + 版本号 + 点击跳转 `${companionUrl}/admin`），`useCompanionConnection` + `companionStore` 的 connection 半边完整保留。
+- [ ] 阶段一：`StudioStorage` 接口的错误类型粒度（粗粒度 `StorageError` + code 字段 vs 细粒度子类 `KeyNotFoundError` / `QuotaExceededError` 等）—— 阶段一 §6.1 暂采用粗粒度 + code 字段方案（实现成本低、调用方判错统一），是否需要细粒度子类留待 PR1 review 时定。
+- [ ] 阶段一：companion 凭据（companionUrl / companionAccessKey）进备份的安全处理细节—— 阶段一 §6.4 暂定与 `apiKey` 走同等级别的 `stripCompanionCredentials`（导出时剥离）。是否改为加密存储（备份包含但加密、恢复时解密）以支持跨设备迁移，留待 PR5 实施前定。
+- [ ] 阶段一：契约测试套件是否覆盖「storage 实现切换」场景—— 阶段一只有 `IndexedDbStorage` 一个真实实现，是否要在测试里预埋一个 mock 实现（如 `InMemoryStorage`）来验证「换实现不改接口」的承诺，还是等阶段二 `CompanionStorage` 出现后再做跨实现验证，留待 PR1 实施时定。
+- [ ] 阶段一：是否在接口层引入轻量事务—— §6.1 决定阶段一不暴露事务原语，备份/恢复的原子性由 `IndexedDbStorage` 内部保障。阶段二（Companion + SQLite）和阶段三（多用户并发）出现真实的跨方法原子性需求时，再评估是否加 `withTransaction?(fn)` 可选方法。
 - [ ] 阶段二：业务 db 的 SQLite schema 细节（字段类型、索引、迁移版本管理；双层结构 D7 已定，但 7 张表的具体 DDL 未定）
 - [ ] 阶段二：`dataset_registry` 的 schema 细节（字段、配置指纹的归一化规则）
 - [ ] 阶段二：选项 A（指定目录）的目录合法性校验和权限边界（如禁止选系统目录、跨盘符等）
