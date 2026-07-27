@@ -144,6 +144,8 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   const connectionMode = ref<ConnectionMode>("direct");
+  // 阶段三 PR5：qiankun 嵌入态标记。true 时连接配置由宿主注入，禁用持久化与设置面板编辑。
+  const isEmbedded = ref(false);
   const apiMode = ref<ApiMode>("images");
   const model = ref(FIXED_IMAGE_MODEL);
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
@@ -629,16 +631,36 @@ export const useSettingsStore = defineStore("settings", () => {
   // 迁移完成前不写，避免把 ref 的初始兜底值（可能还没被迁移逻辑覆盖）误写回 config。
   // ref 初始值仍同步读 localStorage（上方声明），保证 store setup 早于 hydrate 时
   // useCompanionConnection 的 immediate watch 能拿到正确值。
+  // 阶段三 PR5：嵌入态（isEmbedded）跳过持久化——连接配置由宿主注入，不写回本地。
   watch(companionUrl, (v) => {
-    if (!isHydratedRef?.value) return;
+    if (!isHydratedRef?.value || isEmbedded.value) return;
     void configServices.write("companionUrl", v).catch(() => {
       // config 写失败不阻塞 UI（与原 writeStorage 的静默吞错语义一致）。
     });
   });
   watch(companionAccessKey, (v) => {
-    if (!isHydratedRef?.value) return;
+    if (!isHydratedRef?.value || isEmbedded.value) return;
     void configServices.write("companionAccessKey", v).catch(() => {});
   });
+
+  /**
+   * 阶段三 PR5：应用 qiankun 嵌入态配置（由宿主注入）。
+   *
+   * 嵌入态下连接信息由宿主管控：
+   * - companionUrl = 宿主部署的 Companion 服务地址
+   * - jwt = 宿主签发的 JWT（作为 Bearer token，原 accessKey 位置）
+   * - connectionMode 固定 localCompanion（禁止 direct，凭据安全由平台负责）
+   * - isEmbedded = true（禁用持久化 + 设置面板编辑）
+   *
+   * 必须在 useStudioViewModel 装配（resolveStorage 读 connectionMode.value）之前调用，
+   * 即 qiankun mount(props) 时、app.mount 之前。
+   */
+  function applyEmbeddedConfig(input: { companionUrl: string; jwt: string }) {
+    companionUrl.value = input.companionUrl;
+    companionAccessKey.value = input.jwt;
+    connectionMode.value = "localCompanion";
+    isEmbedded.value = true;
+  }
   // Companion 模式只支持 Images API。切到 companion 时若残留 responses，
   // 强制校正为 images，避免发出注定抛「仅支持 Images API」的请求。
   // （apiMode 选择器 UI 仅在 direct 模式可见，切走后该值不会自动重置。）
@@ -665,6 +687,8 @@ export const useSettingsStore = defineStore("settings", () => {
     companionAccessKey,
     companionUrl,
     connectionMode,
+    isEmbedded,
+    applyEmbeddedConfig,
     applySettings,
     applyImageCount,
     applyImageCountMode,

@@ -101,32 +101,47 @@ onUnmounted(() => {
     </p>
 
     <div class="mt-5 space-y-4">
+      <!-- 阶段三 PR5：嵌入态提示——连接配置由宿主注入，用户不可编辑 -->
+      <div
+        v-if="settings.isEmbedded"
+        class="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-1"
+      >
+        <p class="text-sm font-medium text-blue-800">🔗 嵌入模式</p>
+        <p class="text-xs leading-relaxed text-blue-700">
+          当前作为子应用嵌入宿主系统运行，连接地址与认证令牌由宿主管控，无需手动配置。
+        </p>
+      </div>
+
       <div>
         <p class="mb-2 block text-sm font-medium text-gray-700">连接模式</p>
         <div class="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
           <button
             v-track="{ name: 'settings.connection_mode_changed', payload: { mode: 'direct' } }"
-            class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors"
-            :class="
+            class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
+            :class="[
               connectionMode === 'direct'
                 ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-800'
-            "
+                : 'text-gray-500 hover:text-gray-800',
+              settings.isEmbedded ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+            ]"
             type="button"
-            @click="emit('update:connectionMode', 'direct')"
+            :disabled="settings.isEmbedded"
+            @click="!settings.isEmbedded && emit('update:connectionMode', 'direct')"
           >
             浏览器直连
           </button>
           <button
             v-track="{ name: 'settings.connection_mode_changed', payload: { mode: 'localCompanion' } }"
-            class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors"
-            :class="
+            class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
+            :class="[
               connectionMode === 'localCompanion'
                 ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-800'
-            "
+                : 'text-gray-500 hover:text-gray-800',
+              settings.isEmbedded ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+            ]"
             type="button"
-            @click="emit('update:connectionMode', 'localCompanion')"
+            :disabled="settings.isEmbedded"
+            @click="!settings.isEmbedded && emit('update:connectionMode', 'localCompanion')"
           >
             本地 Companion
           </button>
