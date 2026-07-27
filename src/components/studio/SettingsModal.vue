@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import type {
   AnalyticsPromptCapture,
   ApiMode,
@@ -16,6 +16,7 @@ import type {
 import AboutPanel from "../settings/AboutPanel.vue";
 import AnalyticsPanel from "../settings/AnalyticsPanel.vue";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
+import StorageLocationPanel from "../settings/StorageLocationPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
 import FavoritePromptsPanel from "../settings/FavoritePromptsPanel.vue";
@@ -28,6 +29,7 @@ import BaseModal from "../ui/BaseModal.vue";
 type SettingsTab =
   | "general"
   | "api"
+  | "storage"
   | "promptMode"
   | "favoritePrompts"
   | "prompt"
@@ -45,6 +47,8 @@ const props = defineProps<{
   connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
+  companionUrl: string;
+  companionAccessKey: string;
   apiBaseUrlMode: "origin" | "full";
   apiMode: ApiMode;
   streamImages: boolean;
@@ -102,17 +106,26 @@ const activeTab = ref<SettingsTab>("general");
 const pendingBackupFile = ref<File | null>(null);
 const isRestoreConfirmOpen = ref(false);
 
-const tabs: { key: SettingsTab; label: string }[] = [
-  { key: "general", label: "通用" },
-  { key: "api", label: "接口" },
-  { key: "promptMode", label: "提示词模式" },
-  { key: "favoritePrompts", label: "常用提示词" },
-  { key: "prompt", label: "提示词保护" },
-  { key: "backup", label: "数据备份" },
-  { key: "batch", label: "批量操作" },
-  { key: "analytics", label: "行为日志" },
-  { key: "about", label: "关于" },
-];
+// 存储位置 tab 仅 Companion 模式显示（阶段二 PR7）
+const tabs = computed<{ key: SettingsTab; label: string }[]>(() => {
+  const base: { key: SettingsTab; label: string }[] = [
+    { key: "general", label: "通用" },
+    { key: "api", label: "接口" },
+  ];
+  if (props.connectionMode === "localCompanion") {
+    base.push({ key: "storage", label: "存储位置" });
+  }
+  base.push(
+    { key: "promptMode", label: "提示词模式" },
+    { key: "favoritePrompts", label: "常用提示词" },
+    { key: "prompt", label: "提示词保护" },
+    { key: "backup", label: "数据备份" },
+    { key: "batch", label: "批量操作" },
+    { key: "analytics", label: "行为日志" },
+    { key: "about", label: "关于" },
+  );
+  return base;
+});
 
 watch(
   () => props.isOpen,
@@ -237,6 +250,12 @@ function forwardSavePromptWordbank(
               @update:model="emit('update:model', $event)"
               @update:stream-images="emit('update:streamImages', $event)"
               @update:stream-partial-images="emit('update:streamPartialImages', $event)"
+            />
+
+            <StorageLocationPanel
+              v-else-if="activeTab === 'storage'"
+              :companion-url="companionUrl"
+              :companion-access-key="companionAccessKey"
             />
 
             <PromptModeSettingsPanel

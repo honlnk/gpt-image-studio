@@ -701,6 +701,8 @@ export function useStudioViewModel() {
     apiBaseUrlMode: settings.apiBaseUrlMode,
     apiKey: settings.apiKey,
     connectionMode: settings.connectionMode,
+    companionUrl: settings.companionUrl,
+    companionAccessKey: settings.companionAccessKey,
     favoritePrompts: settings.favoritePrompts,
     promptMode: settings.promptMode,
     promptWordbanks: settings.promptWordbanks,
