@@ -17,7 +17,7 @@
  * 再传给本模块的函数。
  */
 import Database from "better-sqlite3";
-import { BUSINESS_DB_DDL, BUSINESS_DB_VERSION, isBusinessTable } from "./schema.js";
+import { BUSINESS_DB_DDL, BUSINESS_DB_VERSION, BUSINESS_TABLES, isBusinessTable } from "./schema.js";
 import type { BusinessTable } from "./schema.js";
 import { StorageStoreError } from "./errors.js";
 
@@ -120,6 +120,25 @@ export function deleteRecord(dbPath: string, table: BusinessTable, key: string):
 export function clearTable(dbPath: string, table: BusinessTable): void {
   assertTable(table);
   openBusinessDb(dbPath).prepare(`DELETE FROM ${table}`).run();
+}
+
+/**
+ * 估算某业务 db 的元数据总字节（用于 estimateStoredBytes）。
+ *
+ * 算法：对 7 张表分别 SUM(LENGTH(value))，累加。LENGTH 对 TEXT 列返回字符数，
+ * 与字节数在纯 ASCII 下相等；含多字节 UTF-8 时略小于真实字节，作为估算可接受
+ * （与 IndexedDB 实现的 list+累加 JSON.stringify 长度量级一致）。
+ */
+export function estimateMetadataBytes(dbPath: string): number {
+  const db = openBusinessDb(dbPath);
+  let total = 0;
+  for (const table of BUSINESS_TABLES) {
+    const row = db
+      .prepare(`SELECT COALESCE(SUM(LENGTH(value)), 0) AS bytes FROM ${table}`)
+      .get() as { bytes: number } | undefined;
+    total += row?.bytes ?? 0;
+  }
+  return total;
 }
 
 // ─── 内部工具 ───

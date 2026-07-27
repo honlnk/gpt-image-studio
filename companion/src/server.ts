@@ -8,6 +8,7 @@ import { imagesRoutes } from "./routes/images.js";
 import { credentialsRoutes } from "./routes/credentials.js";
 import { adminRoutes } from "./routes/admin.js";
 import { logsRoutes } from "./routes/logs.js";
+import { storageRoutes, ensureDefaultDataset } from "./routes/storage.js";
 import { authMiddleware } from "./middleware/auth.js";
 import type { CompanionSecurityConfig } from "./securityConfig.js";
 import { isOriginAllowed } from "./securityConfig.js";
@@ -57,6 +58,9 @@ export async function startServer(opts: {
   await app.register(authRoutes);
   await app.register(imagesRoutes, { security: opts.security });
   await app.register(logsRoutes);
+  // 存储路由（阶段二）：7 表 CRUD + 图片二进制 + 配置 + 数据集管理 + 容量估算。
+  // 走 bearer accessKey（authMiddleware 已在上面生效），与 imagesRoutes 同级。
+  await app.register(storageRoutes);
 
   app.get("/health", async (): Promise<CompanionHealthResponse> => {
     return {
@@ -66,6 +70,13 @@ export async function startServer(opts: {
   });
 
   await app.listen({ host: "127.0.0.1", port: opts.port });
+  // 启动时保证有一个可用的默认数据集（选项 B），让 Companion 模式立即可用
+  try {
+    const defaultDataset = await ensureDefaultDataset();
+    console.log(`默认数据集已就绪: ${defaultDataset.label} (${defaultDataset.image_store_kind})`);
+  } catch (err) {
+    console.warn("默认数据集初始化失败，Companion 存储模式需手动激活:", err);
+  }
   console.log(`Companion 服务已启动: http://127.0.0.1:${opts.port}`);
   console.log(`版本: v${COMPANION_VERSION}`);
   console.log(`安全渠道: ${opts.security.channel}`);
