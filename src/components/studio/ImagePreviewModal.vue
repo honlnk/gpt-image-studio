@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { ImageAsset } from "../../types/studio";
+import { imageDownloadName } from "../../shared/fileFormatters";
 
 const props = defineProps<{
   image?: ImageAsset;
@@ -35,16 +36,6 @@ watch(
     panY.value = 0;
   },
 );
-
-function imageExtension(image?: ImageAsset) {
-  if (image?.mimeType === "image/jpeg") return "jpeg";
-  if (image?.mimeType === "image/webp") return "webp";
-  return "png";
-}
-
-function imageDownloadName(image: ImageAsset) {
-  return `${image.name || "image"}.${imageExtension(image)}`;
-}
 
 function handleWheel(event: WheelEvent) {
   event.preventDefault();

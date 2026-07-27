@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { track } from "../../features/analytics/useAnalyticsTracker";
 import { timestampFromCreatedAt, timestampFromUpdatedAt } from "../../shared/dateTime";
+import { imageDownloadName } from "../../shared/fileFormatters";
 import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
 import { createZipArchive } from "../../services/zipArchive";
 import type { Conversation, ImageAsset, Message } from "../../types/studio";
@@ -339,16 +340,6 @@ function toggledSelection(selection: Set<string>, id: string) {
     nextSelection.add(id);
   }
   return nextSelection;
-}
-
-function imageExtension(image: ImageAsset) {
-  if (image.mimeType === "image/jpeg") return "jpeg";
-  if (image.mimeType === "image/webp") return "webp";
-  return "png";
-}
-
-function imageDownloadName(image: ImageAsset) {
-  return `${image.name || "image"}.${imageExtension(image)}`;
 }
 
 function uniqueZipEntryName(filename: string, index: number) {

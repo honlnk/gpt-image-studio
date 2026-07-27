@@ -10,7 +10,6 @@ import type { ProviderPreset } from "../providerPresets.js";
 import { PROVIDER_PRESETS } from "../providerPresets.js";
 import { loopbackGuard } from "../middleware/loopback.js";
 import {
-  CredentialStoreError,
   consumeCorruptionEvent,
   listCredentials,
   addCredential,
@@ -21,6 +20,7 @@ import {
   restoreLatestBackup,
 } from "../credentials.js";
 import { isRegisteredProvider, listProviderIds } from "../providers/registry.js";
+import { withStoreErrorBoundary } from "./storeRouteWrapper.js";
 
 /**
  * 凭证管理路由（Web 面板 + CLI 共用）：多配置 CRUD + 激活切换。
@@ -48,7 +48,7 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
   });
 
   app.get<{ Reply: CompanionCredentialsListResponse }>("/credentials", async (_req, reply) => {
-    try {
+    return withStoreErrorBoundary(reply, () => {
       const store = listCredentials();
       // store 正常加载后，检查是否有未消费的损坏事件。
       // 场景：Web 端连续发多次 /credentials，第一次触发损坏备份，后续请求文件已不在，
@@ -61,9 +61,7 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
         return { error: event.message, corrupt: true } as never;
       }
       return store;
-    } catch (error) {
-      return handleStoreError(error, reply);
-    }
+    });
   });
 
   app.post<{
@@ -75,12 +73,10 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     if (error) {
       return reply.status(400).send({ error } as never);
     }
-    try {
+    return withStoreErrorBoundary(reply, () => {
       const entry = addCredential(input);
       return { ok: true, entry };
-    } catch (e) {
-      return handleStoreError(e, reply);
-    }
+    });
   });
 
   app.put<{
@@ -93,45 +89,39 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     if (error) {
       return reply.status(400).send({ error } as never);
     }
-    try {
+    return withStoreErrorBoundary(reply, () => {
       const entry = updateCredential(req.params.id, input);
       if (!entry) {
         return reply.status(404).send({ error: "凭据不存在" } as never);
       }
       return { ok: true, entry };
-    } catch (e) {
-      return handleStoreError(e, reply);
-    }
+    });
   });
 
   app.delete<{
     Params: { id: string };
     Reply: CompanionCredentialDeleteResponse;
   }>("/credentials/:id", async (req, reply) => {
-    try {
+    return withStoreErrorBoundary(reply, () => {
       const removed = removeCredential(req.params.id);
       if (!removed) {
         return reply.status(404).send({ error: "凭据不存在" } as never);
       }
       return { ok: true };
-    } catch (e) {
-      return handleStoreError(e, reply);
-    }
+    });
   });
 
   app.post<{
     Params: { id: string };
     Reply: CompanionCredentialActivateResponse;
   }>("/credentials/:id/activate", async (req, reply) => {
-    try {
+    return withStoreErrorBoundary(reply, () => {
       const ok = activateCredential(req.params.id);
       if (!ok) {
         return reply.status(404).send({ error: "凭据不存在" } as never);
       }
       return { ok: true, activeId: req.params.id };
-    } catch (e) {
-      return handleStoreError(e, reply);
-    }
+    });
   });
 
   /**
@@ -139,12 +129,10 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
    * 用户看到凭据损坏提示后选择「重置成空配置」时调用——放弃损坏历史，回到首次使用状态。
    */
   app.post("/credentials/reset-empty", async (_req, reply) => {
-    try {
+    return withStoreErrorBoundary(reply, () => {
       resetEmptyStore();
       return { ok: true };
-    } catch (e) {
-      return handleStoreError(e, reply);
-    }
+    });
   });
 
   /**
@@ -153,30 +141,11 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
    * 失败（备份也坏了）→ 抛 CredentialStoreError，原状不变，用户可改试 reset-empty。
    */
   app.post("/credentials/restore-backup", async (_req, reply) => {
-    try {
+    return withStoreErrorBoundary(reply, () => {
       const store = restoreLatestBackup();
       return { ok: true, entries: store.entries.length, activeId: store.activeId };
-    } catch (e) {
-      return handleStoreError(e, reply);
-    }
+    });
   });
-}
-
-/**
- * 把 CredentialStoreError 转成 500 + { error, corrupt: true } 响应。
- *
- * 凭据文件损坏时 loadStore 抛 CredentialStoreError（已备份损坏文件并给出可读文案）；
- * 这里只在 route 边界兜底一次，让 Web 端 credError 通道能展示具体原因。
- * 非 CredentialStoreError 重新抛出，交给 Fastify 默认错误处理器。
- *
- * 返回值用 `as never` 绕过 Fastify 的 Reply 类型约束——和现有 400 错误响应的
- * `{ error } as never` 同一模式：错误响应的 shape 不在正常 Reply 类型里。
- */
-function handleStoreError(error: unknown, reply: FastifyReply): never {
-  if (error instanceof CredentialStoreError) {
-    return reply.status(500).send({ error: error.message, corrupt: true }) as never;
-  }
-  throw error;
 }
 
 function parseInput(body: unknown): CompanionCredentialInput {

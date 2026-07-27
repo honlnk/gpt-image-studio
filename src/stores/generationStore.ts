@@ -13,9 +13,18 @@ import {
   saveImageBlob,
 } from "../services/imageAssets";
 import { readImageDimensions } from "../services/imageMetadata";
-import { base64ToBlob } from "../services/imagesApi";
+import { resolveImageEditRequest } from "../services/imageEditRequest";
 import { saveMessage } from "../services/messages";
-import { clonePromptWordbanks } from "../services/promptWordbanks";
+import {
+  continuedGenerationLabel,
+  outputFormatToMimeType,
+  pendingGenerationLabel,
+  pendingResultLabel,
+  resultCountLabel,
+  titleFromPrompt,
+} from "../services/generationLabels";
+import { toPlainImageAsset, toPlainMessage } from "../services/messageSerialization";
+import { base64ToBlob } from "../shared/blobConverters";
 import { isoTimestamp, timestampFromCreatedAt } from "../shared/dateTime";
 import { formatError, isApiConfigurationError } from "../shared/errors";
 import { createId } from "../shared/id";
@@ -495,110 +504,19 @@ export const useGenerationStore = defineStore("generation", () => {
     onNetworkRetry?: (retryAttempt: number) => void,
     onPartialImage?: (event: { b64Json: string }) => void,
   ) {
-    const imageSources = await Promise.all(
-      references.map(async (id) => {
-        const reference = input.value.imageById(id);
-        if (!reference) {
-          throw new Error("引用图片不存在，请重新添加引用。");
-        }
-        const blob = await resolveImageBlob(reference);
-        if (!blob) {
-          throw new Error("无法读取引用图片文件，请重新生成或导入图片。");
-        }
-
-        return {
-          id,
-          blob,
-          name: filenameFromAsset(reference),
-        };
-      }),
-    );
-
-    const totalBytes = imageSources.reduce((sum, img) => sum + img.blob.size, 0);
-    const MAX_PAYLOAD_BYTES = 20 * 1024 * 1024;
-    if (totalBytes > MAX_PAYLOAD_BYTES) {
-      const totalMB = (totalBytes / 1024 / 1024).toFixed(1);
-      throw new Error(
-        `引用图片总大小为 ${totalMB}MB，超过 20MB 上限。请减少图片数量或压缩图片后重试。`,
-      );
-    }
-
-    const sourceImage = editSourceImageId
-      ? input.value.imageById(editSourceImageId)
-      : undefined;
-    const maskImage = editMaskImageId
-      ? input.value.imageById(editMaskImageId)
-      : undefined;
-    let maskBlob: Blob | undefined;
-    if (maskImage) {
-      maskBlob = await resolveImageBlob(maskImage);
-      if (!maskBlob) {
-        throw new Error("无法读取编辑遮罩文件，请重新选择编辑区域。");
-      }
-      if (maskBlob.type !== "image/png") {
-        throw new Error("编辑遮罩必须是 PNG 文件，请重新选择编辑区域。");
-      }
-    }
-
-    const editImages = editSourceImageId
-      ? imageSources.filter((image) => image.id === editSourceImageId)
-      : imageSources;
-    if (editSourceImageId && !editImages.length) {
-      throw new Error("编辑源图不在当前引用列表中，请重新选择继续编辑。");
-    }
-    if (editMaskImageId && !maskImage) {
-      throw new Error("编辑遮罩不存在，请重新选择编辑区域。");
-    }
-    if (editMaskImageId && !editSourceImageId) {
-      throw new Error("缺少编辑源图，无法使用局部编辑。");
-    }
-    if (maskBlob && sourceImage) {
-      const sourceBlob = await resolveImageBlob(sourceImage);
-      if (!sourceBlob) {
-        throw new Error("无法读取编辑源图，请重新引用图片。");
-      }
-      const [sourceSize, maskSize] = await Promise.all([
-        readImageDimensions(sourceBlob),
-        readImageDimensions(maskBlob),
-      ]);
-      if (
-        sourceSize &&
-        maskSize &&
-        (sourceSize.width !== maskSize.width ||
-          sourceSize.height !== maskSize.height)
-      ) {
-        throw new Error("编辑遮罩尺寸与源图不一致，请重新选择编辑区域。");
-      }
-    }
-
-    if (maskBlob) {
-      console.info(
-        "[generation] edit with mask",
-        JSON.stringify({
-          prompt: prompt.slice(0, 80),
-          sourceImageId: editSourceImageId,
-          maskImageId: editMaskImageId,
-          referenceCount: references.length,
-          sentImageCount: (editImages.length ? editImages : imageSources)
-            .length,
-        }),
-      );
-    }
-
-    return input.value.imageClient.edit({
+    const resolved = await resolveImageEditRequest({
       prompt,
+      references,
       params,
       promptRequestSettings,
-      images: (editImages.length ? editImages : imageSources).map((item) => ({
-        blob: item.blob,
-        name: item.name,
-      })),
-      mask: maskBlob
-        ? {
-            blob: maskBlob,
-            name: "mask.png",
-          }
-        : undefined,
+      editSourceImageId,
+      editMaskImageId,
+      imageById: input.value.imageById,
+      resolveBlob: resolveImageBlob,
+    });
+
+    return input.value.imageClient.edit({
+      ...resolved,
       onNetworkRetry,
       onPartialImage,
     });
@@ -818,123 +736,4 @@ export const useGenerationStore = defineStore("generation", () => {
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   event.preventDefault();
   event.returnValue = "";
-}
-
-function titleFromPrompt(prompt: string) {
-  return prompt.length > 16 ? `${prompt.slice(0, 16)}...` : prompt;
-}
-
-function filenameFromAsset(asset: ImageAsset) {
-  const extension =
-    asset.mimeType === "image/jpeg"
-      ? "jpeg"
-      : asset.mimeType === "image/webp"
-        ? "webp"
-        : "png";
-
-  return `${asset.name || asset.id}.${extension}`;
-}
-
-function outputFormatToMimeType(outputFormat: GenerationParams["outputFormat"]) {
-  return outputFormat === "jpeg" ? "image/jpeg" : `image/${outputFormat}`;
-}
-
-function resultCountLabel(prefix: string, count: number) {
-  return count > 1 ? `${prefix} ${count} 张图片。` : `${prefix}一张图片。`;
-}
-
-function pendingGenerationLabel(isEdit: boolean, count: number) {
-  if (isEdit) {
-    return count > 1
-      ? `正在基于引用图片生成 ${count} 张编辑结果。`
-      : "正在基于引用图片生成编辑结果。";
-  }
-
-  return count > 1 ? `正在生成 ${count} 张图片。` : "正在生成图片。";
-}
-
-function continuedGenerationLabel(
-  isEdit: boolean,
-  isReplacing: boolean,
-  count: number,
-) {
-  if (isEdit) {
-    if (isReplacing) return "正在重新生成编辑结果。";
-    return count > 1
-      ? `正在继续生成 ${count} 张编辑结果。`
-      : "正在继续生成编辑结果。";
-  }
-
-  if (isReplacing) return "正在重新生成图片。";
-  return count > 1 ? `正在继续生成 ${count} 张图片。` : "正在继续生成图片。";
-}
-
-function pendingResultLabel(
-  isEdit: boolean,
-  generatedCount: number,
-  pendingCount: number,
-) {
-  const generatedPart =
-    generatedCount > 0 ? `已生成 ${generatedCount} 张，` : "";
-  const noun = isEdit ? "编辑结果" : "图片";
-  return `${generatedPart}还有 ${pendingCount} 张${noun}正在生成。`;
-}
-
-function toPlainMessage(message: Message): Message {
-  return {
-    id: message.id,
-    conversationId: message.conversationId,
-    role: message.role,
-    content: message.content,
-    referencedImageIds: [...message.referencedImageIds],
-    resultImageIds: [...message.resultImageIds],
-    status: message.status,
-    createdAt: message.createdAt,
-    generationStartedAt: message.generationStartedAt,
-    generationParams: message.generationParams
-      ? { ...message.generationParams }
-      : undefined,
-    promptRequestSettings: message.promptRequestSettings
-      ? {
-          promptMode: message.promptRequestSettings.promptMode,
-          promptWordbanks: clonePromptWordbanks(
-            message.promptRequestSettings.promptWordbanks,
-          ),
-          promptRewriteGuardEnabled:
-            message.promptRequestSettings.promptRewriteGuardEnabled,
-          promptRewriteGuardText:
-            message.promptRequestSettings.promptRewriteGuardText,
-        }
-      : undefined,
-    networkRetryAttempt: message.networkRetryAttempt,
-    errorMessage: message.errorMessage,
-    editSourceImageId: message.editSourceImageId,
-    editMaskImageId: message.editMaskImageId,
-  };
-}
-
-function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
-  return {
-    id: imageAsset.id,
-    blobKey: imageAsset.blobKey,
-    name: imageAsset.name,
-    source: imageAsset.source,
-    tagColor: imageAsset.tagColor,
-    mimeType: imageAsset.mimeType,
-    width: imageAsset.width,
-    height: imageAsset.height,
-    sizeBytes: imageAsset.sizeBytes,
-    conversationId: imageAsset.conversationId,
-    messageId: imageAsset.messageId,
-    prompt: imageAsset.prompt,
-    revisedPrompt: imageAsset.revisedPrompt,
-    referencedImageIds: imageAsset.referencedImageIds
-      ? [...imageAsset.referencedImageIds]
-      : undefined,
-    editSourceImageId: imageAsset.editSourceImageId,
-    generationDurationMs: imageAsset.generationDurationMs,
-    isEditMask: imageAsset.isEditMask,
-    createdAt: imageAsset.createdAt,
-    updatedAt: imageAsset.updatedAt,
-  };
 }

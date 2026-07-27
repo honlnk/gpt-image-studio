@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { ImageAsset } from "../../types/studio";
+import { formatFileSizeCompact } from "../../shared/fileFormatters";
 import Tooltip from "../ui/Tooltip.vue";
 
 type EditingPairAttachment = {
@@ -95,12 +96,9 @@ const totalSizeBytes = computed(() =>
   props.activeAttachments.reduce((sum, img) => sum + (img.sizeBytes ?? 0), 0),
 );
 
-const totalSizeLabel = computed(() => {
-  const bytes = totalSizeBytes.value;
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
-});
+const totalSizeLabel = computed(() =>
+  formatFileSizeCompact(totalSizeBytes.value),
+);
 </script>
 
 <template>

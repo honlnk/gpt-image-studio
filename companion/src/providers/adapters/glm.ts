@@ -12,6 +12,12 @@
 import type { SizeConstraints } from "../types.js";
 import { createOpenAICompatibleAdapter } from "../openaiCompatible.js";
 import { getProviderProfile } from "../providerProfiles.js";
+import {
+  alignToStep,
+  clampToStep,
+  parseSizeInput,
+  shrinkLongestSideByStep,
+} from "../sizeUtils.js";
 
 /** GLM size 约束（从配置表读，normalizeGlmSize 默认参数共用）。 */
 const SIZE_CONSTRAINTS: SizeConstraints = getProviderProfile("glm")!.sizeConstraints;
@@ -37,37 +43,19 @@ export function normalizeGlmSize(
   size: string,
   constraints: SizeConstraints = SIZE_CONSTRAINTS,
 ): string {
-  const trimmed = size.trim();
+  const parsed = parseSizeInput(size, constraints, {
+    basePixelsStrategy: "minOfMaxAndSqrtMaxPixels",
+  });
 
-  if (trimmed === "auto" || trimmed === "") {
+  if (parsed.auto) {
+    return constraints.defaultSize;
+  }
+  if (parsed.width === undefined || parsed.height === undefined) {
+    console.warn(`[glm] 无法识别的 size "${size.trim()}"，回退默认 ${constraints.defaultSize}`);
     return constraints.defaultSize;
   }
 
-  if (trimmed.includes(":")) {
-    const dims = dimensionsFromRatio(trimmed, constraints);
-    return finalizeSize(dims.width, dims.height, constraints);
-  }
-
-  const match = /^(\d+)\s*[x×]\s*(\d+)$/i.exec(trimmed);
-  if (match) {
-    return finalizeSize(Number(match[1]), Number(match[2]), constraints);
-  }
-
-  console.warn(`[glm] 无法识别的 size "${trimmed}"，回退默认 ${constraints.defaultSize}`);
-  return constraints.defaultSize;
-}
-
-/** 按比例 + 目标像素（取 maxPixels 的一半作基准，接近正方形默认）算出原始尺寸。 */
-function dimensionsFromRatio(ratio: string, constraints: SizeConstraints) {
-  const [w, h] = ratio.split(":").map(Number);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-    return { width: 0, height: 0 };
-  }
-  const aspect = w / h;
-  const baseSide = Math.min(constraints.max, Math.sqrt(constraints.maxPixels));
-  const width = Math.round(baseSide * Math.sqrt(aspect));
-  const height = Math.round(width / aspect);
-  return { width, height };
+  return finalizeSize(parsed.width, parsed.height, constraints);
 }
 
 /** 规整到 GLM 合法：对齐 step → 钳制范围 → 压像素。 */
@@ -79,30 +67,14 @@ function finalizeSize(
   let w = alignToStep(width, constraints);
   let h = alignToStep(height, constraints);
 
-  w = clamp(w, constraints.min, constraints.max, constraints);
-  h = clamp(h, constraints.min, constraints.max, constraints);
+  w = clampToStep(w, constraints.min, constraints.max, constraints);
+  h = clampToStep(h, constraints.min, constraints.max, constraints);
 
   while (w * h > constraints.maxPixels && w > constraints.min && h > constraints.min) {
-    if (w >= h) {
-      w = alignToStep(w - constraints.step, constraints);
-    } else {
-      h = alignToStep(h - constraints.step, constraints);
-    }
+    const next = shrinkLongestSideByStep(w, h, constraints);
+    w = next.width;
+    h = next.height;
   }
 
   return `${w}x${h}`;
-}
-
-function alignToStep(value: number, constraints: SizeConstraints): number {
-  return Math.round(value / constraints.step) * constraints.step;
-}
-
-function clamp(
-  value: number,
-  min: number,
-  max: number,
-  constraints: SizeConstraints,
-): number {
-  const clamped = Math.min(max, Math.max(min, value));
-  return alignToStep(clamped, constraints);
 }

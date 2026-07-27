@@ -13,6 +13,7 @@ import {
   safeJsonParse,
 } from "../providerHttp.js";
 import { buildHttpErrorFromResponse } from "../providerErrors.js";
+import { assertEditImageCount } from "../editGuards.js";
 import { getDefaultModel } from "../../providerPresets.js";
 
 const GEMINI_PROFILE = getProviderProfile("gemini")!;
@@ -88,9 +89,7 @@ export const geminiAdapter: ProviderAdapter = {
     config: ProviderConfig,
     options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
-    if (request.images.length === 0) {
-      throw new Error("Gemini 图片编辑需要至少一张参考图。");
-    }
+    assertEditImageCount("Gemini", request.images.length);
 
     const model = config.model ?? DEFAULT_MODEL;
     const apiUrl = buildGeminiGenerateContentUrl(config.apiBaseUrl, model);

@@ -2,6 +2,7 @@ import { computed, onMounted, proxyRefs, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
 import { useStudioConversations } from "../../features/conversations";
+import { useStudioDrafts } from "../../features/drafts/useStudioDrafts";
 import { useStudioFeedback } from "../../features/feedback";
 import {
   createDirectImagesClient,
@@ -14,36 +15,23 @@ import { useStudioSettings } from "../../features/settings";
 import { useCompanionStore } from "../../stores/companionStore";
 import { withNetworkRetry } from "../../services/networkRetry";
 import { clonePromptWordbanks } from "../../services/promptWordbanks";
-import {
-  deleteConversationDraft,
-  deleteConversationDrafts,
-  loadConversationDraft,
-  saveConversationDraft,
-} from "../../services/conversationDrafts";
+import { copyText as copyTextToClipboard } from "../../shared/clipboard";
 import { saveSettings } from "../../services/settings";
 import {
   applyUrlSettings,
   getPromptFromUrlParams,
   hasUrlGenerationParams,
 } from "../../services/urlSettings";
-import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import { useAnalyticsStore } from "../../stores/analyticsStore";
 import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useComposerStore } from "../../stores/composerStore";
 import type {
   AnalyticsPromptCapture,
-  ConversationDraft,
-  GenerationParams,
   Message,
   PromptMode,
   PromptRequestSettings,
   PromptWordbankSectionKey,
 } from "../../types/studio";
-
-const STORAGE_KEYS = {
-  draftComposerText: "gpt-image-studio:draft-composer-text",
-  draftAttachments: "gpt-image-studio:draft-attachments",
-} as const;
 
 type SettingsTab =
   | "general"
@@ -81,11 +69,6 @@ export function useStudioViewModel() {
     isLibraryOpen,
   } = storeToRefs(composerState);
   const isSettingsOpen = ref(false);
-  const legacyComposerText = readStorage(STORAGE_KEYS.draftComposerText, "");
-  const legacyAttachedImageIds = readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []);
-  let isApplyingDraft = false;
-  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
-  let draftSwitchQueue = Promise.resolve();
 
   const previewImageId = ref("");
   const settingsInitialTab = ref<SettingsTab | undefined>(undefined);
@@ -118,11 +101,41 @@ export function useStudioViewModel() {
     onStorageError: reportStorageError,
   });
 
+  // clearConversationDraft 留在 ViewModel 而非 useStudioDrafts：
+  // 它被 useStudioConversations 通过 clearDraft 参数消费，又依赖 images/composerState，
+  // 搬进 drafts 会构成 drafts ↔ conversations ↔ images 的环。
   function clearConversationDraft() {
     images.attachedImages.value = [];
     composerText.value = "";
     composerState.clearEditSelection();
   }
+
+  // 草稿管理：select/create/delete 会话时的草稿同步、防抖保存、URL 覆盖。
+  // analytics 埋点留在 ViewModel 包装层，drafts 不依赖 analytics。
+  const drafts = useStudioDrafts({
+    isHydrated,
+    composerText,
+    editModeEnabled,
+    activeEditSourceImageId,
+    activeEditMaskImageId,
+    activeConversationId: conversations.activeConversationId,
+    attachedImages: images.attachedImages,
+    imageById: images.imageById,
+    activeSizePreset: settings.activeSizePreset,
+    imageWidth: settings.imageWidth,
+    imageHeight: settings.imageHeight,
+    quality: settings.quality,
+    background: settings.background,
+    outputFormat: settings.outputFormat,
+    applySizePreset: settings.applySizePreset,
+    applySizeResolution: settings.applySizeResolution,
+    currentGenerationParams: settings.currentGenerationParams,
+    selectConversation: conversations.selectConversation,
+    createConversation: conversations.createConversation,
+    deleteConversation: conversations.deleteConversation,
+    deleteConversations: conversations.deleteConversations,
+    onStorageError: reportStorageError,
+  });
 
   function refreshImagesStorageUsage() {
     return images.refreshStorageUsage();
@@ -322,22 +335,12 @@ export function useStudioViewModel() {
       analytics.configure(settings.currentSettings());
       void analytics.refreshEventCount();
 
-      const activeConversationId = conversations.activeConversationId.value;
-      if (!activeConversationId) return;
-
-      const draft = await loadConversationDraft(activeConversationId).catch(reportStorageError);
-      if (draft) {
-        applyConversationDraft(draft);
-        applyUrlDraftOverrides(urlPrompt, shouldApplyUrlGenerationParams);
-        return;
-      }
-
-      if (legacyComposerText || legacyAttachedImageIds.length) {
-        applyConversationDraft(createLegacyDraft(activeConversationId));
-      } else {
-        applyConversationDraft(createDefaultDraft(activeConversationId));
-      }
-      applyUrlDraftOverrides(urlPrompt, shouldApplyUrlGenerationParams);
+      // 草稿初始化时序：必须在 restore + urlSettings + analytics 之后。
+      // initDraftsOnMount 内部处理 loadConversationDraft / legacy 迁移 / URL 覆盖。
+      await drafts.initDraftsOnMount({
+        urlPrompt,
+        shouldApplyUrlGenerationParams,
+      });
     });
   });
 
@@ -349,78 +352,9 @@ export function useStudioViewModel() {
     },
   );
 
-  watch(
-    [
-      composerText,
-      images.attachedImages,
-      settings.activeSizePreset,
-      settings.imageWidth,
-      settings.imageHeight,
-      settings.quality,
-      settings.background,
-      settings.outputFormat,
-      editModeEnabled,
-      activeEditSourceImageId,
-      activeEditMaskImageId,
-      conversations.activeConversationId,
-    ],
-    () => {
-      if (!isHydrated.value || isApplyingDraft) return;
-      scheduleSaveActiveDraft();
-    },
-    { deep: true },
-  );
-
-  function createDefaultDraft(conversationId: string): ConversationDraft {
-    return {
-      conversationId,
-      composerText: "",
-      attachedImageIds: [],
-      editModeEnabled: false,
-      generationParams: settings.currentGenerationParams(),
-      updatedAtMs: Date.now(),
-    };
-  }
-
-  function createLegacyDraft(conversationId: string): ConversationDraft {
-    return {
-      conversationId,
-      composerText: legacyComposerText,
-      attachedImageIds: legacyAttachedImageIds,
-      editModeEnabled: false,
-      generationParams: settings.currentGenerationParams(),
-      updatedAtMs: Date.now(),
-    };
-  }
-
-  function applyConversationDraft(draft: ConversationDraft) {
-    isApplyingDraft = true;
-    composerText.value = draft.composerText;
-    images.attachedImages.value = draft.attachedImageIds.filter((id) => Boolean(images.imageById(id)));
-    editModeEnabled.value = draft.editModeEnabled;
-    activeEditSourceImageId.value = draft.editSourceImageId ?? "";
-    activeEditMaskImageId.value = draft.editMaskImageId ?? "";
-    applyGenerationParams(draft.generationParams);
-    isApplyingDraft = false;
-  }
-
-  function applyGenerationParams(params: GenerationParams) {
-    settings.applySizeResolution(params.resolution);
-    settings.applySizePreset(params.size);
-    settings.imageWidth.value = params.width;
-    settings.imageHeight.value = params.height;
-    settings.quality.value = params.quality;
-    settings.background.value = params.background;
-    settings.outputFormat.value = params.outputFormat;
-  }
-
   async function copyText(text: string) {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        copyTextWithTextarea(text);
-      }
+      await copyTextToClipboard(text);
       feedback.notifySuccess("文本已复制。");
     } catch (error) {
       feedback.notifyError("复制失败，请手动选择文本复制。");
@@ -437,88 +371,19 @@ export function useStudioViewModel() {
     editModeEnabled.value = false;
 
     if (message.generationParams) {
-      applyGenerationParams(message.generationParams);
+      drafts.applyGenerationParams(message.generationParams);
     }
 
-    const conversationId = conversations.activeConversationId.value;
-    if (conversationId) {
-      void saveConversationDraft(currentConversationDraft(conversationId)).catch(
-        reportStorageError,
-      );
-    }
+    void drafts.saveDraftForCurrentConversation().catch(reportStorageError);
     feedback.notifySuccess("已加载到输入面板。");
   }
 
-  function applyUrlDraftOverrides(
-    prompt: string | undefined,
-    shouldApplyGenerationParams: boolean,
-  ) {
-    if (prompt === undefined && !shouldApplyGenerationParams) return;
-
-    isApplyingDraft = true;
-    if (prompt !== undefined) composerText.value = prompt;
-    if (shouldApplyGenerationParams) {
-      applyGenerationParams(settings.currentGenerationParams());
-    }
-    isApplyingDraft = false;
-    void saveActiveDraft().catch(reportStorageError);
-  }
-
-  function currentConversationDraft(conversationId: string): ConversationDraft {
-    return {
-      conversationId,
-      composerText: composerText.value,
-      attachedImageIds: [...images.attachedImages.value],
-      editModeEnabled: editModeEnabled.value,
-      editSourceImageId: activeEditSourceImageId.value || undefined,
-      editMaskImageId: activeEditMaskImageId.value || undefined,
-      generationParams: settings.currentGenerationParams(),
-      updatedAtMs: Date.now(),
-    };
-  }
-
-  function scheduleSaveActiveDraft() {
-    if (draftSaveTimer) {
-      clearTimeout(draftSaveTimer);
-    }
-    draftSaveTimer = setTimeout(() => {
-      draftSaveTimer = null;
-      void saveActiveDraft();
-    }, 250);
-  }
-
-  async function saveActiveDraft() {
-    const conversationId = conversations.activeConversationId.value;
-    if (!conversationId) return;
-
-    const draft = currentConversationDraft(conversationId);
-    await saveConversationDraft(draft).catch(reportStorageError);
-  }
-
+  // selectConversationWithDraft 在 drafts 之上包一层 analytics 埋点：
+  // setContext + track 必须在 select 前同步触发，drafts 本身不依赖 analytics。
   function selectConversationWithDraft(id: string) {
     analytics.setContext({ conversationId: id, imageId: undefined });
     track("conversation.selected", { conversationId: id }, "system");
-    draftSwitchQueue = draftSwitchQueue
-      .catch(reportStorageError)
-      .then(async () => {
-        await saveActiveDraft();
-        conversations.selectConversation(id);
-        const nextDraft = await loadConversationDraft(id).catch(reportStorageError);
-        if (nextDraft) {
-          applyConversationDraft(nextDraft);
-        } else {
-          applyConversationDraft(createDefaultDraft(id));
-        }
-      });
-  }
-
-  async function createConversationWithDraft() {
-    await saveActiveDraft();
-    await conversations.createConversation();
-    const id = conversations.activeConversationId.value;
-    if (!id) return;
-    applyConversationDraft(createDefaultDraft(id));
-    await saveConversationDraft(currentConversationDraft(id)).catch(reportStorageError);
+    drafts.selectConversationWithDraft(id);
   }
 
   async function renameConversation(id: string) {
@@ -676,41 +541,18 @@ export function useStudioViewModel() {
     persistSettingsChange();
   }
 
-  async function deleteConversationWithDraft(id: string) {
-    await conversations.deleteConversation(id);
-    await deleteConversationDraft(id).catch(reportStorageError);
-
-    const activeId = conversations.activeConversationId.value;
-    if (!activeId) return;
-    const draft = await loadConversationDraft(activeId).catch(reportStorageError);
-    if (draft) {
-      applyConversationDraft(draft);
-    } else {
-      applyConversationDraft(createDefaultDraft(activeId));
-    }
-  }
-
+  // deleteConversationWithDraft / deleteConversationsWithDraft 直接转发给 drafts。
+  // deleteConversationsWithDraft 在无激活会话时需清空 composer，由 ViewModel 补一层。
   async function deleteConversationsWithDraft(ids: string[]) {
-    await conversations.deleteConversations(ids);
-    await deleteConversationDrafts(ids).catch(reportStorageError);
-
-    const activeId = conversations.activeConversationId.value;
-    if (!activeId) {
+    await drafts.deleteConversationsWithDraft(ids);
+    if (!conversations.activeConversationId.value) {
       clearConversationDraft();
-      return;
-    }
-
-    const draft = await loadConversationDraft(activeId).catch(reportStorageError);
-    if (draft) {
-      applyConversationDraft(draft);
-    } else {
-      applyConversationDraft(createDefaultDraft(activeId));
     }
   }
 
   const sidebar = proxyRefs({
-    createConversation: createConversationWithDraft,
-    deleteConversation: deleteConversationWithDraft,
+    createConversation: drafts.createConversationWithDraft,
+    deleteConversation: drafts.deleteConversationWithDraft,
     openSettings: openSettingsDefault,
     renameConversation,
     selectConversation: selectConversationWithDraft,
@@ -888,16 +730,4 @@ export function useStudioViewModel() {
 
 function reportStorageError(error: unknown) {
   console.error("Failed to access local studio storage.", error);
-}
-
-function copyTextWithTextarea(text: string) {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  document.body.removeChild(textarea);
 }

@@ -10,10 +10,12 @@ import {
 } from "../services/generationParams";
 import {
   PROMPT_REWRITE_GUARD_PREFIX,
-  getCustomSizeError,
   normalizePromptRewriteGuardText,
+} from "../services/promptRewriteGuard";
+import {
+  getCustomSizeError,
   type SizeConstraints,
-} from "../services/imagesApi";
+} from "../services/sizeConstraints";
 import {
   createFavoritePrompt,
   normalizeFavoritePromptUpdate,
@@ -26,9 +28,21 @@ import {
   normalizeWordbankTerms,
 } from "../services/promptWordbanks";
 import { saveSettings } from "../services/settings";
+import {
+  MAX_PROMPT_REWRITE_GUARD_HISTORY,
+  addPromptGuardHistoryItem,
+  displayApiBaseUrl,
+  getPromptWordbankTerms,
+  normalizeBackground,
+  normalizePromptRewriteGuardHistory,
+  setPromptWordbankTerms,
+  stripImagesApiPath,
+  toPlainFavoritePrompt,
+  toPlainPromptRewriteGuardHistoryItem,
+} from "../services/settingsSerialization";
 import { isoTimestamp } from "../shared/dateTime";
-import { createId } from "../shared/id";
 import { readStorage, writeStorage } from "../shared/localStorage";
+import { COMPANION_DEFAULT_URL } from "../shared/constants";
 import { FIXED_IMAGE_MODEL } from "../shared/models";
 import type {
   CompanionAuthStatus,
@@ -99,7 +113,6 @@ const DEFAULT_PROVIDER_CAPABILITY: CompanionProviderCapability = {
   backgrounds: ["auto", "opaque"],
   outputFormats: ["png", "webp", "jpeg"],
 };
-const MAX_PROMPT_REWRITE_GUARD_HISTORY = 20;
 const IMAGE_COUNT_PRESETS = [1, 2, 3, 4, 6, 8, 10, 12] as const;
 type ImageCountMode = "preset" | "custom";
 
@@ -130,7 +143,7 @@ export const useSettingsStore = defineStore("settings", () => {
     },
   ]);
   const companionUrl = ref(
-    readStorage(SETTINGS_STORAGE_KEYS.companionUrl, "http://127.0.0.1:19750"),
+    readStorage(SETTINGS_STORAGE_KEYS.companionUrl, COMPANION_DEFAULT_URL),
   );
   const companionAccessKey = ref(
     readStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, ""),
@@ -672,104 +685,3 @@ export const useSettingsStore = defineStore("settings", () => {
   };
 });
 
-function getPromptWordbankTerms(
-  wordbanks: PromptWordbanks,
-  section: PromptWordbankSectionKey,
-) {
-  if (section === "pose.safe") return wordbanks.pose.safe;
-  if (section === "pose.creative") return wordbanks.pose.creative;
-  if (section === "pose.nsfw") return wordbanks.pose.nsfw;
-  return wordbanks.adultInspiration;
-}
-
-function setPromptWordbankTerms(
-  wordbanks: PromptWordbanks,
-  section: PromptWordbankSectionKey,
-  terms: string[],
-) {
-  const next = clonePromptWordbanks(wordbanks);
-  if (section === "pose.safe") next.pose.safe = [...terms];
-  if (section === "pose.creative") next.pose.creative = [...terms];
-  if (section === "pose.nsfw") next.pose.nsfw = [...terms];
-  if (section === "adultInspiration") next.adultInspiration = [...terms];
-  return next;
-}
-
-function normalizePromptRewriteGuardHistory(
-  history: PromptRewriteGuardHistoryItem[] | undefined,
-  currentText: string,
-) {
-  const seen = new Set<string>();
-  const normalizedItems = (Array.isArray(history) ? history : [])
-    .map((item) => ({
-      id: item.id || createId("prompt-guard"),
-      text: normalizePromptRewriteGuardText(item.text),
-      createdAt: item.createdAt || isoTimestamp(),
-    }))
-    .filter((item) => {
-      if (seen.has(item.text)) return false;
-      seen.add(item.text);
-      return true;
-    });
-
-  if (!seen.has(currentText)) {
-    normalizedItems.unshift({
-      id: createId("prompt-guard"),
-      text: currentText,
-      createdAt: isoTimestamp(),
-    });
-  }
-
-  return normalizedItems.slice(0, MAX_PROMPT_REWRITE_GUARD_HISTORY);
-}
-
-function addPromptGuardHistoryItem(
-  history: PromptRewriteGuardHistoryItem[],
-  text: string,
-) {
-  if (history[0]?.text === text) return history;
-
-  return [
-    {
-      id: createId("prompt-guard"),
-      text,
-      createdAt: isoTimestamp(),
-    },
-    ...history.filter((item) => item.text !== text),
-  ].slice(0, MAX_PROMPT_REWRITE_GUARD_HISTORY);
-}
-
-function toPlainPromptRewriteGuardHistoryItem(
-  item: PromptRewriteGuardHistoryItem,
-): PromptRewriteGuardHistoryItem {
-  return {
-    id: item.id,
-    text: item.text,
-    createdAt: item.createdAt,
-  };
-}
-
-function toPlainFavoritePrompt(item: FavoritePrompt): FavoritePrompt {
-  return {
-    id: item.id,
-    title: item.title,
-    text: item.text,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-  };
-}
-
-function normalizeBackground(background: GenerationParams["background"]) {
-  if (background === "transparent") return "auto";
-
-  return background;
-}
-
-function displayApiBaseUrl(apiBaseUrl: string, mode: AppSettings["apiBaseUrlMode"]) {
-  if (mode === "full") return apiBaseUrl;
-  return stripImagesApiPath(apiBaseUrl);
-}
-
-function stripImagesApiPath(apiBaseUrl: string) {
-  return apiBaseUrl.trim().replace(/\/+$/, "").replace(/\/v1\/images$/i, "");
-}

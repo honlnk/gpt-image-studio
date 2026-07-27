@@ -23,6 +23,7 @@ import GeneralSettingsPanel from "../settings/GeneralSettingsPanel.vue";
 import PromptGuardSettingsPanel from "../settings/PromptGuardSettingsPanel.vue";
 import PromptModeSettingsPanel from "../settings/PromptModeSettingsPanel.vue";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
+import BaseModal from "../ui/BaseModal.vue";
 
 type SettingsTab =
   | "general"
@@ -151,19 +152,14 @@ function forwardSavePromptWordbank(
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="isOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-3"
-      role="presentation"
-      @mousedown.self="emit('close')"
-    >
-      <section
-        aria-labelledby="settingsTitle"
-        aria-modal="true"
-        class="flex h-[min(88vh,44rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
-        role="dialog"
-      >
+  <BaseModal
+    :is-open="isOpen"
+    z-class="z-50"
+    backdrop-class="bg-black/50 px-3"
+    content-class="flex h-[min(88vh,44rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+    aria-labelledby="settingsTitle"
+    @close="emit('close')"
+  >
         <div
           class="flex items-start justify-between border-b border-gray-200 px-5 py-4"
         >
@@ -315,9 +311,7 @@ function forwardSavePromptWordbank(
             关闭
           </button>
         </div>
-      </section>
-    </div>
-  </Teleport>
+  </BaseModal>
 
   <ConfirmInputModal
     confirm-label="恢复备份"

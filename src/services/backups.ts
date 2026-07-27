@@ -5,7 +5,7 @@ import {
 import {
   PROMPT_REWRITE_GUARD_PREFIX,
   normalizePromptRewriteGuardText,
-} from "./imagesApi";
+} from "./promptRewriteGuard";
 import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";

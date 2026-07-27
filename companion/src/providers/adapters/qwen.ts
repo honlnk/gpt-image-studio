@@ -16,6 +16,14 @@ import { urlToB64 } from "../urlToB64.js";
 import { getProviderProfile } from "../providerProfiles.js";
 import { postJson } from "../providerHttp.js";
 import { getDefaultModel } from "../../providerPresets.js";
+import { assertEditImageCount } from "../editGuards.js";
+import {
+  alignToStepAtLeastMin,
+  clampToStepAtLeastMin,
+  parseSizeInput,
+  shrinkLongestSideByStep,
+  toDashScopeSize,
+} from "../sizeUtils.js";
 
 const QWEN_PROFILE = getProviderProfile("qwen")!;
 const DEFAULT_MODEL = getDefaultModel("qwen")!;
@@ -86,12 +94,7 @@ export const qwenAdapter: ProviderAdapter = {
     config: ProviderConfig,
     options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult> {
-    if (request.images.length === 0) {
-      throw new Error("Qwen-Image 图像编辑需要至少一张参考图。");
-    }
-    if (MAX_EDIT_IMAGES !== undefined && request.images.length > MAX_EDIT_IMAGES) {
-      throw new Error(`Qwen-Image 图像编辑最多支持 ${MAX_EDIT_IMAGES} 张参考图。`);
-    }
+    assertEditImageCount("Qwen-Image", request.images.length, MAX_EDIT_IMAGES);
 
     const apiUrl = buildDashScopeGenerationUrl(config.apiBaseUrl);
     const model = config.model ?? DEFAULT_MODEL;
@@ -138,41 +141,17 @@ export function normalizeQwenSize(
   size: string,
   constraints: SizeConstraints = SIZE_CONSTRAINTS,
 ): string {
-  const trimmed = size.trim();
+  const parsed = parseSizeInput(size, constraints, { allowStarSeparator: true });
 
-  if (trimmed === "auto" || trimmed === "") {
+  if (parsed.auto) {
+    return toDashScopeSize(constraints.defaultSize);
+  }
+  if (parsed.width === undefined || parsed.height === undefined) {
+    console.warn(`[qwen] 无法识别的 size "${size.trim()}"，回退默认 ${constraints.defaultSize}`);
     return toDashScopeSize(constraints.defaultSize);
   }
 
-  let width: number;
-  let height: number;
-
-  if (trimmed.includes(":")) {
-    const dims = dimensionsFromRatio(trimmed, constraints);
-    width = dims.width;
-    height = dims.height;
-  } else {
-    const match = /^(\d+)\s*[x×*]\s*(\d+)$/i.exec(trimmed);
-    if (!match) {
-      console.warn(`[qwen] 无法识别的 size "${trimmed}"，回退默认 ${constraints.defaultSize}`);
-      return toDashScopeSize(constraints.defaultSize);
-    }
-    width = Number(match[1]);
-    height = Number(match[2]);
-  }
-
-  return finalizeSize(width, height, constraints);
-}
-
-function dimensionsFromRatio(ratio: string, constraints: SizeConstraints) {
-  const [w, h] = ratio.split(":").map(Number);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-    return { width: 0, height: 0 };
-  }
-  const aspect = w / h;
-  const width = Math.round(Math.sqrt(constraints.maxPixels * aspect));
-  const height = Math.round(width / aspect);
-  return { width, height };
+  return finalizeSize(parsed.width, parsed.height, constraints);
 }
 
 function finalizeSize(
@@ -180,18 +159,18 @@ function finalizeSize(
   height: number,
   constraints: SizeConstraints,
 ): string {
-  let w = alignToStep(width, constraints);
-  let h = alignToStep(height, constraints);
+  let w = alignToStepAtLeastMin(width, constraints);
+  let h = alignToStepAtLeastMin(height, constraints);
 
-  w = clamp(w, constraints.min, constraints.max, constraints);
-  h = clamp(h, constraints.min, constraints.max, constraints);
+  w = clampToStepAtLeastMin(w, constraints.min, constraints.max, constraints);
+  h = clampToStepAtLeastMin(h, constraints.min, constraints.max, constraints);
 
   const scalePixels = (targetPixels: number) => {
     const ratio = Math.sqrt(targetPixels / (w * h));
-    w = alignToStep(w * ratio, constraints);
-    h = alignToStep(h * ratio, constraints);
-    w = clamp(w, constraints.min, constraints.max, constraints);
-    h = clamp(h, constraints.min, constraints.max, constraints);
+    w = alignToStepAtLeastMin(w * ratio, constraints);
+    h = alignToStepAtLeastMin(h * ratio, constraints);
+    w = clampToStepAtLeastMin(w, constraints.min, constraints.max, constraints);
+    h = clampToStepAtLeastMin(h, constraints.min, constraints.max, constraints);
   };
 
   if (w * h > constraints.maxPixels) {
@@ -201,29 +180,10 @@ function finalizeSize(
   }
 
   while (w * h > constraints.maxPixels && w > constraints.min && h > constraints.min) {
-    if (w >= h) {
-      w = alignToStep(w - constraints.step, constraints);
-    } else {
-      h = alignToStep(h - constraints.step, constraints);
-    }
+    const next = shrinkLongestSideByStep(w, h, constraints, alignToStepAtLeastMin);
+    w = next.width;
+    h = next.height;
   }
 
   return `${w}*${h}`;
-}
-
-function toDashScopeSize(size: string): string {
-  return size.replace(/[x×]/i, "*");
-}
-
-function alignToStep(value: number, constraints: SizeConstraints): number {
-  return Math.max(constraints.step, Math.round(value / constraints.step) * constraints.step);
-}
-
-function clamp(
-  value: number,
-  min: number,
-  max: number,
-  constraints: SizeConstraints,
-): number {
-  return alignToStep(Math.min(max, Math.max(min, value)), constraints);
 }

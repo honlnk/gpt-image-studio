@@ -1,9 +1,17 @@
 import type { ImageAsset, Message } from "../../../types/studio";
+import { imageExtension as imageExtensionFromMime } from "../../../shared/fileFormatters";
 
+/**
+ * 从 ImageAsset 推导扩展名（不含点）。
+ *
+ * 与 shared/fileFormatters.imageExtension 的关系：
+ * - shared 版接受 `mimeType?: string`（纯字符串工具，无 ImageAsset 依赖）
+ * - 本地版接受 `image?: ImageAsset`（消息卡片场景 image 可能为 undefined）
+ *
+ * 签名不同故保留本地包装，内部委托 shared 版，避免 MIME→扩展名映射出现两个真相源。
+ */
 export function imageExtension(image?: ImageAsset) {
-  if (image?.mimeType === "image/jpeg") return "jpeg";
-  if (image?.mimeType === "image/webp") return "webp";
-  return "png";
+  return imageExtensionFromMime(image?.mimeType);
 }
 
 export function imageDownloadName(image?: ImageAsset) {

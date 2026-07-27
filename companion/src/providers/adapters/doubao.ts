@@ -13,6 +13,7 @@
 import type { SizeConstraints } from "../types.js";
 import { createOpenAICompatibleAdapter } from "../openaiCompatible.js";
 import { getProviderProfile } from "../providerProfiles.js";
+import { parseSizeInput } from "../sizeUtils.js";
 
 /** 豆包 size 约束（从配置表读，normalizeDoubaoSize 默认参数共用）。 */
 const SIZE_CONSTRAINTS: SizeConstraints = getProviderProfile("doubao")!.sizeConstraints;
@@ -38,44 +39,17 @@ export function normalizeDoubaoSize(
   size: string,
   constraints: SizeConstraints = SIZE_CONSTRAINTS,
 ): string {
-  const trimmed = size.trim();
+  const parsed = parseSizeInput(size, constraints, { basePixelsStrategy: "geoMean" });
 
-  if (trimmed === "auto" || trimmed === "") {
+  if (parsed.auto) {
+    return constraints.defaultSize;
+  }
+  if (parsed.width === undefined || parsed.height === undefined) {
+    console.warn(`[doubao] 无法识别的 size "${size.trim()}"，回退默认 ${constraints.defaultSize}`);
     return constraints.defaultSize;
   }
 
-  let width: number;
-  let height: number;
-
-  if (trimmed.includes(":")) {
-    const dims = dimensionsFromRatio(trimmed, constraints);
-    width = dims.width;
-    height = dims.height;
-  } else {
-    const match = /^(\d+)\s*[x×]\s*(\d+)$/i.exec(trimmed);
-    if (match) {
-      width = Number(match[1]);
-      height = Number(match[2]);
-    } else {
-      console.warn(`[doubao] 无法识别的 size "${trimmed}"，回退默认 ${constraints.defaultSize}`);
-      return constraints.defaultSize;
-    }
-  }
-
-  return finalizeSize(width, height, constraints);
-}
-
-/** 按比例 + 目标像素（取 maxPixels 与 minPixels 的几何中间值作基准）算出原始尺寸。 */
-function dimensionsFromRatio(ratio: string, constraints: SizeConstraints) {
-  const [w, h] = ratio.split(":").map(Number);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-    return { width: 0, height: 0 };
-  }
-  const aspect = w / h;
-  const basePixels = Math.sqrt(constraints.minPixels * constraints.maxPixels);
-  const width = Math.round(Math.sqrt(basePixels * aspect));
-  const height = Math.round(width / aspect);
-  return { width, height };
+  return finalizeSize(parsed.width, parsed.height, constraints);
 }
 
 /** 规整到豆包合法：钳宽高比 → 钳总像素范围（双向）。无步长对齐。 */

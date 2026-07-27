@@ -2,6 +2,7 @@
 import { computed, ref, onUnmounted } from "vue";
 import type { ApiMode, ConnectionMode } from "../../types/studio";
 import { FIXED_IMAGE_MODEL } from "../../shared/models";
+import { copyText as copyTextToClipboard } from "../../shared/clipboard";
 import { useSettingsStore } from "../../stores/settingsStore";
 
 const props = defineProps<{
@@ -74,7 +75,7 @@ async function copyApiKey() {
   if (!apiKeyVisible.value || !props.apiKey) return;
 
   try {
-    await navigator.clipboard.writeText(props.apiKey);
+    await copyTextToClipboard(props.apiKey);
     apiKeyCopyStatus.value = "copied";
   } catch {
     apiKeyCopyStatus.value = "failed";

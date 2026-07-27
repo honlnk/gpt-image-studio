@@ -5,7 +5,7 @@ import {
 import {
   PROMPT_REWRITE_GUARD_PREFIX,
   normalizePromptRewriteGuardText,
-} from "./imagesApi";
+} from "./promptRewriteGuard";
 import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
 import { FIXED_IMAGE_MODEL } from "../shared/models";

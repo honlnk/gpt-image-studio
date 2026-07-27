@@ -1,4 +1,9 @@
 import type { ImageAsset } from "../../types/studio";
+import {
+  formatFileSize,
+  imageDownloadName as sharedImageDownloadName,
+  imageExtension as sharedImageExtension,
+} from "../../shared/fileFormatters";
 
 export function sourceLabel(image: ImageAsset) {
   return image.source === "generated" ? "生成图" : "导入图";
@@ -9,13 +14,11 @@ export function imageFormat(image: ImageAsset) {
 }
 
 export function imageExtension(image: ImageAsset) {
-  if (image.mimeType === "image/jpeg") return "jpeg";
-  if (image.mimeType === "image/webp") return "webp";
-  return "png";
+  return sharedImageExtension(image.mimeType);
 }
 
 export function imageDownloadName(image: ImageAsset) {
-  return `${image.name || "image"}.${imageExtension(image)}`;
+  return sharedImageDownloadName(image);
 }
 
 export function imageSize(image: ImageAsset) {
@@ -24,10 +27,5 @@ export function imageSize(image: ImageAsset) {
 }
 
 export function fileSize(image: ImageAsset) {
-  if (!image.sizeBytes) return "未知大小";
-  if (image.sizeBytes < 1024 * 1024) {
-    return `${Math.max(1, Math.round(image.sizeBytes / 1024))} KB`;
-  }
-
-  return `${(image.sizeBytes / 1024 / 1024).toFixed(1)} MB`;
+  return formatFileSize(image.sizeBytes);
 }
