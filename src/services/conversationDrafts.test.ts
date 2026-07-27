@@ -1,31 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationDraft } from "../types/studio";
 import {
+  createSpyStorage,
+  type SpyStorage,
+} from "./storage/createSpyStorage";
+
+const spyStorage: SpyStorage = createSpyStorage();
+
+vi.mock("./storage/resolveStorage", () => ({
+  resolveStorage: () => spyStorage,
+}));
+
+const {
   deleteConversationDraft,
   deleteConversationDrafts,
   listConversationDrafts,
   loadConversationDraft,
   saveConversationDraft,
-} from "./conversationDrafts";
-import { STORE_NAMES } from "./db";
-
-const mocks = vi.hoisted(() => ({
-  deleteFromStore: vi.fn(),
-  getAllFromStore: vi.fn(),
-  getFromStore: vi.fn(),
-  putInStore: vi.fn(),
-}));
-
-vi.mock("./db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./db")>();
-  return {
-    ...actual,
-    deleteFromStore: mocks.deleteFromStore,
-    getAllFromStore: mocks.getAllFromStore,
-    getFromStore: mocks.getFromStore,
-    putInStore: mocks.putInStore,
-  };
-});
+} = await import("./conversationDrafts");
+const { STORE_NAMES } = await import("./storage");
 
 const draft: ConversationDraft = {
   conversationId: "c-1",
@@ -51,11 +44,11 @@ describe("conversationDrafts service", () => {
   });
 
   it("loads draft by conversation id", async () => {
-    mocks.getFromStore.mockResolvedValue(draft);
+    spyStorage.get.mockResolvedValue(draft);
 
     const result = await loadConversationDraft("c-1");
 
-    expect(mocks.getFromStore).toHaveBeenCalledWith(
+    expect(spyStorage.get).toHaveBeenCalledWith(
       STORE_NAMES.conversationDrafts,
       "c-1",
     );
@@ -63,39 +56,33 @@ describe("conversationDrafts service", () => {
   });
 
   it("saves draft record", async () => {
-    mocks.putInStore.mockResolvedValue(undefined);
-
     await saveConversationDraft(draft);
 
-    expect(mocks.putInStore).toHaveBeenCalledWith(
+    expect(spyStorage.put).toHaveBeenCalledWith(
       STORE_NAMES.conversationDrafts,
       draft,
     );
   });
 
   it("deletes single draft", async () => {
-    mocks.deleteFromStore.mockResolvedValue(undefined);
-
     await deleteConversationDraft("c-1");
 
-    expect(mocks.deleteFromStore).toHaveBeenCalledWith(
+    expect(spyStorage.delete).toHaveBeenCalledWith(
       STORE_NAMES.conversationDrafts,
       "c-1",
     );
   });
 
   it("deletes multiple drafts", async () => {
-    mocks.deleteFromStore.mockResolvedValue(undefined);
-
     await deleteConversationDrafts(["c-1", "c-2"]);
 
-    expect(mocks.deleteFromStore).toHaveBeenCalledTimes(2);
-    expect(mocks.deleteFromStore).toHaveBeenNthCalledWith(
+    expect(spyStorage.delete).toHaveBeenCalledTimes(2);
+    expect(spyStorage.delete).toHaveBeenNthCalledWith(
       1,
       STORE_NAMES.conversationDrafts,
       "c-1",
     );
-    expect(mocks.deleteFromStore).toHaveBeenNthCalledWith(
+    expect(spyStorage.delete).toHaveBeenNthCalledWith(
       2,
       STORE_NAMES.conversationDrafts,
       "c-2",
@@ -103,11 +90,11 @@ describe("conversationDrafts service", () => {
   });
 
   it("lists all drafts", async () => {
-    mocks.getAllFromStore.mockResolvedValue([draft]);
+    spyStorage.list.mockResolvedValue([draft]);
 
     const result = await listConversationDrafts();
 
-    expect(mocks.getAllFromStore).toHaveBeenCalledWith(
+    expect(spyStorage.list).toHaveBeenCalledWith(
       STORE_NAMES.conversationDrafts,
     );
     expect(result).toEqual([draft]);

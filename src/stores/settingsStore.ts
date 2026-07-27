@@ -27,7 +27,11 @@ import {
   normalizePromptWordbanks,
   normalizeWordbankTerms,
 } from "../services/promptWordbanks";
-import { saveSettings } from "../services/settings";
+import {
+  createSettingsServices,
+  type SettingsServices,
+} from "../services/settings";
+import { resolveStorage } from "../services/storage/resolveStorage";
 import {
   MAX_PROMPT_REWRITE_GUARD_HISTORY,
   addPromptGuardHistoryItem,
@@ -117,6 +121,18 @@ const IMAGE_COUNT_PRESETS = [1, 2, 3, 4, 6, 8, 10, 12] as const;
 type ImageCountMode = "preset" | "custom";
 
 export const useSettingsStore = defineStore("settings", () => {
+  // 阶段一 PR2：settingsStore 新增 configure 机制（5 store 里唯一原本没有的）。
+  // settings service 通过注入获取；未注入时用默认实例（resolveStorage）。
+  let settingsServices: SettingsServices = createSettingsServices(
+    resolveStorage(),
+  );
+
+  function configureSettingsStore(
+    services: SettingsServices,
+  ) {
+    settingsServices = services;
+  }
+
   const connectionMode = ref<ConnectionMode>("direct");
   const apiMode = ref<ApiMode>("images");
   const model = ref(FIXED_IMAGE_MODEL);
@@ -517,7 +533,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   function saveCurrentSettings() {
-    return saveSettings(currentSettings());
+    return settingsServices.save(currentSettings());
   }
 
   function savePromptRewriteGuardText(text: string) {
@@ -624,6 +640,7 @@ export const useSettingsStore = defineStore("settings", () => {
     providerCapability,
     autoRetryOnNetworkError,
     analyticsEnabled,
+    configureSettingsStore,
     analyticsPromptCapture,
     companionConnected,
     companionAccessKey,

@@ -1,23 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings } from "../types/studio";
-import { loadSettings, saveSettings } from "./settings";
-import { STORE_NAMES } from "./db";
+import {
+  createSpyStorage,
+  type SpyStorage,
+} from "./storage/createSpyStorage";
 import { PROMPT_REWRITE_GUARD_PREFIX } from "./imagesApi";
 import { defaultPromptWordbanks } from "./promptWordbanks";
 
-const mocks = vi.hoisted(() => ({
-  getFromStore: vi.fn(),
-  putInStore: vi.fn(),
+const spyStorage: SpyStorage = createSpyStorage();
+
+vi.mock("./storage/resolveStorage", () => ({
+  resolveStorage: () => spyStorage,
 }));
 
-vi.mock("./db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./db")>();
-  return {
-    ...actual,
-    getFromStore: mocks.getFromStore,
-    putInStore: mocks.putInStore,
-  };
-});
+const { loadSettings, saveSettings } = await import("./settings");
+const { STORE_NAMES } = await import("./storage");
 
 const fullSettings: AppSettings = {
   connectionMode: "direct",
@@ -62,14 +59,14 @@ describe("settings service", () => {
   });
 
   it("loads settings with connection mode", async () => {
-    mocks.getFromStore.mockResolvedValue({
+    spyStorage.get.mockResolvedValue({
       key: "app",
       value: fullSettings,
     });
 
     const result = await loadSettings();
 
-    expect(mocks.getFromStore).toHaveBeenCalledWith(STORE_NAMES.settings, "app");
+    expect(spyStorage.get).toHaveBeenCalledWith(STORE_NAMES.settings, "app");
     expect(result).toEqual(fullSettings);
   });
 
@@ -88,7 +85,7 @@ describe("settings service", () => {
       promptWordbanks: _ignoredPromptWordbanks,
       ...legacySettings
     } = fullSettings;
-    mocks.getFromStore.mockResolvedValue({
+    spyStorage.get.mockResolvedValue({
       key: "app",
       value: legacySettings,
     });
@@ -115,7 +112,7 @@ describe("settings service", () => {
   });
 
   it("normalizes any stored custom model back to gpt-image-2", async () => {
-    mocks.getFromStore.mockResolvedValue({
+    spyStorage.get.mockResolvedValue({
       key: "app",
       value: {
         ...fullSettings,
@@ -129,13 +126,15 @@ describe("settings service", () => {
   });
 
   it("saves settings record", async () => {
-    mocks.putInStore.mockResolvedValue(undefined);
-
     await saveSettings(fullSettings);
 
-    expect(mocks.putInStore).toHaveBeenCalledWith(STORE_NAMES.settings, {
+    expect(spyStorage.put).toHaveBeenCalledWith(STORE_NAMES.settings, {
       key: "app",
-      value: fullSettings,
+      // saveSettings 内部会把 model 规范化为 FIXED_IMAGE_MODEL
+      value: expect.objectContaining({
+        ...fullSettings,
+        model: expect.any(String),
+      }),
     });
   });
 });

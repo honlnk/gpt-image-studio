@@ -1,28 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalyticsEvent } from "../types/studio";
 import {
+  createSpyStorage,
+  type SpyStorage,
+} from "./storage/createSpyStorage";
+
+const spyStorage: SpyStorage = createSpyStorage();
+
+vi.mock("./storage/resolveStorage", () => ({
+  resolveStorage: () => spyStorage,
+}));
+
+const {
   clearAnalyticsEvents,
   exportAnalyticsEventsJson,
   listAnalyticsEvents,
   saveAnalyticsEventsBatch,
-} from "./analyticsEvents";
-import { STORE_NAMES } from "./db";
-
-const mocks = vi.hoisted(() => ({
-  clearStore: vi.fn(),
-  getAllFromStore: vi.fn(),
-  putInStore: vi.fn(),
-}));
-
-vi.mock("./db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./db")>();
-  return {
-    ...actual,
-    clearStore: mocks.clearStore,
-    getAllFromStore: mocks.getAllFromStore,
-    putInStore: mocks.putInStore,
-  };
-});
+} = await import("./analyticsEvents");
+const { STORE_NAMES } = await import("./storage");
 
 const event: AnalyticsEvent = {
   id: "ev-1",
@@ -43,37 +38,31 @@ describe("analyticsEvents service", () => {
       id: "ev-2",
       occurredAt: "2026-06-17T01:00:00.000Z",
     };
-    mocks.getAllFromStore.mockResolvedValue([later, event]);
+    spyStorage.list.mockResolvedValue([later, event]);
 
     const result = await listAnalyticsEvents();
 
-    expect(mocks.getAllFromStore).toHaveBeenCalledWith(
-      STORE_NAMES.analyticsEvents,
-    );
+    expect(spyStorage.list).toHaveBeenCalledWith(STORE_NAMES.analyticsEvents);
     expect(result.map((item) => item.id)).toEqual(["ev-1", "ev-2"]);
   });
 
   it("saves a batch of events", async () => {
-    mocks.putInStore.mockResolvedValue(undefined);
-
     await saveAnalyticsEventsBatch([event]);
 
-    expect(mocks.putInStore).toHaveBeenCalledWith(
+    expect(spyStorage.put).toHaveBeenCalledWith(
       STORE_NAMES.analyticsEvents,
       event,
     );
   });
 
   it("clears all events", async () => {
-    mocks.clearStore.mockResolvedValue(undefined);
-
     await clearAnalyticsEvents();
 
-    expect(mocks.clearStore).toHaveBeenCalledWith(STORE_NAMES.analyticsEvents);
+    expect(spyStorage.clear).toHaveBeenCalledWith(STORE_NAMES.analyticsEvents);
   });
 
   it("exports events as JSONL string", async () => {
-    mocks.getAllFromStore.mockResolvedValue([event]);
+    spyStorage.list.mockResolvedValue([event]);
 
     const result = await exportAnalyticsEventsJson();
 

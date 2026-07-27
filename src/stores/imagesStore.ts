@@ -1,12 +1,6 @@
 import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
-import {
-  deleteImageAsset,
-  deleteImageBlob,
-  loadImageBlob,
-  saveImageAsset,
-  saveImageBlob,
-} from "../services/imageAssets";
+import type { ImageAssetServices } from "../services/imageAssets";
 import { readImageDimensions } from "../services/imageMetadata";
 import { toPlainImageAsset } from "../services/messageSerialization";
 import { estimateStorageUsage, type StorageUsage } from "../services/storageUsage";
@@ -20,6 +14,12 @@ import type { ImageAsset, Message } from "../types/studio";
 import type { Ref } from "vue";
 
 type ImagesStoreContext = {
+  /** 阶段一 PR2：imageAssets service 通过 context 注入（决策 T1）。
+   *  storageUsage/imageMetadata/messageSerialization 暂留模块级 import，
+   *  PR3 处理 storageUsage（跨 collection service），其余非存储层不在阶段一范围。 */
+  services: {
+    imageAssets: ImageAssetServices;
+  };
   activeConversationId: Ref<string>;
   messages: Ref<Message[]>;
   onStorageError: (error: unknown) => void;
@@ -96,8 +96,8 @@ export const useImagesStore = defineStore("images", () => {
 
     try {
       await Promise.all([
-        deleteImageAsset(id),
-        image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+        input.services.imageAssets.deleteAsset(id),
+        image.blobKey ? input.services.imageAssets.deleteBlob(image.blobKey) : Promise.resolve(),
       ]);
       await refreshStorageUsage();
       feedback.notifySuccess("图片已删除。");
@@ -122,8 +122,8 @@ export const useImagesStore = defineStore("images", () => {
     try {
       await Promise.all(
         deletedImages.flatMap((image) => [
-          deleteImageAsset(image.id),
-          image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+          input.services.imageAssets.deleteAsset(image.id),
+          image.blobKey ? input.services.imageAssets.deleteBlob(image.blobKey) : Promise.resolve(),
         ]),
       );
       await refreshStorageUsage();
@@ -148,7 +148,7 @@ export const useImagesStore = defineStore("images", () => {
       image,
       ...imageAssets.value.filter((item) => item.id !== id),
     ];
-    await saveImageAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+    await input.services.imageAssets.saveAsset(toPlainImageAsset(image)).catch(input.onStorageError);
     return true;
   }
 
@@ -164,7 +164,7 @@ export const useImagesStore = defineStore("images", () => {
       image,
       ...imageAssets.value.filter((item) => item.id !== id),
     ];
-    await saveImageAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+    await input.services.imageAssets.saveAsset(toPlainImageAsset(image)).catch(input.onStorageError);
 
     // 颜色分组事件分类：set（无→有）/ changed（有→不同）/ cleared（有→无）。
     const hadColor = Boolean(previousColor);
@@ -234,8 +234,8 @@ export const useImagesStore = defineStore("images", () => {
     };
 
     await Promise.all([
-      saveImageBlob(blobKey, file),
-      saveImageAsset(toPlainImageAsset(imageAsset)),
+      input.services.imageAssets.saveBlob(blobKey, file),
+      input.services.imageAssets.saveAsset(toPlainImageAsset(imageAsset)),
     ]).catch(input.onStorageError);
 
     return imageAsset;
@@ -283,7 +283,7 @@ export const useImagesStore = defineStore("images", () => {
       assets.map(async (asset) => {
         if (!asset.blobKey) return asset;
 
-        const blob = await loadImageBlob(asset.blobKey);
+        const blob = await input.services.imageAssets.loadBlob(asset.blobKey);
         if (!blob) return asset;
 
         const restoredAsset = {
@@ -303,7 +303,7 @@ export const useImagesStore = defineStore("images", () => {
           width: dimensions.width,
           height: dimensions.height,
         };
-        await saveImageAsset(toPlainImageAsset(updatedAsset)).catch(input.onStorageError);
+        await input.services.imageAssets.saveAsset(toPlainImageAsset(updatedAsset)).catch(input.onStorageError);
         return updatedAsset;
       }),
     );

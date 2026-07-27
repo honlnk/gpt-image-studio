@@ -18,7 +18,8 @@ import type {
   PromptMode,
   PromptRewriteGuardHistoryItem,
 } from "../types/studio";
-import { getFromStore, putInStore, STORE_NAMES } from "./db";
+import { STORE_NAMES, type StudioStorage } from "./storage";
+import { resolveStorage } from "./storage/resolveStorage";
 
 const SETTINGS_KEY = "app";
 
@@ -27,25 +28,42 @@ type SettingsRecord = {
   value: StoredAppSettings;
 };
 
+/** 应用设置（settings 表，key="app"）的存储服务。阶段一 PR2 改工厂注入（决策 T1）。 */
+export type SettingsServices = ReturnType<typeof createSettingsServices>;
+
+export function createSettingsServices(storage: StudioStorage) {
+  return {
+    async load() {
+      const record = await storage.get<SettingsRecord>(
+        STORE_NAMES.settings,
+        SETTINGS_KEY,
+      );
+
+      if (!record?.value) return undefined;
+
+      return normalizeSettings(record.value);
+    },
+    save(settings: AppSettings) {
+      return storage.put<SettingsRecord>(STORE_NAMES.settings, {
+        key: SETTINGS_KEY,
+        value: {
+          ...settings,
+          model: FIXED_IMAGE_MODEL,
+        },
+      });
+    },
+  };
+}
+
+// ─── 模块级默认实例（向后兼容，PR6 移除） ───
+const defaultServices = createSettingsServices(resolveStorage());
+
 export async function loadSettings() {
-  const record = await getFromStore<SettingsRecord>(
-    STORE_NAMES.settings,
-    SETTINGS_KEY,
-  );
-
-  if (!record?.value) return undefined;
-
-  return normalizeSettings(record.value);
+  return defaultServices.load();
 }
 
 export function saveSettings(settings: AppSettings) {
-  return putInStore<SettingsRecord>(STORE_NAMES.settings, {
-    key: SETTINGS_KEY,
-    value: {
-      ...settings,
-      model: FIXED_IMAGE_MODEL,
-    },
-  });
+  return defaultServices.save(settings);
 }
 
 type StoredAppSettings = Omit<

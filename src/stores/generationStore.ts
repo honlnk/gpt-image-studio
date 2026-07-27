@@ -5,16 +5,10 @@ import { track } from "../features/analytics/useAnalyticsTracker";
 import type { GenerationJob } from "../features/generation/generationJobTypes";
 import type { ImageClient } from "../features/generation/imageClients/imageClient";
 import { normalizeImageCount } from "../services/generationParams";
-import {
-  deleteImageAsset,
-  deleteImageBlob,
-  loadImageBlob,
-  saveImageAsset,
-  saveImageBlob,
-} from "../services/imageAssets";
+import type { ImageAssetServices } from "../services/imageAssets";
+import type { MessageServices } from "../services/messages";
 import { readImageDimensions } from "../services/imageMetadata";
 import { resolveImageEditRequest } from "../services/imageEditRequest";
-import { saveMessage } from "../services/messages";
 import {
   continuedGenerationLabel,
   outputFormatToMimeType,
@@ -44,6 +38,11 @@ type CreateConversationRecordInput = {
 };
 
 type GenerationStoreContext = {
+  /** 阶段一 PR2：存储服务通过 context 注入（决策 T1），store 不再模块级 import service。 */
+  services: {
+    imageAssets: ImageAssetServices;
+    messages: MessageServices;
+  };
   activeConversationId: Ref<string>;
   activeConversation: ComputedRef<Conversation | undefined>;
   attachedImages: Ref<string[]>;
@@ -214,8 +213,8 @@ export const useGenerationStore = defineStore("generation", () => {
     input.value.activeEditMaskImageId.value = "";
 
     await Promise.all([
-      saveMessage(toPlainMessage(userMessage)),
-      saveMessage(toPlainMessage(assistantMessage)),
+      input.value.services.messages.save(toPlainMessage(userMessage)),
+      input.value.services.messages.save(toPlainMessage(assistantMessage)),
       updatedConversation
         ? input.value.persistConversation(updatedConversation)
         : Promise.resolve(),
@@ -262,7 +261,7 @@ export const useGenerationStore = defineStore("generation", () => {
     );
     message.errorMessage = undefined;
     clearPartialPreview(message.id);
-    await saveMessage(toPlainMessage(message)).catch(
+    await input.value.services.messages.save(toPlainMessage(message)).catch(
       input.value.onStorageError,
     );
 
@@ -325,8 +324,8 @@ export const useGenerationStore = defineStore("generation", () => {
       (item) => item !== imageId,
     );
     await Promise.all([
-      image ? deleteImageAsset(image.id) : Promise.resolve(),
-      image?.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+      image ? input.value.services.imageAssets.deleteAsset(image.id) : Promise.resolve(),
+      image?.blobKey ? input.value.services.imageAssets.deleteBlob(image.blobKey) : Promise.resolve(),
       enqueueMessageSave(message),
     ]).catch(input.value.onStorageError);
     await input.value.refreshStorageUsage();
@@ -460,8 +459,8 @@ export const useGenerationStore = defineStore("generation", () => {
       );
 
       const saveTasks: Promise<unknown>[] = [
-        saveImageBlob(blobKey, blob),
-        saveImageAsset(toPlainImageAsset(imageAsset)),
+        input.value.services.imageAssets.saveBlob(blobKey, blob),
+        input.value.services.imageAssets.saveAsset(toPlainImageAsset(imageAsset)),
       ];
       if (assistantMessage) {
         saveTasks.push(enqueueMessageSave(assistantMessage));
@@ -559,7 +558,7 @@ export const useGenerationStore = defineStore("generation", () => {
     if (!image) return undefined;
     if (image.transientBlob) return image.transientBlob;
     if (!image.blobKey) return undefined;
-    return loadImageBlob(image.blobKey);
+    return input.value.services.imageAssets.loadBlob(image.blobKey);
   }
 
   function configureGenerationStore(nextContext: GenerationStoreContext) {
@@ -697,7 +696,7 @@ export const useGenerationStore = defineStore("generation", () => {
       Promise.resolve();
     const saveTask = previousSave.then(() => {
       const latestMessage = findMessage(message.id) ?? message;
-      return saveMessage(toPlainMessage(latestMessage));
+      return input.value.services.messages.save(toPlainMessage(latestMessage));
     });
     messageSaveQueues.set(message.id, saveTask);
     void saveTask.finally(() => {

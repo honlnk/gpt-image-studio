@@ -1,10 +1,9 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import {
-  deleteConversation as deleteConversationRecord,
-  saveConversation,
+import type {
+  ConversationServices,
 } from "../services/conversations";
-import { deleteMessage } from "../services/messages";
+import type { MessageServices } from "../services/messages";
 import { isoTimestamp } from "../shared/dateTime";
 import { formatError } from "../shared/errors";
 import { createId } from "../shared/id";
@@ -18,6 +17,11 @@ type CreateConversationInput = {
 };
 
 type ConversationsStoreContext = {
+  /** 阶段一 PR2：存储服务通过 context 注入（决策 T1），store 不再模块级 import service。 */
+  services: {
+    conversations: ConversationServices;
+    messages: MessageServices;
+  };
   clearDraft: () => void;
   onStorageError: (error: unknown) => void;
   refreshStorageUsage: () => Promise<void>;
@@ -76,8 +80,10 @@ export const useConversationsStore = defineStore("conversations", () => {
 
     try {
       await Promise.all([
-        deleteConversationRecord(id),
-        ...deletedMessages.map((message) => deleteMessage(message.id)),
+        input.services.conversations.remove(id),
+        ...deletedMessages.map((message) =>
+          input.services.messages.remove(message.id),
+        ),
       ]);
       await input.refreshStorageUsage();
       feedback.notifySuccess("会话已删除。");
@@ -110,8 +116,10 @@ export const useConversationsStore = defineStore("conversations", () => {
 
     try {
       await Promise.all([
-        ...ids.map((id) => deleteConversationRecord(id)),
-        ...deletedMessages.map((message) => deleteMessage(message.id)),
+        ...ids.map((id) => input.services.conversations.remove(id)),
+        ...deletedMessages.map((message) =>
+          input.services.messages.remove(message.id),
+        ),
       ]);
       await input.refreshStorageUsage();
       feedback.notifySuccess(`已删除 ${ids.length} 个对话。`);
@@ -195,7 +203,7 @@ export const useConversationsStore = defineStore("conversations", () => {
     const snapshot = toPlainConversation(conversation);
     conversationWriteQueue = conversationWriteQueue
       .catch(input.onStorageError)
-      .then(() => saveConversation(snapshot));
+      .then(() => input.services.conversations.save(snapshot));
 
     return conversationWriteQueue.catch(input.onStorageError);
   }
