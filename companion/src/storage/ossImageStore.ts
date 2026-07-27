@@ -12,6 +12,7 @@
 import OSS from "ali-oss";
 import type { ImageStore, LoadedImage, SavedImage } from "./imageStore.js";
 import type { OssCredentials } from "./ossCredentials.js";
+import type { StsCredentials } from "./stsCredentials.js";
 
 export function createOssImageStore(opts: {
   endpoint: string;
@@ -98,6 +99,108 @@ export function createOssImageStore(opts: {
         // 是否还有下一页
         if ((list as { isTruncated?: boolean }).isTruncated) {
           marker = (list as { nextMarker?: string }).nextMarker;
+        } else {
+          marker = undefined;
+        }
+      } while (marker);
+      return total;
+    },
+  };
+}
+
+/**
+ * 创建 STS 感知的 OssImageStore（阶段三 PR4，D11 服务器模式）。
+ *
+ * 与 createOssImageStore 的区别：凭证不固定，每次操作前从 getStsCredentials 拿
+ * 临时凭证（宿主签发，带 TTL），STS 变了就重建 client。
+ *
+ * STS 响应的 prefix 已由宿主限定到该用户（users/<userId>/），Companion 据此拼 object key。
+ *
+ * @param getUserId 返回当前用户 id（用于 STS 获取，前缀隔离）
+ * @param getStsCredentials STS 凭证获取回调（带缓存，见 stsCredentials.ts）
+ * @param clientFactory 测试用：注入 mock client 工厂（按 STS 凭证建 client）
+ */
+export function createStsOssImageStore(opts: {
+  getUserId: () => string;
+  getStsCredentials: (userId: string) => Promise<StsCredentials>;
+  /** 测试用：按 STS 凭证构造 client。生产用默认 ali-oss。 */
+  clientFactory?: (creds: StsCredentials) => OssLikeClient;
+}): ImageStore {
+  const { getUserId, getStsCredentials } = opts;
+  // 缓存当前 STS + 对应 client，STS 变了才重建
+  let currentCreds: StsCredentials | null = null;
+  let client: OssLikeClient | null = null;
+
+  async function ensureClient(): Promise<{ client: OssLikeClient; prefix: string }> {
+    const userId = getUserId();
+    const creds = await getStsCredentials(userId);
+    // STS 变了（accessKeyId 不同）或首次 → 重建 client
+    if (!currentCreds || currentCreds.accessKeyId !== creds.accessKeyId) {
+      currentCreds = creds;
+      client = opts.clientFactory
+        ? opts.clientFactory(creds)
+        : new OSS({
+            endpoint: `https://${creds.region}.aliyuncs.com`,
+            accessKeyId: creds.accessKeyId,
+            accessKeySecret: creds.accessKeySecret,
+            stsToken: creds.securityToken,
+            bucket: creds.bucket,
+            secure: true,
+          }) as unknown as OssLikeClient;
+    }
+    return { client: client!, prefix: normalizePrefix(creds.prefix) };
+  }
+
+  return {
+    kind: "oss",
+
+    async save(key: string, data: Buffer, mimeType: string): Promise<SavedImage> {
+      const { client: c, prefix } = await ensureClient();
+      await c.put(`${prefix}${key}`, data, {
+        mime: mimeType,
+        headers: { "Content-Type": mimeType },
+      });
+      return { size: data.byteLength, mimeType };
+    },
+
+    async load(key: string): Promise<LoadedImage | undefined> {
+      const { client: c, prefix } = await ensureClient();
+      try {
+        const result = await c.get(`${prefix}${key}`);
+        const content = (result as { content: Buffer }).content;
+        const mimeType =
+          (result as { res?: { headers?: Record<string, string> } }).res?.headers?.[
+            "content-type"
+          ] ?? "application/octet-stream";
+        return { data: content, mimeType };
+      } catch (err) {
+        if (isNotFoundError(err)) return undefined;
+        throw err;
+      }
+    },
+
+    async remove(key: string): Promise<void> {
+      const { client: c, prefix } = await ensureClient();
+      try {
+        await c.delete(`${prefix}${key}`);
+      } catch (err) {
+        if (isNotFoundError(err)) return;
+        throw err;
+      }
+    },
+
+    async estimateBytes(): Promise<number> {
+      const { client: c, prefix } = await ensureClient();
+      let total = 0;
+      let marker: string | undefined;
+      do {
+        const list = await c.list({ prefix, "max-keys": 1000, marker }, {});
+        const objects = list.objects ?? [];
+        for (const obj of objects) {
+          total += obj.size ?? 0;
+        }
+        if (list.isTruncated) {
+          marker = list.nextMarker;
         } else {
           marker = undefined;
         }

@@ -40,6 +40,12 @@ export async function startServer(opts: {
   // server 模式启动吊销黑名单清理定时器（阶段三 PR3 SLO）
   if (opts.deployment.mode === "server") {
     startCleanupTimer();
+    // OSS STS 依赖宿主接口（D11）。filesystem 模式不需要，缺失只 warning 不阻断。
+    if (!process.env.MAIN_APP_URL || !process.env.MAIN_APP_API_KEY) {
+      console.warn(
+        "⚠️  server 模式下 OSS 存储需要 MAIN_APP_URL 和 MAIN_APP_API_KEY 环境变量（宿主 STS 签发接口）。filesystem 模式不受影响。",
+      );
+    }
   }
 
   const app = Fastify({

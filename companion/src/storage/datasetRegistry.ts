@@ -36,8 +36,9 @@ import {
 import { closeBusinessDb, openBusinessDb } from "./businessDb.js";
 import { computeFingerprint, normalizeDirectory } from "./fingerprint.js";
 import { createFileSystemImageStore } from "./fileSystemImageStore.js";
-import { createOssImageStore } from "./ossImageStore.js";
+import { createOssImageStore, createStsOssImageStore } from "./ossImageStore.js";
 import { loadOssCredentials } from "./ossCredentials.js";
+import { getStsCredentials } from "./stsCredentials.js";
 import type { ImageStore } from "./imageStore.js";
 import { StorageStoreError } from "./errors.js";
 import type {
@@ -78,11 +79,13 @@ function parseStorageConfig(raw: string, storageKind: StorageKind): StorageConfi
  *
  * filesystem-default：rootDir = ~/.gpt-image-studio/images，opaqueNaming=true。
  * filesystem-custom：rootDir = 用户配置的 directory（已归一化），opaqueNaming=false。
- * oss：从 oss-credentials.json 读凭据，装配 OssImageStore。
+ * oss + local 模式（userId='__local__'）：从 oss-credentials.json 读长期 AK。
+ * oss + server 模式：用 STS 临时凭证（D11），调宿主签发接口拿短期凭证。
  */
 function buildImageStore(
   imageStoreKind: ImageStoreKind,
   storageConfig: StorageConfig,
+  userId: string = LOCAL_USER_ID,
 ): ImageStore {
   if (imageStoreKind === "filesystem-default") {
     return createFileSystemImageStore({
@@ -99,7 +102,16 @@ function buildImageStore(
       kind: "filesystem-custom",
     });
   }
-  // oss：从 oss-credentials.json 读凭据
+  // oss
+  const ossCfg = storageConfig as OssConfig;
+  if (userId !== LOCAL_USER_ID) {
+    // server 模式：STS 临时凭证（D11）。prefix 由宿主 STS 响应限定（忽略 ossCfg.prefix）。
+    return createStsOssImageStore({
+      getUserId: () => userId,
+      getStsCredentials: (uid) => getStsCredentials(uid),
+    });
+  }
+  // local 模式：从 oss-credentials.json 读长期 AK（阶段二行为）
   const ossCreds = loadOssCredentials();
   if (!ossCreds) {
     throw new StorageStoreError(
@@ -107,7 +119,6 @@ function buildImageStore(
       "STORAGE_UNKNOWN",
     );
   }
-  const ossCfg = storageConfig as OssConfig;
   return createOssImageStore({
     endpoint: ossCreds.endpoint,
     bucket: ossCreds.bucket,
@@ -242,7 +253,7 @@ export async function resolveAndActivate(input: ResolveInput): Promise<ResolveRe
     created = true;
   }
 
-  const imageStore = buildImageStore(input.imageStoreKind, normalizedConfig);
+  const imageStore = buildImageStore(input.imageStoreKind, normalizedConfig, userId);
   return { dataset: toView(dataset), imageStore, created };
 }
 
@@ -275,7 +286,7 @@ export async function getActiveImageStore(
   const active = getActiveDataset(userId);
   if (!active) return undefined;
   const config = parseStorageConfig(active.storage_config, active.storage_kind);
-  const imageStore = buildImageStore(active.image_store_kind, config);
+  const imageStore = buildImageStore(active.image_store_kind, config, userId);
   return { dataset: toView(active), imageStore };
 }
 

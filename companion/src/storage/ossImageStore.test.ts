@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createOssImageStore, testOssConnection, type OssLikeClient } from "./ossImageStore.js";
+import { createOssImageStore, createStsOssImageStore, testOssConnection, type OssLikeClient } from "./ossImageStore.js";
+import type { StsCredentials } from "./stsCredentials.js";
 
 /**
  * OssImageStore 测试：用 clientOverride 注入 mock client，不连真实 OSS。
@@ -246,4 +247,129 @@ describe("testOssConnection", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
   }, 15000); // 网络超时给足时间
+});
+
+// ─── 阶段三 PR4：STS 感知的 OssImageStore ───
+
+describe("createStsOssImageStore", () => {
+  function makeSts(overrides: Partial<StsCredentials> = {}): StsCredentials {
+    return {
+      accessKeyId: "STS.abc",
+      accessKeySecret: "secret",
+      securityToken: "sts-token",
+      expiration: new Date(Date.now() + 3600_000).toISOString(),
+      bucket: "bucket",
+      region: "oss-cn-hangzhou",
+      prefix: "users/user-1/",
+      ...overrides,
+    };
+  }
+
+  it("save 用 STS 凭证 + prefix 拼 object key", async () => {
+    const saved: { name: string; data: Buffer }[] = [];
+    const mockClient: OssLikeClient = {
+      put: async (name: string, data: Buffer) => {
+        saved.push({ name, data });
+        return {};
+      },
+      get: async () => ({ content: Buffer.alloc(0) }),
+      delete: async () => ({}),
+      list: async () => ({ objects: [] }),
+    };
+    let stsCalls = 0;
+    const store = createStsOssImageStore({
+      getUserId: () => "user-1",
+      getStsCredentials: async () => {
+        stsCalls++;
+        return makeSts();
+      },
+      clientFactory: () => mockClient,
+    });
+    await store.save("blob-1", Buffer.from("data"), "image/png");
+    expect(saved[0].name).toBe("users/user-1/blob-1");
+    expect(stsCalls).toBe(1);
+  });
+
+  it("STS 凭证变化时重建 client（缓存未变不重建）", async () => {
+    const createdCreds: string[] = [];
+    let currentSts = makeSts({ accessKeyId: "STS.v1" });
+    const store = createStsOssImageStore({
+      getUserId: () => "user-1",
+      getStsCredentials: async () => currentSts,
+      clientFactory: (creds) => {
+        createdCreds.push(creds.accessKeyId);
+        return {
+          put: async () => ({}),
+          get: async () => ({ content: Buffer.alloc(0) }),
+          delete: async () => ({}),
+          list: async () => ({ objects: [] }),
+        };
+      },
+    });
+    // 第一次操作：建 client with v1
+    await store.save("k1", Buffer.from("x"), "image/png");
+    // 第二次操作：STS 不变，不重建
+    await store.save("k2", Buffer.from("x"), "image/png");
+    expect(createdCreds).toEqual(["STS.v1"]);
+    // STS 变了 → 重建
+    currentSts = makeSts({ accessKeyId: "STS.v2" });
+    await store.save("k3", Buffer.from("x"), "image/png");
+    expect(createdCreds).toEqual(["STS.v1", "STS.v2"]);
+  });
+
+  it("load 返回 content + mimeType", async () => {
+    const mockClient: OssLikeClient = {
+      put: async () => ({}),
+      get: async () => ({
+        content: Buffer.from("img-data"),
+        res: { headers: { "content-type": "image/jpeg" } },
+      }),
+      delete: async () => ({}),
+      list: async () => ({ objects: [] }),
+    };
+    const store = createStsOssImageStore({
+      getUserId: () => "user-1",
+      getStsCredentials: async () => makeSts(),
+      clientFactory: () => mockClient,
+    });
+    const loaded = await store.load("blob-1");
+    expect(loaded?.data.toString()).toBe("img-data");
+    expect(loaded?.mimeType).toBe("image/jpeg");
+  });
+
+  it("load NoSuchKey 返回 undefined", async () => {
+    const mockClient: OssLikeClient = {
+      put: async () => ({}),
+      get: async () => {
+        throw { code: "NoSuchKey", status: 404 };
+      },
+      delete: async () => ({}),
+      list: async () => ({ objects: [] }),
+    };
+    const store = createStsOssImageStore({
+      getUserId: () => "user-1",
+      getStsCredentials: async () => makeSts(),
+      clientFactory: () => mockClient,
+    });
+    const loaded = await store.load("missing");
+    expect(loaded).toBeUndefined();
+  });
+
+  it("estimateBytes 累加 prefix 下对象大小", async () => {
+    const mockClient: OssLikeClient = {
+      put: async () => ({}),
+      get: async () => ({ content: Buffer.alloc(0) }),
+      delete: async () => ({}),
+      list: async () => ({
+        objects: [{ size: 100 }, { size: 200 }, { size: 300 }],
+      }),
+    };
+    const store = createStsOssImageStore({
+      getUserId: () => "user-1",
+      getStsCredentials: async () => makeSts(),
+      clientFactory: () => mockClient,
+    });
+    const bytes = await store.estimateBytes();
+    expect(bytes).toBe(600);
+  });
 });
