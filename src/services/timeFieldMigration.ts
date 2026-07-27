@@ -1,6 +1,7 @@
 import type { Conversation, ImageAsset, Message } from "../types/studio";
 import { isoTimestamp } from "../shared/dateTime";
-import { getAllFromStore, putInStore, STORE_NAMES } from "./db";
+import { STORE_NAMES, type StudioStorage } from "./storage";
+import { resolveStorage } from "./storage/resolveStorage";
 
 type LegacyConversation = Conversation & {
   createdAtMs?: number;
@@ -16,42 +17,61 @@ type LegacyImageAsset = ImageAsset & {
   updatedAtMs?: number;
 };
 
+/** 时间字段迁移服务（跨 3 collection 的枚举+重写）。阶段一 PR3 改工厂注入（决策 T1）。
+ *  normalizeXxxTimeFields 已是纯函数（可测），工厂只包 orchestrator。 */
+export type TimeFieldMigrationServices = ReturnType<
+  typeof createTimeFieldMigrationServices
+>;
+
+export function createTimeFieldMigrationServices(storage: StudioStorage) {
+  return {
+    async migrate() {
+      const [conversations, messages, imageAssets] = await Promise.all([
+        storage.list<LegacyConversation>(STORE_NAMES.conversations),
+        storage.list<LegacyMessage>(STORE_NAMES.messages),
+        storage.list<LegacyImageAsset>(STORE_NAMES.imageAssets),
+      ]);
+
+      const migratedConversations = conversations
+        .map(normalizeConversationTimeFields)
+        .filter(isPresent);
+      const migratedMessages = messages
+        .map(normalizeMessageTimeFields)
+        .filter(isPresent);
+      const migratedImages = imageAssets
+        .map(normalizeImageTimeFields)
+        .filter(isPresent);
+
+      if (
+        !migratedConversations.length &&
+        !migratedMessages.length &&
+        !migratedImages.length
+      ) {
+        return;
+      }
+
+      await Promise.all([
+        ...migratedConversations.map((record) =>
+          storage.put(STORE_NAMES.conversations, record),
+        ),
+        ...migratedMessages.map((record) =>
+          storage.put(STORE_NAMES.messages, record),
+        ),
+        ...migratedImages.map((record) =>
+          storage.put(STORE_NAMES.imageAssets, record),
+        ),
+      ]);
+    },
+  };
+}
+
+// ─── 模块级默认实例（向后兼容，PR6 移除） ───
+const defaultTimeFieldMigrationServices = createTimeFieldMigrationServices(
+  resolveStorage(),
+);
+
 export async function migrateLegacyTimeFields() {
-  const [conversations, messages, imageAssets] = await Promise.all([
-    getAllFromStore<LegacyConversation>(STORE_NAMES.conversations),
-    getAllFromStore<LegacyMessage>(STORE_NAMES.messages),
-    getAllFromStore<LegacyImageAsset>(STORE_NAMES.imageAssets),
-  ]);
-
-  const migratedConversations = conversations
-    .map(normalizeConversationTimeFields)
-    .filter(isPresent);
-  const migratedMessages = messages
-    .map(normalizeMessageTimeFields)
-    .filter(isPresent);
-  const migratedImages = imageAssets
-    .map(normalizeImageTimeFields)
-    .filter(isPresent);
-
-  if (
-    !migratedConversations.length &&
-    !migratedMessages.length &&
-    !migratedImages.length
-  ) {
-    return;
-  }
-
-  await Promise.all([
-    ...migratedConversations.map((record) =>
-      putInStore(STORE_NAMES.conversations, record),
-    ),
-    ...migratedMessages.map((record) =>
-      putInStore(STORE_NAMES.messages, record),
-    ),
-    ...migratedImages.map((record) =>
-      putInStore(STORE_NAMES.imageAssets, record),
-    ),
-  ]);
+  return defaultTimeFieldMigrationServices.migrate();
 }
 
 export function normalizeConversationTimeFields(record: LegacyConversation) {

@@ -9,18 +9,18 @@ import {
 import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
-import { clearStore, getAllFromStore, putInStore, STORE_NAMES } from "./db";
+import {
+  STORE_NAMES,
+  type ImageBlobRecord,
+  type StudioStorage,
+} from "./storage";
+import { resolveStorage } from "./storage/resolveStorage";
 import { saveSettings, loadSettings } from "./settings";
 import { createZipArchive } from "./zipArchive";
 
 const BACKUP_VERSION = 1;
 const MANIFEST_FILE = "manifest.json";
 const DATA_FILE = "data.json";
-
-type ImageBlobRecord = {
-  key: string;
-  blob: Blob;
-};
 
 type BackupManifest = {
   app: "gpt-image-studio";
@@ -64,112 +64,130 @@ type StoredBackupSettings = Omit<
   defaults: StoredGenerationParams;
 };
 
+/** 备份/恢复服务（跨 5 collection 的整库操作）。阶段一 PR3 改工厂注入（决策 T1）。 */
+export type BackupServices = ReturnType<typeof createBackupServices>;
+
+export function createBackupServices(storage: StudioStorage) {
+  return {
+    async create() {
+      const [conversations, messages, imageAssets, imageBlobs, settings] =
+        await Promise.all([
+          storage.list<Conversation>(STORE_NAMES.conversations),
+          storage.list<Message>(STORE_NAMES.messages),
+          storage.list<ImageAsset>(STORE_NAMES.imageAssets),
+          storage.list<ImageBlobRecord>(STORE_NAMES.imageBlobs),
+          loadSettings(),
+        ]);
+
+      const manifest: BackupManifest = {
+        app: "gpt-image-studio",
+        version: BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        excludes: ["apiKey"],
+      };
+      const data: BackupData = {
+        conversations,
+        messages,
+        imageAssets: imageAssets.map(stripPreviewUrl),
+        settings: settings ? stripApiKey(settings) : undefined,
+      };
+      const entries = [
+        jsonEntry(MANIFEST_FILE, manifest),
+        jsonEntry(DATA_FILE, data),
+        ...imageBlobs.map((record) => ({
+          name: blobEntryName(record.key),
+          blob: record.blob,
+        })),
+      ];
+
+      return createZipArchive(entries);
+    },
+
+    async restore(file: File) {
+      const files = await readZipFiles(file);
+      const manifest = await readJsonFile<BackupManifest>(files, MANIFEST_FILE);
+      const data = await readJsonFile<BackupData>(files, DATA_FILE);
+
+      validateManifest(manifest);
+      validateBackupData(data);
+      validateImageBlobs(data, files);
+
+      const currentSettings = await loadSettings();
+      const restoredSettings = data.settings
+        ? {
+            ...data.settings,
+            apiKey: currentSettings?.apiKey ?? "",
+            promptMode: data.settings.promptMode ?? "default",
+            promptWordbanks: normalizePromptWordbanks(data.settings.promptWordbanks),
+            promptRewriteGuardEnabled:
+              data.settings.promptRewriteGuardEnabled ?? true,
+            promptRewriteGuardText: normalizePromptRewriteGuardText(
+              data.settings.promptRewriteGuardText,
+            ),
+            promptRewriteGuardHistory:
+              data.settings.promptRewriteGuardHistory ?? [
+                {
+                  id: "prompt-guard-default",
+                  text: PROMPT_REWRITE_GUARD_PREFIX,
+                  createdAt: new Date(0).toISOString(),
+                },
+              ],
+            favoritePrompts: normalizeFavoritePrompts(data.settings.favoritePrompts),
+            defaults: normalizeGenerationParams(data.settings.defaults),
+            autoRetryOnNetworkError:
+              data.settings.autoRetryOnNetworkError ?? false,
+            analyticsEnabled: data.settings.analyticsEnabled ?? true,
+            analyticsPromptCapture:
+              data.settings.analyticsPromptCapture ?? "length_only",
+          }
+        : currentSettings;
+
+      await Promise.all([
+        storage.clear(STORE_NAMES.conversations),
+        storage.clear(STORE_NAMES.messages),
+        storage.clear(STORE_NAMES.imageAssets),
+        storage.clear(STORE_NAMES.imageBlobs),
+        storage.clear(STORE_NAMES.settings),
+      ]);
+
+      await Promise.all([
+        ...data.conversations.map((conversation) =>
+          storage.put(STORE_NAMES.conversations, conversation),
+        ),
+        ...data.messages.map((message) =>
+          storage.put(STORE_NAMES.messages, normalizeMessage(message)),
+        ),
+        ...data.imageAssets.map((asset) =>
+          storage.put(STORE_NAMES.imageAssets, stripPreviewUrl(asset)),
+        ),
+        ...data.imageAssets.map(async (asset) => {
+          if (!asset.blobKey) return;
+
+          const blob = files.get(blobEntryName(asset.blobKey));
+          if (!blob) return;
+
+          await storage.put<ImageBlobRecord>(STORE_NAMES.imageBlobs, {
+            key: asset.blobKey,
+            blob: await restoreImageBlob(blob, asset),
+          });
+        }),
+        restoredSettings
+          ? saveSettings(restoredSettings)
+          : Promise.resolve(),
+      ]);
+    },
+  };
+}
+
+// ─── 模块级默认实例（向后兼容，PR6 移除） ───
+const defaultBackupServices = createBackupServices(resolveStorage());
+
 export async function createStudioBackup() {
-  const [conversations, messages, imageAssets, imageBlobs, settings] =
-    await Promise.all([
-      getAllFromStore<Conversation>(STORE_NAMES.conversations),
-      getAllFromStore<Message>(STORE_NAMES.messages),
-      getAllFromStore<ImageAsset>(STORE_NAMES.imageAssets),
-      getAllFromStore<ImageBlobRecord>(STORE_NAMES.imageBlobs),
-      loadSettings(),
-    ]);
-
-  const manifest: BackupManifest = {
-    app: "gpt-image-studio",
-    version: BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
-    excludes: ["apiKey"],
-  };
-  const data: BackupData = {
-    conversations,
-    messages,
-    imageAssets: imageAssets.map(stripPreviewUrl),
-    settings: settings ? stripApiKey(settings) : undefined,
-  };
-  const entries = [
-    jsonEntry(MANIFEST_FILE, manifest),
-    jsonEntry(DATA_FILE, data),
-    ...imageBlobs.map((record) => ({
-      name: blobEntryName(record.key),
-      blob: record.blob,
-    })),
-  ];
-
-  return createZipArchive(entries);
+  return defaultBackupServices.create();
 }
 
 export async function restoreStudioBackup(file: File) {
-  const files = await readZipFiles(file);
-  const manifest = await readJsonFile<BackupManifest>(files, MANIFEST_FILE);
-  const data = await readJsonFile<BackupData>(files, DATA_FILE);
-
-  validateManifest(manifest);
-  validateBackupData(data);
-  validateImageBlobs(data, files);
-
-  const currentSettings = await loadSettings();
-  const restoredSettings = data.settings
-    ? {
-        ...data.settings,
-        apiKey: currentSettings?.apiKey ?? "",
-        promptMode: data.settings.promptMode ?? "default",
-        promptWordbanks: normalizePromptWordbanks(data.settings.promptWordbanks),
-        promptRewriteGuardEnabled:
-          data.settings.promptRewriteGuardEnabled ?? true,
-        promptRewriteGuardText: normalizePromptRewriteGuardText(
-          data.settings.promptRewriteGuardText,
-        ),
-        promptRewriteGuardHistory:
-          data.settings.promptRewriteGuardHistory ?? [
-            {
-              id: "prompt-guard-default",
-              text: PROMPT_REWRITE_GUARD_PREFIX,
-              createdAt: new Date(0).toISOString(),
-            },
-          ],
-        favoritePrompts: normalizeFavoritePrompts(data.settings.favoritePrompts),
-        defaults: normalizeGenerationParams(data.settings.defaults),
-        autoRetryOnNetworkError:
-          data.settings.autoRetryOnNetworkError ?? false,
-        analyticsEnabled: data.settings.analyticsEnabled ?? true,
-        analyticsPromptCapture:
-          data.settings.analyticsPromptCapture ?? "length_only",
-      }
-    : currentSettings;
-
-  await Promise.all([
-    clearStore(STORE_NAMES.conversations),
-    clearStore(STORE_NAMES.messages),
-    clearStore(STORE_NAMES.imageAssets),
-    clearStore(STORE_NAMES.imageBlobs),
-    clearStore(STORE_NAMES.settings),
-  ]);
-
-  await Promise.all([
-    ...data.conversations.map((conversation) =>
-      putInStore(STORE_NAMES.conversations, conversation),
-    ),
-    ...data.messages.map((message) =>
-      putInStore(STORE_NAMES.messages, normalizeMessage(message)),
-    ),
-    ...data.imageAssets.map((asset) =>
-      putInStore(STORE_NAMES.imageAssets, stripPreviewUrl(asset)),
-    ),
-    ...data.imageAssets.map(async (asset) => {
-      if (!asset.blobKey) return;
-
-      const blob = files.get(blobEntryName(asset.blobKey));
-      if (!blob) return;
-
-      await putInStore<ImageBlobRecord>(STORE_NAMES.imageBlobs, {
-        key: asset.blobKey,
-        blob: await restoreImageBlob(blob, asset),
-      });
-    }),
-    restoredSettings
-      ? saveSettings(restoredSettings)
-      : Promise.resolve(),
-  ]);
+  return defaultBackupServices.restore(file);
 }
 
 function jsonEntry(name: string, value: unknown) {
