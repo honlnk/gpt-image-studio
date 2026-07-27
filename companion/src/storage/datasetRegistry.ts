@@ -32,6 +32,8 @@ import {
 import { closeBusinessDb, openBusinessDb } from "./businessDb.js";
 import { computeFingerprint, normalizeDirectory } from "./fingerprint.js";
 import { createFileSystemImageStore } from "./fileSystemImageStore.js";
+import { createOssImageStore } from "./ossImageStore.js";
+import { loadOssCredentials } from "./ossCredentials.js";
 import type { ImageStore } from "./imageStore.js";
 import { StorageStoreError } from "./errors.js";
 import type {
@@ -72,7 +74,7 @@ function parseStorageConfig(raw: string, storageKind: StorageKind): StorageConfi
  *
  * filesystem-default：rootDir = ~/.gpt-image-studio/images，opaqueNaming=true。
  * filesystem-custom：rootDir = 用户配置的 directory（已归一化），opaqueNaming=false。
- * oss：PR5 实现，本 PR 抛 not-implemented。
+ * oss：从 oss-credentials.json 读凭据，装配 OssImageStore。
  */
 function buildImageStore(
   imageStoreKind: ImageStoreKind,
@@ -93,11 +95,22 @@ function buildImageStore(
       kind: "filesystem-custom",
     });
   }
-  // oss
-  throw new StorageStoreError(
-    "OSS 图片存储暂未实现（PR5 将填充）",
-    "STORAGE_UNKNOWN",
-  );
+  // oss：从 oss-credentials.json 读凭据
+  const ossCreds = loadOssCredentials();
+  if (!ossCreds) {
+    throw new StorageStoreError(
+      "OSS 凭据未配置，请先在管理页配置 OSS",
+      "STORAGE_UNKNOWN",
+    );
+  }
+  const ossCfg = storageConfig as OssConfig;
+  return createOssImageStore({
+    endpoint: ossCreds.endpoint,
+    bucket: ossCreds.bucket,
+    accessKeyId: ossCreds.accessKeyId,
+    accessKeySecret: ossCreds.accessKeySecret,
+    prefix: ossCfg.prefix ?? "gpt-image-studio",
+  });
 }
 
 /** 默认图片目录（选项 B）：~/.gpt-image-studio/images。 */

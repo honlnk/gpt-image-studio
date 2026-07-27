@@ -8,9 +8,10 @@ const PUBLIC_PATHS = ["/health"];
  * 不走连接密钥——
  *   /credentials：凭证管理发生在连接之前（首次需要先填 key 才有意义连接）。
  *   /admin：Companion 自带管理页（阶段零），同源 loopback 浏览器访问，不要求 accessKey。
+ *   /storage/oss：OSS 凭据管理（阶段二 PR5），敏感的长期 AK 不应跨域暴露，走管理面守卫。
  * authMiddleware 显式跳过这些前缀，把鉴权交给各自 plugin 内部的 loopbackGuard。
  */
-const LOOPBACK_GUARDED_PREFIXES = ["/credentials", "/admin"];
+const LOOPBACK_GUARDED_PREFIXES = ["/credentials", "/admin", "/storage/oss"];
 
 export async function authMiddleware(app: FastifyInstance) {
   app.addHook("onRequest", async (req, reply) => {

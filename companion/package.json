@@ -45,11 +45,13 @@
   "dependencies": {
     "@fastify/cors": "^11.0.0",
     "@fastify/static": "^10.1.2",
+    "ali-oss": "^6.23.0",
     "better-sqlite3": "^11.8.1",
     "commander": "^13.1.0",
     "fastify": "^5.3.3"
   },
   "devDependencies": {
+    "@types/ali-oss": "^6.16.11",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.0",
     "tsx": "^4.19.0",
