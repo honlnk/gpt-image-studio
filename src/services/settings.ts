@@ -55,6 +55,26 @@ export function createSettingsServices(storage: StudioStorage) {
   };
 }
 
+/**
+ * 轻量配置服务（settings 表的 __config__: 前缀命名空间）。
+ *
+ * 阶段一 PR5：收编 companionUrl / companionAccessKey 等运行时配置（决策 T3）。
+ * 与 SettingsServices 的区别：SettingsServices 操作 "app" 记录（业务 AppSettings），
+ * ConfigServices 操作 __config__:xxx 记录（运行时 KV 配置，不进 AppSettings 结构）。
+ */
+export type ConfigServices = ReturnType<typeof createConfigServices>;
+
+export function createConfigServices(storage: StudioStorage) {
+  return {
+    read<T>(key: string) {
+      return storage.readConfig<T>(key);
+    },
+    write<T>(key: string, value: T) {
+      return storage.writeConfig<T>(key, value);
+    },
+  };
+}
+
 // ─── 模块级默认实例（向后兼容，PR6 移除） ───
 const defaultServices = createSettingsServices(resolveStorage());
 

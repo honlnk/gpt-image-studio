@@ -124,7 +124,7 @@ describe("studio backups", () => {
     expect(manifest).toMatchObject({
       app: "gpt-image-studio",
       version: 1,
-      excludes: ["apiKey"],
+      excludes: ["apiKey", "companionAccessKey"],
     });
     expect(data.settings).toEqual({
       connectionMode: settings.connectionMode,

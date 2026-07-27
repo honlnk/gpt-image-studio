@@ -34,6 +34,10 @@ type BackupData = {
   messages: StoredMessage[];
   imageAssets: ImageAsset[];
   settings?: StoredBackupSettings;
+  /** 阶段一 PR5：companion 连接配置进备份（跨设备迁移需要 URL）。
+   *  companionAccessKey 在导出时剥离（stripCompanionCredentials），到新设备重新配对。 */
+  companionUrl?: string;
+  companionAccessKey?: string;
 };
 
 type ZipFileMap = Map<string, Blob>;
@@ -70,26 +74,31 @@ export type BackupServices = ReturnType<typeof createBackupServices>;
 export function createBackupServices(storage: StudioStorage) {
   return {
     async create() {
-      const [conversations, messages, imageAssets, imageBlobs, settings] =
+      const [conversations, messages, imageAssets, imageBlobs, settings, companionUrl, companionAccessKey] =
         await Promise.all([
           storage.list<Conversation>(STORE_NAMES.conversations),
           storage.list<Message>(STORE_NAMES.messages),
           storage.list<ImageAsset>(STORE_NAMES.imageAssets),
           storage.list<ImageBlobRecord>(STORE_NAMES.imageBlobs),
           loadSettings(),
+          storage.readConfig<string>("companionUrl"),
+          storage.readConfig<string>("companionAccessKey"),
         ]);
 
       const manifest: BackupManifest = {
         app: "gpt-image-studio",
         version: BACKUP_VERSION,
         exportedAt: new Date().toISOString(),
-        excludes: ["apiKey"],
+        excludes: ["apiKey", "companionAccessKey"],
       };
       const data: BackupData = {
         conversations,
         messages,
         imageAssets: imageAssets.map(stripPreviewUrl),
         settings: settings ? stripApiKey(settings) : undefined,
+        // 阶段一 PR5：companionUrl 进备份（跨设备迁移需要），accessKey 剥离（敏感）。
+        companionUrl: companionUrl ?? undefined,
+        // companionAccessKey 不写入备份（stripCompanionCredentials 等价于直接不导出）。
       };
       const entries = [
         jsonEntry(MANIFEST_FILE, manifest),
@@ -173,6 +182,10 @@ export function createBackupServices(storage: StudioStorage) {
         }),
         restoredSettings
           ? saveSettings(restoredSettings)
+          : Promise.resolve(),
+        // 阶段一 PR5：恢复 companionUrl 到 config（accessKey 备份里被剥离，保持空）。
+        data.companionUrl
+          ? storage.writeConfig("companionUrl", data.companionUrl)
           : Promise.resolve(),
       ]);
     },

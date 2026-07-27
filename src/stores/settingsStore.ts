@@ -29,9 +29,12 @@ import {
 } from "../services/promptWordbanks";
 import {
   createSettingsServices,
+  createConfigServices,
+  type ConfigServices,
   type SettingsServices,
 } from "../services/settings";
 import { resolveStorage } from "../services/storage/resolveStorage";
+import type { Ref } from "vue";
 import {
   MAX_PROMPT_REWRITE_GUARD_HISTORY,
   addPromptGuardHistoryItem,
@@ -121,16 +124,23 @@ const IMAGE_COUNT_PRESETS = [1, 2, 3, 4, 6, 8, 10, 12] as const;
 type ImageCountMode = "preset" | "custom";
 
 export const useSettingsStore = defineStore("settings", () => {
-  // 阶段一 PR2：settingsStore 新增 configure 机制（5 store 里唯一原本没有的）。
-  // settings service 通过注入获取；未注入时用默认实例（resolveStorage）。
+  // 阶段一 PR2/PR5：settingsStore 新增 configure 机制（5 store 里唯一原本没有的）。
+  // settings service + config service 通过注入获取；未注入时用默认实例（resolveStorage）。
+  // isHydrated 用于守卫 config 写回（迁移完成前不写，避免覆盖）。
   let settingsServices: SettingsServices = createSettingsServices(
     resolveStorage(),
   );
+  let configServices: ConfigServices = createConfigServices(resolveStorage());
+  let isHydratedRef: Ref<boolean> | null = null;
 
-  function configureSettingsStore(
-    services: SettingsServices,
-  ) {
-    settingsServices = services;
+  function configureSettingsStore(input: {
+    services: SettingsServices;
+    config: ConfigServices;
+    isHydrated: Ref<boolean>;
+  }) {
+    settingsServices = input.services;
+    configServices = input.config;
+    isHydratedRef = input.isHydrated;
   }
 
   const connectionMode = ref<ConnectionMode>("direct");
@@ -614,12 +624,21 @@ export const useSettingsStore = defineStore("settings", () => {
     );
   }
 
-  watch(companionUrl, (v) =>
-    writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v),
-  );
-  watch(companionAccessKey, (v) =>
-    writeStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, v),
-  );
+  // 阶段一 PR5：companionUrl/accessKey 收编到 StudioStorage.config（决策 T3）。
+  // 写回走 configServices（IndexedDB __config__: 前缀），加 isHydrated 守卫——
+  // 迁移完成前不写，避免把 ref 的初始兜底值（可能还没被迁移逻辑覆盖）误写回 config。
+  // ref 初始值仍同步读 localStorage（上方声明），保证 store setup 早于 hydrate 时
+  // useCompanionConnection 的 immediate watch 能拿到正确值。
+  watch(companionUrl, (v) => {
+    if (!isHydratedRef?.value) return;
+    void configServices.write("companionUrl", v).catch(() => {
+      // config 写失败不阻塞 UI（与原 writeStorage 的静默吞错语义一致）。
+    });
+  });
+  watch(companionAccessKey, (v) => {
+    if (!isHydratedRef?.value) return;
+    void configServices.write("companionAccessKey", v).catch(() => {});
+  });
   // Companion 模式只支持 Images API。切到 companion 时若残留 responses，
   // 强制校正为 images，避免发出注定抛「仅支持 Images API」的请求。
   // （apiMode 选择器 UI 仅在 direct 模式可见，切走后该值不会自动重置。）

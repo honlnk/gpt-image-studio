@@ -19,7 +19,7 @@ import { clonePromptWordbanks } from "../../services/promptWordbanks";
 import { createConversationServices } from "../../services/conversations";
 import { createMessageServices } from "../../services/messages";
 import { createImageAssetServices } from "../../services/imageAssets";
-import { createSettingsServices } from "../../services/settings";
+import { createSettingsServices, createConfigServices } from "../../services/settings";
 import { createConversationDraftServices } from "../../services/conversationDrafts";
 import { createAnalyticsEventServices } from "../../services/analyticsEvents";
 import { createBackupServices } from "../../services/backups";
@@ -75,6 +75,7 @@ export function useStudioViewModel() {
     messages: createMessageServices(storage),
     imageAssets: createImageAssetServices(storage),
     settings: createSettingsServices(storage),
+    config: createConfigServices(storage),
     drafts: createConversationDraftServices(storage),
     analyticsEvents: createAnalyticsEventServices(storage),
     backup: createBackupServices(storage),
@@ -86,7 +87,7 @@ export function useStudioViewModel() {
   const settings = useStudioSettings({
     isHydrated,
     onStorageError: reportStorageError,
-    services: { settings: services.settings },
+    services: { settings: services.settings, config: services.config },
   });
   const composerState = useComposerStore();
   const {
@@ -284,8 +285,11 @@ export function useStudioViewModel() {
       messages: services.messages,
       imageAssets: services.imageAssets,
       settings: services.settings,
+      config: services.config,
       timeFieldMigration: services.timeFieldMigration,
     },
+    companionUrl: settings.companionUrl,
+    companionAccessKey: settings.companionAccessKey,
     activeConversationId: conversations.activeConversationId,
     applySettings: settings.applySettings,
     attachedImages: images.attachedImages,

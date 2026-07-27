@@ -4,6 +4,8 @@ import { storeToRefs } from "pinia";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   createSettingsServices,
+  createConfigServices,
+  type ConfigServices,
   type SettingsServices,
 } from "../../services/settings";
 import { resolveStorage } from "../../services/storage/resolveStorage";
@@ -11,22 +13,27 @@ import { resolveStorage } from "../../services/storage/resolveStorage";
 type UseStudioSettingsInput = {
   isHydrated: Ref<boolean>;
   onStorageError: (error: unknown) => void;
-  /** 阶段一 PR2：存储服务注入。可选——未传时用默认实例。PR4 在 ViewModel 统一注入。 */
+  /** 阶段一 PR2/PR5：存储服务注入。可选——未传时用默认实例。ViewModel 统一注入。 */
   services?: {
     settings: SettingsServices;
+    config: ConfigServices;
   };
 };
 
-// 模块级默认 service 实例，供未显式注入时使用（PR4 后 ViewModel 统一注入）。
-const defaultSettingsServices = createSettingsServices(resolveStorage());
+// 模块级默认 service 实例，供未显式注入时使用（ViewModel 统一注入）。
+const defaultStorage = resolveStorage();
+const defaultSettingsServices = createSettingsServices(defaultStorage);
+const defaultConfigServices = createConfigServices(defaultStorage);
 
 export function useStudioSettings(input: UseStudioSettingsInput) {
   const settings = useSettingsStore();
   const refs = storeToRefs(settings);
 
-  settings.configureSettingsStore(
-    input.services?.settings ?? defaultSettingsServices,
-  );
+  settings.configureSettingsStore({
+    services: input.services?.settings ?? defaultSettingsServices,
+    config: input.services?.config ?? defaultConfigServices,
+    isHydrated: input.isHydrated,
+  });
 
   watch(
     [
