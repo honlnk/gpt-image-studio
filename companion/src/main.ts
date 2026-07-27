@@ -15,6 +15,7 @@ import {
 } from "./credentials.js";
 import { loadOrCreateAccessKey, resetAccessKey, getAccessKey } from "./accessKey.js";
 import { createSecurityConfig } from "./securityConfig.js";
+import { resolveDeploymentConfig, HostIgnoredWarning } from "./deploymentConfig.js";
 import { PROVIDER_PRESETS } from "./providerPresets.js";
 import {
   getLogFilePath,
@@ -68,6 +69,8 @@ function withCredentialStoreErrorCLI<TArgs extends unknown[]>(
 
 type ServeLikeOptions = {
   port: string;
+  host?: string;
+  deploymentMode?: string;
   channel?: string;
   allowOrigin?: string[];
   managed?: boolean;
@@ -76,6 +79,8 @@ type ServeLikeOptions = {
 function addServeOptions(command: ReturnType<typeof program.command>) {
   return command
     .option("-p, --port <port>", "监听端口", DEFAULT_PORT)
+    .option("-H, --host <host>", "监听地址（local 模式忽略，恒为 127.0.0.1）", process.env.COMPANION_HOST)
+    .option("--deployment-mode <mode>", "部署形态：local 或 server", process.env.COMPANION_DEPLOYMENT_MODE)
     .option("--channel <channel>", "安全渠道：stable 或 dev", process.env.GPT_IMAGE_STUDIO_COMPANION_CHANNEL)
     .option("--allow-origin <origin...>", "额外允许的完整 origin，例如 http://localhost:5173")
     .addOption(new Option("--managed", "由 start 命令托管的后台服务").hideHelp());
@@ -91,8 +96,13 @@ addServeOptions(program
   .description("前台启动本地 companion HTTP 服务"))
   .action(async (opts: ServeLikeOptions) => {
     const { startServer } = await import("./server.js");
+    const deployment = resolveDeploymentConfig(
+      { mode: opts.deploymentMode, host: opts.host },
+      (w: HostIgnoredWarning) => console.warn(`⚠️  ${w.reason}`),
+    );
     await startServer({
       port: Number(opts.port),
+      host: deployment.host,
       security: createSecurityConfig({
         channel: opts.channel,
         allowOrigins: opts.allowOrigin ?? [],
@@ -104,14 +114,21 @@ addServeOptions(program
   .command("start")
   .description("后台启动本地 companion 服务"))
   .action(async (opts: ServeLikeOptions) => {
+    const deployment = resolveDeploymentConfig(
+      { mode: opts.deploymentMode, host: opts.host },
+      (w: HostIgnoredWarning) => console.warn(`⚠️  ${w.reason}`),
+    );
     const info = startManagedProcess({
       port: Number(opts.port),
+      host: deployment.host,
+      deploymentMode: deployment.mode,
       channel: opts.channel ?? "stable",
       allowOrigins: opts.allowOrigin ?? [],
     });
 
-    console.log(`Companion 已在后台启动: http://127.0.0.1:${info.port}`);
+    console.log(`Companion 已在后台启动: http://${deployment.host}:${info.port}`);
     console.log(`PID: ${info.pid}`);
+    console.log(`部署形态: ${deployment.mode}`);
     console.log(`日志: ${info.logFile}`);
     console.log("启动日志中包含连接密钥，可用 gpt-image-studio status 查看。");
   });
@@ -139,13 +156,20 @@ addServeOptions(program
       console.log(`已停止后台 Companion，PID: ${stopped.info.pid}`);
     }
 
+    const deployment = resolveDeploymentConfig(
+      { mode: opts.deploymentMode, host: opts.host },
+      (w: HostIgnoredWarning) => console.warn(`⚠️  ${w.reason}`),
+    );
     const info = startManagedProcess({
       port: Number(opts.port),
+      host: deployment.host,
+      deploymentMode: deployment.mode,
       channel: opts.channel ?? "stable",
       allowOrigins: opts.allowOrigin ?? [],
     });
-    console.log(`Companion 已在后台重启: http://127.0.0.1:${info.port}`);
+    console.log(`Companion 已在后台重启: http://${deployment.host}:${info.port}`);
     console.log(`PID: ${info.pid}`);
+    console.log(`部署形态: ${deployment.mode}`);
     console.log(`日志: ${info.logFile}`);
     console.log("启动日志中包含连接密钥，可用 gpt-image-studio status 查看。");
   });
@@ -323,12 +347,19 @@ program
       console.log(`后台:    ${running ? "运行中" : "记录已失效"}`);
       console.log(`  PID: ${managed.pid}`);
       console.log(`  端口: ${managed.port}`);
+      // server 模式下 host 可能是 0.0.0.0，status 是本机探测，统一用 127.0.0.1
+      const displayHost = managed.host && managed.host !== "0.0.0.0" ? managed.host : "127.0.0.1";
+      console.log(`  地址: ${managed.host ?? displayHost}`);
+      if (managed.deploymentMode) {
+        console.log(`  形态: ${managed.deploymentMode}`);
+      }
       console.log(`  渠道: ${managed.channel}`);
       console.log(`  日志: ${managed.logFile}`);
       console.log(`  启动时间: ${managed.startedAt}`);
     }
 
     const statusPort = managed?.port ?? 19750;
+    // status 总是在本机执行，统一用 127.0.0.1 探测（即使 server 模式监听 0.0.0.0，本机回环也能命中）
     try {
       const res = await fetch(`http://127.0.0.1:${statusPort}/health`, { signal: AbortSignal.timeout(2000) });
       if (res.ok) {

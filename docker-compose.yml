@@ -4,11 +4,9 @@
 # Users open http://localhost:8080 and use "直连模式" (direct mode) with their
 # own OpenAI-compatible Images API base URL + key. No backend needed.
 #
-# Optional `companion` profile: runs the local credential proxy as a sidecar.
-# IMPORTANT: companion/src/server.ts currently binds 127.0.0.1 only, so it is
-# NOT reachable from the host browser out of the box. Enable it only after
-# patching the source to support --host 0.0.0.0 (see notes at bottom of this
-# file). Until then, keep it disabled and use direct mode.
+# Optional `companion` profile: runs the Companion backend as a sidecar.
+# Companion 现已支持可配置监听地址（阶段三 PR1），可绑定 0.0.0.0 供容器外访问。
+# 启用方式：docker compose --profile companion up
 
 services:
   web:
@@ -26,27 +24,27 @@ services:
       timeout: 3s
       retries: 3
 
-  # --- Optional companion sidecar (disabled by default) ---
-  # Uncomment the lines below AND apply the source patch described at the
-  # bottom of this file before enabling.
-  #
-  # companion:
-  #   profiles: ["companion"]
-  #   build:
-  #     context: .
-  #     target: companion
-  #   image: gpt-image-studio-companion:latest
-  #   container_name: gpt-image-studio-companion
-  #   ports:
-  #     - "19750:19750"
-  #   # The container's 127.0.0.1 is not the host's; bind 0.0.0.0 in the app
-  #   # and tell the browser to reach companion at http://localhost:19750
-  #   # (host port mapping) OR at http://companion:19750 if you front it.
-  #   command: ["node", "dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750", "--allow-origin", "http://localhost:8080"]
-  #   volumes:
-  #     # Persist credentials + pairing state across restarts
-  #     - companion-data:/root/.gpt-image-studio
-  #   restart: unless-stopped
+  # --- Optional companion backend (enable with --profile companion) ---
+  companion:
+    profiles: ["companion"]
+    build:
+      context: .
+      target: companion
+    image: gpt-image-studio-companion:latest
+    container_name: gpt-image-studio-companion
+    ports:
+      - "19750:19750"
+    volumes:
+      # 持久化 SQLite master db + 业务 db + 图片 + 凭据
+      - companion-data:/data
+    environment:
+      # PR1 阶段：仍是 local 行为（accessKey 信任模型），但可远程访问
+      # PR2 起 server 模式接入 JWT_SECRET / ADMIN_API_KEY 等
+      - GPT_IMAGE_STUDIO_CONFIG_DIR=/data
+    restart: unless-stopped
+    # 监听 0.0.0.0 让宿主浏览器可通过 http://localhost:19750 访问
+    # 如需让宿主前端（http://localhost:8080）跨域访问 Companion，加 --allow-origin
+    command: ["node", "dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750", "--allow-origin", "http://localhost:8080"]
 
-# volumes:
-#   companion-data:
+volumes:
+  companion-data:

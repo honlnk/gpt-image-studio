@@ -25,12 +25,20 @@ export type ManagedProcessInfo = {
   channel: string;
   logFile: string;
   startedAt: string;
+  /** 监听地址（阶段三 PR1）。旧版记录无此字段，读取时为 undefined。 */
+  host?: string;
+  /** 部署形态 local/server（阶段三 PR1）。旧版记录无此字段，读取时为 undefined。 */
+  deploymentMode?: string;
 };
 
 export type StartManagedProcessInput = {
   port: number;
   channel: string;
   allowOrigins: string[];
+  /** 监听地址（阶段三 PR1）。 */
+  host?: string;
+  /** 部署形态 local/server（阶段三 PR1）。 */
+  deploymentMode?: string;
 };
 
 export function getPidFilePath(): string {
@@ -145,6 +153,13 @@ export function startManagedProcess(input: StartManagedProcessInput): ManagedPro
     "--managed",
   ];
 
+  if (input.host) {
+    args.push("--host", input.host);
+  }
+  if (input.deploymentMode) {
+    args.push("--deployment-mode", input.deploymentMode);
+  }
+
   input.allowOrigins.forEach((origin) => {
     args.push("--allow-origin", origin);
   });
@@ -163,6 +178,8 @@ export function startManagedProcess(input: StartManagedProcessInput): ManagedPro
     channel: input.channel,
     logFile,
     startedAt: new Date().toISOString(),
+    host: input.host,
+    deploymentMode: input.deploymentMode,
   };
   writeManagedProcessInfo(info);
   appendLogLine(logFile, `[manager] started ${basename(process.argv[1])} PID ${info.pid}`);

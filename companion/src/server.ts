@@ -20,6 +20,7 @@ const COMPANION_VERSION = packageJson.version;
 
 export async function startServer(opts: {
   port: number;
+  host: string;
   security: CompanionSecurityConfig;
 }) {
   loadOrCreateAccessKey();
@@ -73,7 +74,7 @@ export async function startServer(opts: {
     };
   });
 
-  await app.listen({ host: "127.0.0.1", port: opts.port });
+  await app.listen({ host: opts.host, port: opts.port });
   // 启动时保证有一个可用的默认数据集（选项 B），让 Companion 模式立即可用
   try {
     const defaultDataset = await ensureDefaultDataset();
@@ -81,7 +82,7 @@ export async function startServer(opts: {
   } catch (err) {
     console.warn("默认数据集初始化失败，Companion 存储模式需手动激活:", err);
   }
-  console.log(`Companion 服务已启动: http://127.0.0.1:${opts.port}`);
+  console.log(`Companion 服务已启动: http://${opts.host}:${opts.port}`);
   console.log(`版本: v${COMPANION_VERSION}`);
   console.log(`安全渠道: ${opts.security.channel}`);
   console.log("允许的 Origin:");
@@ -91,6 +92,8 @@ export async function startServer(opts: {
   console.log("  连接密钥（请粘进 Web 工作台的 Companion 连接框）");
   console.log(`  ${loadOrCreateAccessKey()}`);
   console.log("=".repeat(60));
-  console.log(`  管理页：http://127.0.0.1:${opts.port}/admin`);
+  // 0.0.0.0 不能直接浏览器访问，提示用本机回环地址（server 模式下用户应通过实际域名/IP 访问）
+  const adminDisplayHost = opts.host === "0.0.0.0" ? "127.0.0.1" : opts.host;
+  console.log(`  管理页：http://${adminDisplayHost}:${opts.port}/admin`);
   console.log("=".repeat(60));
 }
