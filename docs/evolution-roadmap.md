@@ -715,6 +715,8 @@ describe("IndexedDbStorage contract", () => {
 
 ## 七、阶段二：Companion 后端化（真实数据）
 
+> **状态：✅ 已完成（2026-07-27）**。8 个 PR 全部合入。Companion 从无状态代理升级为真实数据后端：SQLite 双层结构（主 db dataset_registry + 业务 db 7 表）+ 图片存储 adapter（FileSystem 选项 A/B + Oss 选项 C）+ /storage/* HTTP 路由 + 前端 CompanionStorage fetch 实现（接入契约测试套件）+ 存储位置 UI（切换触发页面 reload，遵循 D1 数据集隔离）。详细施工记录见 `docs/evolution/phase2-*.md`。
+
 ### 目标
 
 让 Companion 从"无状态代理"升级为"真实数据后端"。Web 端切到 Companion 模式时，**整个存储机制都走 Companion**（不只是模型调用），为后续对接 RuoYi-Plus（服务化，不做物理嵌入，见 D8）、APP 内化 Companion 能力做铺垫。

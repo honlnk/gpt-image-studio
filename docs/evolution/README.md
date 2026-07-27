@@ -24,15 +24,15 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| [phase2-overview.md](./phase2-overview.md) | 阶段二总览：SQLite + 文件/OSS 存储 + 数据集管理 | 🚧 进行中 |
-| [phase2-pr1-sqlite-infra.md](./phase2-pr1-sqlite-infra.md) | PR1：Companion 侧 SQLite 基础设施（主 db + 业务 db + schema + CRUD） | ⬜ 待启动 |
-| [phase2-pr2-filesystem-image-store.md](./phase2-pr2-filesystem-image-store.md) | PR2：图片 adapter FileSystemImageStore（选项 A/B） | ⬜ 待启动 |
-| [phase2-pr3-dataset-registry.md](./phase2-pr3-dataset-registry.md) | PR3：数据集管理（datasetRegistry + fingerprint + 激活切换） | ⬜ 待启动 |
-| [phase2-pr4-storage-routes.md](./phase2-pr4-storage-routes.md) | PR4：Companion 侧 /storage/* 路由 + 集成测试 | ⬜ 待启动 |
-| [phase2-pr5-oss-image-store.md](./phase2-pr5-oss-image-store.md) | PR5：OssImageStore（选项 C）+ OSS 凭据录入 | ⬜ 待启动 |
-| [phase2-pr6-companion-storage-frontend.md](./phase2-pr6-companion-storage-frontend.md) | PR6：前端 CompanionStorage 填充 + resolveStorage 切换 | ⬜ 待启动 |
-| [phase2-pr7-storage-location-ui.md](./phase2-pr7-storage-location-ui.md) | PR7：前端存储位置 UI + 切换 reload 逻辑 | ⬜ 待启动 |
-| [phase2-pr8-cleanup.md](./phase2-pr8-cleanup.md) | PR8：收尾（文档、管理页存储入口、部署说明） | ⬜ 待启动 |
+| [phase2-overview.md](./phase2-overview.md) | 阶段二总览：SQLite + 文件/OSS 存储 + 数据集管理 | ✅ 已完成 |
+| [phase2-pr1-sqlite-infra.md](./phase2-pr1-sqlite-infra.md) | PR1：Companion 侧 SQLite 基础设施（主 db + 业务 db + schema + CRUD） | ✅ 已完成 |
+| [phase2-pr2-filesystem-image-store.md](./phase2-pr2-filesystem-image-store.md) | PR2：图片 adapter FileSystemImageStore（选项 A/B） | ✅ 已完成 |
+| [phase2-pr3-dataset-registry.md](./phase2-pr3-dataset-registry.md) | PR3：数据集管理（datasetRegistry + fingerprint + 激活切换） | ✅ 已完成 |
+| [phase2-pr4-storage-routes.md](./phase2-pr4-storage-routes.md) | PR4：Companion 侧 /storage/* 路由 + 集成测试 | ✅ 已完成 |
+| [phase2-pr5-oss-image-store.md](./phase2-pr5-oss-image-store.md) | PR5：OssImageStore（选项 C）+ OSS 凭据录入 | ✅ 已完成 |
+| [phase2-pr6-companion-storage-frontend.md](./phase2-pr6-companion-storage-frontend.md) | PR6：前端 CompanionStorage 填充 + resolveStorage 切换 | ✅ 已完成 |
+| [phase2-pr7-storage-location-ui.md](./phase2-pr7-storage-location-ui.md) | PR7：前端存储位置 UI + 切换 reload 逻辑 | ✅ 已完成 |
+| [phase2-pr8-cleanup.md](./phase2-pr8-cleanup.md) | PR8：收尾（文档、README、evolution-roadmap 标记完成） | ✅ 已完成 |
 
 ### 阶段三：服务化与可嵌入（多用户 SaaS）
 
