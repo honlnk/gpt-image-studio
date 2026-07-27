@@ -12,11 +12,20 @@ import {
 } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
+import { initTrackerStorage } from "../../features/analytics/useAnalyticsTracker";
 import { useCompanionStore } from "../../stores/companionStore";
 import { withNetworkRetry } from "../../services/networkRetry";
 import { clonePromptWordbanks } from "../../services/promptWordbanks";
+import { createConversationServices } from "../../services/conversations";
+import { createMessageServices } from "../../services/messages";
+import { createImageAssetServices } from "../../services/imageAssets";
+import { createSettingsServices } from "../../services/settings";
+import { createConversationDraftServices } from "../../services/conversationDrafts";
+import { createAnalyticsEventServices } from "../../services/analyticsEvents";
+import { createBackupServices } from "../../services/backups";
+import { createTimeFieldMigrationServices } from "../../services/timeFieldMigration";
+import { resolveStorage } from "../../services/storage/resolveStorage";
 import { copyText as copyTextToClipboard } from "../../shared/clipboard";
-import { saveSettings } from "../../services/settings";
 import {
   applyUrlSettings,
   getPromptFromUrlParams,
@@ -56,9 +65,28 @@ type RenameImageDialogState = {
 
 export function useStudioViewModel() {
   const isHydrated = ref(false);
+
+  // ─── 阶段一 PR4：service 工厂全集（唯一装配点，决策 T1 + §6.3） ───
+  // 所有 service 共享同一个 storage 实例（resolveStorage），store/feature 通过注入获取。
+  // 阶段一恒返回 IndexedDbStorage；阶段二扩展为 connectionMode 分叉；阶段四 isTauriRuntime 分叉。
+  const storage = resolveStorage();
+  const services = {
+    conversations: createConversationServices(storage),
+    messages: createMessageServices(storage),
+    imageAssets: createImageAssetServices(storage),
+    settings: createSettingsServices(storage),
+    drafts: createConversationDraftServices(storage),
+    analyticsEvents: createAnalyticsEventServices(storage),
+    backup: createBackupServices(storage),
+    timeFieldMigration: createTimeFieldMigrationServices(storage),
+  };
+  // analytics tracker 是模块级单例，无法通过参数注入，用 init 注入 service。
+  initTrackerStorage(services.analyticsEvents);
+
   const settings = useStudioSettings({
     isHydrated,
     onStorageError: reportStorageError,
+    services: { settings: services.settings },
   });
   const composerState = useComposerStore();
   const {
@@ -90,12 +118,17 @@ export function useStudioViewModel() {
   // 探活/配对/凭证/日志全收拢在这里，不重复实例化、不重复轮询。
   const companionStore = useCompanionStore();
   const conversations = useStudioConversations({
+    services: {
+      conversations: services.conversations,
+      messages: services.messages,
+    },
     clearDraft: clearConversationDraft,
     onStorageError: reportStorageError,
     refreshStorageUsage: refreshImagesStorageUsage,
   });
   const messages = conversations.messages;
   const images = useStudioImages({
+    services: { imageAssets: services.imageAssets },
     activeConversationId: conversations.activeConversationId,
     messages,
     onStorageError: reportStorageError,
@@ -113,6 +146,7 @@ export function useStudioViewModel() {
   // 草稿管理：select/create/delete 会话时的草稿同步、防抖保存、URL 覆盖。
   // analytics 埋点留在 ViewModel 包装层，drafts 不依赖 analytics。
   const drafts = useStudioDrafts({
+    draftServices: services.drafts,
     isHydrated,
     composerText,
     editModeEnabled,
@@ -218,6 +252,10 @@ export function useStudioViewModel() {
     imageById: images.imageById,
     imageClient,
     messages,
+    services: {
+      imageAssets: services.imageAssets,
+      messages: services.messages,
+    },
     supportsEdit: computed(() => settings.providerCapability.value.edit),
     notifyUnsupportedEdit: () =>
       feedback.notifyError(
@@ -241,6 +279,13 @@ export function useStudioViewModel() {
     };
   }
   const { restoreFromStorage } = useStudioRestore({
+    services: {
+      conversations: services.conversations,
+      messages: services.messages,
+      imageAssets: services.imageAssets,
+      settings: services.settings,
+      timeFieldMigration: services.timeFieldMigration,
+    },
     activeConversationId: conversations.activeConversationId,
     applySettings: settings.applySettings,
     attachedImages: images.attachedImages,
@@ -255,6 +300,7 @@ export function useStudioViewModel() {
     saveCurrentSettings: settings.saveCurrentSettings,
   });
   const backup = useStudioBackup({
+    backupServices: services.backup,
     activeConversationId: conversations.activeConversationId,
     attachedImages: images.attachedImages,
     composerText,
@@ -328,7 +374,7 @@ export function useStudioViewModel() {
 
       await applyUrlSettings(
         settings.currentSettings(),
-        saveSettings,
+        services.settings.save,
         settings.applySettings,
       ).catch(reportStorageError);
 

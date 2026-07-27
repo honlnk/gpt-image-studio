@@ -1,13 +1,24 @@
-import { deleteConversation as deleteConversationRecord, listConversations } from "../../services/conversations";
-import { deleteImageAsset, deleteImageBlob, listImageAssets } from "../../services/imageAssets";
-import { deleteMessage, listMessages, saveMessage } from "../../services/messages";
-import { loadSettings } from "../../services/settings";
-import { migrateLegacyTimeFields } from "../../services/timeFieldMigration";
+import type { ConversationServices } from "../../services/conversations";
+import type { ImageAssetServices } from "../../services/imageAssets";
+import type { MessageServices } from "../../services/messages";
+import type { SettingsServices } from "../../services/settings";
+import type { TimeFieldMigrationServices } from "../../services/timeFieldMigration";
 import { formatError } from "../../shared/errors";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
+/** 阶段一 PR2/PR4：restore 流程需要的 service 全集。
+ *  由 ViewModel 在唯一装配点创建并注入（决策 T1 + §6.3）。 */
+export type StudioRestoreServices = {
+  conversations: ConversationServices;
+  messages: MessageServices;
+  imageAssets: ImageAssetServices;
+  settings: SettingsServices;
+  timeFieldMigration: TimeFieldMigrationServices;
+};
+
 type UseStudioRestoreInput = {
+  services: StudioRestoreServices;
   activeConversationId: Ref<string>;
   applySettings: (settings: AppSettings) => void;
   attachedImages: Ref<string[]>;
@@ -27,16 +38,18 @@ const LEGACY_SEED_MESSAGE_IDS = new Set(["m-1", "m-2", "m-3", "m-4", "m-5", "m-6
 const LEGACY_SEED_IMAGE_IDS = new Set(["img-1", "img-2", "img-3", "img-4"]);
 
 export function useStudioRestore(input: UseStudioRestoreInput) {
+  const services = input.services;
+
   async function restoreFromStorage() {
     try {
-      await migrateLegacyTimeFields();
+      await services.timeFieldMigration.migrate();
 
       const [savedSettings, savedConversations, savedMessages, savedImageAssets] =
         await Promise.all([
-          loadSettings(),
-          listConversations(),
-          listMessages(),
-          listImageAssets(),
+          services.settings.load(),
+          services.conversations.list(),
+          services.messages.list(),
+          services.imageAssets.listAssets(),
         ]);
 
       if (savedSettings) {
@@ -88,6 +101,60 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
     }
   }
 
+  async function persistNormalizedMessages(
+    originalMessages: Message[],
+    restoredMessages: Message[],
+  ) {
+    const changedMessages = restoredMessages.filter(
+      (message, index) => message.status !== originalMessages[index]?.status,
+    );
+
+    if (!changedMessages.length) return;
+
+    await Promise.all(
+      changedMessages.map((message) => services.messages.save(message)),
+    );
+  }
+
+  async function removeLegacySeedRecords(
+    conversations: Conversation[],
+    messages: Message[],
+    imageAssets: ImageAsset[],
+  ) {
+    const staleConversations = conversations.filter((conversation) =>
+      LEGACY_SEED_CONVERSATION_IDS.has(conversation.id),
+    );
+    const staleMessages = messages.filter(
+      (message) =>
+        LEGACY_SEED_MESSAGE_IDS.has(message.id) ||
+        LEGACY_SEED_CONVERSATION_IDS.has(message.conversationId),
+    );
+    const staleImages = imageAssets.filter(
+      (image) =>
+        LEGACY_SEED_IMAGE_IDS.has(image.id) ||
+        Boolean(
+          image.conversationId &&
+            LEGACY_SEED_CONVERSATION_IDS.has(image.conversationId),
+        ),
+    );
+
+    if (!staleConversations.length && !staleMessages.length && !staleImages.length) {
+      return;
+    }
+
+    await Promise.all([
+      ...staleConversations.map((conversation) =>
+        services.conversations.remove(conversation.id),
+      ),
+      ...staleMessages.map((message) => services.messages.remove(message.id)),
+      ...staleImages.map((image) => services.imageAssets.deleteAsset(image.id)),
+      ...staleImages
+        .map((image) => image.blobKey)
+        .filter((blobKey): blobKey is string => Boolean(blobKey))
+        .map((blobKey) => services.imageAssets.deleteBlob(blobKey)),
+    ]);
+  }
+
   return {
     restoreFromStorage,
   };
@@ -104,56 +171,4 @@ function normalizeRestoredMessages(messages: Message[]) {
       errorMessage: "页面刷新或会话中断后，未完成的生成任务不会继续运行。",
     } satisfies Message;
   });
-}
-
-async function persistNormalizedMessages(
-  originalMessages: Message[],
-  restoredMessages: Message[],
-) {
-  const changedMessages = restoredMessages.filter(
-    (message, index) => message.status !== originalMessages[index]?.status,
-  );
-
-  if (!changedMessages.length) return;
-
-  await Promise.all(changedMessages.map((message) => saveMessage(message)));
-}
-
-async function removeLegacySeedRecords(
-  conversations: Conversation[],
-  messages: Message[],
-  imageAssets: ImageAsset[],
-) {
-  const staleConversations = conversations.filter((conversation) =>
-    LEGACY_SEED_CONVERSATION_IDS.has(conversation.id),
-  );
-  const staleMessages = messages.filter(
-    (message) =>
-      LEGACY_SEED_MESSAGE_IDS.has(message.id) ||
-      LEGACY_SEED_CONVERSATION_IDS.has(message.conversationId),
-  );
-  const staleImages = imageAssets.filter(
-    (image) =>
-      LEGACY_SEED_IMAGE_IDS.has(image.id) ||
-      Boolean(
-        image.conversationId &&
-          LEGACY_SEED_CONVERSATION_IDS.has(image.conversationId),
-      ),
-  );
-
-  if (!staleConversations.length && !staleMessages.length && !staleImages.length) {
-    return;
-  }
-
-  await Promise.all([
-    ...staleConversations.map((conversation) =>
-      deleteConversationRecord(conversation.id),
-    ),
-    ...staleMessages.map((message) => deleteMessage(message.id)),
-    ...staleImages.map((image) => deleteImageAsset(image.id)),
-    ...staleImages
-      .map((image) => image.blobKey)
-      .filter((blobKey): blobKey is string => Boolean(blobKey))
-      .map((blobKey) => deleteImageBlob(blobKey)),
-  ]);
 }

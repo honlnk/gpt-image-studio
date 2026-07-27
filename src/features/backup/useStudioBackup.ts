@@ -1,4 +1,4 @@
-import { createStudioBackup, restoreStudioBackup } from "../../services/backups";
+import type { BackupServices } from "../../services/backups";
 import { track } from "../analytics/useAnalyticsTracker";
 import { formatError } from "../../shared/errors";
 import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
@@ -6,6 +6,8 @@ import type { Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioBackupInput = {
+  /** 阶段一 PR4：backup service 由 ViewModel 注入（决策 T1 + §6.3）。 */
+  backupServices: BackupServices;
   activeConversationId: Ref<string>;
   attachedImages: Ref<string[]>;
   composerText: Ref<string>;
@@ -22,7 +24,7 @@ export function useStudioBackup(input: UseStudioBackupInput) {
   async function exportBackup() {
     track("backup.export_requested", { kind: "project" }, "system");
     try {
-      const backup = await createStudioBackup();
+      const backup = await input.backupServices.create();
       const url = createObjectUrl(backup);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -41,7 +43,7 @@ export function useStudioBackup(input: UseStudioBackupInput) {
   async function importBackup(file: File) {
     track("backup.import_requested", { kind: "project", sizeBytes: file.size }, "system");
     try {
-      await restoreStudioBackup(file);
+      await input.backupServices.restore(file);
       input.conversations.value = [];
       input.messages.value = [];
       input.imageAssets.value = [];

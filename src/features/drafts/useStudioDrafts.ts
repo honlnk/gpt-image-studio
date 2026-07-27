@@ -1,11 +1,6 @@
 import { watch } from "vue";
 import type { Ref } from "vue";
-import {
-  deleteConversationDraft,
-  deleteConversationDrafts,
-  loadConversationDraft,
-  saveConversationDraft,
-} from "../../services/conversationDrafts";
+import type { ConversationDraftServices } from "../../services/conversationDrafts";
 import { readJsonStorage, readStorage } from "../../shared/localStorage";
 import type {
   ConversationDraft,
@@ -26,6 +21,8 @@ const STORAGE_KEYS = {
 } as const;
 
 type UseStudioDraftsInput = {
+  /** 阶段一 PR4：drafts service 由 ViewModel 注入（决策 T1 + §6.3）。 */
+  draftServices: ConversationDraftServices;
   /** 应用是否已完成 hydrate（restoreFromStorage 完成）。watch 在 hydrate 前不触发。 */
   isHydrated: Ref<boolean>;
   composerText: Ref<string>;
@@ -73,6 +70,7 @@ type UseStudioDraftsInput = {
  *   - onMounted 编排（时序由 ViewModel 控制）
  */
 export function useStudioDrafts(input: UseStudioDraftsInput) {
+  const draftServices = input.draftServices;
   const legacyComposerText = readStorage(STORAGE_KEYS.draftComposerText, "");
   const legacyAttachedImageIds = readJsonStorage<string[]>(
     STORAGE_KEYS.draftAttachments,
@@ -197,7 +195,7 @@ export function useStudioDrafts(input: UseStudioDraftsInput) {
     if (!conversationId) return;
 
     const draft = currentConversationDraft(conversationId);
-    await saveConversationDraft(draft).catch(input.onStorageError);
+    await draftServices.save(draft).catch(input.onStorageError);
   }
 
   /**
@@ -215,7 +213,7 @@ export function useStudioDrafts(input: UseStudioDraftsInput) {
       .then(async () => {
         await saveActiveDraft();
         input.selectConversation(id);
-        const nextDraft = await loadConversationDraft(id).catch(input.onStorageError);
+        const nextDraft = await draftServices.load(id).catch(input.onStorageError);
         if (nextDraft) {
           applyConversationDraft(nextDraft);
         } else {
@@ -230,16 +228,16 @@ export function useStudioDrafts(input: UseStudioDraftsInput) {
     const id = input.activeConversationId.value;
     if (!id) return;
     applyConversationDraft(createDefaultDraft(id));
-    await saveConversationDraft(currentConversationDraft(id)).catch(input.onStorageError);
+    await draftServices.save(currentConversationDraft(id)).catch(input.onStorageError);
   }
 
   async function deleteConversationWithDraft(id: string) {
     await input.deleteConversation(id);
-    await deleteConversationDraft(id).catch(input.onStorageError);
+    await draftServices.remove(id).catch(input.onStorageError);
 
     const activeId = input.activeConversationId.value;
     if (!activeId) return;
-    const draft = await loadConversationDraft(activeId).catch(input.onStorageError);
+    const draft = await draftServices.load(activeId).catch(input.onStorageError);
     if (draft) {
       applyConversationDraft(draft);
     } else {
@@ -249,7 +247,7 @@ export function useStudioDrafts(input: UseStudioDraftsInput) {
 
   async function deleteConversationsWithDraft(ids: string[]) {
     await input.deleteConversations(ids);
-    await deleteConversationDrafts(ids).catch(input.onStorageError);
+    await draftServices.removeMany(ids).catch(input.onStorageError);
 
     const activeId = input.activeConversationId.value;
     if (!activeId) {
@@ -257,7 +255,7 @@ export function useStudioDrafts(input: UseStudioDraftsInput) {
       return;
     }
 
-    const draft = await loadConversationDraft(activeId).catch(input.onStorageError);
+    const draft = await draftServices.load(activeId).catch(input.onStorageError);
     if (draft) {
       applyConversationDraft(draft);
     } else {
@@ -278,7 +276,7 @@ export function useStudioDrafts(input: UseStudioDraftsInput) {
     const activeConversationId = input.activeConversationId.value;
     if (!activeConversationId) return;
 
-    const draft = await loadConversationDraft(activeConversationId).catch(input.onStorageError);
+    const draft = await draftServices.load(activeConversationId).catch(input.onStorageError);
     if (draft) {
       applyConversationDraft(draft);
       applyUrlDraftOverrides(ctx.urlPrompt, ctx.shouldApplyUrlGenerationParams);

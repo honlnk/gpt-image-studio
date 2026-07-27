@@ -8,12 +8,16 @@ import {
 } from "./useAnalyticsTracker";
 import type { AnalyticsEvent } from "../../types/studio";
 
+// 阶段一 PR4：tracker 通过 createAnalyticsEventServices 创建默认 service 实例。
+// mock 该工厂返回带 saveBatch spy 的对象，让测试能断言落库调用。
 const mocks = vi.hoisted(() => ({
-  saveAnalyticsEventsBatch: vi.fn(),
+  saveBatch: vi.fn(),
 }));
 
 vi.mock("../../services/analyticsEvents", () => ({
-  saveAnalyticsEventsBatch: mocks.saveAnalyticsEventsBatch,
+  createAnalyticsEventServices: () => ({
+    saveBatch: mocks.saveBatch,
+  }),
 }));
 
 function configure() {
@@ -25,7 +29,7 @@ function configure() {
 }
 
 function flushedEvents(): AnalyticsEvent[] {
-  const calls = mocks.saveAnalyticsEventsBatch.mock.calls;
+  const calls = mocks.saveBatch.mock.calls;
   return calls.flatMap((call) => call[0] as AnalyticsEvent[]);
 }
 
@@ -52,7 +56,7 @@ describe("useAnalyticsTracker", () => {
     await vi.runAllTimersAsync();
     await Promise.resolve();
 
-    expect(mocks.saveAnalyticsEventsBatch).not.toHaveBeenCalled();
+    expect(mocks.saveBatch).not.toHaveBeenCalled();
   });
 
   it("does not record without a session id", async () => {
@@ -65,7 +69,7 @@ describe("useAnalyticsTracker", () => {
     track("chat.submit");
     await vi.runAllTimersAsync();
 
-    expect(mocks.saveAnalyticsEventsBatch).not.toHaveBeenCalled();
+    expect(mocks.saveBatch).not.toHaveBeenCalled();
   });
 
   it("records an event with context and source", async () => {
@@ -145,18 +149,18 @@ describe("useAnalyticsTracker", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(mocks.saveAnalyticsEventsBatch).toHaveBeenCalledTimes(1);
-    expect(mocks.saveAnalyticsEventsBatch.mock.calls[0][0]).toHaveLength(50);
+    expect(mocks.saveBatch).toHaveBeenCalledTimes(1);
+    expect(mocks.saveBatch.mock.calls[0][0]).toHaveLength(50);
   });
 
   it("swallows persistence errors without throwing", async () => {
     configure();
-    mocks.saveAnalyticsEventsBatch.mockRejectedValue(new Error("db down"));
+    mocks.saveBatch.mockRejectedValue(new Error("db down"));
 
     track("chat.submit");
     await vi.runAllTimersAsync();
     await vi.waitFor(() => {
-      expect(mocks.saveAnalyticsEventsBatch).toHaveBeenCalled();
+      expect(mocks.saveBatch).toHaveBeenCalled();
     });
 
     // 第二次 track 不应抛错，说明前一次失败已被吞掉。
@@ -170,7 +174,7 @@ describe("useAnalyticsTracker", () => {
 
   it("notifies the flushed listener with the batch size on success", async () => {
     vi.useRealTimers();
-    mocks.saveAnalyticsEventsBatch.mockResolvedValue(undefined);
+    mocks.saveBatch.mockResolvedValue(undefined);
     configure();
     const listener = vi.fn();
     setFlushedListener(listener);
@@ -178,21 +182,21 @@ describe("useAnalyticsTracker", () => {
     track("chat.submit");
     track("image.downloaded", { imageId: "img-1" });
     await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(mocks.saveAnalyticsEventsBatch).toHaveBeenCalled();
+    expect(mocks.saveBatch).toHaveBeenCalled();
     expect(listener).toHaveBeenCalledWith(2);
     vi.useFakeTimers();
   });
 
   it("does not notify the listener when persistence fails", async () => {
     configure();
-    mocks.saveAnalyticsEventsBatch.mockRejectedValue(new Error("db down"));
+    mocks.saveBatch.mockRejectedValue(new Error("db down"));
     const listener = vi.fn();
     setFlushedListener(listener);
 
     track("chat.submit");
     await vi.runAllTimersAsync();
     await vi.waitFor(() => {
-      expect(mocks.saveAnalyticsEventsBatch).toHaveBeenCalled();
+      expect(mocks.saveBatch).toHaveBeenCalled();
     });
 
     expect(listener).not.toHaveBeenCalled();
