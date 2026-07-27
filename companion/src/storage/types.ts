@@ -39,18 +39,38 @@ export type OssConfig = {
 export type StorageConfig = FilesystemConfig | OssConfig;
 
 /**
+ * users 表的一行（主 db，阶段三 PR2 多租户）。
+ *
+ * 定位为"本地数据归属索引"：id 来自 JWT sub，display_name 来自 JWT claim。
+ * **不存密码/邮箱/权限**，不与宿主用户表强一致。
+ */
+export type UserRecord = {
+  /** 用户 id（来自 JWT sub）。local 模式为虚拟用户 '__local__'。 */
+  id: string;
+  /** 显示名（来自 JWT display_name claim）。 */
+  display_name: string;
+  /** ISO timestamp。 */
+  created_at: string;
+};
+
+/**
  * dataset_registry 表的一行（主 db）。
- * 字段对应 schema.ts 的 MASTER_DB_DDL。
+ * 字段对应 schema.ts 的 MASTER_DB_DDL（v2 含 user_id）。
  */
 export type DatasetRecord = {
   id: string;
+  /** 所属用户 id（多租户，local 模式为 '__local__'）。 */
+  user_id: string;
   label: string;
   storage_kind: StorageKind;
   /** JSON.stringify(StorageConfig)。读取时由调用方 JSON.parse。 */
   storage_config: string;
-  /** 配置指纹（见 fingerprint.ts），UNIQUE。 */
+  /** 配置指纹（见 fingerprint.ts），(user_id, fingerprint) 唯一。 */
   fingerprint: string;
-  /** 业务 db 的绝对路径（datasets/<id>.db）。 */
+  /**
+   * 业务 db 的绝对路径。
+   * local 模式：datasets/<id>.db；server 模式：users/<userId>/datasets/<id>.db。
+   */
   db_path: string;
   image_store_kind: ImageStoreKind;
   /** ISO timestamp。 */

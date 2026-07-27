@@ -36,6 +36,7 @@ async function loadModules() {
 function makeRecord(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "ds-1",
+    user_id: "__local__",
     label: "默认数据集",
     storage_kind: "filesystem" as const,
     storage_config: JSON.stringify({ directory: "/tmp/pics" }),
@@ -83,7 +84,7 @@ describe("openMasterDb", () => {
     const { openMasterDb, closeMasterDb } = await loadModules();
     const db = openMasterDb();
     const version = db.pragma("user_version", { simple: true });
-    expect(version).toBe(1);
+    expect(version).toBe(2);
     closeMasterDb();
   });
 
@@ -94,9 +95,20 @@ describe("openMasterDb", () => {
     const names = cols.map((c) => c.name);
     expect(names).toEqual(
       expect.arrayContaining([
-        "id", "label", "storage_kind", "storage_config", "fingerprint",
+        "id", "user_id", "label", "storage_kind", "storage_config", "fingerprint",
         "db_path", "image_store_kind", "created_at", "activated_at", "is_active",
       ]),
+    );
+    closeMasterDb();
+  });
+
+  it("users 表存在且有正确字段（阶段三 PR2 多租户）", async () => {
+    const { openMasterDb, closeMasterDb } = await loadModules();
+    const db = openMasterDb();
+    const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+    const names = cols.map((c) => c.name);
+    expect(names).toEqual(
+      expect.arrayContaining(["id", "display_name", "created_at"]),
     );
     closeMasterDb();
   });
@@ -209,6 +221,121 @@ describe("dataset_registry CRUD", () => {
     insertDataset(makeRecord({ label: "原名" }));
     renameDataset("ds-1", "新名");
     expect(getDataset("ds-1")?.label).toBe("新名");
+    closeMasterDb();
+  });
+});
+
+// ─── 阶段三 PR2：多租户隔离（user_id 维度） ───
+
+describe("dataset_registry 多租户隔离（user_id）", () => {
+  it("不同用户可以有相同 fingerprint（复合唯一）", async () => {
+    const { insertDataset, findDatasetByFingerprint, closeMasterDb } =
+      await loadModules();
+    // 用户 A 和 B 都用相同配置（fingerprint 相同），各自独立存在
+    insertDataset(makeRecord({ id: "ds-a", user_id: "userA" }));
+    insertDataset(makeRecord({ id: "ds-b", user_id: "userB" }));
+    expect(findDatasetByFingerprint("fs:/tmp/pics", "userA")?.id).toBe("ds-a");
+    expect(findDatasetByFingerprint("fs:/tmp/pics", "userB")?.id).toBe("ds-b");
+    closeMasterDb();
+  });
+
+  it("findDatasetByFingerprint 按 userId 隔离", async () => {
+    const { insertDataset, findDatasetByFingerprint, closeMasterDb } =
+      await loadModules();
+    insertDataset(makeRecord({ id: "ds-a", user_id: "userA", fingerprint: "fs:/dir" }));
+    expect(findDatasetByFingerprint("fs:/dir", "userA")?.id).toBe("ds-a");
+    expect(findDatasetByFingerprint("fs:/dir", "userB")).toBeUndefined();
+    closeMasterDb();
+  });
+
+  it("getDataset 按 userId 隔离（防越权读）", async () => {
+    const { insertDataset, getDataset, closeMasterDb } = await loadModules();
+    insertDataset(makeRecord({ id: "ds-a", user_id: "userA" }));
+    expect(getDataset("ds-a", "userA")?.id).toBe("ds-a");
+    expect(getDataset("ds-a", "userB")).toBeUndefined();
+    closeMasterDb();
+  });
+
+  it("listDatasets 按 userId 过滤", async () => {
+    const { insertDataset, listDatasets, closeMasterDb } = await loadModules();
+    insertDataset(makeRecord({ id: "ds-a1", user_id: "userA", fingerprint: "fs:/a1" }));
+    insertDataset(makeRecord({ id: "ds-a2", user_id: "userA", fingerprint: "fs:/a2" }));
+    insertDataset(makeRecord({ id: "ds-b1", user_id: "userB", fingerprint: "fs:/b1" }));
+    expect(listDatasets("userA")).toHaveLength(2);
+    expect(listDatasets("userB")).toHaveLength(1);
+    expect(listDatasets("userB")[0].id).toBe("ds-b1");
+    closeMasterDb();
+  });
+
+  it("getActiveDataset 按 userId 隔离", async () => {
+    const { insertDataset, getActiveDataset, closeMasterDb } = await loadModules();
+    insertDataset(makeRecord({ id: "ds-a", user_id: "userA", is_active: 1 }));
+    insertDataset(makeRecord({ id: "ds-b", user_id: "userB", is_active: 1, fingerprint: "fs:/b" }));
+    expect(getActiveDataset("userA")?.id).toBe("ds-a");
+    expect(getActiveDataset("userB")?.id).toBe("ds-b");
+    closeMasterDb();
+  });
+
+  it("activateDataset 只重置该用户的 active（不影响其他用户）", async () => {
+    const { insertDataset, activateDataset, getActiveDataset, closeMasterDb } =
+      await loadModules();
+    insertDataset(makeRecord({ id: "ds-a1", user_id: "userA", is_active: 1, fingerprint: "fs:/a1" }));
+    insertDataset(makeRecord({ id: "ds-a2", user_id: "userA", is_active: 0, fingerprint: "fs:/a2" }));
+    insertDataset(makeRecord({ id: "ds-b1", user_id: "userB", is_active: 1, fingerprint: "fs:/b1" }));
+
+    activateDataset("ds-a2", "2026-07-27T10:00:00Z", "userA");
+
+    expect(getActiveDataset("userA")?.id).toBe("ds-a2");
+    // userB 的 active 不受影响
+    expect(getActiveDataset("userB")?.id).toBe("ds-b1");
+    closeMasterDb();
+  });
+
+  it("deleteDataset 按 userId 隔离（防越权删）", async () => {
+    const { insertDataset, deleteDataset, getDataset, closeMasterDb } =
+      await loadModules();
+    insertDataset(makeRecord({ id: "ds-a", user_id: "userA" }));
+    // userB 尝试删 userA 的数据集 → no-op（不报错但不删除）
+    deleteDataset("ds-a", "userB");
+    expect(getDataset("ds-a", "userA")?.id).toBe("ds-a");
+    // userA 自己删 → 成功
+    deleteDataset("ds-a", "userA");
+    expect(getDataset("ds-a", "userA")).toBeUndefined();
+    closeMasterDb();
+  });
+});
+
+describe("users 表 CRUD（阶段三 PR2）", () => {
+  it("insertUser + getUser 往返一致", async () => {
+    const { insertUser, getUser, closeMasterDb } = await loadModules();
+    insertUser({ id: "user-1", display_name: "Alice", created_at: "2026-07-27T00:00:00Z" });
+    const got = getUser("user-1");
+    expect(got?.id).toBe("user-1");
+    expect(got?.display_name).toBe("Alice");
+    closeMasterDb();
+  });
+
+  it("getUser 未命中返回 undefined", async () => {
+    const { getUser, closeMasterDb } = await loadModules();
+    expect(getUser("nonexistent")).toBeUndefined();
+    closeMasterDb();
+  });
+
+  it("updateUserDisplayName 更新显示名", async () => {
+    const { insertUser, getUser, updateUserDisplayName, closeMasterDb } =
+      await loadModules();
+    insertUser({ id: "user-1", display_name: "Old", created_at: "2026-07-27T00:00:00Z" });
+    updateUserDisplayName("user-1", "New");
+    expect(getUser("user-1")?.display_name).toBe("New");
+    closeMasterDb();
+  });
+
+  it("listUsers 返回全部", async () => {
+    const { insertUser, listUsers, closeMasterDb } = await loadModules();
+    insertUser({ id: "user-1", display_name: "A", created_at: "2026-07-01T00:00:00Z" });
+    insertUser({ id: "user-2", display_name: "B", created_at: "2026-07-27T00:00:00Z" });
+    const list = listUsers();
+    expect(list).toHaveLength(2);
     closeMasterDb();
   });
 });

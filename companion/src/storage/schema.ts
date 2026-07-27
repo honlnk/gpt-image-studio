@@ -10,22 +10,35 @@
  */
 
 /** 主 db schema 版本。dataset_registry 结构变更时递增。 */
-export const MASTER_DB_VERSION = 1;
+export const MASTER_DB_VERSION = 2;
 
 /** 业务 db schema 版本。7 表结构变更时递增。 */
 export const BUSINESS_DB_VERSION = 1;
 
 /**
- * 主 db 的 dataset_registry 表 DDL（D7 主 db 层）。
- * 详见 phase2-overview.md §3.3。
+ * 主 db 的 DDL（D7 主 db 层，v2 含 users 表 + user_id 外键）。
+ *
+ * v2 变更（阶段三 PR2 多租户）：
+ * - 新增 users 表（本地数据归属索引，不存密码）。
+ * - dataset_registry 加 user_id 列（默认 '__local__'，local 模式虚拟用户）。
+ * - fingerprint 唯一性改为 (user_id, fingerprint) 复合——不同用户可有相同配置。
+ *
+ * 旧库（v1）通过 MASTER_DB_MIGRATION_V2 升级，不直接用此 DDL。
  */
 export const MASTER_DB_DDL = `
+  CREATE TABLE IF NOT EXISTS users (
+    id           TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS dataset_registry (
     id               TEXT PRIMARY KEY,
+    user_id          TEXT NOT NULL DEFAULT '__local__',
     label            TEXT NOT NULL,
     storage_kind     TEXT NOT NULL,
     storage_config   TEXT NOT NULL,
-    fingerprint      TEXT NOT NULL UNIQUE,
+    fingerprint      TEXT NOT NULL,
     db_path          TEXT NOT NULL,
     image_store_kind TEXT NOT NULL,
     created_at       TEXT NOT NULL,
@@ -33,7 +46,42 @@ export const MASTER_DB_DDL = `
     is_active        INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_registry_active ON dataset_registry(is_active);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_fingerprint ON dataset_registry(fingerprint);
+  CREATE INDEX IF NOT EXISTS idx_registry_user ON dataset_registry(user_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_user_fingerprint ON dataset_registry(user_id, fingerprint);
+`;
+
+/**
+ * v1 → v2 迁移 DDL（阶段三 PR2）。
+ *
+ * 旧库已有 dataset_registry（v1 schema，fingerprint 全局 UNIQUE），需：
+ * 1. 建 users 表。
+ * 2. 给 dataset_registry 加 user_id 列（默认 '__local__'，已有数据全部归到本地虚拟用户）。
+ * 3. 删除旧的 idx_registry_fingerprint（全局唯一），建 (user_id, fingerprint) 复合唯一索引。
+ *
+ * 注意：SQLite 的 ALTER TABLE ADD COLUMN 加 NOT NULL DEFAULT 是安全的（已有行填默认值）。
+ * 索引重建用 DROP INDEX + CREATE INDEX（SQLite 不支持 CREATE INDEX IF NOT EXISTS 改定义）。
+ */
+export const MASTER_DB_MIGRATION_V2 = `
+  CREATE TABLE IF NOT EXISTS users (
+    id           TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL
+  );
+
+  -- 加 user_id 列（幂等：用 try/catch 包裹，列已存在时 better-sqlite3 抛错被 db.ts 忽略）
+  -- 注意：SQLite 不支持 ADD COLUMN IF NOT EXISTS，这里只产出 ALTER 语句，由 db.ts 的迁移
+  -- 逻辑负责幂等处理（catch "duplicate column" 错误）。
+
+  DROP INDEX IF EXISTS idx_registry_fingerprint;
+  CREATE INDEX IF NOT EXISTS idx_registry_user ON dataset_registry(user_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_user_fingerprint ON dataset_registry(user_id, fingerprint);
+`;
+
+/**
+ * v1→v2 迁移时给 dataset_registry 加 user_id 列的单条 ALTER（独立执行以便幂等 catch）。
+ */
+export const MASTER_DB_MIGRATION_V2_ADD_USER_ID = `
+  ALTER TABLE dataset_registry ADD COLUMN user_id TEXT NOT NULL DEFAULT '__local__'
 `;
 
 /**

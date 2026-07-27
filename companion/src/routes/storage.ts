@@ -57,11 +57,18 @@ function handleStorageStoreError(error: unknown, reply: FastifyReply): boolean {
   return false;
 }
 
-/** 解析当前激活数据集，拿 dbPath + imageStore。无 active 时返回 503 引导前端初始化。 */
+/** 解析当前用户激活数据集，拿 dbPath + imageStore。无 active 时返回 503 引导前端初始化。 */
 async function requireActive(
+  req: FastifyRequest,
   reply: FastifyReply,
 ): Promise<{ dataset: DatasetView; dbPath: string; imageStore: NonNullable<Awaited<ReturnType<typeof getActiveImageStore>>>["imageStore"] } | undefined> {
-  const active = await getActiveImageStore();
+  const userId = req.user?.userId;
+  if (!userId) {
+    // authMiddleware 应已挂载 req.user，这里防御性检查
+    reply.status(401).send({ error: "未授权" });
+    return undefined;
+  }
+  const active = await getActiveImageStore(userId);
   if (!active) {
     reply.status(503).send({
       error: "无激活数据集，请先调用 POST /storage/datasets/activate 初始化",
@@ -72,14 +79,16 @@ async function requireActive(
 }
 
 export async function storageRoutes(app: FastifyInstance) {
-  // ─── 数据集管理 ───
+  // ─── 数据集管理（多租户：从 req.user.userId 定位用户） ───
 
-  app.get("/storage/datasets", async () => {
-    return { datasets: listDatasetViews() };
+  app.get("/storage/datasets", async (req) => {
+    const userId = req.user?.userId ?? "__local__";
+    return { datasets: listDatasetViews(userId) };
   });
 
-  app.get("/storage/datasets/active", async (_req, reply) => {
-    const active = await getActiveImageStore();
+  app.get("/storage/datasets/active", async (req, reply) => {
+    const userId = req.user?.userId ?? "__local__";
+    const active = await getActiveImageStore(userId);
     if (!active) {
       return reply.status(404).send({ error: "无激活数据集" });
     }
@@ -87,6 +96,7 @@ export async function storageRoutes(app: FastifyInstance) {
   });
 
   app.post("/storage/datasets/activate", async (req, reply) => {
+    const userId = req.user?.userId ?? "__local__";
     const body = req.body as ActivateDatasetBody;
     const validation = validateActivateBody(body);
     if (validation) {
@@ -109,8 +119,9 @@ export async function storageRoutes(app: FastifyInstance) {
         storageConfig: body.storageConfig,
         imageStoreKind: body.imageStoreKind,
         label: body.label,
+        userId,
       });
-      // 切换数据集后关闭旧业务 db 连接，避免连接泄漏（新数据集的连接按需建立）
+      // 切换数据集后关闭该用户的业务 db 连接，避免连接泄漏（新数据集的连接按需建立）
       closeAllBusinessDbs();
       return { dataset: result.dataset, created: result.created };
     } catch (error) {
@@ -122,8 +133,9 @@ export async function storageRoutes(app: FastifyInstance) {
   app.delete<{ Params: { id: string } }>(
     "/storage/datasets/:id",
     async (req, reply) => {
+      const userId = req.user?.userId ?? "__local__";
       try {
-        await deleteDatasetCascade(req.params.id);
+        await deleteDatasetCascade(req.params.id, userId);
         closeAllBusinessDbs();
         return { ok: true };
       } catch (error) {
@@ -136,12 +148,13 @@ export async function storageRoutes(app: FastifyInstance) {
   app.patch<{ Params: { id: string } }>(
     "/storage/datasets/:id",
     async (req, reply) => {
+      const userId = req.user?.userId ?? "__local__";
       const body = req.body as { label?: string };
       if (!body.label || typeof body.label !== "string") {
         return reply.status(400).send({ error: "缺少 label 字段" });
       }
       try {
-        renameDatasetView(req.params.id, body.label);
+        renameDatasetView(req.params.id, body.label, userId);
         return { ok: true };
       } catch (error) {
         if (handleStorageStoreError(error, reply)) return;
@@ -158,7 +171,7 @@ export async function storageRoutes(app: FastifyInstance) {
       if (!isBusinessTable(req.params.table)) {
         return reply.status(400).send({ error: `未知表名：${req.params.table}` });
       }
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       try {
         return { data: listTable(active.dbPath, req.params.table) };
@@ -175,7 +188,7 @@ export async function storageRoutes(app: FastifyInstance) {
       if (!isBusinessTable(req.params.table)) {
         return reply.status(400).send({ error: `未知表名：${req.params.table}` });
       }
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       try {
         const record = getRecord(active.dbPath, req.params.table, req.params.key);
@@ -196,7 +209,7 @@ export async function storageRoutes(app: FastifyInstance) {
       if (!isBusinessTable(req.params.table)) {
         return reply.status(400).send({ error: `未知表名：${req.params.table}` });
       }
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       try {
         putRecord(active.dbPath, req.params.table, req.params.key, req.body);
@@ -214,7 +227,7 @@ export async function storageRoutes(app: FastifyInstance) {
       if (!isBusinessTable(req.params.table)) {
         return reply.status(400).send({ error: `未知表名：${req.params.table}` });
       }
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       try {
         deleteRecord(active.dbPath, req.params.table, req.params.key);
@@ -232,7 +245,7 @@ export async function storageRoutes(app: FastifyInstance) {
       if (!isBusinessTable(req.params.table)) {
         return reply.status(400).send({ error: `未知表名：${req.params.table}` });
       }
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       try {
         clearTable(active.dbPath, req.params.table);
@@ -257,7 +270,7 @@ export async function storageRoutes(app: FastifyInstance) {
   app.post<{ Params: { key: string } }>(
     "/storage/blobs/:key",
     async (req, reply) => {
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
 
       const contentType = req.headers["content-type"] ?? "";
@@ -297,7 +310,7 @@ export async function storageRoutes(app: FastifyInstance) {
   app.get<{ Params: { key: string } }>(
     "/storage/blobs/:key",
     async (req, reply) => {
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       const loaded = await active.imageStore.load(req.params.key);
       if (!loaded) {
@@ -319,7 +332,7 @@ export async function storageRoutes(app: FastifyInstance) {
   app.delete<{ Params: { key: string } }>(
     "/storage/blobs/:key",
     async (req, reply) => {
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       await active.imageStore.remove(req.params.key);
       // 同步删 imageBlobs 元信息（key 不存在是 no-op）
@@ -331,7 +344,7 @@ export async function storageRoutes(app: FastifyInstance) {
   app.get<{ Params: { key: string } }>(
     "/storage/blobs/:key/size",
     async (req, reply) => {
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       const meta = getRecord<{ size?: number }>(
         active.dbPath,
@@ -352,7 +365,7 @@ export async function storageRoutes(app: FastifyInstance) {
   app.get<{ Params: { key: string } }>(
     "/storage/config/:key",
     async (req, reply) => {
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       const value = getRecord(active.dbPath, "settings", `${CONFIG_PREFIX}${req.params.key}`);
       if (value === undefined) {
@@ -367,7 +380,7 @@ export async function storageRoutes(app: FastifyInstance) {
   app.put<{ Params: { key: string } }>(
     "/storage/config/:key",
     async (req, reply) => {
-      const active = await requireActive(reply);
+      const active = await requireActive(req, reply);
       if (!active) return;
       try {
         putRecord(active.dbPath, "settings", `${CONFIG_PREFIX}${req.params.key}`, req.body);
@@ -381,8 +394,8 @@ export async function storageRoutes(app: FastifyInstance) {
 
   // ─── 容量估算 ───
 
-  app.get("/storage/usage", async (_req, reply) => {
-    const active = await requireActive(reply);
+  app.get("/storage/usage", async (req, reply) => {
+    const active = await requireActive(req, reply);
     if (!active) return;
     const imageBytes = await active.imageStore.estimateBytes();
     const metadataBytes = estimateMetadataBytes(active.dbPath);

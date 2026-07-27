@@ -342,6 +342,7 @@ describe("ensureDefaultDataset", () => {
     db.openMasterDb();
     db.insertDataset({
       id: "ds-orphan",
+      user_id: "__local__",
       label: "孤儿",
       storage_kind: "filesystem",
       storage_config: JSON.stringify({ directory: join(tempDir, "x") }),
@@ -362,5 +363,129 @@ describe("ensureDefaultDataset", () => {
     // 但 filesystem-default 用默认目录，ensureRoot 会 mkdir，应该能成功
     const active = await getActiveImageStore();
     expect(active?.dataset.id).toBe("ds-orphan");
+  });
+});
+
+// ─── 阶段三 PR2：多租户隔离 ───
+
+describe("多租户隔离（userId 维度）", () => {
+  it("不同 userId 的数据集完全隔离", async () => {
+    const { resolveAndActivate, listDatasetViews } = await import(
+      "./datasetRegistry.js"
+    );
+    const { closeAllBusinessDbs } = await import("./businessDb.js");
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    // 用户 A 创建数据集
+    const dirA = path.join(tempDir, "userA");
+    fs.mkdirSync(dirA, { recursive: true });
+    await resolveAndActivate({
+      storageKind: "filesystem",
+      storageConfig: { directory: dirA },
+      imageStoreKind: "filesystem-custom",
+      userId: "userA",
+      label: "用户A的目录",
+    });
+
+    // 用户 B 创建数据集（相同配置结构但不同目录）
+    const dirB = path.join(tempDir, "userB");
+    fs.mkdirSync(dirB, { recursive: true });
+    await resolveAndActivate({
+      storageKind: "filesystem",
+      storageConfig: { directory: dirB },
+      imageStoreKind: "filesystem-custom",
+      userId: "userB",
+      label: "用户B的目录",
+    });
+
+    // 各自只能看到自己的数据集
+    expect(listDatasetViews("userA")).toHaveLength(1);
+    expect(listDatasetViews("userA")[0].label).toBe("用户A的目录");
+    expect(listDatasetViews("userB")).toHaveLength(1);
+    expect(listDatasetViews("userB")[0].label).toBe("用户B的目录");
+    closeAllBusinessDbs();
+  });
+
+  it("业务 db 路径按用户隔离（users/<uid>/datasets/）", async () => {
+    const { resolveAndActivate } = await import("./datasetRegistry.js");
+    const { closeAllBusinessDbs } = await import("./businessDb.js");
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    const dir = path.join(tempDir, "shared");
+    fs.mkdirSync(dir, { recursive: true });
+    const result = await resolveAndActivate({
+      storageKind: "filesystem",
+      storageConfig: { directory: dir },
+      imageStoreKind: "filesystem-custom",
+      userId: "user-server",
+    });
+
+    // server 模式用户的数据集 db 路径在 users/<uid>/datasets/ 下
+    expect(result.dataset.db_path).toContain("users/user-server/datasets/");
+    closeAllBusinessDbs();
+  });
+
+  it("local 模式（__local__）数据集路径不变（向后兼容）", async () => {
+    const { resolveAndActivate } = await import("./datasetRegistry.js");
+    const { closeAllBusinessDbs } = await import("./businessDb.js");
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    const dir = path.join(tempDir, "local");
+    fs.mkdirSync(dir, { recursive: true });
+    const result = await resolveAndActivate({
+      storageKind: "filesystem",
+      storageConfig: { directory: dir },
+      imageStoreKind: "filesystem-custom",
+      // 不传 userId，默认 __local__
+    });
+
+    // local 模式路径在 datasets/ 下（不含 users/ 层）
+    expect(result.dataset.db_path).toMatch(/\/datasets\/[^/]+\.db$/);
+    expect(result.dataset.db_path).not.toContain("users/");
+    closeAllBusinessDbs();
+  });
+
+  it("getActiveImageStore 按 userId 隔离", async () => {
+    const { resolveAndActivate, getActiveImageStore } = await import(
+      "./datasetRegistry.js"
+    );
+    const { closeAllBusinessDbs } = await import("./businessDb.js");
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    const dirA = path.join(tempDir, "activeA");
+    fs.mkdirSync(dirA, { recursive: true });
+    await resolveAndActivate({
+      storageKind: "filesystem",
+      storageConfig: { directory: dirA },
+      imageStoreKind: "filesystem-custom",
+      userId: "userA",
+    });
+
+    // userA 有 active，userB 没有
+    const activeA = await getActiveImageStore("userA");
+    expect(activeA?.dataset.user_id).toBe("userA");
+    const activeB = await getActiveImageStore("userB");
+    expect(activeB).toBeUndefined();
+    closeAllBusinessDbs();
+  });
+
+  it("ensureUser 懒创建用户记录 + 目录", async () => {
+    const { ensureUser, listDatasetViews } = await import("./datasetRegistry.js");
+    const { getUser } = await import("./db.js");
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    ensureUser("new-user", "新用户");
+    expect(getUser("new-user")?.display_name).toBe("新用户");
+    // 用户目录已建
+    expect(fs.existsSync(path.join(tempDir, "users", "new-user", "datasets"))).toBe(true);
+    // local 虚拟用户不建记录
+    ensureUser("__local__");
+    // users 表不应有 __local__
+    expect(listDatasetViews("__local__")).toEqual([]);
   });
 });

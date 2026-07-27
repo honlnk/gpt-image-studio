@@ -13,6 +13,7 @@ import { storageOssRoutes } from "./routes/storageOss.js";
 import { authMiddleware } from "./middleware/auth.js";
 import type { CompanionSecurityConfig } from "./securityConfig.js";
 import { isOriginAllowed } from "./securityConfig.js";
+import type { DeploymentConfig } from "./deploymentConfig.js";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json") as { version: string };
@@ -22,8 +23,17 @@ export async function startServer(opts: {
   port: number;
   host: string;
   security: CompanionSecurityConfig;
+  deployment: DeploymentConfig;
 }) {
   loadOrCreateAccessKey();
+
+  // server 模式启动校验：JWT_SECRET 必填（多租户认证依赖）
+  const jwtSecret = process.env.JWT_SECRET;
+  if (opts.deployment.mode === "server" && !jwtSecret) {
+    throw new Error(
+      "server 部署形态需要 JWT_SECRET 环境变量（与宿主共享的 HS256 验签密钥）。请在环境变量中配置后重启。",
+    );
+  }
 
   const app = Fastify({
     bodyLimit: opts.security.maxJsonBodyBytes,
@@ -50,21 +60,21 @@ export async function startServer(opts: {
 
   // 注册顺序很重要：
   // 1) credentialsRoutes / adminRoutes 自带 loopbackGuard，必须在 authMiddleware 之前注册，
-  //    否则 /credentials/* 和 /admin* 会被 bearer 守卫拦成 401（这两类接口都不走连接密钥，
+  //    否则 /credentials/* 和 /admin* 会被守卫拦成 401（这两类接口都不走连接密钥/JWT，
   //    只认本机来源或显式白名单）。
-  // 2) authMiddleware（bearer token 守卫）。会显式跳过 /credentials 和 /admin 前缀。
-  // 3) 其余受保护路由 + logsRoutes（日志走连接密钥，放在 authMiddleware 之后）。
+  // 2) authMiddleware（双模式守卫：local=accessKey，server=JWT）。跳过 /credentials /admin /storage/oss。
+  // 3) 其余受保护路由 + logsRoutes（放在 authMiddleware 之后）。
   await app.register(credentialsRoutes, { allowedOrigins: opts.security.allowedOrigins });
   await app.register(adminRoutes, { allowedOrigins: opts.security.allowedOrigins });
   // OSS 凭据管理（阶段二 PR5）：自带 loopbackGuard，必须在 authMiddleware 之前注册，
-  // 否则 /storage/oss/* 会被 bearer 守卫拦成 401（OSS 凭据敏感，走管理面守卫而非数据面）。
+  // 否则 /storage/oss/* 会被守卫拦成 401（OSS 凭据敏感，走管理面守卫而非数据面）。
   await app.register(storageOssRoutes, { allowedOrigins: opts.security.allowedOrigins });
-  await authMiddleware(app);
+  await authMiddleware(app, { mode: opts.deployment.mode, jwtSecret });
   await app.register(authRoutes);
   await app.register(imagesRoutes, { security: opts.security });
   await app.register(logsRoutes);
-  // 存储路由（阶段二）：7 表 CRUD + 图片二进制 + 配置 + 数据集管理 + 容量估算。
-  // 走 bearer accessKey（authMiddleware 已在上面生效），与 imagesRoutes 同级。
+  // 存储路由（阶段二+三）：7 表 CRUD + 图片二进制 + 配置 + 数据集管理 + 容量估算。
+  // 走 authMiddleware（local=accessKey / server=JWT），从 req.user.userId 定位用户数据目录。
   await app.register(storageRoutes);
 
   app.get("/health", async (): Promise<CompanionHealthResponse> => {
@@ -75,7 +85,8 @@ export async function startServer(opts: {
   });
 
   await app.listen({ host: opts.host, port: opts.port });
-  // 启动时保证有一个可用的默认数据集（选项 B），让 Companion 模式立即可用
+  // 启动时保证有一个可用的默认数据集（local 模式的虚拟用户 '__local__'）。
+  // server 模式下每个用户首次访问时由 storage 路由懒创建各自的默认数据集。
   try {
     const defaultDataset = await ensureDefaultDataset();
     console.log(`默认数据集已就绪: ${defaultDataset.label} (${defaultDataset.image_store_kind})`);
@@ -84,14 +95,22 @@ export async function startServer(opts: {
   }
   console.log(`Companion 服务已启动: http://${opts.host}:${opts.port}`);
   console.log(`版本: v${COMPANION_VERSION}`);
+  console.log(`部署形态: ${opts.deployment.mode}`);
   console.log(`安全渠道: ${opts.security.channel}`);
   console.log("允许的 Origin:");
   opts.security.allowedOrigins.forEach((origin) => console.log(`  - ${origin}`));
   console.log("");
-  console.log("=".repeat(60));
-  console.log("  连接密钥（请粘进 Web 工作台的 Companion 连接框）");
-  console.log(`  ${loadOrCreateAccessKey()}`);
-  console.log("=".repeat(60));
+  if (opts.deployment.mode === "local") {
+    console.log("=".repeat(60));
+    console.log("  连接密钥（请粘进 Web 工作台的 Companion 连接框）");
+    console.log(`  ${loadOrCreateAccessKey()}`);
+    console.log("=".repeat(60));
+  } else {
+    console.log("=".repeat(60));
+    console.log("  server 模式：使用宿主签发的 JWT 访问（Authorization: Bearer <jwt>）");
+    console.log(`  JWT_SECRET 已配置（${jwtSecret!.length} 字符）`);
+    console.log("=".repeat(60));
+  }
   // 0.0.0.0 不能直接浏览器访问，提示用本机回环地址（server 模式下用户应通过实际域名/IP 访问）
   const adminDisplayHost = opts.host === "0.0.0.0" ? "127.0.0.1" : opts.host;
   console.log(`  管理页：http://${adminDisplayHost}:${opts.port}/admin`);

@@ -103,6 +103,7 @@ addServeOptions(program
     await startServer({
       port: Number(opts.port),
       host: deployment.host,
+      deployment,
       security: createSecurityConfig({
         channel: opts.channel,
         allowOrigins: opts.allowOrigin ?? [],

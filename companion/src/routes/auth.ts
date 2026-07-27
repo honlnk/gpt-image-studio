@@ -75,6 +75,19 @@ export function buildAuthStatus(): CompanionAuthStatus {
 
 export async function authRoutes(app: FastifyInstance) {
   app.get<{ Reply: CompanionAuthStatus }>("/auth/status", async () => buildAuthStatus());
+
+  // /auth/me：返回当前认证用户信息（阶段三 PR2）。
+  // 前端用它确认登录态：local 模式返虚拟用户，server 模式返 JWT 解析出的 user。
+  // PR3 会在吊销黑名单检查后返回（本 PR 先只返 user 信息）。
+  app.get("/auth/me", async (req, reply) => {
+    if (!req.user) {
+      return reply.status(401).send({ error: "未授权" });
+    }
+    return {
+      userId: req.user.userId,
+      displayName: req.user.displayName ?? "",
+    };
+  });
 }
 
 // 直接引用 openai adapter 的静态值作为「无凭据」回退。

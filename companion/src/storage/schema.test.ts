@@ -3,6 +3,8 @@ import {
   BUSINESS_DB_DDL,
   BUSINESS_TABLES,
   MASTER_DB_DDL,
+  MASTER_DB_MIGRATION_V2,
+  MASTER_DB_VERSION,
   isBusinessTable,
 } from "./schema.js";
 
@@ -12,23 +14,45 @@ import {
  */
 
 describe("schema DDL", () => {
-  it("MASTER_DB_DDL 包含 dataset_registry 表及全部字段", () => {
+  it("MASTER_DB_VERSION 为 2（阶段三 PR2 多租户升级）", () => {
+    expect(MASTER_DB_VERSION).toBe(2);
+  });
+
+  it("MASTER_DB_DDL 包含 dataset_registry 表及全部字段（含 user_id）", () => {
     expect(MASTER_DB_DDL).toContain("CREATE TABLE IF NOT EXISTS dataset_registry");
     for (const field of [
-      "id", "label", "storage_kind", "storage_config", "fingerprint",
+      "id", "user_id", "label", "storage_kind", "storage_config", "fingerprint",
       "db_path", "image_store_kind", "created_at", "activated_at", "is_active",
     ]) {
       expect(MASTER_DB_DDL).toContain(field);
     }
   });
 
-  it("MASTER_DB_DDL 包含 fingerprint 唯一索引", () => {
-    expect(MASTER_DB_DDL).toContain("idx_registry_fingerprint");
-    expect(MASTER_DB_DDL).toContain("UNIQUE");
+  it("MASTER_DB_DDL 包含 users 表（阶段三 PR2 多租户）", () => {
+    expect(MASTER_DB_DDL).toContain("CREATE TABLE IF NOT EXISTS users");
+    for (const field of ["id", "display_name", "created_at"]) {
+      expect(MASTER_DB_DDL).toContain(field);
+    }
+  });
+
+  it("MASTER_DB_DDL fingerprint 唯一性改为 (user_id, fingerprint) 复合", () => {
+    expect(MASTER_DB_DDL).toContain("idx_registry_user_fingerprint");
+    expect(MASTER_DB_DDL).toContain("(user_id, fingerprint)");
+    // 旧的全局唯一索引不应出现在新库 DDL
+    expect(MASTER_DB_DDL).not.toContain("idx_registry_fingerprint");
+  });
+
+  it("MASTER_DB_DDL 包含 user_id 索引", () => {
+    expect(MASTER_DB_DDL).toContain("idx_registry_user");
   });
 
   it("MASTER_DB_DDL 包含 is_active 索引", () => {
     expect(MASTER_DB_DDL).toContain("idx_registry_active");
+  });
+
+  it("MASTER_DB_MIGRATION_V2 包含 v1→v2 迁移语句", () => {
+    expect(MASTER_DB_MIGRATION_V2).toContain("idx_registry_user_fingerprint");
+    expect(MASTER_DB_MIGRATION_V2).toContain("DROP INDEX IF EXISTS idx_registry_fingerprint");
   });
 
   it("BUSINESS_DB_DDL 包含 7 张业务表", () => {

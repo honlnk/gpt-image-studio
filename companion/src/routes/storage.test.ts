@@ -41,7 +41,8 @@ async function makeApp(): Promise<FastifyInstance> {
   const { loadOrCreateAccessKey } = await import("../accessKey.js");
   accessKey = loadOrCreateAccessKey();
   const app: FastifyInstance = Fastify();
-  await authMiddleware(app);
+  // local 模式：accessKey 验证（阶段二行为），req.user.userId='__local__'
+  await authMiddleware(app, { mode: "local" });
   await app.register(storageRoutes);
   return app;
 }
