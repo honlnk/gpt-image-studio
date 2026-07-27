@@ -38,7 +38,13 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| [phase3-overview.md](./phase3-overview.md) | 阶段三总览：多租户 + SSO + Docker + qiankun | ⬜ 待启动 |
+| [phase3-overview.md](./phase3-overview.md) | 阶段三总览：多租户 + SSO + Docker + qiankun | ✅ 已完成 |
+| [phase3-pr1-listen-address-docker.md](./phase3-pr1-listen-address-docker.md) | PR1：Companion 监听地址可配置 + Docker 化（部署形态开关） | ✅ 已完成 |
+| [phase3-pr2-jwt-multitenant.md](./phase3-pr2-jwt-multitenant.md) | PR2：JWT 认证中间件 + users 表多租户隔离（D9 + D10 SSO 登录） | ✅ 已完成 |
+| [phase3-pr3-revocation-slo.md](./phase3-pr3-revocation-slo.md) | PR3：吊销黑名单 SLO + /auth/me + /admin/revoke（D10 完整 SSO） | ✅ 已完成 |
+| [phase3-pr4-oss-sts.md](./phase3-pr4-oss-sts.md) | PR4：OSS STS 临时凭证机制（D11 平台统一 OSS） | ✅ 已完成 |
+| [phase3-pr5-frontend-qiankun.md](./phase3-pr5-frontend-qiankun.md) | PR5：前端 qiankun 嵌入改造（生命周期 + 运行环境感知 + 认证态联动） | ✅ 已完成 |
+| [phase3-pr6-deployment-docs.md](./phase3-pr6-deployment-docs.md) | PR6：部署文档 docs/deployment-guide.md | ✅ 已完成 |
 
 ## 阅读顺序
 
