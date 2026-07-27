@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify from "fastify";
 import { authMiddleware } from "./auth.js";
 import { signJwtForTesting } from "../auth/jwt.js";
+import { revokeUser, revokeJti, clear } from "../auth/revocationList.js";
 
 /**
  * authMiddleware 双模式测试（阶段三 PR2）。
@@ -166,6 +167,81 @@ describe("authMiddleware", () => {
       app.get("/admin/test", async () => ({ ok: true }));
       const res = await app.inject({ method: "GET", url: "/admin/test" });
       expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+  });
+
+  describe("server 模式吊销黑名单（阶段三 PR3 SLO）", () => {
+    const REVOKE_SECRET = "revoke-test-secret";
+
+    beforeEach(() => {
+      clear();
+    });
+    afterEach(() => {
+      clear();
+    });
+
+    it("被吊销的用户 JWT → 401", async () => {
+      const app = await buildApp({ mode: "server", jwtSecret: REVOKE_SECRET });
+      const token = signJwtForTesting({ sub: "banned-user" }, REVOKE_SECRET);
+      // 吊销前通过
+      const res1 = await app.inject({
+        method: "GET",
+        url: "/protected",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res1.statusCode).toBe(200);
+
+      // 吊销该用户
+      revokeUser("banned-user");
+
+      // 吊销后拒绝
+      const res2 = await app.inject({
+        method: "GET",
+        url: "/protected",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res2.statusCode).toBe(401);
+      expect(res2.json().error).toContain("吊销");
+      await app.close();
+    });
+
+    it("被吊销的 jti → 401，其他 jti 不受影响", async () => {
+      const app = await buildApp({ mode: "server", jwtSecret: REVOKE_SECRET });
+      const token1 = signJwtForTesting({ sub: "user-1", jti: "jti-A" }, REVOKE_SECRET);
+      const token2 = signJwtForTesting({ sub: "user-1", jti: "jti-B" }, REVOKE_SECRET);
+
+      // 吊销 jti-A
+      revokeJti("jti-A");
+
+      // jti-A 被拒
+      const res1 = await app.inject({
+        method: "GET",
+        url: "/protected",
+        headers: { authorization: `Bearer ${token1}` },
+      });
+      expect(res1.statusCode).toBe(401);
+
+      // jti-B 仍可用（同用户，不同 jti）
+      const res2 = await app.inject({
+        method: "GET",
+        url: "/protected",
+        headers: { authorization: `Bearer ${token2}` },
+      });
+      expect(res2.statusCode).toBe(200);
+      await app.close();
+    });
+
+    it("user 吊销优先于 jti（user 被吊销时所有 jti 都拒）", async () => {
+      const app = await buildApp({ mode: "server", jwtSecret: REVOKE_SECRET });
+      revokeUser("user-1");
+      const token = signJwtForTesting({ sub: "user-1", jti: "any-jti" }, REVOKE_SECRET);
+      const res = await app.inject({
+        method: "GET",
+        url: "/protected",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res.statusCode).toBe(401);
       await app.close();
     });
   });

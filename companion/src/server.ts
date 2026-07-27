@@ -10,7 +10,9 @@ import { adminRoutes } from "./routes/admin.js";
 import { logsRoutes } from "./routes/logs.js";
 import { storageRoutes, ensureDefaultDataset } from "./routes/storage.js";
 import { storageOssRoutes } from "./routes/storageOss.js";
+import { adminRevokeRoutes } from "./routes/adminRevoke.js";
 import { authMiddleware } from "./middleware/auth.js";
+import { startCleanupTimer } from "./auth/revocationList.js";
 import type { CompanionSecurityConfig } from "./securityConfig.js";
 import { isOriginAllowed } from "./securityConfig.js";
 import type { DeploymentConfig } from "./deploymentConfig.js";
@@ -33,6 +35,11 @@ export async function startServer(opts: {
     throw new Error(
       "server 部署形态需要 JWT_SECRET 环境变量（与宿主共享的 HS256 验签密钥）。请在环境变量中配置后重启。",
     );
+  }
+
+  // server 模式启动吊销黑名单清理定时器（阶段三 PR3 SLO）
+  if (opts.deployment.mode === "server") {
+    startCleanupTimer();
   }
 
   const app = Fastify({
@@ -66,6 +73,10 @@ export async function startServer(opts: {
   // 3) 其余受保护路由 + logsRoutes（放在 authMiddleware 之后）。
   await app.register(credentialsRoutes, { allowedOrigins: opts.security.allowedOrigins });
   await app.register(adminRoutes, { allowedOrigins: opts.security.allowedOrigins });
+  // /admin/revoke 吊销端点（阶段三 PR3 SLO）：走平台级管理密钥（ADMIN_API_KEY），
+  // 不走 authMiddleware。/admin 前缀已被 authMiddleware 跳过，这里在 authMiddleware
+  // 之前注册即可。
+  await app.register(adminRevokeRoutes);
   // OSS 凭据管理（阶段二 PR5）：自带 loopbackGuard，必须在 authMiddleware 之前注册，
   // 否则 /storage/oss/* 会被守卫拦成 401（OSS 凭据敏感，走管理面守卫而非数据面）。
   await app.register(storageOssRoutes, { allowedOrigins: opts.security.allowedOrigins });

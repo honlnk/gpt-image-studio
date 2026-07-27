@@ -1,17 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import { validateAccessKey } from "../accessKey.js";
 import { verifyJwt, JwtVerificationError } from "../auth/jwt.js";
+import { isUserRevoked, isJtiRevoked } from "../auth/revocationList.js";
 import type { DeploymentMode } from "../deploymentConfig.js";
 
 const PUBLIC_PATHS = ["/health"];
 
 /**
  * loopback 守卫前缀集合。这些路由自带 loopback 来源校验（见 middleware/loopback.ts），
- * 不走连接密钥——
+ * 不走连接密钥/JWT——
  *   /credentials：凭证管理发生在连接之前（首次需要先填 key 才有意义连接）。
- *   /admin：Companion 自带管理页（阶段零），同源 loopback 浏览器访问，不要求 accessKey。
+ *   /admin：Companion 自带管理页（阶段零）+ /admin/revoke 吊销端点（阶段三 PR3，走平台密钥）。
  *   /storage/oss：OSS 凭据管理（阶段二 PR5），敏感的长期 AK 不应跨域暴露，走管理面守卫。
- * authMiddleware 显式跳过这些前缀，把鉴权交给各自 plugin 内部的 loopbackGuard。
+ * authMiddleware 显式跳过这些前缀，把鉴权交给各自 plugin 内部的守卫。
  */
 const LOOPBACK_GUARDED_PREFIXES = ["/credentials", "/admin", "/storage/oss"];
 
@@ -50,6 +51,13 @@ export async function authMiddleware(app: FastifyInstance, opts: AuthMiddlewareO
       }
       try {
         const payload = verifyJwt(token, opts.jwtSecret);
+        // 吊销黑名单检查（阶段三 PR3 SLO）
+        if (isUserRevoked(payload.sub)) {
+          return reply.status(401).send({ error: "未授权：用户已被吊销" });
+        }
+        if (payload.jti && isJtiRevoked(payload.jti)) {
+          return reply.status(401).send({ error: "未授权：令牌已被吊销" });
+        }
         req.user = {
           userId: payload.sub,
           displayName: payload.display_name,
