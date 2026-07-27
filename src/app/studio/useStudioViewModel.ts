@@ -14,6 +14,7 @@ import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
 import { initTrackerStorage } from "../../features/analytics/useAnalyticsTracker";
 import { useCompanionStore } from "../../stores/companionStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { withNetworkRetry } from "../../services/networkRetry";
 import { clonePromptWordbanks } from "../../services/promptWordbanks";
 import { createConversationServices } from "../../services/conversations";
@@ -66,10 +67,22 @@ type RenameImageDialogState = {
 export function useStudioViewModel() {
   const isHydrated = ref(false);
 
-  // ─── 阶段一 PR4：service 工厂全集（唯一装配点，决策 T1 + §6.3） ───
+  // ─── 阶段二 PR6：装配顺序调整 ───
+  // 先取 settingsStore 实例（Pinia 单例，重复调用返回同一实例），拿到 connectionMode /
+  // companionUrl / companionAccessKey 的 ref，供 resolveStorage 按 connectionMode 分叉。
+  // 必须在 resolveStorage 之前，因为 CompanionStorage 需要这两个 ref 的惰性 getter。
+  const settingsStore = useSettingsStore();
+  const settingsRefs = storeToRefs(settingsStore);
+
+  // ─── service 工厂全集（唯一装配点，决策 T1 + §6.3） ───
   // 所有 service 共享同一个 storage 实例（resolveStorage），store/feature 通过注入获取。
-  // 阶段一恒返回 IndexedDbStorage；阶段二扩展为 connectionMode 分叉；阶段四 isTauriRuntime 分叉。
-  const storage = resolveStorage();
+  // 阶段一恒返回 IndexedDbStorage；阶段二 localCompanion → CompanionStorage；阶段四 isTauriRuntime → NativeStorage。
+  // getter 闭包持有 ref，每次 fetch 惰性读取最新值（避免装配顺序耦合）。
+  const storage = resolveStorage({
+    connectionMode: settingsRefs.connectionMode.value,
+    getCompanionUrl: () => settingsRefs.companionUrl.value,
+    getCompanionAccessKey: () => settingsRefs.companionAccessKey.value,
+  });
   const services = {
     conversations: createConversationServices(storage),
     messages: createMessageServices(storage),
