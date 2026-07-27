@@ -45,10 +45,12 @@
   "dependencies": {
     "@fastify/cors": "^11.0.0",
     "@fastify/static": "^10.1.2",
+    "better-sqlite3": "^11.8.1",
     "commander": "^13.1.0",
     "fastify": "^5.3.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.0",
     "tsx": "^4.19.0",
     "typescript": "^6.0.3"
