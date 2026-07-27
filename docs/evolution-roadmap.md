@@ -174,6 +174,8 @@ companion/
 
 ## 六、阶段一：前端存储抽象层（地基）
 
+> **状态：✅ 已完成（2026-07-27）**。6 个 PR 全部合入（PR1 接口+实现+契约测试骨架；PR2 6 domain service 工厂 + 5 store context 注入 + settingsStore 新增 configure；PR3 backups/storageUsage/timeFieldMigration 改走 storage；PR4 ViewModel 成为唯一装配点；PR5 companion 凭据收编到 StudioStorage.config + localStorage 迁移 + 备份更新；PR6 删除旧 db.ts + 收尾）。`StudioStorage` 抽象层就位，前端业务代码全部通过接口访问存储。详细施工记录见 `docs/evolution/phase1-*.md`。
+
 ### 目标
 
 在前端引入一层 `StudioStorage` 接口，把所有"直接调 IndexedDB / localStorage"的代码收敛到接口背后。**运行时行为与当前完全一致**，但存储后端变得可替换。
