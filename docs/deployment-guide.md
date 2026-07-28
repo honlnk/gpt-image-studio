@@ -370,7 +370,15 @@ X-User-Id: user-12345                        ← 当前用户
 
 **解决**：确认使用 qiankun 的 `import-entry` 机制（默认会重写资源路径）。若仍 404，检查宿主 qiankun 配置的 `entry` 是否指向正确的入口 HTML。
 
-### 6.3 JWT 验签失败
+### 6.3 qiankun 加载后子应用空白 / 报「生命周期未导出」
+
+**症状**：qiankun 注册并激活子应用后，容器空白，控制台报 `qiankun: need a lifecycle (bootstrap/mount/unmount)` 之类错误。
+
+**原因**：Vite 按「应用入口」打包，产物是 IIFE 脚本，顶层 `export` 会被剥离，qiankun 的 import-entry 无法从产物里发现生命周期。
+
+**解决**：本项目已用 `window[appName]` 全局挂载兜底（见 `src/main.ts` 末尾）。**宿主 `registerMicroApps({ name })` 的 `name` 必须与子应用约定的 `gpt-image-studio` 完全一致**，否则 import-entry 在 `window[name]` 上找不到生命周期。
+
+### 6.4 JWT 验签失败
 
 **症状**：`/auth/me` 返回 401「JWT 签名不匹配」。
 
@@ -384,7 +392,7 @@ X-User-Id: user-12345                        ← 当前用户
 curl -H "Authorization: Bearer <jwt>" https://companion.your-domain.com/auth/me
 ```
 
-### 6.4 用户登出后仍能访问（SLO 未生效）
+### 6.5 用户登出后仍能访问（SLO 未生效）
 
 **症状**：用户在宿主登出后，Companion 仍接受其 JWT。
 
@@ -402,7 +410,7 @@ await fetch(`${companionUrl}/admin/revoke`, {
 });
 ```
 
-### 6.5 多租户数据隔离验证
+### 6.6 多租户数据隔离验证
 
 **验证方法**：用两个不同用户的 JWT，各自访问 `/storage/datasets`，确认只能看到自己的数据集。
 
@@ -418,7 +426,7 @@ curl -H "Authorization: Bearer <jwtB>" https://companion.../storage/datasets
 
 **物理隔离验证**：服务器数据目录下，每个用户有独立的 `users/<user-id>/datasets/` 子目录。
 
-### 6.6 OSS 上传失败
+### 6.7 OSS 上传失败
 
 **症状**：图片上传报错「宿主 STS 签发失败」。
 
@@ -428,7 +436,7 @@ curl -H "Authorization: Bearer <jwtB>" https://companion.../storage/datasets
 3. 检查 Companion 启动日志有无 warning（server 模式缺 MAIN_APP_URL 会 warning）。
 4. 若用 filesystem 模式（非 OSS），确认服务器数据目录可写。
 
-### 6.7 数据持久化丢失（Docker）
+### 6.8 数据持久化丢失（Docker）
 
 **症状**：容器重启后数据消失。
 
@@ -436,7 +444,7 @@ curl -H "Authorization: Bearer <jwtB>" https://companion.../storage/datasets
 
 **解决**：docker-compose.yml 的 `volumes` 必须包含 `- companion-data:/data`（对应容器内 `GPT_IMAGE_STUDIO_CONFIG_DIR=/data`）。
 
-### 6.8 本机模式回归（local 模式不工作）
+### 6.9 本机模式回归（local 模式不工作）
 
 **症状**：本机模式（不设 `COMPANION_DEPLOYMENT_MODE`）行为异常。
 

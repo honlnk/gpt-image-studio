@@ -15,7 +15,19 @@ import { useSettingsStore } from './stores/settingsStore'
  *   localCompanion 模式 + Bearer JWT 认证。
  *
  * 检测标志：window.__POWERED_BY_QIANKUN__（qiankun 在子应用 entry 执行前注入）。
+ *
+ * 生命周期发现机制（重要）：
+ * Vite 默认按「应用入口」打包，产出 IIFE 脚本——顶层 `export` 语句会被打包器
+ * 视为无外部消费者而剥离，因此 qiankun 的 import-entry 无法从产物里拿到
+ * bootstrap/mount/unmount。qiankun 对「非 webpack/非 UMD」子应用的官方约定是
+ * 把生命周期挂到 window 全局（global[name]）。本文件在嵌入态下同时：
+ *   1. 用 `export` 导出（dev 态 ESM 可见，便于本地调试与单元测试）；
+ *   2. 赋值到 `window[QIANKUN_APP_NAME]`（prod 构建后 import-entry 据此发现）。
+ * 宿主 registerMicroApps 的 name 必须与下方 QIANKUN_APP_NAME 一致。
  */
+
+/** qiankun 注册子应用时使用的 name，必须与宿主 registerMicroApps({ name }) 一致。 */
+const QIANKUN_APP_NAME = 'gpt-image-studio'
 
 let app: VueApp | null = null
 
@@ -69,4 +81,12 @@ export async function unmount(): Promise<void> {
     app.unmount()
     app = null
   }
+}
+
+// 嵌入态：把生命周期挂到 window 全局，让 qiankun import-entry 在 prod 构建产物里
+// 也能发现（Vite 应用入口的 IIFE 产物会剥离顶层 export，但保留 window 副作用赋值）。
+// 独立态不需要，仅在 __POWERED_BY_QIANKUN__ 时挂载，避免污染全局命名空间。
+if (window.__POWERED_BY_QIANKUN__) {
+  const lifecycle = { bootstrap, mount, unmount }
+  ;(window as unknown as Record<string, unknown>)[QIANKUN_APP_NAME] = lifecycle
 }

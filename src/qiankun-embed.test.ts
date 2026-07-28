@@ -5,9 +5,10 @@
  * 1. settingsStore.applyEmbeddedConfig 正确注入三 refs + isEmbedded 标记。
  * 2. 嵌入态跳过 companionUrl/accessKey 持久化。
  * 3. 嵌入态 connectionMode 固定 localCompanion。
+ * 4. 生命周期在 window 全局可发现（qiankun import-entry 契约，回归 bug 修复）。
  *
- * 不直接测 main.ts 的生命周期（有 app.mount 副作用），而是测注入逻辑的核心
- * （applyEmbeddedConfig），它是嵌入态配置生效的关键。
+ * 不直接测 main.ts 的渲染副作用（有 app.mount），而是分别测注入逻辑核心
+ * （applyEmbeddedConfig）与 window 生命周期挂载约定（source-level 契约校验）。
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
@@ -75,5 +76,48 @@ describe("qiankun 嵌入态持久化跳过", () => {
     // 独立态改 companionUrl 会触发持久化（watch 不跳过）
     store.companionUrl = "http://standalone";
     expect(store.isEmbedded).toBe(false);
+  });
+});
+
+/**
+ * 生命周期发现契约回归（回归一个真实 prod-only bug）。
+ *
+ * 背景：Vite 按「应用入口」打包，产物是 IIFE 脚本，顶层 `export` 会被打包器剥离。
+ * qiankun 的 import-entry 在 prod 产物里无法通过 ESM named export 拿到
+ * bootstrap/mount/unmount，必须靠 `window[appName]` 全局挂载兜底。
+ *
+ * 这些校验读 main.ts 源码文本，确认关键的 window 全局挂载约定存在——
+ * 这是 prod 构建后唯一可靠的发现路径。避免引入 app.mount 副作用带来的 flaky。
+ */
+describe("qiankun 生命周期发现契约（prod 兜底）", () => {
+  it("main.ts 在嵌入态把 bootstrap/mount/unmount 挂到 window[appName]", async () => {
+    const mainSrc = await import("node:fs").then((fs) =>
+      fs.readFileSync(new URL("./main.ts", import.meta.url), "utf-8"),
+    );
+    // window 全局挂载兜底（prod 唯一可靠发现路径）
+    expect(mainSrc).toContain("__POWERED_BY_QIANKUN__");
+    expect(mainSrc).toMatch(/window.*\[.*QIANKUN_APP_NAME.*\]\s*=\s*lifecycle/);
+    // 生命周期对象包含三个函数
+    expect(mainSrc).toMatch(/bootstrap.*mount.*unmount/);
+    // app 名常量与宿主 registerMicroApps name 约定一致
+    expect(mainSrc).toMatch(/QIANKUN_APP_NAME\s*=\s*['"]gpt-image-studio['"]/);
+  });
+
+  it("独立态不污染 window（仅在 __POWERED_BY_QIANKUN__ 时挂载）", async () => {
+    const mainSrc = await import("node:fs").then((fs) =>
+      fs.readFileSync(new URL("./main.ts", import.meta.url), "utf-8"),
+    );
+    // 挂载语句必须被 __POWERED_BY_QIANKUN__ 守卫包裹
+    const assignLine = mainSrc
+      .split("\n")
+      .find((l) => l.includes("QIANKUN_APP_NAME]") && l.includes("lifecycle"));
+    expect(assignLine).toBeDefined();
+    // 守卫在同一块 if 块内（向上找最近的 if）
+    const idx = mainSrc.split("\n").indexOf(assignLine!);
+    const guard = mainSrc
+      .split("\n")
+      .slice(Math.max(0, idx - 5), idx)
+      .find((l) => l.includes("__POWERED_BY_QIANKUN__"));
+    expect(guard).toBeDefined();
   });
 });
