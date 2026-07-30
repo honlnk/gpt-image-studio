@@ -216,6 +216,28 @@ export function useStudioViewModel() {
       }
     },
   );
+  // 阶段二 PR7 修复：direct ↔ Companion 连接模式切换必须 reload。
+  // resolveStorage() 在 setup 时只执行一次（读 connectionMode.value 快照装配 storage
+  // 实例 + services + stores），切换 connectionMode 后这些全绑死在旧后端上——
+  // 不 reload 的话，切到 Companion 仍走 IndexedDB（看不到空数据集），切回 direct
+  // 也读不到 IndexedDB 的原数据。reload 让 setup 重新按新模式装配正确后端。
+  // 与 StorageLocationPanel 的 reload 同源（D1 数据集隔离）。
+  // 嵌入态（qiankun）connectionMode 由宿主固定，不 reload。
+  watch(
+    () => settings.connectionMode.value,
+    (_next, prev) => {
+      // hydrate 前的初始化赋值（applySettings）不触发 reload。
+      if (!isHydrated.value || settings.isEmbedded.value) return;
+      // 切换前先持久化，避免 reload 后读不到新模式（saveCurrentSettings 写
+      // IndexedDB settings 表，返回 Promise，await 确保落盘）。
+      void settings
+        .saveCurrentSettings()
+        .catch(reportStorageError)
+        .finally(() => {
+          window.location.reload();
+        });
+    },
+  );
   const imageClient: ImageClient = {
     generate(input) {
       if (
