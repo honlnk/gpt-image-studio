@@ -6,6 +6,19 @@ import fastifyStatic from "@fastify/static";
 import { loopbackGuard } from "../middleware/loopback.js";
 import { buildAuthStatus } from "./auth.js";
 import { readLogsTail } from "./logs.js";
+import {
+  handleStorageStoreError,
+  validateActivateBody,
+  type ActivateDatasetBody,
+} from "./storage.js";
+import {
+  listDatasetViews,
+  resolveAndActivate,
+} from "../storage/datasetRegistry.js";
+import { closeAllBusinessDbs } from "../storage/businessDb.js";
+import { LOCAL_USER_ID } from "../storage/db.js";
+import { pickDirectoryNative } from "../storage/directoryPicker.js";
+import { validateCustomDirectory } from "../storage/fileSystemImageStore.js";
 import type { CompanionAuthStatus, CompanionLogsTailResponse } from "../types.js";
 
 /**
@@ -52,6 +65,49 @@ export async function adminRoutes(app: FastifyInstance, opts?: AdminRoutesOption
       lines: Number(req.query?.lines) || undefined,
       date: req.query?.date,
     });
+  });
+
+  // 数据集（存储位置）管理：web 端设置页不再提供，归管理页（loopbackGuard 本机信任）。
+  // userId 固定 __local__——管理页是本机单用户管理面，server 模式多租户不经过这里。
+  app.get("/admin/api/datasets", async () => {
+    return { datasets: listDatasetViews(LOCAL_USER_ID) };
+  });
+
+  app.post("/admin/api/datasets/activate", async (req, reply) => {
+    const body = req.body as ActivateDatasetBody;
+    const validation = validateActivateBody(body);
+    if (validation) {
+      return reply.status(400).send({ error: validation });
+    }
+    if (body.imageStoreKind === "filesystem-custom") {
+      const dirError = validateCustomDirectory(
+        (body.storageConfig as { directory: string }).directory,
+      );
+      if (dirError) {
+        return reply.status(400).send({ error: dirError.message, code: dirError.code });
+      }
+    }
+    try {
+      const result = await resolveAndActivate({
+        storageKind: body.storageKind,
+        storageConfig: body.storageConfig,
+        imageStoreKind: body.imageStoreKind,
+        label: body.label,
+        userId: LOCAL_USER_ID,
+      });
+      // 切换数据集后关闭该用户的业务 db 连接，避免连接泄漏（新数据集的连接按需建立）
+      closeAllBusinessDbs();
+      return { dataset: result.dataset, created: result.created };
+    } catch (error) {
+      if (handleStorageStoreError(error, reply)) return;
+      throw error;
+    }
+  });
+
+  // 原生目录选择框：管理页「选择文件夹…」按钮（浏览器拿不到绝对路径，由同机的 Companion 代弹）。
+  // 结构化返回 { ok, path? , canceled? , error? }，恒 200，错误由前端展示。
+  app.post("/admin/api/pick-directory", async () => {
+    return pickDirectoryNative();
   });
 
   // 3) 静态资源 serve。开发期 admin/ 可能还没构建，缺失时给清晰错误而非崩溃。

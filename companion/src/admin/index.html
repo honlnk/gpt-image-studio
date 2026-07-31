@@ -89,6 +89,106 @@
         <p id="cred-error" class="error-text"></p>
       </section>
 
+      <!-- ③.5 存储位置（数据集） -->
+      <section id="storage-card" class="card" hidden>
+        <h2 class="card-title">存储位置</h2>
+        <p class="muted-text">
+          会话与图片数据的存放位置。切换后原位置数据不会删除，切回可找回。
+        </p>
+        <p id="storage-loading" class="muted-text">加载中…</p>
+
+        <div id="storage-body" hidden>
+          <div class="storage-current">
+            <span class="storage-current-key">当前位置：</span>
+            <span id="storage-current-label"></span>
+          </div>
+
+          <div class="storage-options">
+            <label class="storage-option">
+              <input type="radio" name="storage-kind" value="filesystem-default" />
+              <span class="option-text">
+                <span class="option-title">默认目录（推荐）</span>
+                <span class="option-desc">存到 Companion 默认目录，无需配置，数据安全。</span>
+              </span>
+            </label>
+            <label class="storage-option">
+              <input type="radio" name="storage-kind" value="filesystem-custom" />
+              <span class="option-text">
+                <span class="option-title">指定目录</span>
+                <span class="option-desc">存到指定文件夹，图片可直接用文件管理器打开。需输入绝对路径。</span>
+              </span>
+            </label>
+            <div id="storage-custom-dir" class="storage-subform">
+              <div class="subform-inner">
+                <div class="subform-content">
+                  <label class="field">
+                    <span class="field-label">目录绝对路径</span>
+                    <div class="dir-input-row">
+                      <div class="dir-select-wrap">
+                        <input id="storage-dir" type="text" placeholder="/Users/yourname/Pictures/GPT-Image-Studio" />
+                        <button id="storage-dir-dropdown-btn" class="dir-dropdown-btn" type="button" aria-label="展开历史目录" title="历史目录">▾</button>
+                        <ul id="storage-dir-list" class="dir-dropdown-list" hidden></ul>
+                      </div>
+                      <button id="storage-pick-dir" class="btn-outline-sm" type="button">选择文件夹…</button>
+                    </div>
+                  </label>
+                  <p class="hint-text">目录必须已存在且可写，不允许系统敏感目录。点输入框右侧 ▾ 可从历史使用过的目录中直接选择。</p>
+                </div>
+              </div>
+            </div>
+            <label class="storage-option">
+              <input type="radio" name="storage-kind" value="oss" />
+              <span class="option-text">
+                <span class="option-title">阿里云 OSS</span>
+                <span class="option-desc">上传到阿里云 OSS，跨设备访问。需配置 bucket 和 AccessKey。</span>
+              </span>
+            </label>
+            <div id="storage-oss-form" class="storage-subform">
+              <div class="subform-inner">
+                <div class="subform-content">
+                  <div id="storage-oss-summary" class="oss-summary" hidden>
+                    <p id="storage-oss-current" class="hint-text"></p>
+                    <div class="oss-summary-actions">
+                      <button id="storage-oss-reconfig" type="button" class="btn-outline-sm">重新配置</button>
+                    </div>
+                  </div>
+                  <div id="storage-oss-fields">
+                    <label class="field">
+                      <span class="field-label">Endpoint</span>
+                      <input id="storage-oss-endpoint" type="text" placeholder="oss-cn-hangzhou.aliyuncs.com" />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Bucket</span>
+                      <input id="storage-oss-bucket" type="text" placeholder="my-bucket" />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">AccessKey ID</span>
+                      <input id="storage-oss-ak" type="text" placeholder="LTAI..." />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">AccessKey Secret</span>
+                      <input id="storage-oss-sk" type="password" autocomplete="off" placeholder="••••••••" />
+                    </label>
+                    <p class="hint-text">保存前会做连通性测试，凭据错误将被拒绝。AccessKey 只存在 Companion 本地（切换存储位置不会丢失）。已保存过凭据时，AccessKey 留空即沿用；修改 Endpoint/Bucket 则需重新填写。</p>
+                    <div id="storage-oss-cancel-wrap" class="oss-summary-actions" hidden>
+                      <button id="storage-oss-reconfig-cancel" type="button" class="btn-text">取消</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p id="storage-error" class="error-text"></p>
+          <p id="storage-success" class="success-text" hidden></p>
+          <div id="storage-switch-wrap" class="storage-switch-wrap">
+            <div class="subform-inner">
+              <button id="storage-switch-btn" class="btn-primary" type="button">切换存储位置</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ④ 日志 -->
       <section id="logs-card" class="card" hidden>
         <h2 class="card-title">日志</h2>

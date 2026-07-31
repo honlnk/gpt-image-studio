@@ -45,7 +45,7 @@ import type {
  */
 
 /** 把 StorageStoreError 转成 HTTP 响应。返回 true 表示已处理。 */
-function handleStorageStoreError(error: unknown, reply: FastifyReply): boolean {
+export function handleStorageStoreError(error: unknown, reply: FastifyReply): boolean {
   if (error instanceof StorageStoreError) {
     const status =
       error.code === "STORAGE_INVALID_TABLE" || error.code === "STORAGE_INVALID_KEY"
@@ -405,14 +405,14 @@ export async function storageRoutes(app: FastifyInstance) {
 
 // ─── 请求体类型与校验 ───
 
-type ActivateDatasetBody = {
+export type ActivateDatasetBody = {
   storageKind: StorageKind;
   storageConfig: StorageConfig;
   imageStoreKind: ImageStoreKind;
   label?: string;
 };
 
-function validateActivateBody(body: Partial<ActivateDatasetBody>): string | undefined {
+export function validateActivateBody(body: Partial<ActivateDatasetBody>): string | undefined {
   if (!body) return "请求体为空";
   if (body.storageKind !== "filesystem" && body.storageKind !== "oss") {
     return "storageKind 必须是 filesystem 或 oss";
@@ -435,9 +435,13 @@ function validateActivateBody(body: Partial<ActivateDatasetBody>): string | unde
     return "storageConfig 缺失";
   }
   if (body.storageKind === "filesystem") {
-    const dir = (body.storageConfig as { directory?: unknown }).directory;
-    if (typeof dir !== "string" || dir.length === 0) {
-      return "filesystem 模式需要 directory 字段";
+    // filesystem-default 的 directory 由 Companion 决定（resolveAndActivate 回填默认目录），
+    // 前端传空串占位即可，不做非空校验。
+    if (body.imageStoreKind !== "filesystem-default") {
+      const dir = (body.storageConfig as { directory?: unknown }).directory;
+      if (typeof dir !== "string" || dir.length === 0) {
+        return "filesystem 模式需要 directory 字段";
+      }
     }
   } else {
     const oss = body.storageConfig as { endpoint?: unknown; bucket?: unknown; prefix?: unknown };

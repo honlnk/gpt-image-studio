@@ -132,6 +132,40 @@ describe("数据集管理", () => {
     await app.close();
   });
 
+  it("POST activate filesystem-default 允许空 directory（Companion 回填默认目录）", async () => {
+    const app = await makeApp();
+    mkdirSync(join(tempDir, "images"), { recursive: true });
+    const res = await app.inject(
+      auth("/storage/datasets/activate", {
+        method: "POST",
+        payload: {
+          storageKind: "filesystem",
+          storageConfig: { directory: "" }, // 前端切回默认目录时传空串占位
+          imageStoreKind: "filesystem-default",
+        },
+      }),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json().dataset.image_store_kind).toBe("filesystem-default");
+    await app.close();
+  });
+
+  it("POST activate filesystem-custom 空 directory 仍返回 400", async () => {
+    const app = await makeApp();
+    const res = await app.inject(
+      auth("/storage/datasets/activate", {
+        method: "POST",
+        payload: {
+          storageKind: "filesystem",
+          storageConfig: { directory: "" },
+          imageStoreKind: "filesystem-custom",
+        },
+      }),
+    );
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("GET /storage/datasets/active 无激活返回 404", async () => {
     const app = await makeApp();
     const res = await app.inject(auth("/storage/datasets/active"));

@@ -203,9 +203,15 @@ export async function resolveAndActivate(input: ResolveInput): Promise<ResolveRe
   // filesystem 模式需先归一化目录（realpathSync 解软链），保证指纹稳定
   let normalizedConfig = input.storageConfig;
   if (input.storageKind === "filesystem") {
+    // filesystem-default 的目录由 Companion 决定（前端传空串占位），
+    // 必须与 ensureDefaultDataset 一致，否则指纹不同会新建数据集而非复用默认数据集。
     const fsCfg = input.storageConfig as FilesystemConfig;
     normalizedConfig = {
-      directory: normalizeDirectory(fsCfg.directory),
+      directory: normalizeDirectory(
+        input.imageStoreKind === "filesystem-default"
+          ? defaultImagesDir()
+          : fsCfg.directory,
+      ),
     } satisfies FilesystemConfig;
   }
 

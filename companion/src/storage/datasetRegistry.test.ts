@@ -137,6 +137,23 @@ describe("resolveAndActivate", () => {
     expect(result.imageStore.kind).toBe("filesystem-default");
   });
 
+  it("filesystem-default 传空目录时回填默认目录，指纹命中复用默认数据集", async () => {
+    const { resolveAndActivate, ensureDefaultDataset } = await loadModules();
+    mkdirSync(join(tempDir, "images"), { recursive: true });
+    // 模拟 Companion 启动兜底：建默认数据集（directory = defaultImagesDir()）
+    const def = await ensureDefaultDataset();
+
+    // 模拟前端「切回默认目录」：directory 传空串占位
+    const result = await resolveAndActivate({
+      storageKind: "filesystem",
+      storageConfig: { directory: "" },
+      imageStoreKind: "filesystem-default",
+    });
+
+    expect(result.created).toBe(false);
+    expect(result.dataset.id).toBe(def.id);
+  });
+
   it("storage_config 存储的是归一化后的目录路径", async () => {
     const { resolveAndActivate, listDatasetViews } = await loadModules();
     const customDir = join(tempDir, "pics");

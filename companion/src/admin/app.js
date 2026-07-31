@@ -22,8 +22,17 @@ const state = {
   logs: null, // { lines, logFile, date }
   logDate: todayStr(),
   logLines: 100,
+  // 存储位置（数据集）
+  datasets: [], // DatasetView[]
+  activeDataset: null, // DatasetView | null
+  ossConfig: null, // 脱敏视图 | null（未配置）
+  ossEditing: false, // 已配置凭据时，是否展开完整表单（点「重新配置」后才为 true）
+  storageKind: "filesystem-default", // 当前选中的切换目标
+  storageSuccess: "", // 切换成功提示（渲染间保留）
+  customDirHistory: [], // 历史自定义目录（从数据集记录提取，下拉列表 + 预填）
+  dirDropdownOpen: false, // 历史目录下拉展开态
   // 对话框
-  dialog: null, // { kind: 'delete'|'reset', title, desc, payload? }
+  dialog: null, // { kind: 'delete'|'reset'|'storage', title, desc, payload? }
   // loading 标记
   loadingCredentials: false,
   loadingPresets: false,
@@ -31,6 +40,9 @@ const state = {
   loadingLogs: false,
   loadingReset: false,
   loadingRestore: false,
+  loadingStorage: false,
+  switchingStorage: false,
+  pickingDirectory: false,
 };
 
 // ---- DOM 引用 ----
@@ -71,6 +83,31 @@ const el = {
   logsEmpty: $("logs-empty"),
   logsHint: $("logs-hint"),
   logsError: $("logs-error"),
+  // 存储位置
+  storageCard: $("storage-card"),
+  storageLoading: $("storage-loading"),
+  storageBody: $("storage-body"),
+  storageCurrentLabel: $("storage-current-label"),
+  storageCustomDir: $("storage-custom-dir"),
+  storageDir: $("storage-dir"),
+  storageDirDropdownBtn: $("storage-dir-dropdown-btn"),
+  storageDirList: $("storage-dir-list"),
+  storagePickDir: $("storage-pick-dir"),
+  storageOssForm: $("storage-oss-form"),
+  storageOssEndpoint: $("storage-oss-endpoint"),
+  storageOssBucket: $("storage-oss-bucket"),
+  storageOssAk: $("storage-oss-ak"),
+  storageOssSk: $("storage-oss-sk"),
+  storageOssCurrent: $("storage-oss-current"),
+  storageOssSummary: $("storage-oss-summary"),
+  storageOssFields: $("storage-oss-fields"),
+  storageOssReconfig: $("storage-oss-reconfig"),
+  storageOssReconfigCancel: $("storage-oss-reconfig-cancel"),
+  storageOssCancelWrap: $("storage-oss-cancel-wrap"),
+  storageError: $("storage-error"),
+  storageSuccess: $("storage-success"),
+  storageSwitchWrap: $("storage-switch-wrap"),
+  storageSwitchBtn: $("storage-switch-btn"),
   // 对话框
   dialogBackdrop: $("dialog-backdrop"),
   dialogTitle: $("dialog-title"),
@@ -173,9 +210,10 @@ function renderCorrupt() {
 }
 
 function renderCredentialsVisibility() {
-  // 损坏时不显示凭据卡和日志卡
+  // 损坏时不显示凭据卡、存储位置卡和日志卡
   el.credentialsCard.hidden = !state.online || !!state.corrupt;
   el.logsCard.hidden = !state.online || !!state.corrupt;
+  el.storageCard.hidden = !state.online || !!state.corrupt;
 }
 
 function renderCredentials() {
@@ -343,8 +381,8 @@ async function checkStatus() {
     state.authStatus = null;
   }
   renderAll();
-  // 在线则懒加载凭据 + 预设 + 日志
-  await loadPresetsAndCredentials();
+  // 在线则懒加载凭据 + 预设 + 存储位置
+  await Promise.all([loadPresetsAndCredentials(), loadStorage()]);
 }
 
 async function loadPresetsAndCredentials() {
@@ -525,6 +563,285 @@ async function loadLogs() {
   }
 }
 
+// ---- 存储位置（数据集） ----
+
+const STORAGE_KIND_LABELS = {
+  "filesystem-default": "默认目录",
+  "filesystem-custom": "指定目录",
+  oss: "阿里云 OSS",
+};
+
+async function loadStorage() {
+  if (!state.online) return;
+  state.loadingStorage = true;
+  renderStorage();
+  try {
+    const data = await api("/admin/api/datasets");
+    state.datasets = data.datasets || [];
+    state.activeDataset = state.datasets.find((d) => d.is_active) || null;
+    if (state.activeDataset) {
+      state.storageKind = state.activeDataset.image_store_kind;
+    }
+    // 历史自定义目录（数据集注册表里每个 custom 数据集都存了自己的 directory，
+    // 提取出来做输入框预填 + datalist 候选，避免用户每次重输路径）
+    state.customDirHistory = [
+      ...new Set(
+        state.datasets
+          .filter((d) => d.image_store_kind === "filesystem-custom")
+          .map((d) => {
+            try {
+              return JSON.parse(d.storage_config).directory || "";
+            } catch {
+              return "";
+            }
+          })
+          .filter(Boolean),
+      ),
+    ];
+    if (!el.storageDir.value && state.customDirHistory.length > 0) {
+      el.storageDir.value = state.customDirHistory[0];
+    }
+  } catch (e) {
+    renderError(el.storageError, e.message);
+  } finally {
+    state.loadingStorage = false;
+  }
+  // OSS 配置未配置时 GET 返回 404，视为 null 而非错误
+  try {
+    state.ossConfig = await api("/storage/oss/config");
+  } catch (e) {
+    state.ossConfig = null;
+  }
+  renderStorage();
+}
+
+function renderStorage() {
+  el.storageLoading.hidden = !state.loadingStorage;
+  el.storageBody.hidden = state.loadingStorage;
+  if (state.loadingStorage) return;
+
+  // 当前位置
+  if (state.activeDataset) {
+    const kind = STORAGE_KIND_LABELS[state.activeDataset.image_store_kind] || "";
+    el.storageCurrentLabel.textContent = `${state.activeDataset.label}（${kind}）`;
+  } else {
+    el.storageCurrentLabel.textContent = "未配置";
+  }
+
+  // radio 选中态 + 子表单显隐
+  const radios = document.querySelectorAll('input[name="storage-kind"]');
+  for (const r of radios) {
+    r.checked = r.value === state.storageKind;
+  }
+  el.storageCustomDir.classList.toggle("open", state.storageKind === "filesystem-custom");
+  el.storageOssForm.classList.toggle("open", state.storageKind === "oss");
+
+  // 历史目录下拉：无历史时隐藏 ▾ 按钮；展开态由 state.dirDropdownOpen 驱动
+  el.storageDirDropdownBtn.hidden = state.customDirHistory.length === 0;
+  el.storageDirDropdownBtn.classList.toggle("open", state.dirDropdownOpen);
+  el.storageDirList.hidden = !state.dirDropdownOpen;
+  el.storageDirList.innerHTML = "";
+  for (const dir of state.customDirHistory) {
+    const li = document.createElement("li");
+    li.textContent = dir;
+    li.title = dir;
+    li.onclick = () => selectDirFromHistory(dir);
+    el.storageDirList.appendChild(li);
+  }
+
+  // 原生目录选择按钮态
+  el.storagePickDir.disabled = state.pickingDirectory;
+  el.storagePickDir.textContent = state.pickingDirectory ? "选择中…" : "选择文件夹…";
+
+  // OSS：已配置凭据时默认只显示摘要面板（Endpoint/Bucket/脱敏 AK + 重新配置按钮），
+  // 点「重新配置」（ossEditing）或未配置时才显示完整表单。表单隐藏时输入框仍保留
+  // 预填值，askStorageSwitch 的「沿用已保存凭据」逻辑不受影响。
+  const ossConfigured = !!state.ossConfig;
+  const showOssFields = !ossConfigured || state.ossEditing;
+  el.storageOssSummary.hidden = showOssFields;
+  el.storageOssFields.hidden = !showOssFields;
+  el.storageOssCancelWrap.hidden = !ossConfigured;
+  if (ossConfigured) {
+    el.storageOssCurrent.textContent =
+      `当前已配置：${state.ossConfig.endpoint} / ${state.ossConfig.bucket}（${state.ossConfig.accessKeyIdMasked}）`;
+    if (!el.storageOssEndpoint.value) el.storageOssEndpoint.value = state.ossConfig.endpoint;
+    if (!el.storageOssBucket.value) el.storageOssBucket.value = state.ossConfig.bucket;
+  }
+
+  // 提示与按钮态：切换按钮仅在选中「新目标」（与当前激活位置不同）时展开
+  el.storageSuccess.textContent = state.storageSuccess;
+  el.storageSuccess.hidden = !state.storageSuccess;
+  const isNewTarget =
+    !state.activeDataset || state.storageKind !== state.activeDataset.image_store_kind;
+  el.storageSwitchWrap.classList.toggle("open", isNewTarget);
+  el.storageSwitchBtn.disabled = state.switchingStorage;
+  el.storageSwitchBtn.textContent = state.switchingStorage ? "切换中…" : "切换存储位置";
+}
+
+function onStorageKindChange(value) {
+  state.storageKind = value;
+  state.storageSuccess = "";
+  state.dirDropdownOpen = false;
+  state.ossEditing = false;
+  renderError(el.storageError, "");
+  renderStorage();
+}
+
+function askStorageSwitch() {
+  if (state.switchingStorage) return;
+  state.storageSuccess = "";
+
+  // 组装切换请求体（与 web 原 StorageLocationPanel 一致：默认目录 directory 传空串占位，
+  // 由 Companion 回填默认目录——指纹命中才能复用原默认数据集）
+  let input;
+  if (state.storageKind === "oss") {
+    const endpoint = el.storageOssEndpoint.value.trim();
+    const bucket = el.storageOssBucket.value.trim();
+    const accessKeyId = el.storageOssAk.value.trim();
+    const accessKeySecret = el.storageOssSk.value.trim();
+    if (!endpoint || !bucket) {
+      renderError(el.storageError, "请填写 Endpoint 和 Bucket");
+      return;
+    }
+    // 已保存过凭据且 Endpoint/Bucket 未变：AK/SK 留空即沿用（oss-credentials.json 与
+    // 数据集解耦，切换位置不丢凭据），无需重新填写也不用重复 PUT。
+    const reuseExisting =
+      !!state.ossConfig &&
+      !accessKeyId &&
+      !accessKeySecret &&
+      endpoint === state.ossConfig.endpoint &&
+      bucket === state.ossConfig.bucket;
+    if (!reuseExisting && (!accessKeyId || !accessKeySecret)) {
+      renderError(
+        el.storageError,
+        state.ossConfig
+          ? "修改 Endpoint/Bucket 时需重新填写完整的 AccessKey ID 和 Secret；沿用已保存凭据请保持 Endpoint/Bucket 不变并将 AccessKey 留空"
+          : "请填写完整的 OSS 配置（endpoint/bucket/AccessKey）",
+      );
+      return;
+    }
+    input = {
+      storageKind: "oss",
+      storageConfig: { endpoint, bucket, prefix: "gpt-image-studio" },
+      imageStoreKind: "oss",
+      // null 表示沿用已保存凭据（跳过 PUT）
+      ossCredentials: reuseExisting ? null : { endpoint, bucket, accessKeyId, accessKeySecret },
+    };
+  } else if (state.storageKind === "filesystem-custom") {
+    const directory = el.storageDir.value.trim();
+    if (!directory) {
+      renderError(el.storageError, "请输入目录路径");
+      return;
+    }
+    input = {
+      storageKind: "filesystem",
+      storageConfig: { directory },
+      imageStoreKind: "filesystem-custom",
+    };
+  } else {
+    input = {
+      storageKind: "filesystem",
+      storageConfig: { directory: "" },
+      imageStoreKind: "filesystem-default",
+    };
+  }
+
+  // 确认对话框（当前内容将不可见但不删除）
+  const currentLabel = state.activeDataset
+    ? `${state.activeDataset.label}（${STORAGE_KIND_LABELS[state.activeDataset.image_store_kind] || ""}）`
+    : "未知";
+  const newLabel = STORAGE_KIND_LABELS[state.storageKind];
+  state.dialog = {
+    kind: "storage",
+    title: `切换到「${newLabel}」`,
+    desc: `切换后，当前「${currentLabel}」的内容将不可见（不会删除），新内容会存到新位置。切回「${currentLabel}」可找回原有内容。是否继续？`,
+    confirmLabel: "切换",
+    payload: input,
+  };
+  renderDialog();
+}
+
+async function doStorageSwitch(input) {
+  state.switchingStorage = true;
+  renderError(el.storageError, "");
+  state.storageSuccess = "";
+  renderStorage();
+  try {
+    // OSS 模式：先保存 OSS 凭据（含连通性测试，凭据错误会被拒绝）
+    if (input.ossCredentials) {
+      await api("/storage/oss/config", {
+        method: "PUT",
+        body: JSON.stringify(input.ossCredentials),
+      });
+    }
+    const body = {
+      storageKind: input.storageKind,
+      storageConfig: input.storageConfig,
+      imageStoreKind: input.imageStoreKind,
+    };
+    const result = await api("/admin/api/datasets/activate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    state.storageSuccess = result.created
+      ? "已创建新数据集并切换。请回到 web 页面刷新，以加载新位置的数据。"
+      : "已切换数据集。请回到 web 页面刷新，以加载新位置的数据。";
+    // 切换成功后收起 OSS 表单回到摘要面板，并清空 AccessKey 输入（凭据已落盘）
+    state.ossEditing = false;
+    el.storageOssAk.value = "";
+    el.storageOssSk.value = "";
+    await loadStorage();
+  } catch (e) {
+    renderError(el.storageError, `切换失败：${e.message}`);
+  } finally {
+    state.switchingStorage = false;
+    renderStorage();
+  }
+}
+
+/** 历史目录下拉：展开/收起（不做输入过滤，展示全量历史）。 */
+function toggleDirDropdown() {
+  state.dirDropdownOpen = !state.dirDropdownOpen;
+  renderStorage();
+}
+
+function selectDirFromHistory(dir) {
+  el.storageDir.value = dir;
+  state.dirDropdownOpen = false;
+  renderError(el.storageError, "");
+  renderStorage();
+}
+
+/** 点击下拉外部 / 按 Escape 时关闭。 */
+function maybeCloseDirDropdown(event) {
+  if (!state.dirDropdownOpen) return;
+  if (event.target.closest && event.target.closest(".dir-select-wrap")) return;
+  state.dirDropdownOpen = false;
+  renderStorage();
+}
+
+/** 「选择文件夹…」：调 Companion 弹原生目录选择框（浏览器拿不到绝对路径）。 */
+async function pickDirectory() {
+  if (state.pickingDirectory) return;
+  state.pickingDirectory = true;
+  renderStorage();
+  try {
+    const result = await api("/admin/api/pick-directory", { method: "POST" });
+    if (result.ok) {
+      el.storageDir.value = result.path;
+      renderError(el.storageError, "");
+    } else if (!result.canceled) {
+      renderError(el.storageError, result.error || "无法打开目录选择框，请手动输入路径");
+    }
+    // canceled：用户主动取消，静默不提示
+  } catch (e) {
+    renderError(el.storageError, e.message);
+  } finally {
+    state.pickingDirectory = false;
+    renderStorage();
+  }
+}
+
 // ---- 表单操作 ----
 
 function startAdd() {
@@ -622,6 +939,8 @@ function onDialogConfirm() {
     removeCredential(d.payload);
   } else if (d.kind === "reset") {
     resetEmpty();
+  } else if (d.kind === "storage" && d.payload) {
+    doStorageSwitch(d.payload);
   }
 }
 
@@ -641,6 +960,25 @@ function bindEvents() {
   el.restoreBtn.onclick = () => restoreBackup();
   el.resetBtn.onclick = () => askResetEmpty();
   el.refreshLogs.onclick = () => loadLogs();
+  el.storageSwitchBtn.onclick = () => askStorageSwitch();
+  el.storagePickDir.onclick = () => pickDirectory();
+  el.storageDirDropdownBtn.onclick = () => toggleDirDropdown();
+  el.storageOssReconfig.onclick = () => {
+    state.ossEditing = true;
+    renderStorage();
+  };
+  el.storageOssReconfigCancel.onclick = () => {
+    state.ossEditing = false;
+    renderError(el.storageError, "");
+    renderStorage();
+  };
+  document.addEventListener("click", maybeCloseDirDropdown);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") maybeCloseDirDropdown(e);
+  });
+  document.querySelectorAll('input[name="storage-kind"]').forEach((r) => {
+    r.onchange = () => onStorageKindChange(r.value);
+  });
   el.logDate.onchange = () => {
     state.logDate = el.logDate.value;
   };

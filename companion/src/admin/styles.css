@@ -249,9 +249,9 @@ body {
 }
 
 .cred-entry.active {
-  border-color: #4ade80;
-  background: rgba(239, 252, 244, 0.5);
-  box-shadow: 0 0 0 1px #4ade80;
+  border-color: #111827;
+  background: #f9fafb;
+  box-shadow: 0 0 0 1px #111827;
 }
 
 .entry-head {
@@ -546,4 +546,231 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ---- 存储位置卡片 ---- */
+
+.storage-current {
+  font-size: 13px;
+  color: #111827;
+  margin: 10px 0 12px;
+}
+
+.storage-current-key {
+  color: #6b7280;
+}
+
+.storage-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.storage-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.storage-option:hover {
+  border-color: #d1d5db;
+}
+
+.storage-option:has(input:checked) {
+  border-color: #111827;
+  background: #f9fafb;
+}
+
+.storage-option input {
+  margin-top: 3px;
+  accent-color: #111827;
+}
+
+.option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.option-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.option-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+/* 手风琴展开/收起：grid-template-rows 0fr→1fr 实现高度动画。
+   折叠时子表单（0 高度）会带出上下两个 flex gap（8+8=16px），
+   margin -4px 0 抵消其中一个 gap，让选项间距保持与其他选项一致的 8px。 */
+.storage-subform {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin: -4px 0;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.25s ease,
+    margin 0.25s ease,
+    opacity 0.2s ease;
+}
+
+.storage-subform.open {
+  grid-template-rows: 1fr;
+  margin: 0;
+  opacity: 1;
+}
+
+.subform-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* 历史目录下拉需要溢出子表单显示，但 overflow:hidden 是折叠动画的裁剪基础。
+   离散过渡：.open 时延迟 0.25s（等高度动画结束）才翻转为 visible；
+   收起时（.open 移除）无过渡，立即恢复裁剪，动画不穿帮。 */
+.storage-subform.open .subform-inner {
+  overflow: visible;
+  transition: overflow 0s 0.25s;
+}
+
+.subform-content {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+/* OSS 摘要面板：已配置凭据时的默认形态，信息 + 右下角「重新配置」按钮。 */
+.oss-summary .hint-text {
+  margin: 0;
+}
+
+.oss-summary-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* 切换按钮：仅在选中「新目标」（与当前激活位置不同）时展开显示。 */
+.storage-switch-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.25s ease,
+    opacity 0.2s ease;
+}
+
+.storage-switch-wrap.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.dir-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.dir-input-row .btn-outline-sm {
+  /* 行容器 stretch 使按钮与输入框同高，垂直居中文字 */
+  display: inline-flex;
+  align-items: center;
+}
+
+.dir-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dir-input-row .btn-outline-sm {
+  flex-shrink: 0;
+}
+
+/* 历史目录下拉：点击 ▾ 展开全量列表（不做输入过滤）。 */
+.dir-select-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.dir-select-wrap input {
+  width: 100%;
+  padding-right: 30px;
+}
+
+.dir-dropdown-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.dir-dropdown-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.dir-dropdown-btn.open {
+  color: #111827;
+}
+
+.dir-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.12);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.dir-dropdown-list li {
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.dir-dropdown-list li:hover {
+  background: #f3f4f6;
+}
+
+.success-text {
+  color: #15803d;
+  font-size: 13px;
+  margin: 4px 0 10px;
+  line-height: 1.6;
 }
