@@ -13,10 +13,11 @@ import type {
   PromptWordbanks,
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
+import { readStorage, writeStorage } from "../../shared/localStorage";
 import AboutPanel from "../settings/AboutPanel.vue";
 import AnalyticsPanel from "../settings/AnalyticsPanel.vue";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
-import StorageLocationPanel from "../settings/StorageLocationPanel.vue";
+import CompanionInfoPanel from "../settings/CompanionInfoPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
 import FavoritePromptsPanel from "../settings/FavoritePromptsPanel.vue";
@@ -29,7 +30,7 @@ import BaseModal from "../ui/BaseModal.vue";
 type SettingsTab =
   | "general"
   | "api"
-  | "storage"
+  | "companion"
   | "promptMode"
   | "favoritePrompts"
   | "prompt"
@@ -47,8 +48,6 @@ const props = defineProps<{
   connectionMode: ConnectionMode;
   apiKey: string;
   apiBaseUrl: string;
-  companionUrl: string;
-  companionAccessKey: string;
   apiBaseUrlMode: "origin" | "full";
   apiMode: ApiMode;
   streamImages: boolean;
@@ -106,14 +105,14 @@ const activeTab = ref<SettingsTab>("general");
 const pendingBackupFile = ref<File | null>(null);
 const isRestoreConfirmOpen = ref(false);
 
-// 存储位置 tab 仅 Companion 模式显示（阶段二 PR7）
+// 接口 tab 仅 direct 模式显示（纯直连配置）；Companion tab 仅 Companion 模式显示。
+// Companion 的 provider 凭据/存储位置等配置都在 Companion 自带管理页维护。
 const tabs = computed<{ key: SettingsTab; label: string }[]>(() => {
-  const base: { key: SettingsTab; label: string }[] = [
-    { key: "general", label: "通用" },
-    { key: "api", label: "接口" },
-  ];
+  const base: { key: SettingsTab; label: string }[] = [{ key: "general", label: "通用" }];
   if (props.connectionMode === "localCompanion") {
-    base.push({ key: "storage", label: "存储位置" });
+    base.push({ key: "companion", label: "Companion" });
+  } else {
+    base.push({ key: "api", label: "接口" });
   }
   base.push(
     { key: "promptMode", label: "提示词模式" },
@@ -127,15 +126,30 @@ const tabs = computed<{ key: SettingsTab; label: string }[]>(() => {
   return base;
 });
 
+// 记住上次浏览的 tab：打开时恢复（initialTab 外部指定优先），切换时写回。
+// 纯 UI 偏好、与数据后端无关，存 localStorage（与连接配置镜像同一存储）。
+const SETTINGS_TAB_STORAGE_KEY = "gpt-image-studio:settings-tab";
+
+function isVisibleTab(tab: string): tab is SettingsTab {
+  return tabs.value.some((t) => t.key === tab);
+}
+
 watch(
   () => props.isOpen,
   (isOpen) => {
     if (!isOpen) return;
-    if (props.initialTab) {
-      activeTab.value = props.initialTab;
-    }
+    // 优先级：initialTab（如「批量操作」跳转）> 记忆值 > general。
+    // 记忆值当前不可见时回退 general（如 Companion 模式下记忆的 "api"）。
+    const remembered = readStorage(SETTINGS_TAB_STORAGE_KEY, "");
+    const candidate = props.initialTab ?? (isVisibleTab(remembered) ? remembered : "general");
+    activeTab.value = isVisibleTab(candidate) ? candidate : "general";
   },
 );
+
+watch(activeTab, (tab) => {
+  if (!props.isOpen) return;
+  writeStorage(SETTINGS_TAB_STORAGE_KEY, tab);
+});
 
 function requestBackupImport(file: File) {
   pendingBackupFile.value = file;
@@ -229,12 +243,13 @@ function forwardSavePromptWordbank(
             <GeneralSettingsPanel
               v-if="activeTab === 'general'"
               :auto-retry-on-network-error="autoRetryOnNetworkError"
+              :connection-mode="connectionMode"
               @update:auto-retry-on-network-error="emit('update:autoRetryOnNetworkError', $event)"
+              @update:connection-mode="emit('update:connectionMode', $event)"
             />
 
             <ApiSettingsPanel
               v-else-if="activeTab === 'api'"
-              :connection-mode="connectionMode"
               :api-base-url="apiBaseUrl"
               :api-base-url-mode="apiBaseUrlMode"
               :api-mode="apiMode"
@@ -242,7 +257,6 @@ function forwardSavePromptWordbank(
               :model="model"
               :stream-images="streamImages"
               :stream-partial-images="streamPartialImages"
-              @update:connection-mode="emit('update:connectionMode', $event)"
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
               @update:api-base-url-mode="emit('update:apiBaseUrlMode', $event)"
               @update:api-mode="emit('update:apiMode', $event)"
@@ -252,11 +266,7 @@ function forwardSavePromptWordbank(
               @update:stream-partial-images="emit('update:streamPartialImages', $event)"
             />
 
-            <StorageLocationPanel
-              v-else-if="activeTab === 'storage'"
-              :companion-url="companionUrl"
-              :companion-access-key="companionAccessKey"
-            />
+            <CompanionInfoPanel v-else-if="activeTab === 'companion'" />
 
             <PromptModeSettingsPanel
               v-else-if="activeTab === 'promptMode'"
