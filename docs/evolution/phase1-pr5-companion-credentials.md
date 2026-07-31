@@ -1,9 +1,14 @@
 # 阶段一 PR5：companion 凭据收编 + localStorage 迁移 + 备份更新
 
-> **状态**：✅ 已完成
+> **状态**：⚠️ 已被后续修复回滚（凭据存储部分）
 > **依赖**：PR4 ✅
 > **风险**：中（涉及敏感凭据 + hydrate 时序，需仔细回归）
 > **纲领**：[`evolution-roadmap.md` §6.4](../evolution-roadmap.md) + 决策 T3
+
+> **回滚说明（阶段二实测后）**：目标 1（companionUrl/accessKey 收编到 `StudioStorage.config`）已回滚为 **localStorage 镜像权威**。
+> 原因：连接配置存进「由它自己选中的后端」会形成鸡生蛋——Companion 模式下读 config 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401 卡死；
+> 且 config 在不同后端间不可达，切后端即丢连接。回滚后：ref 初始值同步读 localStorage 镜像，watch 写回镜像；`migrateCredentials` 不再清 localStorage，镜像为空时从旧 config 读回回填并补写镜像（一次性收尾旧数据）。
+> apiKey/apiBaseUrl 走 settings 表、备份剥离敏感值等其余部分保持不变。
 
 ## 目标
 

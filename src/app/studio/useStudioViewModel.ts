@@ -100,7 +100,7 @@ export function useStudioViewModel() {
   const settings = useStudioSettings({
     isHydrated,
     onStorageError: reportStorageError,
-    services: { settings: services.settings, config: services.config },
+    services: { settings: services.settings },
   });
   const composerState = useComposerStore();
   const {
@@ -220,7 +220,8 @@ export function useStudioViewModel() {
   // resolveStorage() 在 setup 时只执行一次（读 connectionMode.value 快照装配 storage
   // 实例 + services + stores），切换 connectionMode 后这些全绑死在旧后端上——
   // 不 reload 的话，切到 Companion 仍走 IndexedDB（看不到空数据集），切回 direct
-  // 也读不到 IndexedDB 的原数据。reload 让 setup 重新按新模式装配正确后端。
+  // 也读不到 IndexedDB 的原数据。reload 后 setup 能装配正确后端，前提是快照初始值
+  // 同步可得——connectionMode 有 localStorage 镜像（settingsStore），切换时已写回。
   // 与 StorageLocationPanel 的 reload 同源（D1 数据集隔离）。
   // 嵌入态（qiankun）connectionMode 由宿主固定，不 reload。
   watch(
@@ -325,6 +326,7 @@ export function useStudioViewModel() {
     },
     companionUrl: settings.companionUrl,
     companionAccessKey: settings.companionAccessKey,
+    isEmbedded: settings.isEmbedded,
     activeConversationId: conversations.activeConversationId,
     applySettings: settings.applySettings,
     attachedImages: images.attachedImages,

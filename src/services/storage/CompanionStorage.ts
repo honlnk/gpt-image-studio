@@ -40,7 +40,9 @@ export class CompanionStorage implements StudioStorage {
   constructor(opts: CompanionStorageOptions) {
     this.getCompanionUrl = opts.getCompanionUrl;
     this.getCompanionAccessKey = opts.getCompanionAccessKey;
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+    // 全局 fetch 必须绑定全局对象——裸引用后以 this.fetchImpl(...) 形式调用会
+    // 丢失 window 接收者，浏览器抛 "Illegal invocation"（测试注入 mock，不走这里）。
+    this.fetchImpl = opts.fetchImpl ?? fetch.bind(globalThis);
   }
 
   // ─── 通用 CRUD ───

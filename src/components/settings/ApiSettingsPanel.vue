@@ -4,6 +4,7 @@ import type { ApiMode, ConnectionMode } from "../../types/studio";
 import { FIXED_IMAGE_MODEL } from "../../shared/models";
 import { copyText as copyTextToClipboard } from "../../shared/clipboard";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useCompanionStore } from "../../stores/companionStore";
 
 const props = defineProps<{
   connectionMode: ConnectionMode;
@@ -36,6 +37,16 @@ const settings = useSettingsStore();
 const companionAdminUrl = computed(
   () => settings.companionUrl.replace(/\/$/, "") + "/admin",
 );
+
+// Companion 连接：密钥输入 → connectWithKey 校验后写入 settingsStore（localStorage 镜像持久化）。
+// 输入 UI 曾随 /companion 页删除而丢失（5491a84），这里恢复到接口设置内。
+const companion = useCompanionStore();
+const accessKeyInput = ref("");
+
+function connectCompanion() {
+  void companion.connectWithKey(accessKeyInput.value);
+  accessKeyInput.value = "";
+}
 
 const apiModeOptions: Array<{ value: ApiMode; label: string; description: string }> = [
   { value: "images", label: "Images API", description: "直接调用 /v1/images，兼容传统图片接口。" },
@@ -155,6 +166,61 @@ onUnmounted(() => {
           <p class="text-xs leading-relaxed">
             Companion 是一个运行在本机的轻量代理服务，负责将浏览器请求转发给你配置的 AI 图片生成接口。
             现已支持多套 provider 配置，可在管理页中自由增删切换。
+          </p>
+        </div>
+
+        <!-- 连接密钥：Web 端向 Companion 证明身份的 Bearer 密钥（权威存储 localStorage） -->
+        <div
+          v-if="!settings.isEmbedded"
+          class="rounded-lg border border-gray-200 p-4 space-y-3"
+        >
+          <div class="flex items-center justify-between">
+            <h4 class="text-sm font-medium text-gray-700">连接</h4>
+            <span
+              class="text-xs"
+              :class="companion.companionOnline ? 'text-green-600' : 'text-gray-400'"
+            >
+              {{ companion.companionOnline ? "Companion 在线" : "Companion 离线" }}
+            </span>
+          </div>
+
+          <template v-if="settings.companionConnected">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-green-700">已连接</span>
+              <button
+                class="cursor-pointer text-xs text-red-500 hover:text-red-700"
+                type="button"
+                @click="companion.disconnect()"
+              >
+                断开连接
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <p class="text-sm text-gray-500">
+              请将 Companion 终端打印的连接密钥粘贴到下方完成连接。
+              密钥可在终端用 <span class="font-mono text-gray-700">gpt-image-studio status</span> 查看。
+            </p>
+            <div class="flex gap-2">
+              <input
+                v-model="accessKeyInput"
+                class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-500"
+                placeholder="粘贴连接密钥"
+                @keydown.enter="connectCompanion"
+              />
+              <button
+                class="cursor-pointer rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50"
+                type="button"
+                :disabled="companion.connecting || !accessKeyInput.trim()"
+                @click="connectCompanion"
+              >
+                {{ companion.connecting ? "连接中…" : "连接" }}
+              </button>
+            </div>
+          </template>
+
+          <p v-if="companion.connectError" class="text-xs text-red-600">
+            {{ companion.connectError }}
           </p>
         </div>
 

@@ -3,7 +3,7 @@ import type { ImageAssetServices } from "../../services/imageAssets";
 import type { MessageServices } from "../../services/messages";
 import type { ConfigServices, SettingsServices } from "../../services/settings";
 import type { TimeFieldMigrationServices } from "../../services/timeFieldMigration";
-import { readStorage } from "../../shared/localStorage";
+import { readStorage, writeStorage } from "../../shared/localStorage";
 import { formatError } from "../../shared/errors";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
@@ -33,12 +33,13 @@ type UseStudioRestoreInput = {
   onStorageError: (error: unknown) => void;
   refreshStorageUsage: () => Promise<void>;
   saveCurrentSettings: () => Promise<void>;
-  /** 阶段一 PR5：companion 凭据 ref，用于迁移后回填（决策 T3）。
-   *  ref 初始值仍由 settingsStore 同步从 localStorage 读（兜底），
-   *  迁移逻辑负责把 localStorage 旧值搬到 config 并清 localStorage，
-   *  二次启动时从 config 读回值赋给 ref。 */
+  /** companion 凭据 ref，用于迁移回填。
+   *  权威存储是 localStorage 镜像（settingsStore 同步初始化 + watch 写回）；
+   *  迁移逻辑负责：镜像为空时从旧 config（PR5 时代遗留）读回回填 ref 并补写镜像。 */
   companionUrl: Ref<string>;
   companionAccessKey: Ref<string>;
+  /** 阶段三 PR5：qiankun 嵌入态。true 时连接配置由宿主注入，跳过凭据迁移。 */
+  isEmbedded: Ref<boolean>;
 };
 
 const LEGACY_SEED_CONVERSATION_IDS = new Set(["c-1", "c-2", "c-3"]);
@@ -50,11 +51,8 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
 
   async function restoreFromStorage() {
     try {
-      // 阶段一 PR5：companion 凭据 + apiKey/apiBaseUrl 从 localStorage 迁到 StudioStorage（决策 T3）。
-      // 必须在 timeFieldMigration 之前、settings.load 之前执行。
-      // ref 初始值已由 settingsStore 同步从 localStorage 读（兜底），这里负责：
-      // 1) 把 localStorage 旧值搬到 config（IndexedDB）并清 localStorage
-      // 2) 二次启动（localStorage 已清）时从 config 读回值回填 ref
+      // companion 凭据迁移：localStorage 镜像为权威；镜像为空时从旧 config（PR5 遗留）
+      // 读回回填 ref 并补写镜像。必须在 timeFieldMigration 之前、settings.load 之前执行。
       await migrateCredentials().catch(() => {
         // 迁移失败不阻塞 hydrate（ref 兜底值仍在，用户可重新输入）。
       });
@@ -173,17 +171,20 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
   }
 
   /**
-   * 阶段一 PR5：companion 凭据迁移（决策 T3）。
+   * companion 凭据迁移（T3 回滚后版）。
    *
-   * 时序安全（见 phase1-pr5 文档的时序分析）：
-   * - ref 初始值已由 settingsStore 同步从 localStorage 读（兜底），保证 store setup
-   *   早于 hydrate 时 useCompanionConnection 的 immediate watch 能拿到正确值。
-   * - 这里把 localStorage 旧值搬到 config（IndexedDB __config__: 前缀），然后清 localStorage。
-   * - 二次启动（localStorage 已清）时，从 config 读回值回填 ref。
+   * companionUrl / companionAccessKey 的权威存储是 localStorage 镜像
+   * （settingsStore 同步初始化 + watch 写回）。阶段一 PR5 曾把它们收编到
+   * StudioStorage.config（IndexedDB __config__: 前缀）并清掉 localStorage——
+   * 已回滚：连接配置存进「由它自己选中的后端」会形成鸡生蛋（Companion 模式下
+   * 读 config 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401）。
    *
-   * companionUrl / companionAccessKey 走 config 命名空间（不进 AppSettings 结构）。
-   * apiKey / apiBaseUrl 走 settings 表的 "app" 记录（它们本就在 AppSettings 里，
-   * saveCurrentSettings 会持久化）；这里只负责清掉 localStorage 遗留兜底入口。
+   * 这里负责收尾旧数据（localStorage 不再清除）：
+   * 1) 镜像有值：以镜像为准（如备份导入刚写过镜像），同步回填 ref；
+   * 2) 镜像为空但旧 config 有值（PR5 时代搬走的）：读回回填 ref + 补写镜像。
+   *
+   * apiKey / apiBaseUrl 走 settings 表的 "app" 记录（不变），这里只清 localStorage
+   * 遗留入口，值由后续 settings.load + applySettings 读回覆盖 ref。
    */
   async function migrateCredentials() {
     const LEGACY_KEYS = {
@@ -193,46 +194,41 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
       apiBaseUrl: "gpt-image-studio:api-base-url",
     };
 
-    // 1) companionUrl：同步读 localStorage 旧值
-    const legacyCompanionUrl = readStorage(
-      LEGACY_KEYS.companionUrl,
-      "",
-    );
-    if (legacyCompanionUrl) {
-      await services.config.write("companionUrl", legacyCompanionUrl);
-      localStorage.removeItem(LEGACY_KEYS.companionUrl);
-      // ref 已是同值（settingsStore 同步读过），无需额外回填。
+    // 嵌入态连接配置由宿主注入，不做任何迁移（同 settingsStore 的持久化跳过）。
+    if (input.isEmbedded.value) return;
+
+    // 1) companionUrl：镜像优先；镜像为空时从旧 config 回填并补写镜像
+    const mirrorUrl = readStorage(LEGACY_KEYS.companionUrl, "");
+    if (mirrorUrl) {
+      if (input.companionUrl.value !== mirrorUrl) {
+        input.companionUrl.value = mirrorUrl;
+      }
     } else {
-      // 二次启动：localStorage 已清，从 config 读回值回填 ref
       const configUrl = await services.config.read<string>("companionUrl");
       if (configUrl) {
         input.companionUrl.value = configUrl;
+        writeStorage(LEGACY_KEYS.companionUrl, configUrl);
       }
     }
 
     // 2) companionAccessKey：同上
-    const legacyCompanionAccessKey = readStorage(
-      LEGACY_KEYS.companionAccessKey,
-      "",
-    );
-    if (legacyCompanionAccessKey) {
-      await services.config.write(
-        "companionAccessKey",
-        legacyCompanionAccessKey,
-      );
-      localStorage.removeItem(LEGACY_KEYS.companionAccessKey);
+    const mirrorKey = readStorage(LEGACY_KEYS.companionAccessKey, "");
+    if (mirrorKey) {
+      if (input.companionAccessKey.value !== mirrorKey) {
+        input.companionAccessKey.value = mirrorKey;
+      }
     } else {
       const configKey = await services.config.read<string>(
         "companionAccessKey",
       );
       if (configKey) {
         input.companionAccessKey.value = configKey;
+        writeStorage(LEGACY_KEYS.companionAccessKey, configKey);
       }
     }
 
-    // 3) apiKey / apiBaseUrl：只清 localStorage 遗留入口（运行时持久化本就走 IndexedDB settings 表）。
-    //    它们的值由后续 settings.load + applySettings 从 IndexedDB 读回覆盖 ref。
-    //    这里检测到 localStorage 有旧值就清掉，避免下次启动再用旧兜底。
+    // 3) apiKey / apiBaseUrl：只清 localStorage 遗留入口（运行时持久化本就走 settings 表）。
+    //    它们的值由后续 settings.load + applySettings 从 settings 表读回覆盖 ref。
     const legacyApiKey = readStorage(LEGACY_KEYS.apiKey, "");
     const legacyApiBaseUrl = readStorage(LEGACY_KEYS.apiBaseUrl, "");
     if (legacyApiKey) {
@@ -241,6 +237,10 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
     if (legacyApiBaseUrl) {
       localStorage.removeItem(LEGACY_KEYS.apiBaseUrl);
     }
+
+    // 4) 旧配对机制（7/15 前 pairing ceremony）的孤儿 key：session token 已失效，
+    //    现无任何代码读取，不可用作 accessKey，直接清掉避免混淆。
+    localStorage.removeItem("gpt-image-studio:companion-session-token");
   }
 
   return {

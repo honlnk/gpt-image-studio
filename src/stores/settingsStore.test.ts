@@ -8,6 +8,9 @@ import type { CompanionAuthStatus } from "../types/companion";
 const store: Record<string, string> = {};
 beforeEach(() => {
   setActivePinia(createPinia());
+  // 清掉上一用例的 localStorage 残留——connectionMode 镜像会写入 stub，
+  // 不清理的话会泄漏到后续用例的 store 初始化。
+  for (const key of Object.keys(store)) delete store[key];
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => store[k] ?? null,
     setItem: (k: string, v: string) => {
@@ -473,5 +476,69 @@ describe("settingsStore connectionMode → apiMode 校正", () => {
 
     // 切回 direct 不应被改写
     expect(s.apiMode).toBe("responses");
+  });
+});
+
+describe("settingsStore connectionMode localStorage 镜像", () => {
+  const MIRROR_KEY = "gpt-image-studio:connection-mode";
+
+  it("初始化时同步读 localStorage 镜像（resolveStorage 启动期快照来源）", () => {
+    store[MIRROR_KEY] = "localCompanion";
+    const s = useSettingsStore();
+    expect(s.connectionMode).toBe("localCompanion");
+  });
+
+  it("镜像值非法时回退 direct", () => {
+    store[MIRROR_KEY] = "garbage";
+    const s = useSettingsStore();
+    expect(s.connectionMode).toBe("direct");
+  });
+
+  it("用户切换 connectionMode 时写回镜像", async () => {
+    const s = useSettingsStore();
+    s.connectionMode = "localCompanion";
+    await nextTick();
+    expect(store[MIRROR_KEY]).toBe("localCompanion");
+  });
+
+  it("applySettings 不从 settings 记录回写 connectionMode（防止旧数据集残留值顶回）", () => {
+    store[MIRROR_KEY] = "localCompanion";
+    const s = useSettingsStore();
+    expect(s.connectionMode).toBe("localCompanion");
+
+    const persisted = s.currentSettings();
+    persisted.connectionMode = "direct";
+    s.applySettings(persisted);
+
+    expect(s.connectionMode).toBe("localCompanion");
+  });
+
+  it("嵌入态（applyEmbeddedConfig）不写镜像", async () => {
+    const s = useSettingsStore();
+    s.applyEmbeddedConfig({ companionUrl: "http://x", jwt: "y" });
+    await nextTick();
+    expect(store[MIRROR_KEY]).toBeUndefined();
+  });
+});
+
+describe("settingsStore companion 凭据 localStorage 镜像", () => {
+  const URL_KEY = "gpt-image-studio:companion-url";
+  const ACCESS_KEY = "gpt-image-studio:companion-access-key";
+
+  it("companionUrl / companionAccessKey 变化时写回 localStorage 镜像", async () => {
+    const s = useSettingsStore();
+    s.companionUrl = "http://127.0.0.1:29999";
+    s.companionAccessKey = "test-key-123";
+    await nextTick();
+    expect(store[URL_KEY]).toBe("http://127.0.0.1:29999");
+    expect(store[ACCESS_KEY]).toBe("test-key-123");
+  });
+
+  it("嵌入态（applyEmbeddedConfig）不写 companion 凭据镜像", async () => {
+    const s = useSettingsStore();
+    s.applyEmbeddedConfig({ companionUrl: "http://x", jwt: "jwt-token" });
+    await nextTick();
+    expect(store[URL_KEY]).toBeUndefined();
+    expect(store[ACCESS_KEY]).toBeUndefined();
   });
 });

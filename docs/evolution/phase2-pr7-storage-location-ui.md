@@ -24,6 +24,8 @@ storage 实例 + services + stores 在 ViewModel setup 时一次性创建，绑�
 4. `window.location.reload()`。
 5. 页面重载 → ViewModel setup → resolveStorage 返回新 storage → hydrate 读新数据集。
 
+**生效前提（后续修复补充）**：`resolveStorage` 在 setup 时同步读 `connectionMode` 快照，而 settings 记录存在所选后端内部（异步 hydrate 才可得）——只 reload 的话每次启动都恒装配成 IndexedDbStorage，两条切换路径都是空操作。因此 `connectionMode` 增加 localStorage 镜像（与 companionUrl/accessKey 同模式）：store 初始化时同步读镜像，用户切换时写回；`applySettings` 不再从 settings 记录回写它（连接配置 ≠ 数据集内容，避免旧数据集残留值把模式顶回）。
+
 ## 2. UI 设计
 
 设置页新增「存储位置」配置区（仅 Companion 模式显示）：

@@ -29,12 +29,9 @@ import {
 } from "../services/promptWordbanks";
 import {
   createSettingsServices,
-  createConfigServices,
-  type ConfigServices,
   type SettingsServices,
 } from "../services/settings";
 import { resolveStorage } from "../services/storage/resolveStorage";
-import type { Ref } from "vue";
 import {
   MAX_PROMPT_REWRITE_GUARD_HISTORY,
   addPromptGuardHistoryItem,
@@ -75,7 +72,19 @@ const SETTINGS_STORAGE_KEYS = {
   apiBaseUrl: "gpt-image-studio:api-base-url",
   companionUrl: "gpt-image-studio:companion-url",
   companionAccessKey: "gpt-image-studio:companion-access-key",
+  connectionMode: "gpt-image-studio:connection-mode",
 } as const;
+
+/**
+ * 从 localStorage 镜像读 connectionMode（启动期同步可用）；非法值回退 direct。
+ * resolveStorage 在 ViewModel setup 时同步读 connectionMode 快照装配 storage 后端，
+ * 而 settings 记录存在所选后端内部（异步 hydrate 才可得）——所以必须有这个同步镜像，
+ * 否则独立态每次启动都恒装配成 IndexedDbStorage（reload 也救不回来）。
+ */
+function readConnectionModeMirror(): ConnectionMode {
+  const raw = readStorage(SETTINGS_STORAGE_KEYS.connectionMode, "direct");
+  return raw === "localCompanion" ? "localCompanion" : "direct";
+}
 
 const SIZE_RATIO_OPTIONS = [
   { value: "21:9", label: "21:9", widthRatio: 21, heightRatio: 9 },
@@ -125,25 +134,22 @@ type ImageCountMode = "preset" | "custom";
 
 export const useSettingsStore = defineStore("settings", () => {
   // 阶段一 PR2/PR5：settingsStore 新增 configure 机制（5 store 里唯一原本没有的）。
-  // settings service + config service 通过注入获取；未注入时用默认实例（resolveStorage）。
-  // isHydrated 用于守卫 config 写回（迁移完成前不写，避免覆盖）。
+  // settings service 通过注入获取；未注入时用默认实例（resolveStorage）。
+  // （曾注入 config service 持久化 companionUrl/accessKey——已回滚为 localStorage 镜像，
+  // 见下方 watch 注释。）
   let settingsServices: SettingsServices = createSettingsServices(
     resolveStorage(),
   );
-  let configServices: ConfigServices = createConfigServices(resolveStorage());
-  let isHydratedRef: Ref<boolean> | null = null;
 
   function configureSettingsStore(input: {
     services: SettingsServices;
-    config: ConfigServices;
-    isHydrated: Ref<boolean>;
   }) {
     settingsServices = input.services;
-    configServices = input.config;
-    isHydratedRef = input.isHydrated;
   }
 
-  const connectionMode = ref<ConnectionMode>("direct");
+  // 初始值同步读 localStorage 镜像（而非硬编码 "direct"）——resolveStorage 在
+  // ViewModel setup 时读它的快照装配后端，hydrate 不会回写它（见 applySettings）。
+  const connectionMode = ref<ConnectionMode>(readConnectionModeMirror());
   // 阶段三 PR5：qiankun 嵌入态标记。true 时连接配置由宿主注入，禁用持久化与设置面板编辑。
   const isEmbedded = ref(false);
   const apiMode = ref<ApiMode>("images");
@@ -443,7 +449,10 @@ export const useSettingsStore = defineStore("settings", () => {
 
   function applySettings(settings: AppSettings) {
     const defaults = normalizeGenerationParams(settings.defaults);
-    connectionMode.value = settings.connectionMode;
+    // connectionMode 故意不从 settings 记录回写：它是连接配置（决定读哪个后端），
+    // 启动期权威源是 localStorage 镜像 + 用户切换。数据集内的记录可能是上一个
+    // 后端时代留下的旧值（如切回 direct 后 IndexedDB 里仍存着 localCompanion），
+    // 回写会把模式顶回去，造成 storage 后端与 UI 状态错配。
     apiKey.value = settings.apiKey;
     apiBaseUrlMode.value = settings.apiBaseUrlMode;
     apiBaseUrl.value = displayApiBaseUrl(settings.apiBaseUrl, settings.apiBaseUrlMode);
@@ -626,21 +635,27 @@ export const useSettingsStore = defineStore("settings", () => {
     );
   }
 
-  // 阶段一 PR5：companionUrl/accessKey 收编到 StudioStorage.config（决策 T3）。
-  // 写回走 configServices（IndexedDB __config__: 前缀），加 isHydrated 守卫——
-  // 迁移完成前不写，避免把 ref 的初始兜底值（可能还没被迁移逻辑覆盖）误写回 config。
-  // ref 初始值仍同步读 localStorage（上方声明），保证 store setup 早于 hydrate 时
-  // useCompanionConnection 的 immediate watch 能拿到正确值。
+  // companionUrl/accessKey 的权威存储是 localStorage 镜像（启动期同步可读——
+  // resolveStorage 装配、useCompanionConnection 的 immediate watch 都依赖它）。
+  // 曾按决策 T3 收编到 StudioStorage.config（IndexedDB __config__: 前缀），已回滚：
+  // 连接配置存进「由它自己选中的后端」会形成鸡生蛋——Companion 模式下读 config
+  // 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401 卡死。
+  // ref 初始值同步读 localStorage（上方声明），变化时写回镜像。
   // 阶段三 PR5：嵌入态（isEmbedded）跳过持久化——连接配置由宿主注入，不写回本地。
   watch(companionUrl, (v) => {
-    if (!isHydratedRef?.value || isEmbedded.value) return;
-    void configServices.write("companionUrl", v).catch(() => {
-      // config 写失败不阻塞 UI（与原 writeStorage 的静默吞错语义一致）。
-    });
+    if (isEmbedded.value) return;
+    writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v);
   });
   watch(companionAccessKey, (v) => {
-    if (!isHydratedRef?.value || isEmbedded.value) return;
-    void configServices.write("companionAccessKey", v).catch(() => {});
+    if (isEmbedded.value) return;
+    writeStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, v);
+  });
+  // connectionMode 镜像写回 localStorage：resolveStorage 在每次启动（含切换后的 reload）
+  // setup 时同步读它装配后端。hydrate 不会改它（applySettings 不回写，见上方注释），
+  // 故无需 isHydrated 守卫；嵌入态由宿主固定，跳过持久化（同 companionUrl/accessKey）。
+  watch(connectionMode, (v) => {
+    if (isEmbedded.value) return;
+    writeStorage(SETTINGS_STORAGE_KEYS.connectionMode, v);
   });
 
   /**

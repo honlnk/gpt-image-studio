@@ -17,10 +17,13 @@ import {
 import { resolveStorage } from "./storage/resolveStorage";
 import { saveSettings, loadSettings } from "./settings";
 import { createZipArchive } from "./zipArchive";
+import { readStorage, writeStorage } from "../shared/localStorage";
 
 const BACKUP_VERSION = 1;
 const MANIFEST_FILE = "manifest.json";
 const DATA_FILE = "data.json";
+/** companionUrl 的权威存储（与 settingsStore 的 SETTINGS_STORAGE_KEYS.companionUrl 一致）。 */
+const COMPANION_URL_MIRROR_KEY = "gpt-image-studio:companion-url";
 
 type BackupManifest = {
   app: "gpt-image-studio";
@@ -74,16 +77,19 @@ export type BackupServices = ReturnType<typeof createBackupServices>;
 export function createBackupServices(storage: StudioStorage) {
   return {
     async create() {
-      const [conversations, messages, imageAssets, imageBlobs, settings, companionUrl, companionAccessKey] =
+      const [conversations, messages, imageAssets, imageBlobs, settings, configCompanionUrl] =
         await Promise.all([
           storage.list<Conversation>(STORE_NAMES.conversations),
           storage.list<Message>(STORE_NAMES.messages),
           storage.list<ImageAsset>(STORE_NAMES.imageAssets),
           storage.list<ImageBlobRecord>(STORE_NAMES.imageBlobs),
           loadSettings(),
+          // 旧版（阶段一 PR5）把 companionUrl 存在 config，作为镜像为空时的兜底来源
           storage.readConfig<string>("companionUrl"),
-          storage.readConfig<string>("companionAccessKey"),
         ]);
+      // companionUrl 的权威存储是 localStorage 镜像（T3 已回滚），镜像优先。
+      const companionUrl =
+        readStorage(COMPANION_URL_MIRROR_KEY, "") || configCompanionUrl;
 
       const manifest: BackupManifest = {
         app: "gpt-image-studio",
@@ -96,9 +102,8 @@ export function createBackupServices(storage: StudioStorage) {
         messages,
         imageAssets: imageAssets.map(stripPreviewUrl),
         settings: settings ? stripApiKey(settings) : undefined,
-        // 阶段一 PR5：companionUrl 进备份（跨设备迁移需要），accessKey 剥离（敏感）。
+        // companionUrl 进备份（跨设备迁移需要），accessKey 剥离（敏感，不导出）。
         companionUrl: companionUrl ?? undefined,
-        // companionAccessKey 不写入备份（stripCompanionCredentials 等价于直接不导出）。
       };
       const entries = [
         jsonEntry(MANIFEST_FILE, manifest),
@@ -183,9 +188,10 @@ export function createBackupServices(storage: StudioStorage) {
         restoredSettings
           ? saveSettings(restoredSettings)
           : Promise.resolve(),
-        // 阶段一 PR5：恢复 companionUrl 到 config（accessKey 备份里被剥离，保持空）。
+        // 恢复 companionUrl 到 localStorage 镜像（权威存储，T3 回滚后不再写 config），
+        // 镜像值由随后 restoreFromStorage 的凭据迁移同步进 ref。accessKey 备份里被剥离。
         data.companionUrl
-          ? storage.writeConfig("companionUrl", data.companionUrl)
+          ? Promise.resolve(writeStorage(COMPANION_URL_MIRROR_KEY, data.companionUrl))
           : Promise.resolve(),
       ]);
     },
