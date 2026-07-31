@@ -157,6 +157,20 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
     },
   );
 
+  // provider 切换发生在 Companion 管理页（另一个标签页），本页不会收到任何通知。
+  // 页面重新可见时重新探测 /auth/status，让 model/capability 回流跟得上管理页的修改，
+  // 不用手动刷新页面。
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (
+        document.visibilityState === "visible" &&
+        input.connectionMode.value === "localCompanion"
+      ) {
+        void checkStatus();
+      }
+    });
+  }
+
   return {
     companionOnline,
     companionHealth,

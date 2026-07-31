@@ -419,6 +419,17 @@ export function useStudioViewModel() {
         settings.applySettings,
       ).catch(reportStorageError);
 
+      // provider 回流排序保证（阶段二 PR7 后暴露的时序竞争）：
+      // setup 期 companionStore 的 immediate watch 就发出了 /auth/status 探测，
+      // 它比 hydrate 快时，applyProviderInfo 先落地、随后被 applySettings 用 settings
+      // 记录里的旧 model 顶回去（记录又持久化旧值，永不自愈），页面一直显示切换前的
+      // 模型。这里在 hydrate + urlSettings 之后用已拿到的 status 重放一次回流，确保
+      // 「先恢复记录值、后覆盖回流值」的顺序成立；status 仍在途也没关系，在途的
+      // checkStatus 完成时会自然应用（已在 applySettings 之后）。
+      if (settings.connectionMode.value === "localCompanion") {
+        settings.applyProviderInfo(companionStore.companionAuthStatus);
+      }
+
       analytics.configure(settings.currentSettings());
       void analytics.refreshEventCount();
 
