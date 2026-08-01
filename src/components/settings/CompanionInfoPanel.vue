@@ -100,7 +100,11 @@ const upgradeHintVisible = ref(false);
         </p>
       </div>
 
-      <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+      <!-- Companion 管理页入口：server/嵌入态下管理页已禁用（多租户管理面在宿主），不显示 -->
+      <div
+        v-if="!settings.isEmbedded"
+        class="flex items-center justify-between rounded-lg border border-gray-200 p-3"
+      >
         <div class="text-xs text-gray-500">
           provider 凭据、存储位置、日志由 Companion 自带管理页维护
         </div>

@@ -78,7 +78,13 @@ export async function startServer(opts: {
   // 2) authMiddleware（双模式守卫：local=accessKey，server=JWT）。跳过 /credentials /admin /storage/oss。
   // 3) 其余受保护路由 + logsRoutes（放在 authMiddleware 之后）。
   await app.register(credentialsRoutes, { allowedOrigins: opts.security.allowedOrigins });
-  await app.register(adminRoutes, { allowedOrigins: opts.security.allowedOrigins });
+  // 管理页（/admin 页面 + /admin/api/*）是本机单用户管理面：数据集视图固定 __local__
+  // 虚拟用户（见 routes/admin.ts），server 模式多租户不经过这里，显示无意义且误导，
+  // 故 server 模式下不注册（404）。注意 /admin/revoke（SLO 吊销端点）不属于管理页，
+  // server 模式仍需注册（下方 adminRevokeRoutes）。
+  if (opts.deployment.mode !== "server") {
+    await app.register(adminRoutes, { allowedOrigins: opts.security.allowedOrigins });
+  }
   // /admin/revoke 吊销端点（阶段三 PR3 SLO）：走平台级管理密钥（ADMIN_API_KEY），
   // 不走 authMiddleware。/admin 前缀已被 authMiddleware 跳过，这里在 authMiddleware
   // 之前注册即可。
@@ -113,6 +119,9 @@ export async function startServer(opts: {
   console.log(`Companion 服务已启动: http://${opts.host}:${opts.port}`);
   console.log(`版本: v${COMPANION_VERSION}`);
   console.log(`部署形态: ${opts.deployment.mode}`);
+  if (opts.deployment.mode === "server") {
+    console.log("管理页: 已禁用（server 模式多租户由宿主/API 按用户管理）");
+  }
   console.log(`安全渠道: ${opts.security.channel}`);
   console.log("允许的 Origin:");
   opts.security.allowedOrigins.forEach((origin) => console.log(`  - ${origin}`));
@@ -129,7 +138,10 @@ export async function startServer(opts: {
     console.log("=".repeat(60));
   }
   // 0.0.0.0 不能直接浏览器访问，提示用本机回环地址（server 模式下用户应通过实际域名/IP 访问）
-  const adminDisplayHost = opts.host === "0.0.0.0" ? "127.0.0.1" : opts.host;
-  console.log(`  管理页：http://${adminDisplayHost}:${opts.port}/admin`);
+  // server 模式管理页已禁用（不注册 adminRoutes），不再打印入口
+  if (opts.deployment.mode !== "server") {
+    const adminDisplayHost = opts.host === "0.0.0.0" ? "127.0.0.1" : opts.host;
+    console.log(`  管理页：http://${adminDisplayHost}:${opts.port}/admin`);
+  }
   console.log("=".repeat(60));
 }

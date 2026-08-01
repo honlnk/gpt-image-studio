@@ -64,6 +64,11 @@ pnpm dev    # Vite dev server，http://127.0.0.1:8888
 
 服务器模式让 Companion 可远程访问、支持多用户、对接宿主 JWT 认证。
 
+> **管理页边界**：Companion 自带管理页（`/admin` 页面 + `/admin/api/*`）是本机
+> 单用户管理面（数据集视图固定 `__local__` 虚拟用户），**server 模式下不注册（404）**。
+> 多租户的存储位置/数据集由宿主或 `POST /storage/datasets/activate`（带用户 JWT）按
+> 用户管理；平台级操作走 `/admin/revoke`（`ADMIN_API_KEY`，§5.3）。
+
 ### 3.1 Docker 部署（推荐）
 
 #### 3.1.1 拉取镜像 + 配置
@@ -193,6 +198,7 @@ server {
 | `MAIN_APP_URL` | OSS 模式必填 | 宿主地址（STS 签发接口） |
 | `MAIN_APP_API_KEY` | OSS 模式必填 | Companion 调宿主的凭证 |
 | `GPT_IMAGE_STUDIO_CONFIG_DIR` | 否（Docker 默认 `/data`） | 数据根目录 |
+| `COMPANION_OSS_LONG_TERM_AK` | 否（默认关闭，**仅本地调试**） | `1`/`true` 时 server 模式的 OSS 允许用 `oss-credentials.json` 长期 AK（违背 D11，生产禁用；无宿主 STS 时的本地演示逃生门） |
 
 ---
 
