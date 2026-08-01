@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,6 +12,23 @@ import { join } from "node:path";
  * macOS 上 /var 是 /private/var 软链，realpathSync 会解析。测试用 realpath 后的路径比对。
  */
 
+/** 捕获 ali-oss 构造参数与 put 调用（逃生门测试用，不连真实 OSS）。 */
+const { ossClientInstances } = vi.hoisted(() => ({
+  ossClientInstances: [] as {
+    args: Record<string, unknown>;
+    put: ReturnType<typeof vi.fn>;
+  }[],
+}));
+
+vi.mock("ali-oss", () => ({
+  default: class MockOSS {
+    put = vi.fn(async (name: string) => ({ name }));
+    constructor(args: Record<string, unknown>) {
+      ossClientInstances.push({ args, put: this.put });
+    }
+  },
+}));
+
 let tempDir: string;
 let realTempDir: string;
 
@@ -19,6 +36,7 @@ beforeEach(() => {
   tempDir = mkdtempSync(join(tmpdir(), "gis-reg-test-"));
   realTempDir = realpathSync(tempDir);
   process.env.GPT_IMAGE_STUDIO_CONFIG_DIR = tempDir;
+  ossClientInstances.length = 0;
   vi.resetModules();
 });
 
@@ -504,5 +522,64 @@ describe("多租户隔离（userId 维度）", () => {
     ensureUser("__local__");
     // users 表不应有 __local__
     expect(listDatasetViews("__local__")).toEqual([]);
+  });
+});
+
+describe("server 模式 OSS 长期 AK 逃生门（COMPANION_OSS_LONG_TERM_AK）", () => {
+  const longTermCreds = {
+    endpoint: "oss-cn-beijing.aliyuncs.com",
+    bucket: "test-bucket",
+    accessKeyId: "ak-long-term",
+    accessKeySecret: "sk-long-term",
+    configuredAt: new Date().toISOString(),
+  };
+  const ossInput = {
+    storageKind: "oss" as const,
+    storageConfig: {
+      endpoint: "oss-cn-beijing.aliyuncs.com",
+      bucket: "test-bucket",
+      prefix: "p",
+    },
+    imageStoreKind: "oss" as const,
+    userId: "userA",
+  };
+
+  afterEach(() => {
+    delete process.env.COMPANION_OSS_LONG_TERM_AK;
+  });
+
+  it("默认关闭：server 模式 oss 仍走 STS（未配 MAIN_APP_URL 时操作报错）", async () => {
+    const { resolveAndActivate } = await loadModules();
+    const result = await resolveAndActivate(ossInput);
+    expect(result.imageStore.kind).toBe("oss");
+    // STS 路径：操作时才取凭证，缺 MAIN_APP_URL 直接报错，且不会建 ali-oss client
+    await expect(
+      result.imageStore.save("blob-1", Buffer.from("x"), "text/plain"),
+    ).rejects.toThrow(/MAIN_APP_URL/);
+    expect(ossClientInstances).toHaveLength(0);
+  });
+
+  it("开启但无 oss-credentials.json：直接抛凭据未配置", async () => {
+    process.env.COMPANION_OSS_LONG_TERM_AK = "1";
+    const { resolveAndActivate } = await loadModules();
+    await expect(resolveAndActivate(ossInput)).rejects.toThrow(/OSS 凭据未配置/);
+  });
+
+  it("开启且有凭据：用长期 AK 建 client（无 stsToken），按 users/<uid>/ 前缀隔离", async () => {
+    process.env.COMPANION_OSS_LONG_TERM_AK = "1";
+    writeFileSync(join(tempDir, "oss-credentials.json"), JSON.stringify(longTermCreds));
+    const { resolveAndActivate } = await loadModules();
+    const result = await resolveAndActivate(ossInput);
+    await result.imageStore.save("blob-1", Buffer.from("x"), "text/plain");
+    expect(ossClientInstances).toHaveLength(1);
+    expect(ossClientInstances[0].args.accessKeyId).toBe("ak-long-term");
+    // 长期 AK 路径不带 stsToken（区别于 STS 路径）
+    expect(ossClientInstances[0].args).not.toHaveProperty("stsToken");
+    // 多用户共享长期 AK 时按 users/<uid>/ 前缀隔离（对齐 STS 契约）
+    expect(ossClientInstances[0].put).toHaveBeenCalledWith(
+      "users/userA/blob-1",
+      expect.any(Buffer),
+      expect.anything(),
+    );
   });
 });

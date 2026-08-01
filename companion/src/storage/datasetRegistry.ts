@@ -81,6 +81,7 @@ function parseStorageConfig(raw: string, storageKind: StorageKind): StorageConfi
  * filesystem-custom：rootDir = 用户配置的 directory（已归一化），opaqueNaming=false。
  * oss + local 模式（userId='__local__'）：从 oss-credentials.json 读长期 AK。
  * oss + server 模式：用 STS 临时凭证（D11），调宿主签发接口拿短期凭证。
+ *   逃生门（仅本地调试）：COMPANION_OSS_LONG_TERM_AK=1 时 server 模式也用长期 AK。
  */
 function buildImageStore(
   imageStoreKind: ImageStoreKind,
@@ -105,6 +106,12 @@ function buildImageStore(
   // oss
   const ossCfg = storageConfig as OssConfig;
   if (userId !== LOCAL_USER_ID) {
+    // 逃生门（仅本地调试，默认关闭）：server 模式也用 oss-credentials.json 的长期 AK。
+    // 违背 D11（生产应走宿主 STS 签发），仅显式设置 COMPANION_OSS_LONG_TERM_AK=1 时生效。
+    if (isLongTermOssAkAllowed()) {
+      warnLongTermAkOnce();
+      return buildLongTermAkOssStore(userId, ossCfg);
+    }
     // server 模式：STS 临时凭证（D11）。prefix 由宿主 STS 响应限定（忽略 ossCfg.prefix）。
     return createStsOssImageStore({
       getUserId: () => userId,
@@ -112,6 +119,18 @@ function buildImageStore(
     });
   }
   // local 模式：从 oss-credentials.json 读长期 AK（阶段二行为）
+  return buildLongTermAkOssStore(userId, ossCfg);
+}
+
+/**
+ * 用 oss-credentials.json 的长期 AK 装配 OssImageStore（local 模式 & 逃生门共用）。
+ *
+ * prefix 语义：
+ * - local 模式（单用户）：用数据集配置的 prefix（默认 "gpt-image-studio"）。
+ * - server 模式（逃生门，多用户共享同一把长期 AK）：强制 users/<userId>/ 前缀隔离，
+ *   对齐 STS 契约（宿主 STS 响应的 prefix 也是 users/<userId>/），忽略 ossCfg.prefix。
+ */
+function buildLongTermAkOssStore(userId: string, ossCfg: OssConfig): ImageStore {
   const ossCreds = loadOssCredentials();
   if (!ossCreds) {
     throw new StorageStoreError(
@@ -124,8 +143,28 @@ function buildImageStore(
     bucket: ossCreds.bucket,
     accessKeyId: ossCreds.accessKeyId,
     accessKeySecret: ossCreds.accessKeySecret,
-    prefix: ossCfg.prefix ?? "gpt-image-studio",
+    prefix: userId === LOCAL_USER_ID ? (ossCfg.prefix ?? "gpt-image-studio") : `users/${userId}/`,
   });
+}
+
+/**
+ * 逃生门开关：COMPANION_OSS_LONG_TERM_AK=1/true 时，server 模式的 OSS 允许用
+ * oss-credentials.json 的长期 AK（仅本地调试，违背 D11，生产禁用）。
+ */
+function isLongTermOssAkAllowed(): boolean {
+  const v = process.env.COMPANION_OSS_LONG_TERM_AK;
+  return v === "1" || v === "true";
+}
+
+let longTermAkWarned = false;
+/** 逃生门启用时每进程警告一次。 */
+function warnLongTermAkOnce(): void {
+  if (longTermAkWarned) return;
+  longTermAkWarned = true;
+  console.warn(
+    "[storage] 警告：COMPANION_OSS_LONG_TERM_AK 已开启，server 模式的 OSS 正在使用长期 AK" +
+      "（仅本地调试用；生产环境请关闭并配置宿主 STS 签发接口，见 docs/deployment-guide.md §5.4）",
+  );
 }
 
 /** 默认图片目录（选项 B）：~/.gpt-image-studio/images。 */
