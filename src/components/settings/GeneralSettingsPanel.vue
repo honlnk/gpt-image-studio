@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { ConnectionMode } from "../../types/studio";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useFeedbackStore } from "../../stores/feedbackStore";
 
-defineProps<{
+const props = defineProps<{
   autoRetryOnNetworkError: boolean;
   connectionMode: ConnectionMode;
 }>();
@@ -13,6 +14,30 @@ const emit = defineEmits<{
 }>();
 
 const settings = useSettingsStore();
+const feedback = useFeedbackStore();
+
+const MODE_LABELS: Record<ConnectionMode, string> = {
+  direct: "浏览器直连",
+  localCompanion: "本地 Companion",
+};
+
+/**
+ * 切换连接模式前先弹确认框：
+ * 1) 说明数据隔离语义（切回可找回），对标 Companion 管理页切换存储位置的确认；
+ * 2) reload 不可撤销，避免用户误点后页面猝不及防刷新。
+ */
+async function handleSwitchMode(mode: ConnectionMode) {
+  if (settings.isEmbedded) return;
+  const current = props.connectionMode;
+  if (mode === current) return;
+  const confirmed = await feedback.requestConfirmation({
+    title: `切换到「${MODE_LABELS[mode]}」`,
+    description: `切换后，当前「${MODE_LABELS[current]}」的内容将不可见（不会删除），新内容会存到新位置。切回「${MODE_LABELS[current]}」可找回原有内容。页面将自动重新加载以应用新模式。`,
+    confirmLabel: "切换",
+  });
+  if (!confirmed) return;
+  emit("update:connectionMode", mode);
+}
 </script>
 
 <template>
@@ -47,7 +72,7 @@ const settings = useSettingsStore();
             ]"
             type="button"
             :disabled="settings.isEmbedded"
-            @click="!settings.isEmbedded && emit('update:connectionMode', 'direct')"
+            @click="handleSwitchMode('direct')"
           >
             浏览器直连
           </button>
@@ -62,7 +87,7 @@ const settings = useSettingsStore();
             ]"
             type="button"
             :disabled="settings.isEmbedded"
-            @click="!settings.isEmbedded && emit('update:connectionMode', 'localCompanion')"
+            @click="handleSwitchMode('localCompanion')"
           >
             本地 Companion
           </button>

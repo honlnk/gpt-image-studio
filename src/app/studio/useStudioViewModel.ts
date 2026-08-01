@@ -42,6 +42,7 @@ import type {
   PromptRequestSettings,
   PromptWordbankSectionKey,
 } from "../../types/studio";
+import { CONNECTION_MODE_SWITCHED_KEY } from "../../shared/constants";
 
 type SettingsTab =
   | "general"
@@ -216,29 +217,11 @@ export function useStudioViewModel() {
       }
     },
   );
-  // 阶段二 PR7 修复：direct ↔ Companion 连接模式切换必须 reload。
-  // resolveStorage() 在 setup 时只执行一次（读 connectionMode.value 快照装配 storage
-  // 实例 + services + stores），切换 connectionMode 后这些全绑死在旧后端上——
-  // 不 reload 的话，切到 Companion 仍走 IndexedDB（看不到空数据集），切回 direct
-  // 也读不到 IndexedDB 的原数据。reload 后 setup 能装配正确后端，前提是快照初始值
-  // 同步可得——connectionMode 有 localStorage 镜像（settingsStore），切换时已写回。
-  // 与 StorageLocationPanel 的 reload 同源（D1 数据集隔离）。
-  // 嵌入态（qiankun）connectionMode 由宿主固定，不 reload。
-  watch(
-    () => settings.connectionMode.value,
-    (_next, prev) => {
-      // hydrate 前的初始化赋值（applySettings）不触发 reload。
-      if (!isHydrated.value || settings.isEmbedded.value) return;
-      // 切换前先持久化，避免 reload 后读不到新模式（saveCurrentSettings 写
-      // IndexedDB settings 表，返回 Promise，await 确保落盘）。
-      void settings
-        .saveCurrentSettings()
-        .catch(reportStorageError)
-        .finally(() => {
-          window.location.reload();
-        });
-    },
-  );
+  // 注意：connectionMode 切换的重建逻辑已移至 App.vue（组件级 :key 重建，替代
+  // 整页 window.location.reload）。App.vue 监听 settingsStore.connectionMode，
+  // 切换时先持久化再改 appKey 触发 <StudioShell> 卸载重建，本函数会重新执行
+  // resolveStorage() 按新模式装配 storage。sessionStorage 标记也由 App.vue 写入，
+  // 下方的 onMounted 读它显示切换成功提示。
   const imageClient: ImageClient = {
     generate(input) {
       if (
@@ -439,6 +422,21 @@ export function useStudioViewModel() {
         urlPrompt,
         shouldApplyUrlGenerationParams,
       });
+
+      // 切换连接模式 reload 后的「切换成功」提示：reload 前由 connectionMode
+      // watch 写入 sessionStorage 标记，这里读到后按当前模式显示成功文案并清除标记。
+      // 放在 hydrate 全流程末尾，避免被后续初始化覆盖或抢焦点。
+      try {
+        const switched = sessionStorage.getItem(CONNECTION_MODE_SWITCHED_KEY);
+        if (switched) {
+          sessionStorage.removeItem(CONNECTION_MODE_SWITCHED_KEY);
+          const modeLabel =
+            switched === "localCompanion" ? "本地 Companion" : "浏览器直连";
+          feedback.notifySuccess(`已切换到「${modeLabel}」模式。`);
+        }
+      } catch {
+        // sessionStorage 不可用时静默降级。
+      }
     });
   });
 
