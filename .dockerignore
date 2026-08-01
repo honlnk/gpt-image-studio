@@ -12,8 +12,8 @@ desktop/src-tauri/gen
 folder-alias.json
 private-folder-alias.json
 docs
+examples
 README.md
 CLAUDE.md
 LICENSE
-embed-test.html
 pnpm-debug.log*

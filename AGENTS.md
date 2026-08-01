@@ -63,6 +63,10 @@ src/components/
 
 The desktop app lives under `desktop/src-tauri` and is a Tauri v2 shell that embeds the existing Vite `dist/` output. Keep the browser/Web app behavior as the source of truth. The desktop shell currently connects to the external Companion over `127.0.0.1`; do not assume Companion is bundled as a sidecar yet.
 
+### Embed Examples (`examples/`)
+
+Minimal local hosts for the two embedding approaches, plain static files excluded from build output: `iframe-embed/` (iframe + URL query config injection, served by the dev server) and `qiankun-host/` (qiankun micro-frontend host registering the `pnpm preview` build with `companionUrl`/`jwt` props; its local `config.json` holds a JWT and is gitignored). Usage is documented in `examples/README.md`; keep them in sync with `src/main.ts`'s embedding logic and `src/qiankun-embed.test.ts`.
+
 ### Service Layer (`src/services/`)
 
 All IndexedDB access goes through `db.ts` (generic CRUD: `getAllFromStore`, `getFromStore`, `putInStore`, `deleteFromStore`). Domain services build on top:

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>qiankun 宿主 · GPT Image Studio 嵌入预览</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #f5f5f5; }
+  .host-bar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 16px; background: #1a1a2e; color: #fff;
+    font-size: 13px; position: sticky; top: 0; z-index: 9999;
+  }
+  .host-bar b { color: #4fc3f7; }
+  .host-bar .pill {
+    background: #16213e; padding: 4px 10px; border-radius: 12px; font-size: 12px;
+  }
+  .host-bar .ok { color: #66bb6a; }
+  .host-bar .err { color: #ef5350; }
+  .host-bar button {
+    background: #4fc3f7; color: #000; border: none; padding: 5px 12px;
+    border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  #status { margin-left: auto; font-size: 12px; }
+  /* qiankun 子应用挂载容器 */
+  #image-studio-container {
+    background: #fff; min-height: 600px; margin: 0; padding: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="host-bar">
+  <b>🏠 qiankun 宿主</b>
+  <span class="pill">子应用: gpt-image-studio</span>
+  <span class="pill">entry: <span id="entry-url">-</span></span>
+  <span class="pill">companionUrl: <span id="companion-url">-</span></span>
+  <button onclick="reloadSubApp()">重新挂载子应用</button>
+  <span id="status">⏳ 等待子应用激活...</span>
+</div>
+
+<!-- qiankun 子应用挂载点 -->
+<div id="image-studio-container">子应用加载中...</div>
+
+<script>
+// ─── 嵌入配置（注入给子应用的 props） ───
+// 读取同目录 config.json（由宿主脚本生成），或用 URL hash 调试
+async function loadConfig() {
+  try {
+    const res = await fetch('./config.json');
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  // 兜底默认值（companionUrl/jwt 需自行替换）
+  return {
+    companionUrl: 'http://127.0.0.1:19751',
+    jwt: 'REPLACE_WITH_REAL_JWT',
+  };
+}
+</script>
+
+<!-- qiankun UMD（从 CDN 加载 2.x） -->
+<script src="https://unpkg.com/qiankun@2.10.5/dist/index.umd.js"></script>
+
+<script>
+(async function () {
+  const cfg = await loadConfig();
+  document.getElementById('entry-url').textContent = 'http://127.0.0.1:4173';
+  document.getElementById('companion-url').textContent = cfg.companionUrl;
+
+  const qiankun = window.qiankun;
+  if (!qiankun) {
+    document.getElementById('status').innerHTML =
+      '<span class="err">❌ qiankun UMD 未加载（检查网络/CDN）</span>';
+    return;
+  }
+
+  // 注册子应用：name 必须与子应用 main.ts 的 QIANKUN_APP_NAME ('gpt-image-studio') 一致
+  qiankun.registerMicroApps([
+    {
+      name: 'gpt-image-studio',
+      entry: '//127.0.0.1:4173',
+      container: '#image-studio-container',
+      activeRule: location.pathname,
+      props: {
+        companionUrl: cfg.companionUrl,
+        jwt: cfg.jwt,
+      },
+    },
+  ]);
+
+  // 监听子应用生命周期事件（验证加载是否成功）
+  window.addEventListener('single-spa:app-change', (evt) => {
+    const apps = evt.detail?.appsByNewStatus;
+    if (apps && apps.MOUNTED) {
+      document.getElementById('status').innerHTML =
+        '<span class="ok">✅ 子应用已挂载（MOUNTED）</span>';
+    }
+  });
+
+  qiankun.start({
+    sandbox: true,
+    prefetch: false,
+  });
+
+  window._reloadSubApp = function () {
+    const c = document.getElementById('image-studio-container');
+    c.innerHTML = '重新加载中...';
+    location.reload();
+  };
+})();
+
+function reloadSubApp() {
+  if (window._reloadSubApp) window._reloadSubApp();
+  else location.reload();
+}
+</script>
+</body>
+</html>
