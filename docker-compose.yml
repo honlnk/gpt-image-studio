@@ -44,7 +44,34 @@ services:
     restart: unless-stopped
     # 监听 0.0.0.0 让宿主浏览器可通过 http://localhost:19750 访问
     # 如需让宿主前端（http://localhost:8080）跨域访问 Companion，加 --allow-origin
-    command: ["node", "dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750", "--allow-origin", "http://localhost:8080"]
+    command: ["node", "companion/dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750", "--allow-origin", "http://localhost:8080"]
+
+  # --- server 模式 companion（qiankun 嵌入演示，profile companion-server） ---
+  # JWT 认证 + 多用户隔离，配合 examples/qiankun-host 使用（见 examples/README.md）。
+  # 需要环境变量：JWT_SECRET（与宿主共享）、ADMIN_API_KEY（平台级管理密钥）。
+  companion-server:
+    profiles: ["companion-server"]
+    build:
+      context: .
+      target: companion
+    image: gpt-image-studio-companion:server
+    container_name: gpt-image-studio-companion-server
+    ports:
+      - "19751:19751"
+    volumes:
+      # 独立数据目录（与 local 模式的 ~/.gpt-image-studio 隔离）；
+      # OSS 长期 AK（oss-credentials.json）和 provider 凭据（credentials.json）放这里
+      - ${HOME}/.gpt-image-studio-docker:/data
+    environment:
+      - GPT_IMAGE_STUDIO_CONFIG_DIR=/data
+      - COMPANION_DEPLOYMENT_MODE=server
+      - JWT_SECRET=${JWT_SECRET:?需要 JWT_SECRET 环境变量（与宿主共享的 HS256 密钥）}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:?需要 ADMIN_API_KEY 环境变量（平台级管理密钥）}
+      # 逃生门（仅本地调试）：server 模式 OSS 用 oss-credentials.json 长期 AK。
+      # 违背 D11（生产应走宿主 STS 签发），无宿主后端的本地演示才开启。
+      - COMPANION_OSS_LONG_TERM_AK=1
+    restart: unless-stopped
+    command: ["node", "companion/dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19751", "--deployment-mode", "server", "--allow-origin", "http://127.0.0.1:5599"]
 
 volumes:
   companion-data:

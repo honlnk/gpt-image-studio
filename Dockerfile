@@ -59,4 +59,4 @@ RUN mkdir -p /data
 EXPOSE 19750
 
 # 默认监听 0.0.0.0 让容器外可访问；部署形态 local（PR2 起 server 模式接入 JWT）
-CMD ["node", "dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750"]
+CMD ["node", "companion/dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750"]
