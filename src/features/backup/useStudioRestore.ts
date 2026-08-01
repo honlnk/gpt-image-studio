@@ -1,7 +1,7 @@
 import type { ConversationServices } from "../../services/conversations";
 import type { ImageAssetServices } from "../../services/imageAssets";
 import type { MessageServices } from "../../services/messages";
-import type { ConfigServices, SettingsServices } from "../../services/settings";
+import type { SettingsServices } from "../../services/settings";
 import type { TimeFieldMigrationServices } from "../../services/timeFieldMigration";
 import { readStorage, writeStorage } from "../../shared/localStorage";
 import { formatError } from "../../shared/errors";
@@ -15,7 +15,6 @@ export type StudioRestoreServices = {
   messages: MessageServices;
   imageAssets: ImageAssetServices;
   settings: SettingsServices;
-  config: ConfigServices;
   timeFieldMigration: TimeFieldMigrationServices;
 };
 
@@ -35,7 +34,7 @@ type UseStudioRestoreInput = {
   saveCurrentSettings: () => Promise<void>;
   /** companion 凭据 ref，用于迁移回填。
    *  权威存储是 localStorage 镜像（settingsStore 同步初始化 + watch 写回）；
-   *  迁移逻辑负责：镜像为空时从旧 config（PR5 时代遗留）读回回填 ref 并补写镜像。 */
+   *  迁移逻辑负责：备份导入刚写过镜像时，把镜像值同步到内存 ref。 */
   companionUrl: Ref<string>;
   companionAccessKey: Ref<string>;
   /** 阶段三 PR5：qiankun 嵌入态。true 时连接配置由宿主注入，跳过凭据迁移。 */
@@ -51,8 +50,8 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
 
   async function restoreFromStorage() {
     try {
-      // companion 凭据迁移：localStorage 镜像为权威；镜像为空时从旧 config（PR5 遗留）
-      // 读回回填 ref 并补写镜像。必须在 timeFieldMigration 之前、settings.load 之前执行。
+      // companion 凭据迁移：localStorage 镜像为权威，备份导入刚写过镜像时
+      // 同步到内存 ref。必须在 timeFieldMigration 之前、settings.load 之前执行。
       await migrateCredentials().catch(() => {
         // 迁移失败不阻塞 hydrate（ref 兜底值仍在，用户可重新输入）。
       });
@@ -179,12 +178,13 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
    * 已回滚：连接配置存进「由它自己选中的后端」会形成鸡生蛋（Companion 模式下
    * 读 config 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401）。
    *
-   * 这里负责收尾旧数据（localStorage 不再清除）：
-   * 1) 镜像有值：以镜像为准（如备份导入刚写过镜像），同步回填 ref；
-   * 2) 镜像为空但旧 config 有值（PR5 时代搬走的）：读回回填 ref + 补写镜像。
+   * 这里只做「镜像 → 内存 ref」的同步（备份导入刚写过镜像时需要），不再回查
+   * 旧 config——PR5 从未发布到 main（仅在 dev 分支存活 4 天即回滚），没有真实
+   * 用户的 IndexedDB config 里会留有这两个键，去捞必然落空（Companion 模式下
+   * 更是向 Companion 数据集发必然 404 的请求）。
    *
    * apiKey / apiBaseUrl 走 settings 表的 "app" 记录（不变），这里只清 localStorage
-   * 遗留入口，值由后续 settings.load + applySettings 读回覆盖 ref。
+   * 遗留入口，值由后续 settings.load + applySettings 从 settings 表读回覆盖 ref。
    */
   async function migrateCredentials() {
     const LEGACY_KEYS = {
@@ -197,35 +197,18 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
     // 嵌入态连接配置由宿主注入，不做任何迁移（同 settingsStore 的持久化跳过）。
     if (input.isEmbedded.value) return;
 
-    // 1) companionUrl：镜像优先；镜像为空时从旧 config 回填并补写镜像
+    // 1) companionUrl：镜像优先。备份导入会写镜像，这里同步到内存 ref。
     const mirrorUrl = readStorage(LEGACY_KEYS.companionUrl, "");
-    if (mirrorUrl) {
-      if (input.companionUrl.value !== mirrorUrl) {
-        input.companionUrl.value = mirrorUrl;
-      }
-    } else {
-      const configUrl = await services.config.read<string>("companionUrl");
-      if (configUrl) {
-        input.companionUrl.value = configUrl;
-        writeStorage(LEGACY_KEYS.companionUrl, configUrl);
-      }
+    if (mirrorUrl && input.companionUrl.value !== mirrorUrl) {
+      input.companionUrl.value = mirrorUrl;
     }
 
     // 2) companionAccessKey：同上
     const mirrorKey = readStorage(LEGACY_KEYS.companionAccessKey, "");
-    if (mirrorKey) {
-      if (input.companionAccessKey.value !== mirrorKey) {
-        input.companionAccessKey.value = mirrorKey;
-      }
-    } else {
-      const configKey = await services.config.read<string>(
-        "companionAccessKey",
-      );
-      if (configKey) {
-        input.companionAccessKey.value = configKey;
-        writeStorage(LEGACY_KEYS.companionAccessKey, configKey);
-      }
+    if (mirrorKey && input.companionAccessKey.value !== mirrorKey) {
+      input.companionAccessKey.value = mirrorKey;
     }
+
 
     // 3) apiKey / apiBaseUrl：只清 localStorage 遗留入口（运行时持久化本就走 settings 表）。
     //    它们的值由后续 settings.load + applySettings 从 settings 表读回覆盖 ref。

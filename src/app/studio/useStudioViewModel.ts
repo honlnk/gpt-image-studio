@@ -304,7 +304,6 @@ export function useStudioViewModel() {
       messages: services.messages,
       imageAssets: services.imageAssets,
       settings: services.settings,
-      config: services.config,
       timeFieldMigration: services.timeFieldMigration,
     },
     companionUrl: settings.companionUrl,

@@ -7,7 +7,14 @@
 
 > **回滚说明（阶段二实测后）**：目标 1（companionUrl/accessKey 收编到 `StudioStorage.config`）已回滚为 **localStorage 镜像权威**。
 > 原因：连接配置存进「由它自己选中的后端」会形成鸡生蛋——Companion 模式下读 config 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401 卡死；
-> 且 config 在不同后端间不可达，切后端即丢连接。回滚后：ref 初始值同步读 localStorage 镜像，watch 写回镜像；`migrateCredentials` 不再清 localStorage，镜像为空时从旧 config 读回回填并补写镜像（一次性收尾旧数据）。
+> 且 config 在不同后端间不可达，切后端即丢连接。回滚后：ref 初始值同步读 localStorage 镜像，watch 写回镜像。
+>
+> **兜底迁移代码移除（后续清理）**：回滚时曾保留「镜像为空时从旧 config 读回回填」的兜底分支
+> （`migrateCredentials` + `backups.ts` create），为 PR5 时代的老用户捞回 IndexedDB config 里的遗留值。
+> 后确认 PR5 从未合并到 main（仅在 `honlnk/dev` 存活 4 天即回滚，从未上线 GitHub Pages），
+> 没有真实用户的 IndexedDB 会留有 `__config__:companionUrl` 记录，兜底分支是纯死代码
+> （Companion 模式下更会向 Companion 数据集发必然 404 的 `/storage/config/companionUrl` 请求）。
+> 故移除兜底分支，仅保留「镜像 → 内存 ref」的同步（备份导入刚写过镜像时需要）。
 > apiKey/apiBaseUrl 走 settings 表、备份剥离敏感值等其余部分保持不变。
 
 ## 目标

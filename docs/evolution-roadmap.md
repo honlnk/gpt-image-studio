@@ -174,7 +174,7 @@ companion/
 
 ## 六、阶段一：前端存储抽象层（地基）
 
-> **状态：✅ 已完成（2026-07-27）**。6 个 PR 全部合入（PR1 接口+实现+契约测试骨架；PR2 6 domain service 工厂 + 5 store context 注入 + settingsStore 新增 configure；PR3 backups/storageUsage/timeFieldMigration 改走 storage；PR4 ViewModel 成为唯一装配点；PR5 companion 凭据收编到 StudioStorage.config + localStorage 迁移 + 备份更新；PR6 删除旧 db.ts + 收尾）。`StudioStorage` 抽象层就位，前端业务代码全部通过接口访问存储。详细施工记录见 `docs/evolution/phase1-*.md`。
+> **状态：✅ 已完成（2026-07-27）**。6 个 PR 全部合入（PR1 接口+实现+契约测试骨架；PR2 6 domain service 工厂 + 5 store context 注入 + settingsStore 新增 configure；PR3 backups/storageUsage/timeFieldMigration 改走 storage；PR4 ViewModel 成为唯一装配点；PR5 companion 凭据收编到 StudioStorage.config + localStorage 迁移 + 备份更新〔注：收编部分后已回滚为 localStorage 镜像权威，见 §6.4〕；PR6 删除旧 db.ts + 收尾）。`StudioStorage` 抽象层就位，前端业务代码全部通过接口访问存储。详细施工记录见 `docs/evolution/phase1-*.md`。
 
 ### 目标
 
@@ -449,7 +449,7 @@ export function createTimeFieldMigrationServices(storage: StudioStorage) {
 | `generationStore` | `GenerationStoreContext`（已有 imageClient、persistConversation 等） | `imageAssets: ImageAssetServices`、`messages: MessageServices` |
 | `conversationsStore` | `ConversationsStoreContext`（已有 clearDraft、refreshStorageUsage） | `conversations: ConversationServices`、`messages: MessageServices` |
 | `imagesStore` | `ImagesStoreContext`（已有 activeConversationId、messages） | `imageAssets: ImageAssetServices`、`storageUsage: StorageUsageServices` |
-| **`settingsStore`** | **无（自给自足）** | **新增 `configureSettingsStore(context)`**，注入 `settings: SettingsServices`、`config: ConfigServices` |
+| **`settingsStore`** | **无（自给自足）** | **新增 `configureSettingsStore(context)`**，注入 `settings: SettingsServices`（曾同时注入 `config: ConfigServices` 收编 companion 凭据，已回滚为 localStorage 镜像，见 §6.4） |
 | `analyticsStore` | 无（直接用 settings 参数） | `analyticsEvents: AnalyticsEventServices` |
 
 **重点**：`settingsStore` 是 5 个 store 里**唯一没有 configure 机制的**，必须新增。它的特殊性还在于直连 localStorage（见 §6.4）。
@@ -530,21 +530,27 @@ export function useStudioViewModel() {
 
 ### 6.4 companion 凭据迁移（决策 T3 落地）
 
+> **历史状态：⚠️ 目标 1（companionUrl/accessKey 收编到 `StudioStorage.config`）已在阶段二回滚**
+>
+> 回滚原因：连接配置存进「由它自己选中的后端」会形成鸡生蛋——Companion 模式下读 config 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401 卡死；且 config 在不同后端间不可达，切后端即丢连接。回滚为 **localStorage 镜像权威**（ref 初始值同步读镜像，watch 写回镜像）。
+>
+> 兜底迁移代码（`migrateCredentials` + `backups.ts` create 里「镜像为空时从旧 config 读回」的分支）后也已移除——PR5 从未合并到 main（仅在 dev 分支存活 4 天即回滚），没有真实用户的 IndexedDB 会留有 `__config__:companionUrl` 记录，兜底是纯死代码。下方表格与迁移逻辑保留作为「曾规划的设计」的历史记录，**当前实现以 localStorage 镜像为准**。
+
 #### 4 个 localStorage key 的处理清单
 
 当前 `src/stores/settingsStore.ts:66-71` 定义了 4 个 key。它们的真实行为需要区分清楚（核验结论，避免表格误导）：
 
 | key | 当前真实行为（核验后） | 阶段一处理 |
 |-----|------------------------|------------|
-| `gpt-image-studio:companion-url` | companionUrl **唯一存储**：声明 L145-147 `readStorage(...)`、`watch` 写回 L601-603。**不进 IndexedDB settings 表**。 | **收编** → `storage.writeConfig("companionUrl", ...)` |
-| `gpt-image-studio:companion-access-key` | companionAccessKey **唯一存储**：声明 L148-150 `readStorage(...)`、`watch` 写回 L604-606。**不进 IndexedDB settings 表**。 | **收编** → `storage.writeConfig("companionAccessKey", ...)` |
+| `gpt-image-studio:companion-url` | companionUrl **唯一存储**：声明 L145-147 `readStorage(...)`、`watch` 写回 L601-603。**不进 IndexedDB settings 表**。 | ~~**收编** → `storage.writeConfig("companionUrl", ...)`~~ **已回滚**：保留 localStorage 镜像为权威存储 |
+| `gpt-image-studio:companion-access-key` | companionAccessKey **唯一存储**：声明 L148-150 `readStorage(...)`、`watch` 写回 L604-606。**不进 IndexedDB settings 表**。 | ~~**收编** → `storage.writeConfig("companionAccessKey", ...)`~~ **已回滚**：保留 localStorage 镜像为权威存储 |
 | `gpt-image-studio:api-key` | 启动从 localStorage 读初始值（L123），但**运行时持久化走 IndexedDB settings 表**（`saveCurrentSettings` → `saveSettings`，L519-520）。localStorage 这边**只读不写**，是老版本遗留的兜底入口。 | **废弃 localStorage 入口**：首次启动从 localStorage 读旧值 → 写入 IndexedDB settings → 清 localStorage；之后统一从 IndexedDB 读 |
 | `gpt-image-studio:api-base-url` | 同 api-key（L124 读，不写 localStorage，持久化进 IndexedDB） | 同上 |
 | `gpt-image-studio:draft-composer-text` / `draft-attachments` | 遗留 draft 迁移键（`useStudioDrafts.ts:23-26`，只读不写的一次性迁移） | **不动**：这是运行时一次性迁移逻辑，不属于 config 范畴 |
 
-> 注：companionUrl / companionAccessKey 是**唯一存储在 localStorage、不进 IndexedDB 的两个 key**——它们既不进 IndexedDB settings 表，也不进项目备份（`backups.ts` 的 `stripApiKey` 只处理 apiKey）。这是当前架构的真实缺口，§6.4 的迁移逻辑就是为修复它而设计。
+> 注：companionUrl / companionAccessKey 的权威存储是 localStorage 镜像（启动期同步可读，resolveStorage 装配、useCompanionConnection 的 immediate watch 都依赖它）。它们进项目备份（companionUrl 导出、companionAccessKey 剥离），但不进 IndexedDB settings 表。
 
-#### 一次性迁移逻辑
+#### 一次性迁移逻辑（⚠️ 已回滚，保留作历史记录）
 
 ```ts
 // 首次启动 detect 旧 localStorage 值

@@ -77,19 +77,17 @@ export type BackupServices = ReturnType<typeof createBackupServices>;
 export function createBackupServices(storage: StudioStorage) {
   return {
     async create() {
-      const [conversations, messages, imageAssets, imageBlobs, settings, configCompanionUrl] =
+      const [conversations, messages, imageAssets, imageBlobs, settings] =
         await Promise.all([
           storage.list<Conversation>(STORE_NAMES.conversations),
           storage.list<Message>(STORE_NAMES.messages),
           storage.list<ImageAsset>(STORE_NAMES.imageAssets),
           storage.list<ImageBlobRecord>(STORE_NAMES.imageBlobs),
           loadSettings(),
-          // 旧版（阶段一 PR5）把 companionUrl 存在 config，作为镜像为空时的兜底来源
-          storage.readConfig<string>("companionUrl"),
         ]);
-      // companionUrl 的权威存储是 localStorage 镜像（T3 已回滚），镜像优先。
-      const companionUrl =
-        readStorage(COMPANION_URL_MIRROR_KEY, "") || configCompanionUrl;
+      // companionUrl 的权威存储是 localStorage 镜像（T3 回滚后）。
+      // 不再回查旧 config——PR5 从未发布到 main，没有真实用户在 config 里留有此键。
+      const companionUrl = readStorage(COMPANION_URL_MIRROR_KEY, "");
 
       const manifest: BackupManifest = {
         app: "gpt-image-studio",

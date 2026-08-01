@@ -58,9 +58,14 @@ export function createSettingsServices(storage: StudioStorage) {
 /**
  * 轻量配置服务（settings 表的 __config__: 前缀命名空间）。
  *
- * 阶段一 PR5：收编 companionUrl / companionAccessKey 等运行时配置（决策 T3）。
- * 与 SettingsServices 的区别：SettingsServices 操作 "app" 记录（业务 AppSettings），
- * ConfigServices 操作 __config__:xxx 记录（运行时 KV 配置，不进 AppSettings 结构）。
+ * 封装 storage.readConfig/writeConfig 的通用 KV 配置能力（与 SettingsServices
+ * 的区别：SettingsServices 操作 "app" 记录即业务 AppSettings，ConfigServices
+ * 操作 __config__:xxx 记录即运行时 KV 配置，不进 AppSettings 结构）。
+ *
+ * 历史：阶段一 PR5 曾用它收编 companionUrl/companionAccessKey（决策 T3），
+ * 后在阶段二回滚为 localStorage 镜像权威（连接配置存进自选后端会形成鸡生蛋），
+ * 兜底迁移代码也已移除（PR5 从未发布到 main，无真实用户数据）。工厂本身保留
+ * 作为 StudioStorage config 能力的正当暴露，供未来通用 KV 配置使用。
  */
 export type ConfigServices = ReturnType<typeof createConfigServices>;
 
