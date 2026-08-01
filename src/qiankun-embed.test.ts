@@ -121,3 +121,36 @@ describe("qiankun 生命周期发现契约（prod 兜底）", () => {
     expect(guard).toBeDefined();
   });
 });
+
+/**
+ * CSS 注入契约（回归 qiankun 嵌入态样式丢失 bug）。
+ *
+ * 背景：qiankun 的 import-html-entry 处理子应用 HTML 时会移除 <link rel=stylesheet>，
+ * 沙箱配置下子应用样式整个丢失。解法：main.ts 用 `import styleCssUrl from './style.css?url'`
+ * 在 build 时拿到 CSS 文件 URL（带 hash），嵌入态时用 window.__INJECTED_PUBLIC_PATH_BY_QIANKUN__
+ * （qiankun 注入的 entry 地址）拼出子应用源的完整 URL，再通过容器元素的 ownerDocument
+ * 拿到宿主真实 document，动态创建 <link> 注入宿主 head。
+ *
+ * 这里校验 main.ts 的注入契约存在，避免被误删（CSS 丢失会复现）。
+ */
+describe("qiankun 嵌入态 CSS 注入契约", () => {
+  it("main.ts 用 ?url 导入 CSS + 嵌入态动态注入 link（浏览器原生执行通道）", async () => {
+    const mainSrc = await import("node:fs").then((fs) =>
+      fs.readFileSync(new URL("./main.ts", import.meta.url), "utf-8"),
+    );
+    // 用 ?url 导入 CSS，build 时替换成真实 URL（带 hash）
+    expect(mainSrc).toMatch(/style\.css\?url/);
+    // 嵌入态调用注入函数
+    expect(mainSrc).toMatch(/injectEmbeddedCss/);
+    // 通过容器元素的 ownerDocument 拿真实 document（绕开 qiankun 沙箱代理）
+    expect(mainSrc).toMatch(/ownerDocument/);
+    // 用 qiankun 注入的 publicPath（entry 地址）拼出子应用源完整 URL，
+    // 否则 /assets/xxx.css 会按宿主 origin 解析 → 404（URL 解析不经沙箱）
+    expect(mainSrc).toMatch(/__INJECTED_PUBLIC_PATH_BY_QIANKUN__/);
+    expect(mainSrc).toMatch(/new URL\(styleCssUrl/);
+    // 以 <link rel=stylesheet> 注入宿主 head
+    expect(mainSrc).toMatch(/createElement\(['"]link['"]\)/);
+    // 幂等：用 data-app-css 标记避免重复注入
+    expect(mainSrc).toMatch(/data-app-css/);
+  });
+});

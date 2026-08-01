@@ -1,6 +1,10 @@
 import { createApp, type App as VueApp } from 'vue'
 import { createPinia } from 'pinia'
 import './style.css'
+// 嵌入态 CSS 注入用：build 时替换成真实 CSS 文件 URL（带 hash）。
+// qiankun 嵌入态下 import './style.css' 的副作用注入会被 import-html-entry 破坏，
+// 需要用这个 URL 手动创建 <link> 注入真实 document.head（见 injectEmbeddedCss）。
+import styleCssUrl from './style.css?url'
 import App from './App.vue'
 import { trackDirective } from './directives/track'
 import { useSettingsStore } from './stores/settingsStore'
@@ -56,8 +60,51 @@ function render(props: QiankunProps = {}) {
     })
   }
 
+  // 嵌入态：注入子应用 CSS。qiankun 的 import-html-entry 会移除子应用 HTML 的
+  // <link rel=stylesheet>，沙箱配置下样式丢失，这里手动注入（见 injectEmbeddedCss）。
+  if (window.__POWERED_BY_QIANKUN__ && props.container) {
+    injectEmbeddedCss(props.container)
+  }
+
   const mountTarget = props.container ?? '#app'
   app.mount(mountTarget)
+}
+
+/**
+ * 嵌入态 CSS 注入：把子应用 CSS 以 <link> 注入宿主真实 document.head。
+ *
+ * 两个难点及解法：
+ * 1. qiankun 的 JS 沙箱 patch 了 document.head.appendChild 等 DOM API，子应用动态插入的
+ *    link/style 会被转移到沙箱容器（卸载即丢失）。
+ *    解法：通过 props.container.ownerDocument 拿宿主真实 document 再注入。
+ * 2. styleCssUrl 是相对于子应用源的绝对路径（/assets/xxx.css），在宿主页面里会按
+ *    document.baseURI（宿主 origin）解析 → 404。相对/绝对路径的 URL 解析由浏览器按
+ *    真实文档 baseURI 完成，qiankun 沙箱不会重写。
+ *    解法：用 qiankun 执行子应用 entry 前注入的 window.__INJECTED_PUBLIC_PATH_BY_QIANKUN__
+ *    （= 宿主 registerMicroApps 的 entry 地址）拼出子应用源的完整 URL。
+ *
+ * CSS URL 由 Vite build 时 `import styleCssUrl from './style.css?url'` 内联进 JS（带 hash）。
+ * 幂等：用 data-app-css 属性标记，避免重复注入。
+ */
+function injectEmbeddedCss(container: HTMLElement | string) {
+  const containerEl =
+    typeof container === 'string'
+      ? document.querySelector<HTMLElement>(container)
+      : container
+  if (!containerEl) return
+  const realDoc = containerEl.ownerDocument
+  const realHead = realDoc.head
+  // 幂等：用 data-app-css 标记，避免重复注入
+  if (realHead.querySelector('link[data-app-css]')) return
+  const publicPath = (
+    window as unknown as Record<string, unknown>
+  ).__INJECTED_PUBLIC_PATH_BY_QIANKUN__ as string | undefined
+  const href = publicPath ? new URL(styleCssUrl, publicPath).href : styleCssUrl
+  const link = realDoc.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = href
+  link.setAttribute('data-app-css', href)
+  realHead.appendChild(link)
 }
 
 // ─── 独立态：直接渲染 ───
