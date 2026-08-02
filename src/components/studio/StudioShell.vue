@@ -8,17 +8,27 @@ import ConfirmDialog from "../ui/ConfirmDialog.vue";
 import NoticeToast from "../ui/NoticeToast.vue";
 import RenameDialog from "../ui/RenameDialog.vue";
 import { useStudioViewModel } from "../../app/studio";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 /**
  * 工作台外壳：从 App.vue 抽出的主应用界面（侧边栏 + 聊天 + 图库 + 设置弹窗 + 各种 modal）。
  * App.vue 顶层按 URL 分发——非 /companion 路径渲染本组件。
  */
 const studio = useStudioViewModel();
+const settings = useSettingsStore();
 </script>
 
 <template>
-  <main class="flex h-screen bg-white text-gray-900 antialiased">
+  <main
+    :class="[
+      'flex bg-white text-gray-900 antialiased',
+      // 嵌入态撑满宿主容器（html.__embedded__ body height:100% + 容器 calc），
+      // 独立态撑满视口（阶段三 PR7 §2.4）。
+      settings.isEmbedded ? 'h-full' : 'h-screen',
+    ]"
+  >
     <ConversationSidebar
+      v-if="!(settings.isEmbedded && settings.hideSidebarInEmbed)"
       @create-conversation="studio.sidebar.createConversation"
       @delete-conversation="studio.sidebar.deleteConversation"
       @rename-conversation="studio.sidebar.renameConversation"

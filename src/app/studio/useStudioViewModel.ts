@@ -1,4 +1,4 @@
-import { computed, onMounted, proxyRefs, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, proxyRefs, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
 import { useStudioConversations } from "../../features/conversations";
@@ -32,6 +32,15 @@ import {
   getPromptFromUrlParams,
   hasUrlGenerationParams,
 } from "../../services/urlSettings";
+import {
+  readConversationIdFromUrl,
+  writeConversationIdToUrl,
+} from "../../services/conversationUrl";
+import {
+  notifyHostActiveConversationChanged,
+  notifyHostConversationsChanged,
+  setHostActions,
+} from "../../services/embeddedBridge";
 import { useAnalyticsStore } from "../../stores/analyticsStore";
 import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useComposerStore } from "../../stores/composerStore";
@@ -390,6 +399,38 @@ export function useStudioViewModel() {
   }
 
   onMounted(() => {
+    // popstate 注册放在 onMounted 同步部分（非 .then 内）：hydration 走 catch
+    // 分支时 .then 不执行，但浏览器前进/后退此时仍需可用。
+    window.addEventListener("popstate", onPopState);
+    // 注入宿主 postMessage 指令桥接（阶段三 PR7 §2.3 + PR8 §2.3 多操作）。
+    // 嵌入态下宿主发 select/create/delete/rename 消息时，main.ts 的监听器分发到此。
+    // 通知宿主的时机：
+    // - create/delete 完成后发 conversations-changed（列表内容变了，宿主刷新）；
+    // - rename 只负责打开 RenameDialog，真正的通知在 confirmRenameConversation
+    //   确认后发出——此处发的话宿主刷新看到的还是旧标题；
+    // - select 不发 conversations-changed（列表内容没变）；激活态变化由下方
+    //   watch 统一发 active-conversation-changed（pushState 不触发 popstate，
+    //   宿主无法靠监听地址栏感知，必须显式通知）。
+    // 独立态下监听器不响应（__POWERED_BY_QIANKUN__ 守卫），注入也无副作用；
+    // 两个 notify 在独立态都是 no-op。
+    setHostActions({
+      select: switchToConversationIfValid,
+      create: async () => {
+        await drafts.createConversationWithDraft();
+        notifyHostConversationsChanged();
+      },
+      delete: async (id: string) => {
+        await drafts.deleteConversationWithDraft(id);
+        notifyHostConversationsChanged();
+      },
+      rename: (id: string) => {
+        void renameConversation(id);
+      },
+      openSettings: () => {
+        openSettingsDefault();
+      },
+    });
+
     void restoreFromStorage().then(async () => {
       const urlSearchParams = new URLSearchParams(window.location.search);
       const urlPrompt = getPromptFromUrlParams(urlSearchParams);
@@ -439,6 +480,11 @@ export function useStudioViewModel() {
     });
   });
 
+  onUnmounted(() => {
+    window.removeEventListener("popstate", onPopState);
+    setHostActions(null);
+  });
+
   watch(
     [settings.analyticsEnabled, settings.analyticsPromptCapture],
     () => {
@@ -479,6 +525,54 @@ export function useStudioViewModel() {
     analytics.setContext({ conversationId: id, imageId: undefined });
     track("conversation.selected", { conversationId: id }, "system");
     drafts.selectConversationWithDraft(id);
+    // 主动切换进历史栈（阶段三 PR7 §2.2/§3.4 主动切换）。
+    // push 去重比较 URL 当前值（非激活 id）：popstate 恢复触发的切换，浏览器
+    // 已更新地址栏到目标值，此时 URL === id 不会再 push；否则按一次后退就压
+    // 一条新记录、"前进"永远失效。watch 兜底也会同步，但那是 replace 不进栈。
+    if (readConversationIdFromUrl() !== id) {
+      writeConversationIdToUrl(id, "push");
+    }
+  }
+
+  // ─── 当前对话 ↔ URL 双向同步（阶段三 PR7 §2.2/§3.4） ───
+
+  // 兜底同步（replace）：任何路径（选择/新建/删除回落/popstate 恢复）导致激活
+  // 变化，若与 URL 当前值不一致则 replaceState 同步。覆盖 selectConversationWithDraft
+  // 之外的两条路径——新建会话（createConversation）、删除当前会话后的回落
+  // （deleteConversation 内 conversations[0]?.id）。replace 不污染历史栈：
+  // 删除回落/新建视为"开新文档"而非"导航"。selectConversationWithDraft 内的
+  // push 已同步 URL，watch 触发时 URL 已一致、跳过 replace，无重复。
+  //
+  // 同时在此发 active-conversation-changed（PR8 §2.5）：嵌入态下宿主列表的
+  // 高亮依赖激活态信号——pushState/replaceState 都不触发 popstate，宿主无法
+  // 靠监听地址栏感知激活变化，必须显式通知。单点覆盖所有激活路径（含初始
+  // hydrate 后的首次激活，顺带解决宿主 MOUNTED 时 ?c= 尚未写入的高亮竞态）。
+  watch(
+    conversations.activeConversationId,
+    (id) => {
+      const urlId = readConversationIdFromUrl();
+      if (urlId !== (id || null)) {
+        writeConversationIdToUrl(id ?? "", "replace");
+      }
+      notifyHostActiveConversationChanged(id ?? "");
+    },
+  );
+
+  // 校验 id 有效后切换会话（popstate 恢复 + 宿主 postMessage 切换共用）。
+  // 无效 id（已删除会话的历史条目、宿主传入不存在的 id）静默跳过，watch 兜底会
+  // replace 同步 URL。selectConversationWithDraft 内的 push 去重保证不重复进栈。
+  function switchToConversationIfValid(id: string) {
+    if (!id || id === conversations.activeConversationId.value) return;
+    const exists = conversations.conversations.value.some((item) => item.id === id);
+    if (!exists) return;
+    selectConversationWithDraft(id);
+  }
+
+  // popstate 恢复：浏览器前进/后退。读 URL，校验后切换。
+  function onPopState() {
+    const id = readConversationIdFromUrl();
+    if (!id) return;
+    switchToConversationIfValid(id);
   }
 
   async function renameConversation(id: string) {
@@ -507,6 +601,9 @@ export function useStudioViewModel() {
     cancelRenameConversation();
     if (nextTitle === previousTitle) return;
     await conversations.renameConversation(conversationId, nextTitle);
+    // 重命名实际完成后才通知宿主刷新列表（PR8）——hostActions.rename 只是
+    // 打开弹窗，在那里通知会让宿主刷到旧标题。
+    notifyHostConversationsChanged();
     analytics.setContext({ conversationId });
     track("conversation.renamed", { conversationId }, "system");
     feedback.notifySuccess("会话已重命名。");

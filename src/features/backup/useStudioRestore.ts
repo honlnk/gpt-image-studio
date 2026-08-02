@@ -5,6 +5,7 @@ import type { SettingsServices } from "../../services/settings";
 import type { TimeFieldMigrationServices } from "../../services/timeFieldMigration";
 import { readStorage, writeStorage } from "../../shared/localStorage";
 import { formatError } from "../../shared/errors";
+import { readConversationIdFromUrl } from "../../services/conversationUrl";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
@@ -96,7 +97,16 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
       );
 
       input.conversations.value = restoredConversations;
-      input.activeConversationId.value = restoredConversations[0]?.id ?? "";
+      // 首次激活优先用 URL 里的 ?c=<id>（阶段三 PR7 §2.2 读侧）。
+      // 校验 id 必须存在于恢复后的列表——遵循 D1 数据集隔离：
+      // URL 指向的可能是其它后端/已删除的对话，无效 id 静默回落第一个，不报错。
+      const urlConversationId = readConversationIdFromUrl();
+      const urlIdExists = urlConversationId
+        ? restoredConversations.some((c) => c.id === urlConversationId)
+        : false;
+      input.activeConversationId.value = urlIdExists
+        ? urlConversationId!
+        : (restoredConversations[0]?.id ?? "");
 
       const normalizedMessages = normalizeRestoredMessages(restoredMessages);
       input.messages.value = normalizedMessages;

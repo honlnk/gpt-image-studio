@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* 阶段三 PR7 §2.4：嵌入态高度链。
+ * 嵌入态 Vue mount 到宿主容器（无 #app），html/body 默认 height:auto 会让
+ * 子应用 h-full 的父链断裂。此处给嵌入态的 html/body 补 height:100% 作防御——
+ * 主高度仍由宿主容器的 calc(100vh - 顶栏) 决定。
+ * class 由 main.ts 嵌入态挂载、unmount 移除。 */
+html.__embedded__,
+html.__embedded__ body {
+  height: 100%;
+}
+
+/* qiankun 挂载时会在宿主容器内再包一层 wrapper div
+ * （id 形如 __qiankun_microapp_wrapper_for_<appName>），Vue 根节点 mount 进 wrapper
+ * 而非直接挂宿主容器。wrapper 无高度样式（height:auto 由内容撑开），会截断
+ * <main> h-full 的父链——实测 wrapper 高度 = 内容高度（570px）而非容器高度。
+ * 嵌入态给 wrapper 补 height:100%，把 容器(calc) → wrapper → main(h-full) 链接通。
+ * sandbox:true 下子应用注入的 CSS 在全局作用域，可覆盖到 wrapper。 */
+html.__embedded__ [id^="__qiankun_microapp_wrapper_for_"] {
+  height: 100%;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;

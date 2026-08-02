@@ -1,5 +1,5 @@
 import { createApp, type App as VueApp } from 'vue'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
 
@@ -11,6 +11,7 @@ import App from './App.vue'
 const EMBEDDED_CSS_FILE = '__EMBEDDED_CSS_FILE__'
 import { trackDirective } from './directives/track'
 import { useSettingsStore } from './stores/settingsStore'
+import { listenHostMessages } from './services/embeddedBridge'
 
 /**
  * 前端入口（阶段三 PR5：qiankun 嵌入兼容）。
@@ -36,7 +37,21 @@ import { useSettingsStore } from './stores/settingsStore'
 /** qiankun 注册子应用时使用的 name，必须与宿主 registerMicroApps({ name }) 一致。 */
 const QIANKUN_APP_NAME = 'gpt-image-studio'
 
+/**
+ * 嵌入态标记 class，挂在 <html> 上。用于：
+ * - style.css 的嵌入态高度链（html.__embedded__ body { height:100% }）
+ * - StudioShell 的 h-full（嵌入态）/ h-screen（独立态）切换
+ * 见 docs/evolution/phase3-pr7-embed-experience.md §2.4。
+ */
+const EMBEDDED_HTML_CLASS = '__embedded__'
+
 let app: VueApp | null = null
+// pinia 模块级共享：render 创建、unmount 置空。setActivePinia 保证 ViewModel 内
+// 不传参的 useXxxStore() 与此处是同一实例（否则 main.ts 写入的 isEmbedded 等
+// 嵌入态配置 ViewModel 读不到）。
+let piniaInstance: Pinia | null = null
+// 宿主消息监听卸载函数，unmount 时按顺序清理（见下方 unmount 的清理顺序注释）。
+let unlistenHostMessages: (() => void) | null = null
 
 interface QiankunProps {
   /** 宿主提供的 Companion 服务地址（嵌入态必填）。 */
@@ -45,22 +60,38 @@ interface QiankunProps {
   jwt?: string
   /** qiankun 传入的挂载容器（实际是 ShadowRoot/HTMLElement 的容器选择器或元素）。 */
   container?: HTMLElement | string
+  /**
+   * 嵌入态是否隐藏子应用自带侧边栏（默认 true）。
+   * 嵌入态下会话管理应由宿主提供，子应用侧边栏不再显示。见文档 §2.5。
+   */
+  hideSidebar?: boolean
 }
 
 function render(props: QiankunProps = {}) {
   app = createApp(App)
-  const pinia = createPinia()
-  app.use(pinia)
+  piniaInstance = createPinia()
+  // 显式设为活跃 pinia：ViewModel 内 useSettingsStore()/useConversationsStore() 不传
+  // pinia 参数时走活跃实例，必须与此处一致，否则 main.ts 写入的 isEmbedded 等配置
+  // ViewModel 读不到（拿到不同的 store 实例）。
+  setActivePinia(piniaInstance)
+  app.use(piniaInstance)
   app.directive('track', trackDirective)
 
   // 嵌入态：挂载前注入宿主配置（必须在 useStudioViewModel 装配前，
   // 因为 resolveStorage 在 ViewModel setup 时读一次 connectionMode.value）。
-  if (window.__POWERED_BY_QIANKUN__ && props.companionUrl && props.jwt) {
-    const settings = useSettingsStore(pinia)
+  //
+  // 进入嵌入态只看 __POWERED_BY_QIANKUN__，不绑定凭据是否齐全——凭据缺失只影响
+  // 连接（生成会失败），不应阻断 isEmbedded/hideSidebar/高度修复等所有嵌入态行为。
+  // 此前的 && props.companionUrl && props.jwt 条件会导致凭据未配时整个嵌入态失效。
+  if (window.__POWERED_BY_QIANKUN__) {
+    const settings = useSettingsStore(piniaInstance)
     settings.applyEmbeddedConfig({
-      companionUrl: props.companionUrl,
-      jwt: props.jwt,
+      companionUrl: props.companionUrl ?? '',
+      jwt: props.jwt ?? '',
+      hideSidebar: props.hideSidebar,
     })
+    // __embedded__ class：触发 style.css 嵌入态高度链 + StudioShell h-full。
+    document.documentElement.classList.add(EMBEDDED_HTML_CLASS)
   }
 
   // 嵌入态：注入子应用 CSS。qiankun 会把 entry HTML 的 <link rel=stylesheet> 内联成
@@ -72,6 +103,13 @@ function render(props: QiankunProps = {}) {
 
   const mountTarget = props.container ?? '#app'
   app.mount(mountTarget)
+
+  // 嵌入态：注册宿主消息监听（postMessage 通道，见 embeddedBridge.ts）。
+  // 必须在 mount 之后——监听器触发的切换依赖 conversationSwitcher，而它由
+  // ViewModel 在 onMounted 时注入。unmount 时按清理顺序先于 app.unmount 卸载。
+  if (window.__POWERED_BY_QIANKUN__) {
+    unlistenHostMessages = listenHostMessages()
+  }
 }
 
 /**
@@ -137,10 +175,21 @@ export async function mount(props: QiankunProps): Promise<void> {
 }
 
 export async function unmount(): Promise<void> {
+  // 清理顺序（文档 §3.5）：qiankun 沙箱不会自动清理真实 window 上的监听器——
+  // demo 的"重新挂载"是 location.reload() 掩盖了这一点，真实宿主用 loadMicroApp
+  // 反复挂载时漏一步就叠加监听。顺序固定：
+  //   1. 先卸 host message 监听（避免卸载过程中收到消息触发已失效的 switcher）
+  //   2. app.unmount（触发 ViewModel onUnmounted：移除 popstate、setConversationSwitcher(null)）
+  //   3. 移除 __embedded__ class
+  //   4. pinia 置 null
+  unlistenHostMessages?.()
+  unlistenHostMessages = null
   if (app) {
     app.unmount()
     app = null
   }
+  document.documentElement.classList.remove(EMBEDDED_HTML_CLASS)
+  piniaInstance = null
 }
 
 // 嵌入态：把生命周期挂到 window 全局，让 qiankun import-entry 在 prod 构建产物里

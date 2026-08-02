@@ -152,6 +152,8 @@ export const useSettingsStore = defineStore("settings", () => {
   const connectionMode = ref<ConnectionMode>(readConnectionModeMirror());
   // 阶段三 PR5：qiankun 嵌入态标记。true 时连接配置由宿主注入，禁用持久化与设置面板编辑。
   const isEmbedded = ref(false);
+  // 阶段三 PR7：嵌入态是否隐藏子应用自带侧边栏（默认 true，会话管理交宿主）。见文档 §2.5。
+  const hideSidebarInEmbed = ref(true);
   const apiMode = ref<ApiMode>("images");
   const model = ref(FIXED_IMAGE_MODEL);
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
@@ -659,22 +661,29 @@ export const useSettingsStore = defineStore("settings", () => {
   });
 
   /**
-   * 阶段三 PR5：应用 qiankun 嵌入态配置（由宿主注入）。
+   * 阶段三 PR5/PR7：应用 qiankun 嵌入态配置（由宿主注入）。
    *
    * 嵌入态下连接信息由宿主管控：
    * - companionUrl = 宿主部署的 Companion 服务地址
    * - jwt = 宿主签发的 JWT（作为 Bearer token，原 accessKey 位置）
    * - connectionMode 固定 localCompanion（禁止 direct，凭据安全由平台负责）
    * - isEmbedded = true（禁用持久化 + 设置面板编辑）
+   * - hideSidebar = 是否隐藏子应用自带侧边栏（PR7，默认 true，会话管理交宿主）
    *
    * 必须在 useStudioViewModel 装配（resolveStorage 读 connectionMode.value）之前调用，
    * 即 qiankun mount(props) 时、app.mount 之前。
    */
-  function applyEmbeddedConfig(input: { companionUrl: string; jwt: string }) {
+  function applyEmbeddedConfig(input: {
+    companionUrl: string;
+    jwt: string;
+    /** 嵌入态隐藏侧边栏，省略时默认 true。 */
+    hideSidebar?: boolean;
+  }) {
     companionUrl.value = input.companionUrl;
     companionAccessKey.value = input.jwt;
     connectionMode.value = "localCompanion";
     isEmbedded.value = true;
+    hideSidebarInEmbed.value = input.hideSidebar ?? true;
   }
   // Companion 模式只支持 Images API。切到 companion 时若残留 responses，
   // 强制校正为 images，避免发出注定抛「仅支持 Images API」的请求。
@@ -703,6 +712,7 @@ export const useSettingsStore = defineStore("settings", () => {
     companionUrl,
     connectionMode,
     isEmbedded,
+    hideSidebarInEmbed,
     applyEmbeddedConfig,
     applySettings,
     applyImageCount,
