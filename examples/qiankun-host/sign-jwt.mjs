@@ -5,7 +5,8 @@
  * 用与 Companion server 模式相同的 JWT_SECRET 签发 HS256 JWT，
  * 子应用拿到后用 Authorization: Bearer <jwt> 调 Companion。
  *
- * 用法：JWT_SECRET=xxx node sign-jwt.mjs
+ * 用法：JWT_SECRET=xxx node sign-jwt.mjs [有效期]
+ * 有效期支持 s/m/h/d 后缀（如 1h、30d），不带后缀按秒计，默认 1h。
  */
 import { createHmac } from "node:crypto";
 
@@ -14,6 +15,19 @@ if (!SECRET) {
   console.error("请先设置 JWT_SECRET 环境变量");
   process.exit(1);
 }
+
+function parseTtl(arg) {
+  if (!arg) return 3600;
+  const match = /^(\d+)([smhd]?)$/.exec(arg);
+  if (!match) {
+    console.error(`无法识别的有效期：${arg}（示例：3600、1h、7d）`);
+    process.exit(1);
+  }
+  const unit = { s: 1, m: 60, h: 3600, d: 86400, "": 1 }[match[2]];
+  return Number(match[1]) * unit;
+}
+
+const TTL_SECONDS = parseTtl(process.argv[2]);
 
 function b64url(input) {
   return Buffer.from(input, "utf-8")
@@ -36,7 +50,7 @@ const payload = b64url(
     sub: "qiankun-preview-user", // 必填：用户 id（Companion 据此定位用户数据目录）
     display_name: "qiankun 预览用户",
     iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 3600, // 1 小时有效
+    exp: Math.floor(Date.now() / 1000) + TTL_SECONDS,
   }),
 );
 const signingInput = `${header}.${payload}`;

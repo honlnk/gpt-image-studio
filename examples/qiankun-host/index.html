@@ -4,12 +4,23 @@
 <meta charset="UTF-8" />
 <title>qiankun 宿主 · GPT Image Studio 嵌入预览</title>
 <style>
+  :root {
+    --host-bar-height: 44px;
+    --sidebar-width: 240px;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #f5f5f5; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #f5f5f5; display: flex; flex-direction: column; height: 100vh;
+  }
+
+  /* ─── 顶栏 ─── */
   .host-bar {
     display: flex; align-items: center; gap: 16px;
-    padding: 10px 16px; background: #1a1a2e; color: #fff;
-    font-size: 13px; position: sticky; top: 0; z-index: 9999;
+    padding: 0 16px; height: var(--host-bar-height);
+    background: #1a1a2e; color: #fff; font-size: 13px;
+    flex-shrink: 0; z-index: 9999;
   }
   .host-bar b { color: #4fc3f7; }
   .host-bar .pill {
@@ -22,9 +33,70 @@
     border-radius: 6px; cursor: pointer; font-size: 12px;
   }
   #status { margin-left: auto; font-size: 12px; }
-  /* qiankun 子应用挂载容器 */
+
+  /* ─── 主体：左列表 + 右子应用 ─── */
+  .host-body { display: flex; flex: 1; min-height: 0; }
+
+  /* ─── 宿主侧会话列表（PR8 §3.3） ─── */
+  .host-sidebar {
+    width: var(--sidebar-width); flex-shrink: 0;
+    background: #171717; color: #e5e5e5;
+    display: flex; flex-direction: column; border-right: 1px solid #2a2a2a;
+  }
+  .host-sidebar .new-btn {
+    margin: 12px; padding: 10px; background: rgba(255,255,255,0.1);
+    color: #fff; border: none; border-radius: 8px; cursor: pointer;
+    font-size: 13px; text-align: center; transition: background 0.15s;
+  }
+  .host-sidebar .new-btn:hover { background: rgba(255,255,255,0.2); }
+  /* 设置按钮：次级样式（描边），与主操作"新建"区分 */
+  .host-sidebar .settings-btn {
+    background: transparent; border: 1px solid rgba(255,255,255,0.25);
+    margin-top: -4px; color: #ccc;
+  }
+  .host-sidebar .settings-btn:hover { background: rgba(255,255,255,0.08); }
+  .host-sidebar .list-title {
+    padding: 4px 16px 8px; font-size: 11px; color: #888;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .host-sidebar .conv-list {
+    flex: 1; overflow-y: auto; padding: 0 8px 12px;
+  }
+  .host-sidebar .conv-item {
+    display: flex; align-items: center; gap: 4px;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    margin-bottom: 2px; font-size: 13px; color: #aaa;
+    transition: background 0.1s;
+  }
+  .host-sidebar .conv-item:hover { background: rgba(255,255,255,0.05); color: #ddd; }
+  .host-sidebar .conv-item.active {
+    background: rgba(255,255,255,0.12); color: #fff;
+  }
+  .host-sidebar .conv-item .title {
+    flex: 1; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .host-sidebar .conv-item .ops {
+    display: none; gap: 2px; flex-shrink: 0;
+  }
+  .host-sidebar .conv-item:hover .ops { display: flex; }
+  .host-sidebar .conv-item .op-btn {
+    background: transparent; border: none; color: #777; cursor: pointer;
+    padding: 2px 4px; font-size: 11px; border-radius: 3px;
+  }
+  .host-sidebar .conv-item .op-btn:hover { background: rgba(255,255,255,0.1); color: #ddd; }
+  .host-sidebar .conv-item .op-btn.del:hover { color: #f87171; }
+  .host-sidebar .empty {
+    padding: 32px 16px; text-align: center; color: #666; font-size: 12px;
+  }
+  .host-sidebar .loading {
+    padding: 16px; text-align: center; color: #666; font-size: 12px;
+  }
+
+  /* ─── 子应用挂载容器 ─── */
   #image-studio-container {
-    background: #fff; min-height: 600px; margin: 0; padding: 0;
+    flex: 1; min-width: 0; background: #fff;
+    height: calc(100vh - var(--host-bar-height));
   }
 </style>
 </head>
@@ -33,29 +105,134 @@
 <div class="host-bar">
   <b>🏠 qiankun 宿主</b>
   <span class="pill">子应用: gpt-image-studio</span>
-  <span class="pill">entry: <span id="entry-url">-</span></span>
   <span class="pill">companionUrl: <span id="companion-url">-</span></span>
   <button onclick="reloadSubApp()">重新挂载子应用</button>
   <span id="status">⏳ 等待子应用激活...</span>
 </div>
 
-<!-- qiankun 子应用挂载点 -->
-<div id="image-studio-container">子应用加载中...</div>
+<div class="host-body">
+  <!-- 宿主侧会话列表（PR8 §3.3）：数据来自 Companion API，写操作委托子应用 -->
+  <aside class="host-sidebar" aria-label="会话列表">
+    <button class="new-btn" onclick="hostCreateConversation()">+ 新建会话</button>
+    <button class="new-btn settings-btn" onclick="hostOpenSettings()">⚙️ 设置</button>
+    <div class="list-title">历史会话</div>
+    <div id="conv-list" class="conv-list">
+      <div class="loading">加载中...</div>
+    </div>
+  </aside>
+
+  <!-- qiankun 子应用挂载点 -->
+  <div id="image-studio-container">子应用加载中...</div>
+</div>
 
 <script>
 // ─── 嵌入配置（注入给子应用的 props） ───
-// 读取同目录 config.json（由宿主脚本生成），或用 URL hash 调试
+let HOST_CONFIG = { companionUrl: '', jwt: '', hideSidebar: true };
+
 async function loadConfig() {
   try {
     const res = await fetch('./config.json');
     if (res.ok) return await res.json();
   } catch (e) {}
-  // 兜底默认值（companionUrl/jwt 需自行替换）
-  return {
-    companionUrl: 'http://127.0.0.1:19751',
-    jwt: 'REPLACE_WITH_REAL_JWT',
-  };
+  return { companionUrl: 'http://127.0.0.1:19751', jwt: 'REPLACE_WITH_REAL_JWT', hideSidebar: true };
 }
+
+// ─── 宿主侧会话列表数据层（PR8 §2.1 读用 API） ───
+let conversations = [];
+// 当前激活会话 id：由子应用的 active-conversation-changed 消息维护（PR8 §2.5）。
+// 为什么不能只读地址栏 ?c=：子应用切换会话用 pushState/replaceState 写 URL，
+// 二者都不触发 popstate，宿主监听地址栏感知不到激活变化，必须靠显式消息。
+// 初始值 null 时 renderConvList 回退读 URL ?c=（覆盖刷新恢复场景）。
+let hostActiveConvId = null;
+
+/** GET /storage/conversations（JWT 鉴权），按 updatedAt 降序排 */
+async function loadConversations() {
+  const listEl = document.getElementById('conv-list');
+  try {
+    const res = await fetch(`${HOST_CONFIG.companionUrl}/storage/conversations`, {
+      headers: { Authorization: `Bearer ${HOST_CONFIG.jwt}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { data } = await res.json();
+    conversations = (data || []).sort((a, b) =>
+      new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0),
+    );
+  } catch (e) {
+    listEl.innerHTML = `<div class="empty">加载失败：${e.message}<br>请确认 Companion server 模式已启动</div>`;
+    return;
+  }
+  renderConvList();
+}
+
+/** 渲染会话列表，高亮激活会话（优先消息维护的 hostActiveConvId，回退 URL ?c=） */
+function renderConvList() {
+  const listEl = document.getElementById('conv-list');
+  const activeId = hostActiveConvId ?? new URLSearchParams(location.search).get('c');
+  if (!conversations.length) {
+    listEl.innerHTML = '<div class="empty">暂无会话，点击上方新建</div>';
+    return;
+  }
+  listEl.innerHTML = conversations.map((c) => {
+    const isActive = c.id === activeId;
+    const escTitle = escapeHtml(c.title || '(未命名)');
+    return `
+      <div class="conv-item ${isActive ? 'active' : ''}" data-id="${c.id}">
+        <span class="title" onclick="hostSelectConversation('${c.id}')" title="${escTitle}">${escTitle}</span>
+        <span class="ops">
+          <button class="op-btn" onclick="event.stopPropagation();hostRenameConversation('${c.id}')" title="重命名">✏️</button>
+          <button class="op-btn del" onclick="event.stopPropagation();hostDeleteConversation('${c.id}')" title="删除">🗑️</button>
+        </span>
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (m) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;',
+  }[m]));
+}
+
+// ─── 写操作：postMessage 委托子应用（PR8 §2.1 写委托） ───
+function hostSelectConversation(id) {
+  window.postMessage({ type: 'select-conversation', id }, location.origin);
+}
+function hostCreateConversation() {
+  window.postMessage({ type: 'create-conversation' }, location.origin);
+}
+function hostDeleteConversation(id) {
+  // 即时删除无确认——与子应用自带侧边栏的行为一致（ConversationSidebar
+  // 删除也不弹确认）。数据不可逆，列表 UI 与子应用保持同一交互约定。
+  window.postMessage({ type: 'delete-conversation', id }, location.origin);
+}
+function hostRenameConversation(id) {
+  // RenameDialog 由子应用弹，这里只发指令
+  window.postMessage({ type: 'rename-conversation', id }, location.origin);
+}
+function hostOpenSettings() {
+  // 打开子应用的设置弹窗（嵌入态下连接配置只读，PR8 §2.2 open-settings）
+  window.postMessage({ type: 'open-settings' }, location.origin);
+}
+
+// ─── 监听子应用反向消息 ───
+// conversations-changed → 列表内容变了，重新拉取；
+// active-conversation-changed → 激活会话变了，更新高亮（地址栏 ?c= 靠
+// pushState/replaceState 写，不触发 popstate，必须靠这个消息感知）。
+window.addEventListener('message', (event) => {
+  if (event.origin !== location.origin) return;
+  if (!event.data || typeof event.data !== 'object') return;
+  if (event.data.type === 'conversations-changed') {
+    loadConversations();
+  } else if (event.data.type === 'active-conversation-changed') {
+    hostActiveConvId = event.data.id || null;
+    renderConvList();
+  }
+});
+
+// ─── 浏览器前进/后退时回退高亮（?c= 随历史条目变化，此时有 popstate） ───
+window.addEventListener('popstate', () => {
+  hostActiveConvId = null;  // 回到 URL 驱动
+  renderConvList();
+});
 </script>
 
 <!-- qiankun UMD（从 CDN 加载 2.x） -->
@@ -63,9 +240,8 @@ async function loadConfig() {
 
 <script>
 (async function () {
-  const cfg = await loadConfig();
-  document.getElementById('entry-url').textContent = 'http://127.0.0.1:4173';
-  document.getElementById('companion-url').textContent = cfg.companionUrl;
+  HOST_CONFIG = await loadConfig();
+  document.getElementById('companion-url').textContent = HOST_CONFIG.companionUrl;
 
   const qiankun = window.qiankun;
   if (!qiankun) {
@@ -74,7 +250,6 @@ async function loadConfig() {
     return;
   }
 
-  // 注册子应用：name 必须与子应用 main.ts 的 QIANKUN_APP_NAME ('gpt-image-studio') 一致
   qiankun.registerMicroApps([
     {
       name: 'gpt-image-studio',
@@ -82,29 +257,27 @@ async function loadConfig() {
       container: '#image-studio-container',
       activeRule: location.pathname,
       props: {
-        companionUrl: cfg.companionUrl,
-        jwt: cfg.jwt,
+        companionUrl: HOST_CONFIG.companionUrl,
+        jwt: HOST_CONFIG.jwt,
+        hideSidebar: HOST_CONFIG.hideSidebar,
       },
     },
   ]);
 
-  // 监听子应用生命周期事件（验证加载是否成功）
   window.addEventListener('single-spa:app-change', (evt) => {
     const apps = evt.detail?.appsByNewStatus;
     if (apps && apps.MOUNTED) {
       document.getElementById('status').innerHTML =
         '<span class="ok">✅ 子应用已挂载（MOUNTED）</span>';
+      // 子应用挂载后加载会话列表（依赖 Companion server 已就绪）
+      loadConversations();
     }
   });
 
-  qiankun.start({
-    sandbox: true,
-    prefetch: false,
-  });
+  qiankun.start({ sandbox: true, prefetch: false });
 
   window._reloadSubApp = function () {
-    const c = document.getElementById('image-studio-container');
-    c.innerHTML = '重新加载中...';
+    document.getElementById('image-studio-container').innerHTML = '重新加载中...';
     location.reload();
   };
 })();

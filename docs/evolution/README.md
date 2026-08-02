@@ -45,6 +45,8 @@
 | [phase3-pr4-oss-sts.md](./phase3-pr4-oss-sts.md) | PR4：OSS STS 临时凭证机制（D11 平台统一 OSS） | ✅ 已完成 |
 | [phase3-pr5-frontend-qiankun.md](./phase3-pr5-frontend-qiankun.md) | PR5：前端 qiankun 嵌入改造（生命周期 + 运行环境感知 + 认证态联动） | ✅ 已完成 |
 | [phase3-pr6-deployment-docs.md](./phase3-pr6-deployment-docs.md) | PR6：部署文档 docs/deployment-guide.md | ✅ 已完成 |
+| [phase3-pr7-embed-experience.md](./phase3-pr7-embed-experience.md) | PR7：嵌入态体验增强（URL 会话定位 `?c=` + postMessage 宿主通信 + 高度修复 + 隐藏侧边栏） | 🚧 进行中 |
+| [phase3-pr8-host-conversation-list.md](./phase3-pr8-host-conversation-list.md) | PR8：宿主侧会话列表（会话管理外移到宿主，读用 API/写委托子应用，双向 postMessage 协议） | ⬜ 待启动 |
 
 ## 阅读顺序
 

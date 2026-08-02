@@ -40,7 +40,7 @@ JWT_SECRET=<32+字符随机串> node dist/main.js serve \
 # 3. 签发 JWT 并生成 config.json（config.json 已 gitignore，不进仓库）
 cd examples/qiankun-host
 cp config.example.json config.json
-JWT_SECRET=<同上密钥> node sign-jwt.mjs   # 输出 1 小时有效的 JWT，填进 config.json
+JWT_SECRET=<同上密钥> node sign-jwt.mjs 30d  # 签发 JWT 填进 config.json，默认 1h，可传 7d/30d 等
 
 # 4. 启动宿主静态服务（端口 5599，任意静态服务器均可）
 python3 -m http.server 5599
@@ -77,6 +77,7 @@ JWT_SECRET=<32+字符随机串> ADMIN_API_KEY=<平台管理密钥> \
 
 ### 注意
 
-- JWT 只有 1 小时有效期（`sign-jwt.mjs` 里 `exp` 写死 +3600s），过期后 Companion 请求会 401，重新签发替换 `config.json` 即可。
+- **必须用 `http://127.0.0.1:5599` 打开宿主页，不能用 `localhost:5599`**——二者在浏览器看来是两个不同 origin，Companion 的 CORS 白名单（`--allow-origin http://127.0.0.1:5599`）只放行前者。用 localhost 打开会导致所有 Companion 请求报 `Failed to fetch`（CORS 拦截），表现为子应用"离线"、toast"读取本地数据失败"、宿主列表"加载失败"。
+- JWT 有效期由 `sign-jwt.mjs` 的第一个参数控制（如 `30d`，默认 1h），过期后 Companion 请求会 401，重新签发替换 `config.json` 即可。
 - 改完 `src/main.ts` 的嵌入逻辑后必须重新 `pnpm build`，preview 才会 serve 新产物。
 - 嵌入态 CSS 由子应用 `main.ts` 的 `injectEmbeddedCss` 通过 `__INJECTED_PUBLIC_PATH_BY_QIANKUN__` 注入宿主 document.head，不依赖 qiankun 的样式处理。
