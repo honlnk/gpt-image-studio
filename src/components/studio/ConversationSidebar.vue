@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useComposerStore } from "../../stores/composerStore";
 import { useConversationsStore } from "../../stores/conversationsStore";
 import { useGenerationStore } from "../../stores/generationStore";
+import { resolvePublicAssetUrl } from "../../utils/publicAssets";
 
 const emit = defineEmits<{
   createConversation: [];
@@ -12,6 +13,8 @@ const emit = defineEmits<{
   selectConversation: [id: string];
 }>();
 
+// 嵌入态（qiankun）下 /favicon.svg 会解析到宿主 origin → 404，需按子应用源拼 URL
+const logoUrl = resolvePublicAssetUrl("/favicon.svg");
 const searchText = ref("");
 const composer = useComposerStore();
 const conversations = useConversationsStore();
@@ -50,7 +53,7 @@ function closeSidebar() {
       <div class="flex min-w-0 items-center gap-2 px-2 py-2">
         <img
           class="h-8 w-8 shrink-0"
-          src="/favicon.svg"
+          :src="logoUrl"
           alt=""
           aria-hidden="true"
         />
@@ -201,7 +204,7 @@ function closeSidebar() {
     <div class="flex items-center gap-2 border-t border-white/10 p-3">
       <img
         class="h-5 w-5 shrink-0"
-        src="/favicon.svg"
+        :src="logoUrl"
         alt=""
         aria-hidden="true"
       />
