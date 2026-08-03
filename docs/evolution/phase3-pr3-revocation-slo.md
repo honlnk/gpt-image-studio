@@ -1,6 +1,6 @@
 # 阶段三 PR3：吊销黑名单 SLO + /admin/revoke
 
-> 状态：⬜ 待启动
+> 状态：✅ 已完成
 > 依赖：PR2（JWT 中间件 + req.user 已就位）
 > 纲领：[`./phase3-overview.md`](./phase3-overview.md) §三 D10 SLO 部分
 

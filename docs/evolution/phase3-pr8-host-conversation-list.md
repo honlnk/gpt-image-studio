@@ -1,6 +1,6 @@
 # 阶段三 PR8：宿主侧会话列表（嵌入态会话管理外移）
 
-> 状态：⬜ 待启动
+> 状态：✅ 已完成（2026-08，demo 形态，见第七节实施记录）
 > 依赖：PR7（postMessage 通道 + URL 同步 + 高度修复 + 隐藏侧边栏开关已就位）
 > 定位：PR7 解决"嵌入态基本可用"，本 PR 解决"嵌入态会话管理由宿主管"——把子应用自带的 ConversationSidebar 完全外移到宿主页面，宿主侧渲染会话列表、触发新建/删除/重命名/切换。
 
@@ -148,20 +148,20 @@ window.postMessage({ type: "conversations-changed" }, window.location.origin);
 
 ### 嵌入态（demo 手动验证）
 
-- [ ] 宿主左侧显示会话列表，数据来自 Companion API（JWT 鉴权）
-- [ ] 列表按 updatedAt 降序
-- [ ] 点击列表项 → 子应用切换到该会话（postMessage select，PR7 通道）
-- [ ] 宿主列表高亮跟随激活会话（子应用 select/新建/删除回落后发 `active-conversation-changed`；初始加载高亮正确）
-- [ ] 新建按钮 → 子应用创建会话 → 子应用回发 conversations-changed → 宿主列表刷新出现新项且高亮到新会话
-- [ ] 删除按钮 → 子应用即时删除（无确认，与子应用侧边栏一致）→ 回发通知 → 宿主列表刷新，项消失
-- [ ] 重命名按钮 → 子应用弹 RenameDialog → **确认后**回发通知 → 宿主列表刷新为新标题（弹窗打开时不通知）
-- [ ] 设置按钮 → 子应用打开设置弹窗（连接配置只读可见）
-- [ ] 子应用侧边栏保持隐藏（hideSidebar:true）
-- [ ] 高度无溢出（PR7 修复继续生效）
+- [x] 宿主左侧显示会话列表，数据来自 Companion API（JWT 鉴权）
+- [x] 列表按 updatedAt 降序
+- [x] 点击列表项 → 子应用切换到该会话（postMessage select，PR7 通道）
+- [x] 宿主列表高亮跟随激活会话（子应用 select/新建/删除回落后发 `active-conversation-changed`；初始加载高亮正确）
+- [x] 新建按钮 → 子应用创建会话 → 子应用回发 conversations-changed → 宿主列表刷新出现新项且高亮到新会话
+- [x] 删除按钮 → 子应用即时删除（无确认，与子应用侧边栏一致）→ 回发通知 → 宿主列表刷新，项消失
+- [x] 重命名按钮 → 子应用弹 RenameDialog → **确认后**回发通知 → 宿主列表刷新为新标题（弹窗打开时不通知）
+- [x] 设置按钮 → 子应用打开设置弹窗（连接配置只读可见）
+- [x] 子应用侧边栏保持隐藏（hideSidebar:true）
+- [x] 高度无溢出（PR7 修复继续生效）
 
 ### 独立态回归
 
-- [ ] 独立态行为完全不变（hostActions 注入对独立态无副作用，独立态不发反向消息）
+- [x] 独立态行为完全不变（hostActions 注入对独立态无副作用，独立态不发反向消息）
 
 ## 五、回滚策略
 
@@ -181,4 +181,6 @@ window.postMessage({ type: "conversations-changed" }, window.location.origin);
 
 ## 七、实施记录
 
-> （PR 合并后填写）
+> 2026-08 以 demo 宿主形态完成。核心 commit：`d0e9832` feat(examples) qiankun 宿主会话列表/设置入口 demo。联调中补齐：宿主列表读取走 Companion API（JWT）、选中/新建/删除/重命名均委托子应用执行并靠反向消息（conversations-changed / active-conversation-changed）刷新高亮；删除按子应用侧边栏一致体验免确认即时删除；新增宿主侧设置按钮（打开子应用设置弹窗）。
+>
+> 用户手动验收（5599 demo）：宿主列表可切换会话且高亮同步、新建/删除/重命名后列表刷新正确、子应用侧边栏保持隐藏、高度无溢出；独立态回归无副作用。真实 Vben 集成仍属后续（见第六节）。

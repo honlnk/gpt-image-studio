@@ -1,6 +1,6 @@
 # 阶段二 PR6：前端 CompanionStorage 填充 + resolveStorage 切换
 
-> **状态：🚧 进行中**
+> **状态：✅ 已完成（2026-07-27）**
 >
 > 依赖：PR1-5（Companion 后端 /storage/* 路由就绪）
 >

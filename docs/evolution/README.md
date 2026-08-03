@@ -12,13 +12,13 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| [phase1-overview.md](./phase1-overview.md) | 阶段一总览：目标、PR 拆分、依赖图、全局验收门槛 | 🚧 进行中 |
-| [phase1-pr1-storage-interface.md](./phase1-pr1-storage-interface.md) | PR1：`StudioStorage` 接口 + `IndexedDbStorage` 实现 + 契约测试骨架 | ⬜ 待启动 |
-| [phase1-pr2-service-factories.md](./phase1-pr2-service-factories.md) | PR2：6 个 domain service 改工厂 + store context 注入 | ⬜ 待启动 |
-| [phase1-pr3-cross-collection-services.md](./phase1-pr3-cross-collection-services.md) | PR3：backups/storageUsage/timeFieldMigration 改走 storage | ⬜ 待启动 |
-| [phase1-pr4-feature-assembly.md](./phase1-pr4-feature-assembly.md) | PR4：feature 层 import 改造 + ViewModel 装配点接入 | ⬜ 待启动 |
-| [phase1-pr5-companion-credentials.md](./phase1-pr5-companion-credentials.md) | PR5：companion 凭据收编 + localStorage 迁移 + 备份更新 | ⬜ 待启动 |
-| [phase1-pr6-cleanup.md](./phase1-pr6-cleanup.md) | PR6：ImageBlobRecord 收敛 + 删除旧 db.ts + 文档收尾 | ⬜ 待启动 |
+| [phase1-overview.md](./phase1-overview.md) | 阶段一总览：目标、PR 拆分、依赖图、全局验收门槛 | ✅ 已完成 |
+| [phase1-pr1-storage-interface.md](./phase1-pr1-storage-interface.md) | PR1：`StudioStorage` 接口 + `IndexedDbStorage` 实现 + 契约测试骨架 | ✅ 已完成 |
+| [phase1-pr2-service-factories.md](./phase1-pr2-service-factories.md) | PR2：6 个 domain service 改工厂 + store context 注入 | ✅ 已完成 |
+| [phase1-pr3-cross-collection-services.md](./phase1-pr3-cross-collection-services.md) | PR3：backups/storageUsage/timeFieldMigration 改走 storage | ✅ 已完成 |
+| [phase1-pr4-feature-assembly.md](./phase1-pr4-feature-assembly.md) | PR4：feature 层 import 改造 + ViewModel 装配点接入 | ✅ 已完成 |
+| [phase1-pr5-companion-credentials.md](./phase1-pr5-companion-credentials.md) | PR5：companion 凭据收编 + localStorage 迁移 + 备份更新 | ✅ 已完成 |
+| [phase1-pr6-cleanup.md](./phase1-pr6-cleanup.md) | PR6：ImageBlobRecord 收敛 + 删除旧 db.ts + 文档收尾 | ✅ 已完成 |
 
 ### 阶段二：Companion 后端化（真实数据）
 
@@ -45,13 +45,13 @@
 | [phase3-pr4-oss-sts.md](./phase3-pr4-oss-sts.md) | PR4：OSS STS 临时凭证机制（D11 平台统一 OSS） | ✅ 已完成 |
 | [phase3-pr5-frontend-qiankun.md](./phase3-pr5-frontend-qiankun.md) | PR5：前端 qiankun 嵌入改造（生命周期 + 运行环境感知 + 认证态联动） | ✅ 已完成 |
 | [phase3-pr6-deployment-docs.md](./phase3-pr6-deployment-docs.md) | PR6：部署文档 docs/deployment-guide.md | ✅ 已完成 |
-| [phase3-pr7-embed-experience.md](./phase3-pr7-embed-experience.md) | PR7：嵌入态体验增强（URL 会话定位 `?c=` + postMessage 宿主通信 + 高度修复 + 隐藏侧边栏） | 🚧 进行中 |
-| [phase3-pr8-host-conversation-list.md](./phase3-pr8-host-conversation-list.md) | PR8：宿主侧会话列表（会话管理外移到宿主，读用 API/写委托子应用，双向 postMessage 协议） | ⬜ 待启动 |
-| [phase3-pr9-image-loading.md](./phase3-pr9-image-loading.md) | PR9：图片加载性能优化（blob 缓存头 + 预览懒加载优先级队列 + 加载态占位） | 🚧 进行中 |
+| [phase3-pr7-embed-experience.md](./phase3-pr7-embed-experience.md) | PR7：嵌入态体验增强（URL 会话定位 `?c=` + postMessage 宿主通信 + 高度修复 + 隐藏侧边栏） | ✅ 已完成 |
+| [phase3-pr8-host-conversation-list.md](./phase3-pr8-host-conversation-list.md) | PR8：宿主侧会话列表（会话管理外移到宿主，读用 API/写委托子应用，双向 postMessage 协议） | ✅ 已完成 |
+| [phase3-pr9-image-loading.md](./phase3-pr9-image-loading.md) | PR9：图片加载性能优化（blob 缓存头 + 预览懒加载优先级队列 + 加载态占位） | ✅ 已完成 |
 
 ## Backlog（已识别、暂未排期）
 
-- **server 模式全链路分页**：server 部署到服务器后，Companion `/storage/*/list` 目前全量返回 conversations/messages/imageAssets，数据量大后需改为分页/增量同步，牵动 API 契约、前端 store、恢复逻辑一整条链。配套还有前端图片库的 DOM 分页/虚拟列表（目前仅 blob 懒加载，元数据和 DOM 仍全量）。与 PR9 的视口懒加载不冲突，是互补的两层。单独立项。
+- **server 模式全链路分页**：server 部署到服务器后，Companion `/storage/*/list` 目前全量返回 conversations/messages/imageAssets，数据量大后需改为分页/增量同步，牵动 API 契约、前端 store、恢复逻辑一整条链。配套还有前端图片库的 DOM 分页/虚拟列表（目前仅 blob 懒加载，元数据和 DOM 仍全量）。与 PR9 的视口懒加载不冲突，是互补的两层。单独立项。**分析稿：[backlog-server-pagination.md](./backlog-server-pagination.md)**（现状、两个待推翻的设计决策、API/SQL/接口/UI 分层方案、PR 拆分建议、开放问题）。
 
 ## 阅读顺序
 

@@ -1,6 +1,6 @@
 # 阶段三 PR7：嵌入态体验增强（URL 会话定位 + 宿主通信 + 高度修复）
 
-> 状态：⬜ 待启动
+> 状态：✅ 已完成（2026-08，见第八节实施记录）
 > 依赖：PR5（qiankun 嵌入生命周期已就位，`isEmbedded` 标记已贯穿）
 > 定位：phase3 PR5「前端 qiankun 嵌入改造」的能力补全——PR5 解决了"能不能嵌进来"，本 PR 解决"嵌进来之后好不好用"。
 > 纲领：[`./phase3-overview.md`](./phase3-overview.md) §三 D14「前端子项目化」+ roadmap §8
@@ -239,28 +239,28 @@ input.activeConversationId.value = exists ? urlId! : (restoredConversations[0]?.
 
 ### 独立态回归（不能破）
 
-- [ ] `pnpm dev` 独立运行，切换会话 → URL 变 `?c=<id>`，刷新回到同一会话
-- [ ] 连续切换多个会话后，浏览器**后退逐会话回退、前进逐会话恢复**（方案 B：主动切换 `pushState`）
-- [ ] 回退到已删除会话的历史条目时，静默回落到有效会话，不报错
-- [ ] 新建会话 / 删除当前会话后 URL 同步正确，且不产生多余历史条目（兜底走 `replaceState`）
-- [ ] 无 `?c=` 时行为同改造前（回落第一个会话）
-- [ ] `?c=<无效id>` 时静默回落第一个，不报错
-- [ ] `pnpm typecheck` + `pnpm typecheck:companion` 无错
-- [ ] `pnpm test` 全绿（含新增测试）
+- [x] `pnpm dev` 独立运行，切换会话 → URL 变 `?c=<id>`，刷新回到同一会话
+- [x] 连续切换多个会话后，浏览器**后退逐会话回退、前进逐会话恢复**（方案 B：主动切换 `pushState`）
+- [x] 回退到已删除会话的历史条目时，静默回落到有效会话，不报错
+- [x] 新建会话 / 删除当前会话后 URL 同步正确，且不产生多余历史条目（兜底走 `replaceState`）
+- [x] 无 `?c=` 时行为同改造前（回落第一个会话）
+- [x] `?c=<无效id>` 时静默回落第一个，不报错
+- [x] `pnpm typecheck` + `pnpm typecheck:companion` 无错
+- [x] `pnpm test` 全绿（含新增测试）
 
 ### 嵌入态（qiankun demo 手动验证）
 
-- [ ] 子应用填满宿主容器，无溢出（高度 = 顶栏以下空间，非视口高度）
-- [ ] 宿主 `postMessage({type:'select-conversation', id:<有效id>})` → 子应用切换到该会话
-- [ ] 子应用内切换会话（含 postMessage 触发）→ **宿主地址栏**同步显示 `?c=`（嵌入态 URL 共享的预期行为，见 §2.2 嵌入态补充）
-- [ ] `hideSidebar: true`（默认）→ 子应用自带侧边栏隐藏
-- [ ] `hideSidebar: false` → 子应用侧边栏显示
-- [ ] 嵌入态刷新宿主页 → 子应用按 URL `?c=` 恢复对话
+- [x] 子应用填满宿主容器，无溢出（高度 = 顶栏以下空间，非视口高度）
+- [x] 宿主 `postMessage({type:'select-conversation', id:<有效id>})` → 子应用切换到该会话
+- [x] 子应用内切换会话（含 postMessage 触发）→ **宿主地址栏**同步显示 `?c=`（嵌入态 URL 共享的预期行为，见 §2.2 嵌入态补充）
+- [x] `hideSidebar: true`（默认）→ 子应用自带侧边栏隐藏
+- [x] `hideSidebar: false` → 子应用侧边栏显示
+- [x] 嵌入态刷新宿主页 → 子应用按 URL `?c=` 恢复对话
 
 ### 部署文档同步
 
-- [ ] `examples/README.md` 更新 demo 用法（postMessage 演示 + hideSidebar）
-- [ ] `docs/deployment-guide.md` 视情况补充嵌入态通信协议说明
+- [x] `examples/README.md` 更新 demo 用法（postMessage 演示 + hideSidebar）
+- [x] `docs/deployment-guide.md` 视情况补充嵌入态通信协议说明
 
 ## 五、回滚策略
 
@@ -297,4 +297,6 @@ input.activeConversationId.value = exists ? urlId! : (restoredConversations[0]?.
 
 ## 八、实施记录
 
-> （PR 合并后填写）
+> 2026-08 完成。核心 commit：`e5bbae5` feat(web) qiankun 嵌入态体验增强（?c= 会话定位 + 高度修复 + 隐藏侧边栏 + 双向 postMessage）；后续修补 `197678f`（嵌入态 logo 按子应用源拼 URL）、`58de2a2`（注入完整 bundle CSS 修 scoped 样式丢失）；`96e5ec9` 将 qiankun vendor 到本地并 `sandbox:false`（本文 §高度修复 注释处已补充说明）。
+>
+> 用户手动验收（8888 独立态 + 5599 qiankun demo）：切换会话 URL 变 `?c=<id>`；刷新按 id 恢复；浏览器前进/后退逐会话回退（方案 B pushState 已采用）；嵌入态宿主打子应用 postMessage 切换会话、宿主地址栏同步 `?c=`、刷新按 `?c=` 恢复；hideSidebar 开/关均符合预期；高度填满容器无溢出。`pnpm typecheck` + `pnpm test` 全绿。

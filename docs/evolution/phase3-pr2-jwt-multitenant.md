@@ -1,6 +1,6 @@
 # 阶段三 PR2：JWT 认证中间件 + users 表多租户隔离
 
-> 状态：⬜ 待启动
+> 状态：✅ 已完成
 > 依赖：PR1（部署形态开关已就位，server 模式可识别）
 > 纲领：[`./phase3-overview.md`](./phase3-overview.md) §三 D9 + D10 SSO 登录部分
 

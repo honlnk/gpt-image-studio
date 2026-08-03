@@ -1,6 +1,6 @@
 # 阶段三 PR1：Companion 监听地址可配置 + Docker 化
 
-> 状态：⬜ 待启动
+> 状态：✅ 已完成
 > 依赖：无（阶段二已完成）
 > 纲领：[`./phase3-overview.md`](./phase3-overview.md) §三「部署形态开关」+ §四 PR1
 

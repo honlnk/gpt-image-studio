@@ -1,6 +1,6 @@
 # 阶段二 PR3：数据集管理（datasetRegistry + fingerprint + 激活切换）
 
-> **状态：🚧 进行中**
+> **状态：✅ 已完成（2026-07-27）**
 >
 > 依赖：PR1（主 db CRUD）+ PR2（ImageStore）
 >

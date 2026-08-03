@@ -1,6 +1,6 @@
 # 阶段二：Companion 后端化（真实数据）—— 总览
 
-> **状态：🚧 进行中（2026-07-27 启动）**
+> **状态：✅ 已完成（2026-07-27）**
 >
 > 对应纲领：[`evolution-roadmap.md` 第七章](../evolution-roadmap.md#七阶段二companion-后端化真实数据)
 >

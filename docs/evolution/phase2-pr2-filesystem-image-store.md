@@ -1,6 +1,6 @@
 # 阶段二 PR2：图片 adapter FileSystemImageStore（选项 A/B）
 
-> **状态：🚧 进行中**
+> **状态：✅ 已完成（2026-07-27）**
 >
 > 依赖：PR1（共用 storage 目录）
 >

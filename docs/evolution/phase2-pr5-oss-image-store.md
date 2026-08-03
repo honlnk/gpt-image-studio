@@ -1,6 +1,6 @@
 # 阶段二 PR5：OssImageStore（选项 C）+ OSS 凭据录入
 
-> **状态：🚧 进行中**
+> **状态：✅ 已完成（2026-07-27）**
 >
 > 依赖：PR1-4（storage 路由、datasetRegistry、imageStore 接口）
 >

@@ -1,6 +1,6 @@
 # 阶段二 PR4：Companion 侧 /storage/* 路由 + 集成测试
 
-> **状态：🚧 进行中**
+> **状态：✅ 已完成（2026-07-27）**
 >
 > 依赖：PR1（db）+ PR2（imageStore）+ PR3（datasetRegistry）
 >

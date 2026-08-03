@@ -1,6 +1,6 @@
 # 阶段三 PR4：OSS STS 临时凭证机制
 
-> 状态：⬜ 待启动
+> 状态：✅ 已完成
 > 依赖：PR2（多租户 userId 已就位，OSS prefix 可按用户隔离）
 > 纲领：[`./phase3-overview.md`](./phase3-overview.md) §三 D11
 

@@ -1,6 +1,6 @@
 # 阶段三 PR5：前端 qiankun 嵌入改造
 
-> 状态：⬜ 待启动
+> 状态：✅ 已完成
 > 依赖：PR2（JWT + req.user 已就位，前端注入 JWT 即可对接）
 > 纲领：[`./phase3-overview.md`](./phase3-overview.md) §三 D14 + roadmap §8「前端子项目化」
 

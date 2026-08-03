@@ -1,6 +1,6 @@
 # 阶段三 PR9：图片加载性能优化（缓存头 + 懒加载 + 加载态占位）
 
-> 状态：🚧 进行中
+> 状态：✅ 已完成（2026-08-03，三个 commit，见第 5 节）
 > 前置：PR7/PR8（嵌入态 demo 联调中发现 OSS 图片加载慢）
 > 关联决策：D6（图片存储 adapter）、D11（OSS STS）
 
@@ -72,9 +72,27 @@ Cache-Control: private, max-age=31536000, immutable
 - [x] `pnpm typecheck` 通过
 - [x] `pnpm test` 全绿（web 1198：1189 + 新增 9；companion 734）
 - [x] blob GET 响应带 `Cache-Control: private, max-age=31536000, immutable`（两个 Companion 实测）
-- [ ] 手动验收：清空缓存刷新 → UI 立即渲染 + 骨架占位；当前会话最新图片最先出现；图片库滚动时新入视口的图片才发请求；二次刷新全部 disk cache
-- [ ] 加载中不再显示"图片已删除"；真删除仍显示"已删除"
+- [x] 手动验收：清空缓存刷新 → UI 立即渲染 + 骨架占位；当前会话最新图片最先出现；图片库滚动时新入视口的图片才发请求；二次刷新全部 disk cache
+- [x] 加载中不再显示"图片已删除"；真删除仍显示"已删除"
 
 ## 5. 实施记录
 
-（合并后填写）
+2026-08-03 完成，分三个 commit 落地（`honlnk/dev` 分支）：
+
+| commit | 内容 |
+|---|---|
+| `8899899` `perf(companion)` | blob GET 缓存头（2.1）+ 测试断言 |
+| `96e5ec9` `perf(examples)` | qiankun demo 宿主 vendor 化 + `sandbox:false`（见下"偏差"） |
+| `e834434` `perf(web)` | 前端懒加载全套（2.2/2.3）+ 9 用例 + 本文档 |
+
+**与计划的偏差**：
+
+1. **sandbox:false 是计划外发现**。排查"嵌入态慢于独立态"时定位到 qiankun LegacySandbox 对子应用所有 `window` 全局读写的 Proxy 损耗是最大单一因素；demo 单子应用无隔离需求，遂 `start({ sandbox: false })` 并把 qiankun UMD vendor 到 `examples/qiankun-host/vendor/`（不走 CDN）。真实宿主若需隔离可用 `{ speedy: true }`。详见 `examples/README.md` 与 phase3-pr7 文档补充。
+2. 缓存头与懒加载是**先后两轮**验证的：先上缓存头（用户实测"真正有效"），后上懒加载（首次访问感知提速）。两者互补：缓存头管重复访问，懒加载管首次访问的请求顺序与并发。
+
+**用户手动验收结果**（2026-08-03）：5599（qiankun demo）与 8888（独立态）加载速度持平；二次刷新图片全部命中 disk cache；加载中显示骨架占位而非"已删除"。
+
+**遗留 / 后续**（已记入 `docs/evolution/README.md` Backlog，单独立项）：
+
+- server 模式全链路分页：Companion `/storage/*/list` 目前全量返回，上服务器后需分页/增量同步，牵动 API 契约 + 前端 store + 恢复逻辑。
+- 图片库 DOM 分页/虚拟列表：与本次视口懒加载**互补不冲突**——分页管"哪些条目进 DOM"，懒加载管"进了 DOM 的条目何时拉 blob"，届时懒加载原样套用在每页条目上。
