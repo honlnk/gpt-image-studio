@@ -325,6 +325,11 @@ export async function storageRoutes(app: FastifyInstance) {
       const mimeType = meta?.mimeType ?? loaded.mimeType;
       reply.header("Content-Type", mimeType);
       reply.header("Content-Length", loaded.data.byteLength);
+      // blobKey 是每张图生成时的 UUID、内容不可变（新图 = 新 key），可安全长缓存。
+      // OSS 后端每次 load 都要从云端下载，没有缓存头时浏览器每次刷新都全量重拉
+      // （实测演示数据集 ~11MB/次，受 OSS 下行带宽限制每张 ~1s）。private 是因为
+      // 路由带鉴权且按用户数据集隔离，不允许共享缓存（CDN/代理）存储。
+      reply.header("Cache-Control", "private, max-age=31536000, immutable");
       return reply.send(loaded.data);
     },
   );

@@ -426,6 +426,10 @@ describe("图片二进制", () => {
     expect(getRes.statusCode).toBe(200);
     expect(getRes.headers["content-type"]).toBe("image/png");
     expect(getRes.body).toBe("png-bytes-data");
+    // blobKey 内容不可变 → 长缓存 + immutable；带鉴权按用户隔离 → private
+    expect(getRes.headers["cache-control"]).toBe(
+      "private, max-age=31536000, immutable",
+    );
     await app.close();
   });
 
