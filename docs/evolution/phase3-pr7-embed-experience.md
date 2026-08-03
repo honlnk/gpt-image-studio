@@ -117,7 +117,7 @@ qiankun 的 JS 沙箱**不隔离 `location`/`history`**——一个页面只有�
    ```css
    html.__embedded__ [id^="__qiankun_microapp_wrapper_for_"] { height: 100%; }
    ```
-   （sandbox:true 下子应用注入的 CSS 在全局作用域，可覆盖到 wrapper。）
+   （子应用的 bundle CSS 由 `injectEmbeddedCss` 注入宿主真实 document.head，在全局作用域，可覆盖到 wrapper——与沙箱开关无关。demo 宿主现用 `sandbox: false`，见 `examples/qiankun-host/index.html` 注释。）
 2. `main.ts` 嵌入态在 `render()` 加 `document.documentElement.classList.add('__embedded__')`，`unmount` 时 remove。
 3. `StudioShell.vue:20` 根节点条件类：嵌入态 `h-full`（撑满容器），独立态 `h-screen`（撑满视口）。
 4. 宿主容器（`examples/qiankun-host/index.html` 的 `#image-studio-container`）高度改为 `calc(100vh - <顶栏高度>)`，精确填满顶栏以下空间。

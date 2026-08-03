@@ -235,8 +235,10 @@ window.addEventListener('popstate', () => {
 });
 </script>
 
-<!-- qiankun UMD（从 CDN 加载 2.x） -->
-<script src="https://unpkg.com/qiankun@2.10.5/dist/index.umd.js"></script>
+<!-- qiankun UMD：本地 vendor（examples/qiankun-host/vendor/），不走 CDN。
+     之前用 unpkg，国内网络下阻塞式加载经常卡数秒，拖慢整个挂载流程。
+     版本仍锁 2.10.5，升级时替换 vendor 文件并同步改这里。 -->
+<script src="./vendor/qiankun-2.10.5.umd.js"></script>
 
 <script>
 (async function () {
@@ -274,7 +276,12 @@ window.addEventListener('popstate', () => {
     }
   });
 
-  qiankun.start({ sandbox: true, prefetch: false });
+  // sandbox: false——本 demo 只有一个子应用、无样式/全局冲突需要隔离，
+  // 不需要 LegacySandbox。沙箱会给子应用所有 window 全局读写套 Proxy，
+  // 对整个运行期（Vue 渲染/fetch/store）都有可观损耗，是嵌入态明显慢于
+  // 独立态（8888）的最大单一因素。真实宿主若需要隔离，可用提速沙箱
+  // { speedy: true } 替代 true（qiankun 2.x 实验特性，开销小得多）。
+  qiankun.start({ sandbox: false, prefetch: false });
 
   window._reloadSubApp = function () {
     document.getElementById('image-studio-container').innerHTML = '重新加载中...';

@@ -22,7 +22,9 @@ pnpm dev
 
 对应 `src/main.ts` 的 qiankun 生命周期导出与嵌入态逻辑（契约测试见 `src/qiankun-embed.test.ts`，部署细节见 `docs/deployment-guide.md`）。
 
-宿主是单个 `index.html`（从 CDN 加载 qiankun 2.x UMD），`registerMicroApps` 注册子应用并把 `companionUrl`/`jwt` 通过 props 注入。
+宿主是单个 `index.html`（qiankun 2.x UMD 已 vendor 到 `vendor/qiankun-2.10.5.umd.js`，本地加载不走 CDN），`registerMicroApps` 注册子应用并把 `companionUrl`/`jwt` 通过 props 注入。
+
+性能说明：`qiankun.start({ sandbox: false })`——demo 只有一个子应用、无隔离需求，关掉沙箱可避免 LegacySandbox 对子应用所有 `window` 全局读写的 Proxy 损耗（嵌入态明显慢于独立态 8888 的最大单一因素）。真实宿主若需隔离，可用提速沙箱 `{ speedy: true }`（qiankun 2.x 实验特性）。
 
 ### 启动步骤（共 4 个进程/端口）
 
