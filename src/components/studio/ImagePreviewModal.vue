@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { ImageAsset } from "../../types/studio";
+import { useImagesStore } from "../../stores/imagesStore";
 import { imageDownloadName } from "../../shared/fileFormatters";
 
 const props = defineProps<{
@@ -12,6 +13,18 @@ const emit = defineEmits<{
   close: [];
   editImage: [id: string];
 }>();
+
+const imagesStore = useImagesStore();
+
+// PR9 懒加载：预览大图兜底——打开 modal 时若 blob 未加载则触发加载，
+// 加载完成（previewUrl 出现）后自动显示图片。
+watch(
+  () => props.image?.id,
+  (id) => {
+    if (id) imagesStore.ensurePreviewLoaded(id);
+  },
+  { immediate: true },
+);
 
 const zoom = ref(1);
 const panX = ref(0);
@@ -95,7 +108,7 @@ function handleEdit() {
 <template>
   <Teleport to="body">
     <div
-      v-if="image?.previewUrl"
+      v-if="image"
       class="fixed inset-0 z-50 bg-black/85 text-white"
       role="dialog"
       aria-modal="true"
@@ -118,11 +131,22 @@ function handleEdit() {
           @dblclick="resetView"
         >
           <img
+            v-if="image.previewUrl"
             class="max-h-[calc(100vh-160px)] max-w-full rounded-lg object-contain shadow-2xl transition-transform duration-75"
             draggable="false"
             :alt="image.name"
             :src="image.previewUrl"
           />
+          <!-- PR9：blob 未加载时显示加载占位（modal 打开即触发 ensurePreviewLoaded） -->
+          <div
+            v-else
+            class="flex h-64 w-96 flex-col items-center justify-center gap-2 rounded-lg bg-white/10"
+          >
+            <span
+              class="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white"
+            ></span>
+            <span class="text-sm text-white/70">加载中…</span>
+          </div>
           <div
             v-if="maskUrl"
             class="absolute inset-0 rounded-lg bg-black/60"
@@ -163,6 +187,7 @@ function handleEdit() {
             编辑
           </button>
           <a
+            v-if="image.previewUrl"
             class="rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-white/15"
             title="下载"
             :download="imageDownloadName(image)"

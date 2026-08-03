@@ -25,7 +25,8 @@ type UseStudioRestoreInput = {
   applySettings: (settings: AppSettings) => void;
   attachedImages: Ref<string[]>;
   conversations: Ref<Conversation[]>;
-  hydrateImagePreviews: (assets: ImageAsset[]) => Promise<ImageAsset[]>;
+  /** PR9：hydrate 只装配 metadata（同步返回），blob 由 imagesStore 懒加载队列补齐。 */
+  hydrateImagePreviews: (assets: ImageAsset[]) => ImageAsset[];
   imageAssets: Ref<ImageAsset[]>;
   isHydrated: Ref<boolean>;
   messages: Ref<Message[]>;
@@ -112,7 +113,9 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
       input.messages.value = normalizedMessages;
       await persistNormalizedMessages(restoredMessages, normalizedMessages);
 
-      input.imageAssets.value = await input.hydrateImagePreviews(restoredImages);
+      // PR9：hydrate 只装配 metadata（同步），blob 由懒加载队列后台补齐——
+      // imageAssets 立即赋值，UI 先渲染，图片逐张出现。
+      input.imageAssets.value = input.hydrateImagePreviews(restoredImages);
       input.attachedImages.value = input.attachedImages.value.filter((id) =>
         restoredImages.some((image) => image.id === id),
       );

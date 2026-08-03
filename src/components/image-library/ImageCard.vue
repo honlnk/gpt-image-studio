@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { formatRelativeTime } from "../../shared/dateTime";
+import { useImagesStore } from "../../stores/imagesStore";
 import type { ImageAsset } from "../../types/studio";
 import {
   imageDownloadName,
@@ -20,6 +21,33 @@ const emit = defineEmits<{
   previewImage: [id: string];
   selectImage: [id: string];
 }>();
+
+const imagesStore = useImagesStore();
+
+// PR9 懒加载：缩略图进入视口（含 200px 预取边距）才请求 blob。
+// 每张卡片自观察——图片库是 overflow 滚动容器，root=null（视口）即可正确触发，
+// 且对过滤/切换导致的列表重建天然健壮。
+const thumbRef = ref<HTMLElement | null>(null);
+let observer: IntersectionObserver | null = null;
+
+onMounted(() => {
+  if (props.image.previewUrl || !props.image.blobKey) return;
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      imagesStore.ensurePreviewLoaded(props.image.id);
+      observer?.disconnect();
+      observer = null;
+    },
+    { rootMargin: "200px" },
+  );
+  if (thumbRef.value) observer.observe(thumbRef.value);
+});
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  observer = null;
+});
 
 const createdAtLabel = computed(() =>
   formatRelativeTime(props.image.createdAt, props.nowMs),
@@ -59,6 +87,7 @@ const titleStyle = computed(() => {
     @click="emit('selectImage', image.id)"
   >
     <div
+      ref="thumbRef"
       class="group relative flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400"
       @click.stop="image.previewUrl && emit('previewImage', image.id)"
     >
@@ -68,6 +97,20 @@ const titleStyle = computed(() => {
         :alt="image.name"
         :src="image.previewUrl"
       />
+      <!-- PR9 三态：加载失败可重试 / 加载中转圈 / idle（进入视口即触发加载） -->
+      <button
+        v-else-if="imagesStore.isPreviewError(image.id)"
+        class="h-full w-full cursor-pointer rounded-lg text-gray-400 hover:bg-gray-200"
+        type="button"
+        title="加载失败，点击重试"
+        @click.stop="imagesStore.ensurePreviewLoaded(image.id)"
+      >
+        !
+      </button>
+      <span
+        v-else-if="imagesStore.isPreviewLoading(image.id)"
+        class="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500"
+      ></span>
       <span v-else>img</span>
       <button
         v-if="image.previewUrl"
