@@ -1,6 +1,6 @@
 {
   "name": "@honlnk/image-studio-companion",
-  "version": "0.6.1",
+  "version": "1.0.0",
   "description": "Local CLI companion for GPT Image Studio image API credential proxying.",
   "type": "module",
   "bin": {
@@ -12,6 +12,9 @@
     "LICENSE"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/honlnk/gpt-image-studio.git",

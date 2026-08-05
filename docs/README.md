@@ -8,17 +8,19 @@
 - [产品路线图](roadmap.md)：产品方向和阶段性功能规划。
 - [架构演进路线图](evolution-roadmap.md)：从单体 Web 演进到可后端化 / 可嵌入 / 可独立 APP 的四阶段纲领，与业务功能 roadmap 正交。
 - [本地 CLI Companion](companion.md)：本地伴侣的设计、协议、安全要求和分阶段计划。
-- [Companion 多 Provider 翻译层](companion-providers-plan.md)：在不改 Web 的前提下，让 companion 内部翻译层支持 GLM 等国产图像 API 的开发方案。已接 GLM-Image、豆包 Seedream、Qwen-Image、通义万相 Wan。
+- [Companion 多 Provider 翻译层](companion-providers-plan.md)：在不改 Web 的前提下，让 companion 内部翻译层支持 GLM 等国产图像 API 的开发方案。已接 OpenAI、GLM-Image、豆包 Seedream、Qwen-Image、通义万相 Wan、Grok、Gemini、Gemini-OpenAI、DeepInfra 共 9 个 Provider。
 - [Companion 豆包 Provider 方案](companion-doubao-plan.md)：豆包（火山方舟 Seedream）adapter 的独立设计方案。文生图 + 图生图都做；核心是 size 总像素下限（minPixels）要反向增强 web 通用尺寸逻辑。
 - [Companion 多模型适配层审查](companion-provider-adapter-review.md)：当前 Provider Adapter 架构、已接受的安全决策、已完成整改、剩余风险和建议整改顺序。
 - [各 Provider 参考图上传限制](provider-reference-image-limits.md)：各图像生成 Provider 对参考图的数量、大小和格式限制，基于官方文档整理。
 - [阶段一测试清单](phase1-test-checklist.md)：翻译层骨架 + 能力驱动 UI 的手动验证步骤（含重启 companion 这个坑）。
 - [遮罩局部编辑](mask-editing.md)：基于本地遮罩绘制的图片局部编辑方案。
-- [提示词模式开发计划](prompt-modes.md)：安全、创意、成人三级提示词模式的设计和实现计划。
+- [提示词模式开发计划](prompt-modes.md)：默认、安全、创意、开放四档提示词模式的设计和实现计划。
 - [Responses API 与流式图片预览开发方案](responses-streaming-plan.md)：浏览器直连模式下接入 `Responses API` 与流式图片预览的设计和实施计划。
 - [备份格式](backup-format.md)：当前备份 ZIP 结构和恢复行为。
 - [桌面端打包方案](desktop-packaging.md)：Tauri v2 集成、构建命令和后续路线。
-- [用户行为日志计划](analytics-event-logging-plan.md)：后续本地行为日志系统方案。
+- [部署指南](deployment-guide.md)：Companion server 模式部署、Docker 编排、JWT 多租户配置。
+- [发布指南](release-guide.md)：npm 包与 Docker 镜像（ghcr.io + Docker Hub）的 tag 驱动发布流程。
+- [用户行为日志计划](analytics-event-logging-plan.md)：本地行为日志系统方案（V1 已完成）。
 
 ## 架构决策
 

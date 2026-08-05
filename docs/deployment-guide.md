@@ -78,10 +78,13 @@ pnpm dev    # Vite dev server，http://127.0.0.1:8888
 ```yaml
 services:
   companion:
-    build:
-      context: .
-      target: companion
-    # 或用预构建镜像：image: honlnk/gpt-image-studio-companion:latest
+    # 推荐用预构建镜像（免本地构建）：
+    image: ghcr.io/honlnk/gpt-image-studio-companion:latest
+    # Docker Hub 同步镜像：docker.io/honlnk/gpt-image-studio-companion:latest
+    # 如需改源码后本地构建，注释掉上面的 image，改用下面的 build：
+    # build:
+    #   context: .
+    #   target: companion
     container_name: gpt-image-studio-companion
     ports:
       - "19750:19750"
@@ -234,10 +237,15 @@ server {
 适用于内网/对 CDN 不信任的场景。
 
 ```bash
-# 构建 Web 镜像
-docker build --target web -t gpt-image-studio-web:latest .
+# 拉预构建镜像（推荐）：
+docker pull ghcr.io/honlnk/gpt-image-studio-web:latest
+# Docker Hub 同步镜像：docker pull honlnk/gpt-image-studio-web:latest
 
 # 运行（nginx 静态托管）
+docker run -d -p 8080:80 ghcr.io/honlnk/gpt-image-studio-web:latest
+
+# 或从源码构建：
+docker build --target web -t gpt-image-studio-web:latest .
 docker run -d -p 8080:80 gpt-image-studio-web:latest
 ```
 

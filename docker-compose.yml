@@ -7,13 +7,18 @@
 # Optional `companion` profile: runs the Companion backend as a sidecar.
 # Companion 现已支持可配置监听地址（阶段三 PR1），可绑定 0.0.0.0 供容器外访问。
 # 启用方式：docker compose --profile companion up
+#
+# 镜像源：image 字段已指向 registry 全名（ghcr.io / docker.io）。
+# 首次运行前先 `docker compose pull` 拉预构建镜像；
+# 如需本地改代码重新构建，保留 `build:` 字段并执行 `docker compose build`。
 
 services:
   web:
-    build:
-      context: .
-      target: web
-    image: gpt-image-studio:latest
+    image: ghcr.io/honlnk/gpt-image-studio-web:latest
+    # 如需从源码构建（修改前端后），取消下行注释：
+    # build:
+    #   context: .
+    #   target: web
     container_name: gpt-image-studio-web
     ports:
       - "8080:80"
@@ -27,10 +32,11 @@ services:
   # --- Optional companion backend (enable with --profile companion) ---
   companion:
     profiles: ["companion"]
-    build:
-      context: .
-      target: companion
-    image: gpt-image-studio-companion:latest
+    image: ghcr.io/honlnk/gpt-image-studio-companion:latest
+    # 如需从源码构建（修改 companion 后），取消下行注释：
+    # build:
+    #   context: .
+    #   target: companion
     container_name: gpt-image-studio-companion
     ports:
       - "19750:19750"
@@ -51,10 +57,11 @@ services:
   # 需要环境变量：JWT_SECRET（与宿主共享）、ADMIN_API_KEY（平台级管理密钥）。
   companion-server:
     profiles: ["companion-server"]
-    build:
-      context: .
-      target: companion
-    image: gpt-image-studio-companion:server
+    image: ghcr.io/honlnk/gpt-image-studio-companion:latest
+    # 如需从源码构建，取消下行注释：
+    # build:
+    #   context: .
+    #   target: companion
     container_name: gpt-image-studio-companion-server
     ports:
       - "19751:19751"
