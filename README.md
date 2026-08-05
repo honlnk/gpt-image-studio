@@ -1,14 +1,77 @@
 # GPT Image Studio
 
+[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen)](https://github.com/honlnk/gpt-image-studio/releases)
+[![npm](https://img.shields.io/npm/v/@honlnk/image-studio-companion?label=companion%20npm)](https://www.npmjs.com/package/@honlnk/image-studio-companion)
 [![Deploy](https://github.com/honlnk/gpt-image-studio/actions/workflows/deploy.yml/badge.svg)](https://github.com/honlnk/gpt-image-studio/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Vue 3](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
 > 🔗 **在线体验**：<a href="https://image.honlnk.com" target="_blank">image.honlnk.com</a>
 
-本地优先的 AI 图片创作工作台。通过聊天式界面调用 OpenAI 兼容 Images API，生成和编辑图片。所有数据保存在浏览器本地，无需后端服务。
+本地优先的 AI 图片创作工作台。通过聊天式界面调用 OpenAI 兼容 Images API，生成和编辑图片。数据本地存储，无需后端即可使用；需要保护 API 凭据或多人共用时，可接入本地 Companion 或部署为服务器模式。
+
+## 快速开始
+
+选择最适合你的使用方式：
+
+| 方式 | 适合场景 | 一句话说明 |
+|------|----------|------------|
+| **[在线版](https://image.honlnk.com)** | 个人快速体验 | 直接打开浏览器用，填入自己的 API 地址和密钥 |
+| **本地 Companion** | 不想暴露 API Key 给浏览器 | 装个 CLI 服务，凭据留在本机 |
+| **Docker 自部署** | 内网 / 私有化 / 服务器多租户 | docker compose 一键拉起前端 + 后端 |
+| **桌面端** | 想要原生 App 体验 | macOS 原生壳（Tauri v2） |
+
+### 方式一：在线直接用
+
+打开 [image.honlnk.com](https://image.honlnk.com)，在设置中填入你的 OpenAI 兼容 Images API 地址和密钥即可。所有数据保存在浏览器本地。
+
+### 方式二：本地 Companion
+
+凭据不经过浏览器，适合不想在前端暴露 API Key 的场景：
+
+```bash
+npm install -g @honlnk/image-studio-companion
+gpt-image-studio provider add    # 交互式添加 Provider 凭据
+gpt-image-studio start           # 启动后台服务
+gpt-image-studio status          # 查看连接密钥（access key）
+```
+
+然后在网页设置中切换到「本地 Companion」，粘贴终端中 `status` 显示的连接密钥完成连接。
+
+### 方式三：Docker 自部署
+
+```bash
+# 拉预构建镜像并启动（默认仅前端）
+docker compose pull
+docker compose up -d
+# → http://localhost:8080
+
+# 带 Companion 后端（local 模式）
+docker compose --profile companion up -d
+
+# 服务器模式（JWT 多租户，配合 qiankun 嵌入）
+JWT_SECRET=xxx ADMIN_API_KEY=xxx docker compose --profile companion-server up -d
+```
+
+镜像已发布到 ghcr.io 和 Docker Hub：
+
+| 镜像 | 地址 |
+|------|------|
+| 前端 (web) | `ghcr.io/honlnk/gpt-image-studio-web:latest` / `honlnk/gpt-image-studio-web:latest` |
+| Companion | `ghcr.io/honlnk/gpt-image-studio-companion:latest` / `honlnk/gpt-image-studio-companion:latest` |
+
+详见 [部署指南](docs/deployment-guide.md)。
+
+### 方式四：桌面端
+
+```bash
+pnpm dev:desktop      # 开发模式
+pnpm build:desktop    # 构建 .app / .dmg（macOS，需 Rust）
+```
+
+详见 [桌面端打包方案](docs/desktop-packaging.md)。
 
 ## 功能特性
 
@@ -37,17 +100,20 @@
 - 存储用量可视化
 
 **数据安全**
-- 本地优先：所有数据存储在浏览器 IndexedDB
+- 本地优先：所有数据存储在浏览器 IndexedDB（直连模式）或 Companion 后端（Companion 模式）
 - 完整备份导出/恢复（ZIP 格式）
 - API key 不写入备份文件
-- 支持本地 Companion 模式，凭据不经过浏览器
+- Companion 模式凭据不经过浏览器
 
 ## 连接模式
 
-| 模式 | 说明 |
-|------|------|
-| 浏览器直连 | 配置 API Base URL 和 API key，浏览器直接调用接口 |
-| 本地 Companion | 安装本地 CLI 服务，凭据保存在本机，浏览器只与 localhost 通信 |
+| 模式 | 凭据存储 | 适合场景 |
+|------|----------|----------|
+| **浏览器直连** | 浏览器本地 | 个人快速使用，信任前端 |
+| **本地 Companion** | 本机文件（loopback） | 不想暴露 API Key 给浏览器，单机使用 |
+| **服务器模式 (Companion server)** | 服务器 + JWT 多租户 | 多人共用 / 私有化部署 / 嵌入宿主系统 |
+
+服务器模式支持 JWT 认证的多用户数据隔离、qiankun 微前端嵌入、平台级凭据管理 API，详见 [部署指南](docs/deployment-guide.md)。
 
 ## 提示词模式
 
@@ -58,158 +124,139 @@
 | 默认 | 不追加任何模式指令，保持当前逻辑 |
 | 安全 | 使用安全提示词方向，只抽取 safe 词库 |
 | 创意 | 使用 safe + creative 词库，强化性感氛围和画面张力 |
-| 开放 | 使用 safe + creative + nsfw 词库，适合支持成人内容的模型或接口 |
+| 开放 | 使用 safe + creative + adultInspiration 词库，适合支持成人内容的模型或接口 |
 
 提示词模式不会改写聊天记录里的原始输入，只改变最终发送给图片接口的请求文本。是否能生成对应内容仍取决于当前模型和接口本身的能力与限制。
 
 ## 页面嵌入
 
-可以将完整工作台作为 iframe 嵌入到其他页面，并通过 URL 参数预填浏览器直连配置和默认生成参数：
+支持两种嵌入方式，将完整工作台集成到你的系统中：
 
-使用 `settings` JSON 传入完整配置：
+### iframe 嵌入
 
-```html
-<iframe
-  id="imageStudioFrame"
-  allow="clipboard-read; clipboard-write"
-></iframe>
-
-<script>
-  const settings = {
-    apiUrl: "https://api.example.com",
-    apiKey: "sk-xxx",
-    apiMode: "images",
-    streamImages: false,
-    streamPartialImages: 1,
-    prompt: "生成一张白底商品主图",
-    size: "1:1",
-    background: "opaque",
-    outputFormat: "png",
-  };
-
-  document.querySelector("#imageStudioFrame").src =
-    `https://image.honlnk.com?settings=${encodeURIComponent(JSON.stringify(settings))}`;
-</script>
-```
-
-也可以直接使用普通查询参数：
+通过 URL 参数预填浏览器直连配置和默认生成参数：
 
 ```html
 <iframe
-  src="https://image.honlnk.com?apiUrl=https://api.example.com&apiKey=sk-xxx&apiMode=images&streamImages=false&streamPartialImages=1&prompt=生成一张白底商品主图&size=1:1&background=opaque&outputFormat=png"
+  src="https://image.honlnk.com?settings=%7B%22apiUrl%22%3A%22https%3A%2F%2Fapi.example.com%22%2C%22apiKey%22%3A%22sk-xxx%22%7D"
   allow="clipboard-read; clipboard-write"
 ></iframe>
 ```
 
-`settings` 和普通查询参数可以同时存在；同时存在时，普通查询参数会覆盖 `settings` 中的同名配置。
+也支持普通查询参数（`?apiUrl=...&apiKey=...&prompt=...`），详见下方参数列表。
 
-支持的参数：
+### qiankun 微前端
 
-- `settings`：URL 编码后的 JSON 配置。可包含下方所有参数；如果 `settings` 与独立参数同时存在，以独立参数为准
-- `apiUrl` 或 `apiBaseUrl`：API Base URL
-- `apiKey`：API key
-- `apiBaseUrlMode=full`：将 `apiUrl` / `apiBaseUrl` 视为完整 API Base URL；默认会将其视为站点根地址并自动追加 `/v1/images`
-- `apiMode`：接口模式，支持 `images`、`responses`
-- `streamImages`：是否开启流式预览，支持 `1` / `0`、`true` / `false`
-- `streamPartialImages`：请求的中间图数量，支持 `0`、`1`、`2`、`3`
-- `prompt`：预填输入框内容，不会自动提交
-- `size`：默认尺寸，支持 `auto`、`1:1`、`16:9`、`9:16`、`custom` 等
-- `resolution`：默认分辨率，支持 `1k`、`2k`、`4k`
-- `width` / `height`：自定义尺寸，通常与 `size=custom` 配合使用
-- `background`：默认背景，支持 `auto`、`opaque`、`transparent`
-- `outputFormat`：默认输出格式，支持 `png`、`webp`、`jpeg`
-- `promptRewriteGuard` 或 `promptRewriteGuardEnabled`：是否启用提示词防改写，支持 `1` / `0`、`true` / `false`
-- `promptRewriteGuardText`：自定义提示词防改写前缀
+适合需要与宿主系统深度集成的场景（宿主签发 JWT、管理用户、平台级凭据）：
 
-当前版本固定使用 `gpt-image-2`，不开放通过 iframe URL 自定义模型。即使外部传入 `model` 参数，运行时也会被忽略。
-
-页面读取这些参数后会保存设置类配置，并从地址栏清除已识别的配置参数，保留其他查询参数。`prompt` 只会写入当前输入框草稿。
-
-本仓库提供了一个本地测试页，可用于验证 iframe 嵌入效果：
-
-```bash
-pnpm dev
+```ts
+// 宿主侧注册
+registerMicroApps([{
+  name: 'gpt-image-studio',
+  entry: 'https://image.honlnk.com',
+  container: '#container',
+  activeRule: '/image-studio',
+  props: {
+    companionUrl: 'https://companion.your-domain.com',
+    jwt: getCurrentUserJwt(),  // 宿主签发
+  },
+}])
 ```
 
-然后在浏览器打开 `http://127.0.0.1:8888/examples/iframe-embed/`。测试页左侧会显示平台地址、API URL、API Key、接口模式、流式预览等输入项；右侧 iframe 默认加载 `http://127.0.0.1:8888/`。如果需要测试线上站点，可以在测试页左侧把平台地址改成 `https://image.honlnk.com`，并确认线上版本已经部署了 URL 参数支持。
+完整嵌入示例（含宿主管理页）见 `examples/` 目录，部署细节见 [部署指南](docs/deployment-guide.md)。
 
-跨站 iframe 中的 IndexedDB 可能被浏览器按顶层站点分区，因此测试页里看到的会话和图片数据可能不同于直接打开平台时的数据。
+### 嵌入参数（iframe）
 
-更多嵌入方案示例（含 qiankun 微前端宿主）见 `examples/` 目录。
+| 参数 | 说明 |
+|------|------|
+| `settings` | URL 编码后的 JSON，可包含下方所有参数 |
+| `apiUrl` / `apiBaseUrl` | API Base URL |
+| `apiKey` | API key |
+| `apiBaseUrlMode=full` | 将 apiUrl 视为完整地址，不自动追加 `/v1/images` |
+| `apiMode` | 接口模式：`images` / `responses` |
+| `streamImages` | 是否开启流式预览：`1`/`0`、`true`/`false` |
+| `streamPartialImages` | 中间图数量：`0`-`3` |
+| `prompt` | 预填输入框（不自动提交） |
+| `size` | 尺寸：`auto`、`1:1`、`16:9`、`9:16`、`custom` |
+| `resolution` | 分辨率：`1k`、`2k`、`4k` |
+| `width` / `height` | 自定义尺寸（配合 `size=custom`） |
+| `background` | 背景：`auto`、`opaque`、`transparent` |
+| `outputFormat` | 输出格式：`png`、`webp`、`jpeg` |
+| `promptRewriteGuard` | 启用提示词防改写：`1`/`0` |
+| `promptRewriteGuardText` | 自定义防改写前缀 |
 
-### 本地 Companion 快速开始
-
-```bash
-npm install -g @honlnk/image-studio-companion
-gpt-image-studio login
-gpt-image-studio start
-```
-
-然后在网页设置中切换到「本地 Companion」，点击配对并输入终端中显示的 6 位配对码。
+页面读取参数后会保存设置并从地址栏清除已识别的配置参数。当前版本固定使用 `gpt-image-2`，不开放通过 URL 自定义模型。
 
 ## 技术栈
 
 - Vue 3 (Composition API, `<script setup>`)
-- TypeScript
+- TypeScript 6
 - Pinia 状态管理
 - Tailwind CSS v4
 - Vite
-- IndexedDB 持久化
+- IndexedDB 持久化（直连模式）/ SQLite + OSS（Companion 模式）
 - pnpm workspace monorepo
+- Companion: Fastify + Commander（Node ≥ 20）
 
-## 快速开始
+## 开发
 
 ```bash
 pnpm install
-pnpm dev              # 启动 Web App (http://127.0.0.1:8888)
+pnpm dev              # Web App (http://127.0.0.1:8888)
+pnpm dev:companion    # Companion (http://127.0.0.1:19750)
+pnpm test             # 全量测试
+pnpm typecheck        # 类型检查
+pnpm build            # 生产构建 → dist/
 ```
 
-启动本地 Companion（可选）：
+桌面端开发（需 [Rust](docs/desktop-packaging.md#前置依赖)）：
 
 ```bash
-pnpm dev:companion    # 启动 Companion 服务 (http://127.0.0.1:19750)
+pnpm dev:desktop      # webview + 热重载
+pnpm build:desktop    # .app / .dmg (macOS)
 ```
-
-## 构建
-
-```bash
-pnpm build            # 生产构建到 dist/
-pnpm preview          # 预览生产构建
-```
-
-桌面端（Tauri v2，需要 [Rust toolchain](docs/desktop-packaging.md#前置依赖)）：
-
-```bash
-pnpm dev:desktop      # 开发模式：启动 webview + 热重载
-pnpm build:desktop    # 生产构建：产出 .app / .dmg（macOS）
-```
-
-桌面端目前只打包 Web App 本身，Companion 仍为外部独立服务，详见 [桌面端打包方案](docs/desktop-packaging.md)。
 
 ## 项目结构
 
 ```
 gpt-image-studio/
 ├── src/                    # Web App 源码
-├── companion/              # 本地 CLI Companion (Fastify + Commander)
-├── desktop/                # Tauri v2 桌面壳 (仅 Rust 工程骨架，消费现有 dist/)
-└── docs/                   # 项目文档
+├── companion/              # CLI Companion (Fastify + Commander)
+├── desktop/                # Tauri v2 桌面壳
+├── examples/               # 嵌入示例（iframe / qiankun）
+├── docs/                   # 项目文档
+└── .github/workflows/      # CI（Pages 部署 + npm/Docker 发布）
 ```
 
 ## 文档
 
 - [架构说明](docs/architecture.md)
+- [部署指南](docs/deployment-guide.md) — Docker、服务器模式、nginx、qiankun 嵌入
+- [发布指南](docs/release-guide.md) — npm 与 Docker 镜像的 tag 驱动发布流程
 - [产品路线图](docs/roadmap.md)
 - [桌面端打包方案](docs/desktop-packaging.md)
 - [本地 Companion 方案](docs/companion.md)
 - [遮罩编辑](docs/mask-editing.md)
-- [提示词模式开发计划](docs/prompt-modes.md)
+- [提示词模式](docs/prompt-modes.md)
 - [备份格式](docs/backup-format.md)
 - [文档索引](docs/README.md)
 
+## 发布
+
+本项目通过 git tag 驱动自动化发布（详见 [发布指南](docs/release-guide.md)）：
+
+```bash
+# 改 companion/package.json version → 提交 → 打 tag → 推送
+git tag companion-v1.1.0
+git push origin companion-v1.1.0
+# CI 自动：npm publish + Docker 镜像构建推送（ghcr.io + Docker Hub）
+```
+
 ## 注意事项
 
-API key 保存在当前浏览器本地 IndexedDB，适合个人设备使用。浏览器直连模式下，部分接口可能被 CORS 拦截，建议使用支持 CORS 的中转站或切换到本地 Companion 模式。
+- 浏览器直连模式下，部分接口可能被 CORS 拦截，建议使用支持 CORS 的中转站或切换到 Companion 模式。
+- API key 保存在浏览器本地 IndexedDB（直连模式），适合个人设备使用。
+- 服务器模式部署请妥善保管 `JWT_SECRET` 和 `ADMIN_API_KEY`。
 
 ## License
 
