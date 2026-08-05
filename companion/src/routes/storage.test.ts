@@ -570,3 +570,155 @@ describe("容量估算", () => {
     await app.close();
   });
 });
+
+describe("分页查询（server 模式分页 PR-a）", () => {
+  /** 造 n 条消息（createdAt 逐分钟递增，conversationId 可指定）。 */
+  async function seedMessages(
+    app: FastifyInstance,
+    n: number,
+    conversationId = "c1",
+    keyPrefix = "m",
+  ): Promise<void> {
+    for (let i = 0; i < n; i++) {
+      const key = `${keyPrefix}${String(i).padStart(3, "0")}`;
+      await app.inject(
+        auth(`/storage/messages/${key}`, {
+          method: "PUT",
+          payload: {
+            id: key,
+            conversationId,
+            createdAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+          },
+        }),
+      );
+    }
+  }
+
+  it("无 query 参数：保持旧契约全量返回 { data }（无 nextCursor/total）", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    await seedMessages(app, 3);
+    const res = await app.inject(auth("/storage/messages"));
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data).toHaveLength(3);
+    expect(body).not.toHaveProperty("nextCursor");
+    expect(body).not.toHaveProperty("total");
+    await app.close();
+  });
+
+  it("?limit= 分页返回 { data, nextCursor, total }，DESC 序", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    await seedMessages(app, 3);
+    const res = await app.inject(auth("/storage/messages?limit=2"));
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.map((m: { id: string }) => m.id)).toEqual(["m002", "m001"]);
+    expect(typeof body.nextCursor).toBe("string");
+    expect(body.total).toBe(3);
+    await app.close();
+  });
+
+  it("nextCursor 翻页：第二页取到剩余记录且 nextCursor=null", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    await seedMessages(app, 3);
+    const page1 = (await app.inject(auth("/storage/messages?limit=2"))).json();
+    const res2 = await app.inject(
+      auth(`/storage/messages?limit=2&before=${encodeURIComponent(page1.nextCursor)}`),
+    );
+    const page2 = res2.json();
+    expect(page2.data.map((m: { id: string }) => m.id)).toEqual(["m000"]);
+    expect(page2.nextCursor).toBeNull();
+    expect(page2.total).toBe(3);
+    await app.close();
+  });
+
+  it("conversationId 过滤：只回该会话消息，total 只算过滤后", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    await seedMessages(app, 3, "c1", "a");
+    await seedMessages(app, 2, "c2", "b");
+    const res = await app.inject(auth("/storage/messages?conversationId=c1&limit=10"));
+    const body = res.json();
+    expect(body.data).toHaveLength(3);
+    expect(
+      body.data.every((m: { conversationId: string }) => m.conversationId === "c1"),
+    ).toBe(true);
+    expect(body.total).toBe(3);
+    await app.close();
+  });
+
+  it("只有 conversationId 没有 limit：走分页模式（默认页大小），不是全量", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    await seedMessages(app, 3);
+    const res = await app.inject(auth("/storage/messages?conversationId=c1"));
+    const body = res.json();
+    expect(body.data).toHaveLength(3);
+    expect(body).toHaveProperty("nextCursor", null);
+    expect(body).toHaveProperty("total", 3);
+    await app.close();
+  });
+
+  it("limit 非法（0 / 超上限 / 非数字）返回 400", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    for (const bad of ["0", "-1", "201", "abc"]) {
+      const res = await app.inject(auth(`/storage/messages?limit=${bad}`));
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe("STORAGE_INVALID_QUERY");
+    }
+    await app.close();
+  });
+
+  it("before 是非法游标返回 400", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    const res = await app.inject(auth("/storage/messages?limit=10&before=garbage"));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("STORAGE_INVALID_CURSOR");
+    await app.close();
+  });
+
+  it("不支持分页的表（settings）传 limit 返回 400", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    const res = await app.inject(auth("/storage/settings?limit=10"));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("STORAGE_INVALID_QUERY");
+    await app.close();
+  });
+
+  it("conversations 传 conversationId 返回 400", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    const res = await app.inject(auth("/storage/conversations?conversationId=c1"));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("STORAGE_INVALID_QUERY");
+    await app.close();
+  });
+
+  it("imageAssets 支持 conversationId 过滤 + createdAt DESC 分页", async () => {
+    const app = await makeApp();
+    await activateDefault(app);
+    for (let i = 0; i < 3; i++) {
+      await app.inject(
+        auth(`/storage/imageAssets/img${i}`, {
+          method: "PUT",
+          payload: {
+            id: `img${i}`,
+            conversationId: i === 2 ? "c2" : "c1",
+            createdAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+          },
+        }),
+      );
+    }
+    const res = await app.inject(auth("/storage/imageAssets?conversationId=c1&limit=10"));
+    const body = res.json();
+    expect(body.data.map((a: { id: string }) => a.id)).toEqual(["img1", "img0"]);
+    expect(body.total).toBe(2);
+    await app.close();
+  });
+});

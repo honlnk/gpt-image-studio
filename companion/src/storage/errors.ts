@@ -37,5 +37,9 @@ export type StorageErrorCode =
   | "STORAGE_DATASET_NOT_FOUND"
   /** 配置指纹冲突（理论不应发生，UNIQUE 约束兜底）。 */
   | "STORAGE_FINGERPRINT_CONFLICT"
+  /** 分页查询参数不合法（表不支持分页/过滤组合、limit 越界）。 */
+  | "STORAGE_INVALID_QUERY"
+  /** 分页游标无法解码（非本服务产出的 opaque cursor）。 */
+  | "STORAGE_INVALID_CURSOR"
   /** 兜底。 */
   | "STORAGE_UNKNOWN";

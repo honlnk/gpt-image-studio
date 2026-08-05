@@ -12,6 +12,8 @@ import {
   deleteRecord,
   estimateMetadataBytes,
   getRecord,
+  LIST_PAGE_DEFAULT_LIMIT,
+  listPage,
   listTable,
   putRecord,
   closeAllBusinessDbs,
@@ -48,7 +50,10 @@ import type {
 export function handleStorageStoreError(error: unknown, reply: FastifyReply): boolean {
   if (error instanceof StorageStoreError) {
     const status =
-      error.code === "STORAGE_INVALID_TABLE" || error.code === "STORAGE_INVALID_KEY"
+      error.code === "STORAGE_INVALID_TABLE" ||
+      error.code === "STORAGE_INVALID_KEY" ||
+      error.code === "STORAGE_INVALID_QUERY" ||
+      error.code === "STORAGE_INVALID_CURSOR"
         ? 400
         : 500;
     reply.status(status).send({ error: error.message, code: error.code });
@@ -165,7 +170,14 @@ export async function storageRoutes(app: FastifyInstance) {
 
   // ─── 业务表 CRUD ───
 
-  app.get<{ Params: { table: string } }>(
+  // GET /storage/:table 支持两种模式：
+  // - 无 query 参数：全量返回 { data }（旧契约，宿主 demo / 备份导出等消费方依赖，保持不动）
+  // - 带 conversationId / before / limit 任一参数：分页返回 { data, nextCursor, total }
+  //   （server 模式全链路分页 PR-a，契约见 docs/evolution/backlog-server-pagination.md §3.2）
+  app.get<{
+    Params: { table: string };
+    Querystring: { conversationId?: string; before?: string; limit?: string };
+  }>(
     "/storage/:table",
     async (req, reply) => {
       if (!isBusinessTable(req.params.table)) {
@@ -173,8 +185,18 @@ export async function storageRoutes(app: FastifyInstance) {
       }
       const active = await requireActive(req, reply);
       if (!active) return;
+      const { conversationId, before, limit } = req.query;
       try {
-        return { data: listTable(active.dbPath, req.params.table) };
+        if (conversationId === undefined && before === undefined && limit === undefined) {
+          return { data: listTable(active.dbPath, req.params.table) };
+        }
+        // limit 缺省 50；非法值（非整数/越界/NaN）由 listPage 抛 INVALID_QUERY → 400
+        const pageLimit = limit === undefined ? LIST_PAGE_DEFAULT_LIMIT : Number(limit);
+        return listPage(active.dbPath, req.params.table, {
+          conversationId,
+          before,
+          limit: pageLimit,
+        });
       } catch (error) {
         if (handleStorageStoreError(error, reply)) return;
         throw error;

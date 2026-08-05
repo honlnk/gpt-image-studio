@@ -23,7 +23,7 @@
 | POST | `/storage/datasets/activate` | 切换/创建数据集（body: storageKind/storageConfig/imageStoreKind） |
 | DELETE | `/storage/datasets/:id` | 删除数据集（级联删 db 文件） |
 | PATCH | `/storage/datasets/:id` | 重命名数据集（body: label） |
-| GET | `/storage/:table` | 列出某表全部记录 |
+| GET | `/storage/:table` | 列出某表全部记录；带分页参数时翻页返回（见下「分页契约」） |
 | GET | `/storage/:table/:key` | 取单条 |
 | PUT | `/storage/:table/:key` | upsert（body: value） |
 | DELETE | `/storage/:table/:key` | 删单条 |
@@ -45,6 +45,20 @@
 - 图片下载：`reply.header("Content-Type", mimeType).send(buffer)`。
 - 配置读写：value 是 JSON body（任意类型）。
 - 容量估算：`{ imageBytes, metadataBytes }`，metadataBytes 从业务 db 各表 SUM(length(value)) 算，imageBytes 从 imageStore.estimateBytes() 算。
+
+### 分页契约（2026-08-03 追加，server 模式分页 PR-a）
+
+`GET /storage/:table` 支持两种模式，按 query 参数是否存在分流：
+
+- **无 `conversationId` / `before` / `limit` 任一参数**：保持上方旧契约，全量返回 `{ data: T[] }`（不保证顺序，调用方自己排）。宿主 demo、备份导出等既有消费方不受影响。
+- **带任一上述参数**：分页模式，返回 `{ data: T[], nextCursor: string | null, total: number }`：
+  - `limit`：页大小，1..200 整数，缺省 50；非法值 → 400 `STORAGE_INVALID_QUERY`。
+  - `before`：上一页返回的 `nextCursor`（opaque，base64url(JSON([排序值, key]))，只允许原样回传）；取"比游标更早"的一页。无法解析 → 400 `STORAGE_INVALID_CURSOR`。
+  - `conversationId`：按会话过滤，仅 `messages` / `imageAssets` 支持；传给其它表 → 400 `STORAGE_INVALID_QUERY`。
+  - `data` 排序统一为排序字段 **DESC**（最新在前）：`conversations` 按 `updatedAt`，`messages` / `imageAssets` 按 `createdAt`（ISO 字符串，字典序=时间序）。客户端要正序展示（如聊天记录）时自行 reverse。
+  - `total`：满足过滤条件的总条数，不受 `before`/`limit` 影响，供"共 N 条"计数。
+  - 可分页的表：`conversations` / `messages` / `imageAssets`；其它表传分页参数 → 400 `STORAGE_INVALID_QUERY`。
+- SQL 实现：真实派生列 + B-tree 索引（业务 db schema v2：`updated_at`/`created_at`/`conversation_id`，`value` JSON 仍是数据真相源，列是写入时派生的查询材料；v1 旧库打开时自动 ALTER 加列 + `json_extract` 回填迁移），游标是 (排序值, key) 双字段谓词防同值跨页漏重。设计与权衡见 `backlog-server-pagination.md`。
 
 ## 2. 改造范围
 

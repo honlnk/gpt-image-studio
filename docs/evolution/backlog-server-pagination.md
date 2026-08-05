@@ -1,6 +1,6 @@
 # Backlog 分析：server 模式全链路分页
 
-> 状态：📄 分析稿（未排期，Backlog 项，单独立项）
+> 状态：🔧 进行中——PR-a ✅ 已完成（2026-08-03），PR-b ~ PR-e 未动工
 > 来源：2026-08-03 PR9 验收讨论中提出——server 模式部署到服务器后，全量加载模型不成立
 > 关联：PR9（视口懒加载，与本方案互补）、阶段二（Companion 后端化）、决策 T2（StudioStorage 纯 CRUD）
 
@@ -34,6 +34,8 @@ server 模式（多用户 SaaS，Companion 部署在服务器）下，数据量�
 - **B. 真实列 + 迁移（正道）**：业务表加 `created_at`、`conversation_id` 等列，`putRecord` 时从 JSON 同步写入；`BUSINESS_DB_VERSION` 升 2，`PRAGMA user_version` 迁移框架已有。索引是正经 B-tree，万级以上不心虚。代价是 schema 迁移 + 双写一致性。
 
 **建议：A 起步，B 作为同 PR 或紧随其后的一步**——迁移框架现成，列同步在 `putRecord`（`businessDb.ts:96`）一处收口，成本没有想象中高。若坚持最小改动，A + 表达式索引也够用到很大数据量。
+
+> **PR-a 落地时拍板：直接做 B**（2026-08-03）。理由：Companion 未上线、无生产数据，迁移成本历史最低；A 只是"够用"，B 才是 server 化正道。
 
 ### 3.2 HTTP 层：契约怎么改
 
@@ -99,7 +101,7 @@ listPage?<T>(store: StoreName, opts: {
 
 ## 4. 建议拆分（立项时）
 
-1. **PR-a：Companion 查询能力**——schema 决策（json_extract 或加列）+ `/storage/:table` 分页/过滤参数 + 契约测试。纯后端，前端不动。
+1. **PR-a：Companion 查询能力**——✅ 已完成（2026-08-03）。schema 决策拍板 **方案 B 真实列**（业务 db schema v2：三张可分页表加 `updated_at`/`created_at`/`conversation_id` 派生列 + B-tree 复合索引，v1 旧库打开时自动迁移回填；`value` JSON 仍是数据真相源）。拍板理由：Companion 未上线、无生产数据，此时迁移成本历史最低；方案 A（json_extract）只是"够用"，方案 B 才是 server 化的正道。`/storage/:table` 加分页参数（`conversationId`/`before`/`limit`，不传保持全量旧契约），响应 `{ data, nextCursor, total }`；契约已补录进 `phase2-pr4-storage-routes.md`「分页契约」节。纯后端，前端不动。
 2. **PR-b：StudioStorage 接口扩展**——`listPage` 可选方法 + 双实现 + T2 决策修订。
 3. **PR-c：启动恢复按需加载**——restore 改造 + 切会话惰性拉消息（用户体验收益核心）。
 4. **PR-d：列表 UI 滚动加载**——侧边栏/消息/图片库三个列表 + 计数兼容。
@@ -109,7 +111,7 @@ listPage?<T>(store: StoreName, opts: {
 
 ## 5. 开放问题（立项时拍板）
 
-- json_extract 表达式索引 vs 真实列迁移——建议立项 PR-a 时用演示数据集实测一把再定。
-- `total` 计数要不要、怎么要（COUNT(*) 每次查 vs 缓存 vs 不要）。
-- messages 分页后，内存全量 filter 的 `activeMessages`（`conversationsStore.ts:40-44`）要改成"分页窗口 + 已加载缓存"，跨会话未读角标之类依赖全量 messages 的逻辑需逐一排查。
-- local 模式（IndexedDB）是否同步启用分页加载，还是永远全量回退——建议同步启用，保持单一代码路径。
+- ~~json_extract 表达式索引 vs 真实列迁移~~——**PR-a 已拍板：方案 B 真实列迁移**（业务 db schema v2）。Companion 未上线、无生产数据要兼容，迁移成本最低；方案 A（json_extract 表达式索引）被否——它只是"够用"，每次新增查询字段都要迁就 JSON 掏值，server 化方向下会持续制造妥协。
+- `total` 计数要不要、怎么要——**PR-a 已拍板：要**，`COUNT(*)` 每次查（带 conversationId 过滤条件，不含 before/limit）。SQLite COUNT 是毫秒级，缓存收益不抵复杂度。
+- messages 分页后，内存全量 filter 的 `activeMessages`（`conversationsStore.ts:40-44`）要改成"分页窗口 + 已加载缓存"，跨会话未读角标之类依赖全量 messages 的逻辑需逐一排查。（PR-c 时处理）
+- local 模式（IndexedDB）是否同步启用分页加载，还是永远全量回退——建议同步启用，保持单一代码路径。（PR-b 时拍板）

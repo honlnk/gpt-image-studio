@@ -49,9 +49,9 @@
 | [phase3-pr8-host-conversation-list.md](./phase3-pr8-host-conversation-list.md) | PR8：宿主侧会话列表（会话管理外移到宿主，读用 API/写委托子应用，双向 postMessage 协议） | ✅ 已完成 |
 | [phase3-pr9-image-loading.md](./phase3-pr9-image-loading.md) | PR9：图片加载性能优化（blob 缓存头 + 预览懒加载优先级队列 + 加载态占位） | ✅ 已完成 |
 
-## Backlog（已识别、暂未排期）
+## Backlog（已识别、部分进行中）
 
-- **server 模式全链路分页**：server 部署到服务器后，Companion `/storage/*/list` 目前全量返回 conversations/messages/imageAssets，数据量大后需改为分页/增量同步，牵动 API 契约、前端 store、恢复逻辑一整条链。配套还有前端图片库的 DOM 分页/虚拟列表（目前仅 blob 懒加载，元数据和 DOM 仍全量）。与 PR9 的视口懒加载不冲突，是互补的两层。单独立项。**分析稿：[backlog-server-pagination.md](./backlog-server-pagination.md)**（现状、两个待推翻的设计决策、API/SQL/接口/UI 分层方案、PR 拆分建议、开放问题）。
+- **server 模式全链路分页**（🔧 PR-a 已完成，PR-b~e 未动工）：server 部署到服务器后，Companion `/storage/*` 原来全量返回 conversations/messages/imageAssets，数据量大后需改为分页/增量同步，牵动 API 契约、前端 store、恢复逻辑一整条链。配套还有前端图片库的 DOM 分页/虚拟列表（目前仅 blob 懒加载，元数据和 DOM 仍全量）。与 PR9 的视口懒加载不冲突，是互补的两层。**分析稿：[backlog-server-pagination.md](./backlog-server-pagination.md)**（现状、API/SQL/接口/UI 分层方案、PR 拆分、已拍板决策）。已完成：PR-a Companion 查询能力（`/storage/:table` 游标分页参数 + 真实派生列 schema v2 迁移，契约见 [phase2-pr4-storage-routes.md](./phase2-pr4-storage-routes.md)「分页契约」节）。
 
 ## 阅读顺序
 

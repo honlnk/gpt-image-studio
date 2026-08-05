@@ -12,8 +12,15 @@
 /** 主 db schema 版本。dataset_registry 结构变更时递增。 */
 export const MASTER_DB_VERSION = 2;
 
-/** 业务 db schema 版本。7 表结构变更时递增。 */
-export const BUSINESS_DB_VERSION = 1;
+/**
+ * 业务 db schema 版本。7 表结构变更时递增。
+ *
+ * v2 变更（server 模式分页 PR-a，方案 B 真实列）：
+ * conversations/messages/imageAssets 三张可分页表加派生查询列
+ * （updated_at / created_at / conversation_id），替代 v1 的纯 KV。
+ * 旧库（v1）走 businessDb.ts 的迁移逻辑升级，不直接用此 DDL。
+ */
+export const BUSINESS_DB_VERSION = 2;
 
 /**
  * 主 db 的 DDL（D7 主 db 层，v2 含 users 表 + user_id 外键）。
@@ -85,19 +92,105 @@ export const MASTER_DB_MIGRATION_V2_ADD_USER_ID = `
 `;
 
 /**
- * 业务 db 的 7 张表 DDL（D7 业务 db 层）。
- * 每张表结构一致：key (TEXT PRIMARY KEY) + value (TEXT, JSON)。
- * keyPath 映射见 BUSINESS_DB_KEY_PATHS 注释。
+ * 业务 db 的 7 张表 DDL（D7 业务 db 层，v2）。
+ *
+ * 基础模型不变：key (TEXT PRIMARY KEY) + value (TEXT, JSON)，value 是数据真相源
+ * （前端整个对象 upsert，业务字段随演进变化，不拆关系列）。
+ *
+ * v2 起，三张可分页表额外带「派生查询列」——写入时从业务对象抽出填充
+ * （见 businessDb.ts putRecord），仅供排序/过滤索引用，不是第二份真相：
+ * - conversations: updated_at（排序）
+ * - messages:      created_at（排序）+ conversation_id（过滤）
+ * - imageAssets:   created_at（排序）+ conversation_id（过滤）
+ * 字段缺失的行存 NULL（DESC 序排最后）。索引见 BUSINESS_DB_INDEXES。
  */
 export const BUSINESS_DB_DDL = `
-  CREATE TABLE IF NOT EXISTS conversations      (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS messages           (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS imageAssets        (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS conversations (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    key             TEXT PRIMARY KEY,
+    value           TEXT NOT NULL,
+    created_at      TEXT,
+    conversation_id TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS imageAssets (
+    key             TEXT PRIMARY KEY,
+    value           TEXT NOT NULL,
+    created_at      TEXT,
+    conversation_id TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS imageBlobs         (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS settings           (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS conversationDrafts (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS analyticsEvents    (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `;
+
+/**
+ * 派生查询列的索引。独立于 BUSINESS_DB_DDL：v1 旧库的表还没有这些列，
+ * 必须先经迁移 ALTER 出列才能建索引，所以由 openBusinessDb 在迁移之后执行。
+ *
+ * 选择：两张带过滤的表用 (conversation_id, created_at) 复合索引服务
+ * 「按会话过滤 + 时间排序」的分页主查询；另加 created_at 单列索引服务
+ * 无过滤的全表分页。conversations 只需 updated_at 单列。
+ */
+export const BUSINESS_DB_INDEXES = `
+  CREATE INDEX IF NOT EXISTS idx_conversations_updated_at
+    ON conversations(updated_at);
+  CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
+    ON messages(conversation_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_messages_created_at
+    ON messages(created_at);
+  CREATE INDEX IF NOT EXISTS idx_imageAssets_conversation_created
+    ON imageAssets(conversation_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_imageAssets_created_at
+    ON imageAssets(created_at);
+`;
+
+/**
+ * v1 → v2 迁移：三张可分页表加派生查询列。
+ *
+ * ALTER ADD COLUMN 不支持 IF NOT EXISTS：逐条执行，由 businessDb.ts 的迁移逻辑
+ * try/catch "duplicate column" 错误（与 MASTER_DB_MIGRATION_V2 同模式）——
+ * 新库走 v2 DDL 建表时列已存在，ALTER 必然撞重复列，属正常路径。
+ */
+export const BUSINESS_DB_MIGRATION_V2_COLUMNS = [
+  "ALTER TABLE conversations ADD COLUMN updated_at TEXT",
+  "ALTER TABLE messages ADD COLUMN created_at TEXT",
+  "ALTER TABLE messages ADD COLUMN conversation_id TEXT",
+  "ALTER TABLE imageAssets ADD COLUMN created_at TEXT",
+  "ALTER TABLE imageAssets ADD COLUMN conversation_id TEXT",
+];
+
+/**
+ * v1 → v2 迁移：回填存量行的派生列（从 value JSON 抽取）。幂等——
+ * 重复执行只是把同样的值再写一遍，新库空表执行是 no-op。
+ */
+export const BUSINESS_DB_MIGRATION_V2_BACKFILL = `
+  UPDATE conversations SET updated_at = json_extract(value,'$.updatedAt');
+  UPDATE messages SET created_at = json_extract(value,'$.createdAt'),
+                      conversation_id = json_extract(value,'$.conversationId');
+  UPDATE imageAssets SET created_at = json_extract(value,'$.createdAt'),
+                         conversation_id = json_extract(value,'$.conversationId');
+`;
+
+/**
+ * 各表的派生查询列配置：列名 → value JSON（业务对象）内的字段名。
+ * 一处配置驱动三处消费：DDL/迁移（上方）、putRecord 写入填充、listPage 查询校验。
+ * 未列出的表是纯 KV，不支持分页参数。
+ */
+export const TABLE_QUERY_COLUMNS: Partial<
+  Record<BusinessTable, Record<string, string>>
+> = {
+  conversations: { updated_at: "updatedAt" },
+  messages: { created_at: "createdAt", conversation_id: "conversationId" },
+  imageAssets: { created_at: "createdAt", conversation_id: "conversationId" },
+};
 
 /**
  * 业务表的合法表名（与前端 STORE_NAMES 对齐）。
