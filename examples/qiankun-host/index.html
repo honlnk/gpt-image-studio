@@ -121,6 +121,94 @@
     flex: 1; min-width: 0; background: #fff;
     height: calc(100vh - var(--host-bar-height));
   }
+
+  /* ─── 管理页（#/admin 全屏遮罩） ─── */
+  /* 视觉风格复刻 companion/src/admin/styles.css 的色板/卡片/按钮 */
+  #admin-overlay {
+    position: fixed; inset: 0; z-index: 10001;
+    background: #f9fafb; color: #111827;
+    font-size: 14px; line-height: 1.6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+    overflow-y: auto;
+  }
+  #admin-overlay.hidden { display: none; }
+  .admin-bar {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 20px; height: 44px;
+    background: #1a1a2e; color: #fff; font-size: 13px;
+  }
+  .admin-bar b { color: #4fc3f7; }
+  .admin-bar .back-btn {
+    margin-left: auto; background: #4fc3f7; color: #000;
+    border: none; padding: 5px 12px; border-radius: 6px;
+    cursor: pointer; font-size: 12px;
+  }
+  .admin-container { max-width: 720px; margin: 0 auto; padding: 24px 20px 80px; }
+  .admin-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .admin-card h2 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
+  .admin-card .muted { color: #6b7280; font-size: 13px; }
+  .admin-card .error { color: #b91c1c; font-size: 13px; margin: 8px 0; min-height: 16px; }
+  .admin-card .ok-msg { color: #15803d; font-size: 13px; margin: 8px 0; min-height: 16px; }
+  /* 状态卡 */
+  .admin-status-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .admin-dot { width: 10px; height: 10px; border-radius: 50%; background: #d1d5db; }
+  .admin-dot.online { background: #22c55e; }
+  .admin-status-meta { color: #374151; font-size: 13px; }
+  .admin-status-meta b { color: #111827; }
+  /* 凭据卡 */
+  .cred-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .cred-head .btn-add {
+    background: #111827; color: #fff; border: none; border-radius: 6px;
+    padding: 5px 12px; cursor: pointer; font-size: 12px;
+  }
+  .cred-entry {
+    border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 8px;
+  }
+  .cred-entry.active { border-color: #111827; box-shadow: 0 0 0 1px #111827; }
+  .cred-entry-top { display: flex; align-items: center; gap: 8px; }
+  .cred-entry-top .name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cred-entry-top .badge { font-size: 11px; color: #15803d; border: 1px solid #15803d; border-radius: 10px; padding: 1px 8px; }
+  .cred-entry-top .op {
+    background: transparent; border: 1px solid #d1d5db; border-radius: 4px;
+    padding: 3px 10px; cursor: pointer; font-size: 12px; color: #374151;
+  }
+  .cred-entry-top .op.danger { color: #b91c1c; border-color: #b91c1c; }
+  .cred-entry-detail { margin-top: 8px; font-size: 13px; color: #374151; }
+  .cred-entry-detail .row { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+  .cred-entry-detail .k { color: #6b7280; min-width: 72px; }
+  .cred-entry-detail .v { font-family: ui-monospace, monospace; word-break: break-all; }
+  .cred-form { border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+  .cred-form .ftitle { font-weight: 600; margin-bottom: 8px; }
+  .cred-form label { display: block; margin-bottom: 8px; }
+  .cred-form label span { display: block; font-size: 12px; color: #6b7280; margin-bottom: 2px; }
+  .cred-form input, .cred-form select {
+    width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px;
+    font-size: 13px; box-sizing: border-box;
+  }
+  .cred-form .factions { display: flex; gap: 8px; margin-top: 4px; }
+  .cred-form .btn-save { background: #111827; color: #fff; border: none; border-radius: 6px; padding: 6px 16px; cursor: pointer; font-size: 13px; }
+  .cred-form .btn-cancel { background: transparent; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 16px; cursor: pointer; font-size: 13px; }
+  /* 数据集卡 */
+  .ds-current { padding: 8px 0; font-size: 13px; color: #374151; }
+  .ds-current b { color: #111827; }
+  .ds-list { margin-top: 8px; }
+  .ds-item {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px;
+  }
+  .ds-item.active { border-color: #111827; box-shadow: 0 0 0 1px #111827; }
+  .ds-item .info { flex: 1; min-width: 0; }
+  .ds-item .info .lbl { font-weight: 600; font-size: 13px; }
+  .ds-item .info .sub { font-size: 12px; color: #6b7280; word-break: break-all; }
+  .ds-item .op {
+    background: transparent; border: 1px solid #d1d5db; border-radius: 4px;
+    padding: 3px 10px; cursor: pointer; font-size: 12px; color: #374151;
+  }
+
 </style>
 </head>
 <body>
@@ -130,6 +218,7 @@
   <span class="pill">子应用: gpt-image-studio</span>
   <span class="pill">companionUrl: <span id="companion-url">-</span></span>
   <button onclick="reloadSubApp()">重新挂载子应用</button>
+  <button onclick="openAdminPage()">⚙️ 管理页</button>
   <button onclick="hostLogout()">退出登录</button>
   <span id="status">⏳ 等待子应用激活...</span>
 </div>
@@ -159,11 +248,77 @@
   </div>
 </div>
 
+<!-- 管理页（#/admin hash 路由触发）：server 模式适配版，复刻默认管理页视觉。
+     端点适配：状态 /health+/auth/me、凭据 /admin/credentials/*（ADMIN_API_KEY）、
+     数据集 /storage/datasets（JWT）。砍掉日志卡（server 无用户级日志）与目录选择（远程无意义）。 -->
+<div id="admin-overlay" class="hidden">
+  <div class="admin-bar">
+    <b>⚙️ 平台管理</b>
+    <span class="pill" id="admin-companion-url">-</span>
+    <span class="pill" id="admin-user">-</span>
+    <button class="back-btn" onclick="closeAdminPage()">← 返回工作台</button>
+  </div>
+  <div class="admin-container">
+    <!-- 状态卡 -->
+    <div class="admin-card">
+      <h2>状态总览</h2>
+      <div class="admin-status-row">
+        <span id="admin-dot" class="admin-dot"></span>
+        <span id="admin-status-text" class="admin-status-meta">检测中…</span>
+        <span id="admin-version" class="admin-status-meta"></span>
+      </div>
+      <div id="admin-health-detail" class="admin-status-meta" style="margin-top:8px"></div>
+    </div>
+
+    <!-- API 凭据卡 -->
+    <div class="admin-card">
+      <div class="cred-head">
+        <h2>API 凭据</h2>
+        <button class="btn-add" id="admin-cred-add" onclick="adminCredStartAdd()">+ 新增</button>
+      </div>
+      <p class="muted">平台级共享凭据：管理员在此统一配置，所有运营人员共享。走 <code>/admin/credentials/*</code>（ADMIN_API_KEY 鉴权）。</p>
+      <div id="admin-cred-form" class="cred-form" hidden>
+        <div class="ftitle" id="admin-cred-form-title">新增配置</div>
+        <label><span>名称</span><input id="admin-f-label" type="text" placeholder="如：豆包测试号" /></label>
+        <label><span>Provider</span><select id="admin-f-provider"></select></label>
+        <label><span>API Base URL</span><input id="admin-f-baseurl" type="text" placeholder="https://..." /></label>
+        <label><span>Model</span><input id="admin-f-model" type="text" placeholder="模型 ID" /></label>
+        <label><span>API Key</span><input id="admin-f-apikey" type="password" autocomplete="off" placeholder="sk-..." /></label>
+        <div class="factions">
+          <button class="btn-save" onclick="adminCredSubmit()">保存</button>
+          <button class="btn-cancel" onclick="adminCredCancelForm()">取消</button>
+        </div>
+      </div>
+      <div id="admin-cred-list"></div>
+      <p class="error" id="admin-cred-error"></p>
+    </div>
+
+    <!-- 存储位置卡（用户级数据集，JWT） -->
+    <div class="admin-card">
+      <h2>存储位置</h2>
+      <p class="muted">当前登录用户的数据集（<code>/storage/datasets</code>，JWT 鉴权）。server 模式下每个用户独立隔离。</p>
+      <div id="admin-ds-current" class="ds-current"></div>
+      <div id="admin-ds-list" class="ds-list"></div>
+      <p class="error" id="admin-ds-error"></p>
+    </div>
+
+    <!-- 平台说明卡（替代日志卡） -->
+    <div class="admin-card">
+      <h2>平台说明</h2>
+      <p class="muted">
+        · API 凭据由管理员在此统一配置，运营人员无需关心 API Key / 模型选择。<br>
+        · 凭据是平台级共享的，所有用户共用当前激活的那套配置。<br>
+        · server 模式不提供日志查看与本机目录选择（远程无意义）。
+      </p>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── 嵌入配置（注入给子应用的 props） ───
 // config.json（gitignore，本地私有）格式见 config.example.json。
 // jwt 不再手写进配置——登录流程在浏览器内用 jwtSecret 自签（WebCrypto HMAC-SHA256）。
-let HOST_CONFIG = { companionUrl: '', jwtSecret: '', user: null, oss: null, jwt: '', hideSidebar: true };
+let HOST_CONFIG = { companionUrl: '', jwtSecret: '', adminApiKey: '', user: null, oss: null, jwt: '', hideSidebar: true };
 
 async function loadConfig() {
   try {
@@ -173,6 +328,7 @@ async function loadConfig() {
   return {
     companionUrl: 'http://127.0.0.1:19751',
     jwtSecret: '',
+    adminApiKey: '',
     user: { sub: 'qiankun-preview-user', displayName: 'qiankun 预览用户' },
     oss: null,
     hideSidebar: true,
@@ -371,6 +527,286 @@ window.addEventListener('popstate', () => {
   hostActiveConvId = null;  // 回到 URL 驱动
   renderConvList();
 });
+
+// ═══ 管理页（#/admin hash 路由） ═══
+// server 模式适配版：端点走 ADMIN_API_KEY（凭据）/ JWT（数据集）/ 公开（health）。
+// 不依赖被禁用的 /admin/api/*（commit 657c172，__local__ 视图多租户下误导）。
+
+function openAdminPage() { location.hash = '#/admin'; }
+function closeAdminPage() {
+  // 有历史可回就回，否则清 hash
+  if (location.hash === '#/admin') history.back();
+}
+
+window.addEventListener('hashchange', () => {
+  const isAdmin = location.hash === '#/admin';
+  document.getElementById('admin-overlay').classList.toggle('hidden', !isAdmin);
+  // 主工作台显隐（侧边栏 + 子应用容器）
+  const body = document.querySelector('.host-body');
+  if (body) body.style.display = isAdmin ? 'none' : 'flex';
+  if (isAdmin) loadAdminData();
+});
+
+// 管理页状态
+const adminState = {
+  presets: [],
+  credentials: [],
+  activeCredId: null,
+  editingCredId: '',  // '' = 未编辑（列表态），'new' = 新增，其它 = 编辑某 id
+  datasets: [],
+  activeDataset: null,
+};
+
+// 带 ADMIN_API_KEY 的 fetch（凭据管理）
+async function adminFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  headers['Authorization'] = `Bearer ${HOST_CONFIG.adminApiKey}`;
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const res = await fetch(`${HOST_CONFIG.companionUrl}${path}`, { ...options, headers });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// 带 JWT 的 fetch（数据集）
+async function jwtFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  headers['Authorization'] = `Bearer ${HOST_CONFIG.jwt}`;
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const res = await fetch(`${HOST_CONFIG.companionUrl}${path}`, { ...options, headers });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function loadAdminData() {
+  // 顶栏信息
+  document.getElementById('admin-companion-url').textContent = HOST_CONFIG.companionUrl;
+  document.getElementById('admin-user').textContent =
+    `用户: ${HOST_CONFIG.user?.displayName || '-'}`;
+  await Promise.all([loadAdminStatus(), loadAdminCredentials(), loadAdminDatasets()]);
+}
+
+async function loadAdminStatus() {
+  const dot = document.getElementById('admin-dot');
+  const text = document.getElementById('admin-status-text');
+  const ver = document.getElementById('admin-version');
+  const detail = document.getElementById('admin-health-detail');
+  try {
+    const health = await fetch(`${HOST_CONFIG.companionUrl}/health`).then(r => r.json());
+    dot.classList.add('online');
+    text.textContent = 'Companion 在线';
+    ver.textContent = health.version ? `v${health.version}` : '';
+  } catch {
+    dot.classList.remove('online');
+    text.textContent = 'Companion 离线';
+    ver.textContent = '';
+    detail.textContent = '请检查 Companion server 模式是否已启动';
+    return;
+  }
+  // 当前登录用户信息（JWT）
+  try {
+    const me = await jwtFetch('/auth/me');
+    detail.innerHTML = `登录用户：<b>${escapeHtml(me.displayName || me.userId || '-')}</b>（userId: <code>${escapeHtml(me.userId || '-')}</code>）`;
+  } catch (e) {
+    detail.textContent = `获取用户信息失败：${e.message}`;
+  }
+}
+
+function maskKey(key) {
+  if (!key) return '';
+  if (key.length <= 8) return '***';
+  return key.slice(0, 8) + '***';
+}
+function providerLabel(id) {
+  const p = adminState.presets.find(x => x.id === id);
+  return p ? p.label : id || '（未设置）';
+}
+
+async function loadAdminCredentials() {
+  const errEl = document.getElementById('admin-cred-error');
+  errEl.textContent = '';
+  try {
+    const [presets, data] = await Promise.all([
+      adminFetch('/admin/credentials/presets'),
+      adminFetch('/admin/credentials'),
+    ]);
+    adminState.presets = presets || [];
+    adminState.credentials = data.entries || [];
+    adminState.activeCredId = data.activeId || null;
+    // 填 provider 下拉
+    const sel = document.getElementById('admin-f-provider');
+    sel.innerHTML = adminState.presets.map(p => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join('');
+    renderAdminCredentials();
+  } catch (e) {
+    errEl.textContent = `加载凭据失败：${e.message}`;
+  }
+}
+
+function renderAdminCredentials() {
+  const listEl = document.getElementById('admin-cred-list');
+  const formEl = document.getElementById('admin-cred-form');
+  const addBtn = document.getElementById('admin-cred-add');
+  // 表单态
+  if (adminState.editingCredId !== '') {
+    formEl.hidden = false;
+    addBtn.hidden = true;
+    listEl.innerHTML = '';
+    return;
+  }
+  formEl.hidden = true;
+  addBtn.hidden = false;
+  if (!adminState.credentials.length) {
+    listEl.innerHTML = '<p class="muted">暂无 provider 配置，点击「新增」添加。</p>';
+    return;
+  }
+  listEl.innerHTML = adminState.credentials.map(entry => {
+    const isActive = entry.id === adminState.activeCredId;
+    return `
+      <div class="cred-entry ${isActive ? 'active' : ''}">
+        <div class="cred-entry-top">
+          <span class="name">${escapeHtml(entry.label || '(未命名)')}</span>
+          ${isActive ? '<span class="badge">激活中</span>' : `<button class="op" onclick="adminCredActivate('${entry.id}')">激活</button>`}
+          <button class="op" onclick="adminCredStartEdit('${entry.id}')">编辑</button>
+          <button class="op danger" onclick="adminCredDelete('${entry.id}')">删除</button>
+        </div>
+        <div class="cred-entry-detail">
+          <div class="row"><span class="k">Provider</span><span class="v">${escapeHtml(providerLabel(entry.provider))}</span></div>
+          <div class="row"><span class="k">Base URL</span><span class="v">${escapeHtml(entry.apiBaseUrl)}</span></div>
+          <div class="row"><span class="k">Model</span><span class="v">${escapeHtml(entry.model || '（未设置）')}</span></div>
+          <div class="row"><span class="k">API Key</span><span class="v">${escapeHtml(maskKey(entry.apiKey))}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function adminCredStartAdd() {
+  adminState.editingCredId = 'new';
+  document.getElementById('admin-cred-form-title').textContent = '新增配置';
+  const first = adminState.presets[0] || {};
+  document.getElementById('admin-f-label').value = '';
+  document.getElementById('admin-f-provider').value = first.id || '';
+  document.getElementById('admin-f-baseurl').value = first.defaultBaseUrl || '';
+  document.getElementById('admin-f-model').value = first.defaultModel || '';
+  document.getElementById('admin-f-apikey').value = '';
+  renderAdminCredentials();
+}
+
+function adminCredStartEdit(id) {
+  const entry = adminState.credentials.find(c => c.id === id);
+  if (!entry) return;
+  adminState.editingCredId = id;
+  document.getElementById('admin-cred-form-title').textContent = '编辑配置';
+  document.getElementById('admin-f-label').value = entry.label || '';
+  document.getElementById('admin-f-provider').value = entry.provider || '';
+  document.getElementById('admin-f-baseurl').value = entry.apiBaseUrl || '';
+  document.getElementById('admin-f-model').value = entry.model || '';
+  document.getElementById('admin-f-apikey').value = entry.apiKey || '';
+  renderAdminCredentials();
+}
+
+function adminCredCancelForm() {
+  adminState.editingCredId = '';
+  renderAdminCredentials();
+}
+
+async function adminCredSubmit() {
+  const errEl = document.getElementById('admin-cred-error');
+  errEl.textContent = '';
+  const input = {
+    label: document.getElementById('admin-f-label').value.trim(),
+    provider: document.getElementById('admin-f-provider').value,
+    apiBaseUrl: document.getElementById('admin-f-baseurl').value.trim(),
+    apiKey: document.getElementById('admin-f-apikey').value.trim(),
+    model: document.getElementById('admin-f-model').value.trim(),
+  };
+  if (!input.apiBaseUrl || !input.apiKey) {
+    errEl.textContent = 'API Base URL 和 API Key 不能为空';
+    return;
+  }
+  try {
+    if (adminState.editingCredId === 'new') {
+      await adminFetch('/admin/credentials', { method: 'POST', body: JSON.stringify(input) });
+    } else {
+      await adminFetch(`/admin/credentials/${adminState.editingCredId}`, { method: 'PUT', body: JSON.stringify(input) });
+    }
+    adminState.editingCredId = '';
+    await loadAdminCredentials();
+  } catch (e) {
+    errEl.textContent = `保存失败：${e.message}`;
+  }
+}
+
+async function adminCredActivate(id) {
+  const errEl = document.getElementById('admin-cred-error');
+  errEl.textContent = '';
+  try {
+    await adminFetch(`/admin/credentials/${id}/activate`, { method: 'POST' });
+    await loadAdminCredentials();
+  } catch (e) {
+    errEl.textContent = `激活失败：${e.message}`;
+  }
+}
+
+async function adminCredDelete(id) {
+  const errEl = document.getElementById('admin-cred-error');
+  errEl.textContent = '';
+  if (!confirm('确定删除这条凭据？')) return;
+  try {
+    await adminFetch(`/admin/credentials/${id}`, { method: 'DELETE' });
+    await loadAdminCredentials();
+  } catch (e) {
+    errEl.textContent = `删除失败：${e.message}`;
+  }
+}
+
+async function loadAdminDatasets() {
+  const errEl = document.getElementById('admin-ds-error');
+  const curEl = document.getElementById('admin-ds-current');
+  const listEl = document.getElementById('admin-ds-list');
+  errEl.textContent = '';
+  try {
+    const data = await jwtFetch('/storage/datasets');
+    adminState.datasets = data.datasets || [];
+    adminState.activeDataset = adminState.datasets.find(d => d.is_active) || null;
+    if (adminState.activeDataset) {
+      curEl.innerHTML = `当前位置：<b>${escapeHtml(adminState.activeDataset.label || '-')}</b>（${escapeHtml(adminState.activeDataset.image_store_kind || '-')}）`;
+    } else {
+      curEl.innerHTML = '<span class="muted">暂无激活数据集</span>';
+    }
+    if (!adminState.datasets.length) {
+      listEl.innerHTML = '<p class="muted">暂无数据集。</p>';
+      return;
+    }
+    listEl.innerHTML = adminState.datasets.map(d => {
+      const isActive = d.is_active;
+      let sub = d.storage_kind || '';
+      try {
+        const cfg = d.storage_config ? JSON.parse(d.storage_config) : null;
+        if (cfg) {
+          if (cfg.directory) sub = `目录: ${cfg.directory}`;
+          else if (cfg.bucket) sub = `OSS: ${cfg.endpoint || ''}/${cfg.bucket}`;
+        }
+      } catch {}
+      return `
+        <div class="ds-item ${isActive ? 'active' : ''}">
+          <div class="info">
+            <div class="lbl">${escapeHtml(d.label || '-')}</div>
+            <div class="sub">${escapeHtml(sub)}</div>
+          </div>
+          ${isActive ? '<span class="badge" style="font-size:11px;color:#15803d;border:1px solid #15803d;border-radius:10px;padding:1px 8px">当前</span>' : ''}
+        </div>`;
+    }).join('');
+  } catch (e) {
+    errEl.textContent = `加载数据集失败：${e.message}`;
+  }
+}
 </script>
 
 <!-- qiankun UMD：本地 vendor（examples/qiankun-host/vendor/），不走 CDN。

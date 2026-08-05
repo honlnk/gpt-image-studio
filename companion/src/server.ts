@@ -11,6 +11,7 @@ import { logsRoutes } from "./routes/logs.js";
 import { storageRoutes, ensureDefaultDataset } from "./routes/storage.js";
 import { storageOssRoutes } from "./routes/storageOss.js";
 import { adminRevokeRoutes } from "./routes/adminRevoke.js";
+import { adminCredentialsRoutes } from "./routes/adminCredentials.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { startCleanupTimer } from "./auth/revocationList.js";
 import type { CompanionSecurityConfig } from "./securityConfig.js";
@@ -89,6 +90,12 @@ export async function startServer(opts: {
   // 不走 authMiddleware。/admin 前缀已被 authMiddleware 跳过，这里在 authMiddleware
   // 之前注册即可。
   await app.register(adminRevokeRoutes);
+  // /admin/credentials/* 平台级凭据管理（server 模式管理面入口）：与 /admin/revoke
+  // 同属 /admin/* 命名空间，走 ADMIN_API_KEY（adminKeyGuard），不走 authMiddleware。
+  // 端点结构镜像 /credentials/*（loopbackGuard，local 模式本机用），读写同一凭据存储，
+  // 给 server 模式的宿主后端/操作员一条可远程访问的凭据管理路径（657c172 禁用默认
+  // 管理页后补的缺口）。全模式注册——local 模式操作员也可用平台密钥管理。
+  await app.register(adminCredentialsRoutes);
   // OSS 凭据管理（阶段二 PR5）：自带 loopbackGuard，必须在 authMiddleware 之前注册，
   // 否则 /storage/oss/* 会被守卫拦成 401（OSS 凭据敏感，走管理面守卫而非数据面）。
   await app.register(storageOssRoutes, { allowedOrigins: opts.security.allowedOrigins });
@@ -121,6 +128,7 @@ export async function startServer(opts: {
   console.log(`部署形态: ${opts.deployment.mode}`);
   if (opts.deployment.mode === "server") {
     console.log("管理页: 已禁用（server 模式多租户由宿主/API 按用户管理）");
+    console.log("  凭据管理: /admin/credentials/*（ADMIN_API_KEY 鉴权，宿主/操作员远程管理）");
   }
   console.log(`安全渠道: ${opts.security.channel}`);
   console.log("允许的 Origin:");

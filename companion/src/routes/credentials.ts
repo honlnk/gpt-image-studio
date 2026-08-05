@@ -19,8 +19,8 @@ import {
   resetEmptyStore,
   restoreLatestBackup,
 } from "../credentials.js";
-import { isRegisteredProvider, listProviderIds } from "../providers/registry.js";
 import { withStoreErrorBoundary } from "./storeRouteWrapper.js";
+import { parseCredentialInput, validateCredentialInput } from "./credentialInput.js";
 
 /**
  * 凭证管理路由（Web 面板 + CLI 共用）：多配置 CRUD + 激活切换。
@@ -68,8 +68,8 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     Body: CompanionCredentialInput;
     Reply: CompanionCredentialMutationResponse;
   }>("/credentials", async (req, reply) => {
-    const input = parseInput(req.body);
-    const error = validateInput(input);
+    const input = parseCredentialInput(req.body);
+    const error = validateCredentialInput(input);
     if (error) {
       return reply.status(400).send({ error } as never);
     }
@@ -84,8 +84,8 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     Body: CompanionCredentialInput;
     Reply: CompanionCredentialMutationResponse;
   }>("/credentials/:id", async (req, reply) => {
-    const input = parseInput(req.body);
-    const error = validateInput(input);
+    const input = parseCredentialInput(req.body);
+    const error = validateCredentialInput(input);
     if (error) {
       return reply.status(400).send({ error } as never);
     }
@@ -146,30 +146,4 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
       return { ok: true, entries: store.entries.length, activeId: store.activeId };
     });
   });
-}
-
-function parseInput(body: unknown): CompanionCredentialInput {
-  const b = (body ?? {}) as Record<string, unknown>;
-  return {
-    label: typeof b.label === "string" ? b.label : undefined,
-    provider: typeof b.provider === "string" ? b.provider : undefined,
-    apiBaseUrl: typeof b.apiBaseUrl === "string" ? b.apiBaseUrl : "",
-    apiKey: typeof b.apiKey === "string" ? b.apiKey : "",
-    model: typeof b.model === "string" ? b.model : undefined,
-  };
-}
-
-function validateInput(input: CompanionCredentialInput): string | null {
-  if (!input.apiBaseUrl.trim()) return "apiBaseUrl 不能为空";
-  if (!input.apiKey.trim()) return "apiKey 不能为空";
-  // 明确传了 provider 但不在注册表里 → 拒绝（拼写错 / 已删除的 provider 不能静默存下来）
-  if (
-    input.provider !== undefined &&
-    input.provider.trim() !== "" &&
-    !isRegisteredProvider(input.provider.trim())
-  ) {
-    const valid = listProviderIds().sort().join(", ");
-    return `未知的 provider "${input.provider.trim()}"，已注册的有：${valid}`;
-  }
-  return null;
 }
