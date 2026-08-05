@@ -93,6 +93,29 @@
     padding: 16px; text-align: center; color: #666; font-size: 12px;
   }
 
+  /* ─── 登录页 ─── */
+  .login-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    background: #f5f5f5;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .login-overlay.hidden { display: none; }
+  .login-card {
+    background: #1a1a2e; color: #fff; border-radius: 12px;
+    padding: 40px 48px; width: 320px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+  .login-card h1 { font-size: 18px; margin: 0 0 8px; }
+  .login-card .sub { font-size: 12px; color: #888; margin-bottom: 24px; }
+  .login-card .login-btn {
+    width: 100%; padding: 12px; font-size: 14px;
+    background: #4fc3f7; color: #000; border: none; border-radius: 8px;
+    cursor: pointer;
+  }
+  .login-card .login-btn:disabled { opacity: 0.6; cursor: default; }
+  .login-card .login-msg { margin-top: 16px; font-size: 12px; min-height: 16px; color: #aaa; }
+  .login-card .login-msg.err { color: #ef5350; }
+
   /* ─── 子应用挂载容器 ─── */
   #image-studio-container {
     flex: 1; min-width: 0; background: #fff;
@@ -107,6 +130,7 @@
   <span class="pill">子应用: gpt-image-studio</span>
   <span class="pill">companionUrl: <span id="companion-url">-</span></span>
   <button onclick="reloadSubApp()">重新挂载子应用</button>
+  <button onclick="hostLogout()">退出登录</button>
   <span id="status">⏳ 等待子应用激活...</span>
 </div>
 
@@ -125,16 +149,130 @@
   <div id="image-studio-container">子应用加载中...</div>
 </div>
 
+<!-- 登录页：一个按钮，点击后自动完成 签 JWT → 确保数据集激活 → 挂载子应用 -->
+<div id="login-overlay" class="login-overlay hidden">
+  <div class="login-card">
+    <h1>GPT Image Studio</h1>
+    <div class="sub">qiankun 嵌入预览 · 演示账号一键登录</div>
+    <button id="login-btn" class="login-btn" onclick="hostLogin()">登 录</button>
+    <div id="login-msg" class="login-msg"></div>
+  </div>
+</div>
+
 <script>
 // ─── 嵌入配置（注入给子应用的 props） ───
-let HOST_CONFIG = { companionUrl: '', jwt: '', hideSidebar: true };
+// config.json（gitignore，本地私有）格式见 config.example.json。
+// jwt 不再手写进配置——登录流程在浏览器内用 jwtSecret 自签（WebCrypto HMAC-SHA256）。
+let HOST_CONFIG = { companionUrl: '', jwtSecret: '', user: null, oss: null, jwt: '', hideSidebar: true };
 
 async function loadConfig() {
   try {
     const res = await fetch('./config.json');
     if (res.ok) return await res.json();
   } catch (e) {}
-  return { companionUrl: 'http://127.0.0.1:19751', jwt: 'REPLACE_WITH_REAL_JWT', hideSidebar: true };
+  return {
+    companionUrl: 'http://127.0.0.1:19751',
+    jwtSecret: '',
+    user: { sub: 'qiankun-preview-user', displayName: 'qiankun 预览用户' },
+    oss: null,
+    hideSidebar: true,
+  };
+}
+
+// ─── 浏览器内 JWT 自签（HS256，仅本地 demo） ───
+// 生产语义里 JWT 应由宿主后端签发；本 demo 宿主是纯静态页、没有后端，
+// 故把签发搬进浏览器。secret 与此前一样只存在于 gitignore 的 config.json，
+// 安全水位不变。
+function b64urlBytes(bytes) {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlText(s) {
+  return b64urlBytes(new TextEncoder().encode(s));
+}
+async function signJwt(secret, payload) {
+  const header = b64urlText(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = b64urlText(JSON.stringify(payload));
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${header}.${body}`));
+  return `${header}.${body}.${b64urlBytes(new Uint8Array(sig))}`;
+}
+
+// ─── JWT 本地缓存：未过期则跳过登录页直接进主界面 ───
+const JWT_CACHE_KEY = 'qiankun-demo-jwt';
+const JWT_TTL_SECONDS = 30 * 24 * 3600; // 30 天
+
+function readCachedJwt() {
+  try {
+    const token = localStorage.getItem(JWT_CACHE_KEY);
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    // 60s 余量，避免边界时刻拿着将过期 token 发请求 401
+    if (!payload.exp || payload.exp * 1000 < Date.now() + 60000) return null;
+    return token;
+  } catch (e) { return null; }
+}
+
+// ─── 登录流程：签 JWT → 确保数据集激活 → 返回 JWT ───
+async function performLogin(msgEl) {
+  if (!HOST_CONFIG.jwtSecret) throw new Error('config.json 缺少 jwtSecret');
+  msgEl.textContent = '正在签发登录凭证...';
+  const now = Math.floor(Date.now() / 1000);
+  const jwt = await signJwt(HOST_CONFIG.jwtSecret, {
+    sub: HOST_CONFIG.user.sub,
+    display_name: HOST_CONFIG.user.displayName,
+    iat: now,
+    exp: now + JWT_TTL_SECONDS,
+  });
+
+  // 确保该用户有激活数据集：清库/首次登录后是 404，自动激活 OSS 数据集，
+  // 不再手动 curl POST /storage/datasets/activate。
+  msgEl.textContent = '正在检查数据集...';
+  const headers = { Authorization: `Bearer ${jwt}` };
+  const activeRes = await fetch(`${HOST_CONFIG.companionUrl}/storage/datasets/active`, { headers });
+  if (activeRes.status === 404) {
+    if (!HOST_CONFIG.oss) throw new Error('config.json 缺少 oss 配置，无法自动初始化数据集');
+    msgEl.textContent = '正在初始化 OSS 数据集...';
+    const actRes = await fetch(`${HOST_CONFIG.companionUrl}/storage/datasets/activate`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        storageKind: 'oss',
+        storageConfig: HOST_CONFIG.oss,
+        imageStoreKind: 'oss',
+        label: `OSS ${HOST_CONFIG.oss.bucket}`,
+      }),
+    });
+    if (!actRes.ok) throw new Error(`初始化数据集失败：HTTP ${actRes.status} ${await actRes.text()}`);
+  } else if (!activeRes.ok) {
+    throw new Error(`检查数据集失败：HTTP ${activeRes.status}`);
+  }
+  return jwt;
+}
+
+async function hostLogin() {
+  const btn = document.getElementById('login-btn');
+  const msgEl = document.getElementById('login-msg');
+  btn.disabled = true;
+  msgEl.className = 'login-msg';
+  try {
+    const jwt = await performLogin(msgEl);
+    localStorage.setItem(JWT_CACHE_KEY, jwt);
+    boot(jwt);
+  } catch (e) {
+    msgEl.className = 'login-msg err';
+    msgEl.textContent = `登录失败：${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+function hostLogout() {
+  localStorage.removeItem(JWT_CACHE_KEY);
+  location.reload();
 }
 
 // ─── 宿主侧会话列表数据层（PR8 §2.1 读用 API） ───
@@ -242,13 +380,27 @@ window.addEventListener('popstate', () => {
 
 <script>
 (async function () {
-  HOST_CONFIG = await loadConfig();
+  HOST_CONFIG = { ...HOST_CONFIG, ...(await loadConfig()) };
   document.getElementById('companion-url').textContent = HOST_CONFIG.companionUrl;
+
+  // 有未过期的缓存 JWT → 跳过登录页直接进主界面；否则等用户点登录按钮
+  const cached = readCachedJwt();
+  if (cached) boot(cached);
+  else document.getElementById('login-overlay').classList.remove('hidden');
+})();
+
+// 登录成功后启动主界面：注册并挂载 qiankun 子应用（只执行一次）
+let booted = false;
+function boot(jwt) {
+  if (booted) return;
+  booted = true;
+  HOST_CONFIG.jwt = jwt;
+  document.getElementById('login-overlay').classList.add('hidden');
 
   const qiankun = window.qiankun;
   if (!qiankun) {
     document.getElementById('status').innerHTML =
-      '<span class="err">❌ qiankun UMD 未加载（检查网络/CDN）</span>';
+      '<span class="err">❌ qiankun UMD 未加载（检查 vendor 文件）</span>';
     return;
   }
 
@@ -287,7 +439,7 @@ window.addEventListener('popstate', () => {
     document.getElementById('image-studio-container').innerHTML = '重新加载中...';
     location.reload();
   };
-})();
+}
 
 function reloadSubApp() {
   if (window._reloadSubApp) window._reloadSubApp();
