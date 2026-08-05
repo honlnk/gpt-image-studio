@@ -14,6 +14,7 @@ import {
   type ImageBlobRecord,
   type StudioStorage,
 } from "./storage";
+import { iterateAll } from "./storage/inMemoryPage";
 import { resolveStorage } from "./storage/resolveStorage";
 import { saveSettings, loadSettings } from "./settings";
 import { createZipArchive } from "./zipArchive";
@@ -76,15 +77,25 @@ export type BackupServices = ReturnType<typeof createBackupServices>;
 
 export function createBackupServices(storage: StudioStorage) {
   return {
+    /**
+     * 导出整库为 ZIP（server 模式分页 PR-e 改造）。
+     *
+     * 改造前是一次性 Promise.all 拉 4 张表全量进内存（其中 imageBlobs 是二进制大头），
+     * server 模式下数据量大时单次响应内存峰值高。现在：
+     * - conversations / messages / imageAssets 用 iterateAll 游标分批拉取（条目小，
+     *   最终仍需完整数组进 data.json，但分批请求避免单次全表 HTTP）；
+     * - 图片二进制改为 imageAssets 驱动逐个 loadImageBlob，每拿到一个立即构造 zip entry，
+     *   峰值内存从"全部 blob 同时驻留"降到"一个 blob"。与 restore 侧（imageAssets 驱动
+     *   写 blob）对称，且天然不会导出孤儿 blob。
+     */
     async create() {
-      const [conversations, messages, imageAssets, imageBlobs, settings] =
-        await Promise.all([
-          storage.list<Conversation>(STORE_NAMES.conversations),
-          storage.list<Message>(STORE_NAMES.messages),
-          storage.list<ImageAsset>(STORE_NAMES.imageAssets),
-          storage.list<ImageBlobRecord>(STORE_NAMES.imageBlobs),
-          loadSettings(),
-        ]);
+      // 三张元数据表 + settings 并发分批拉取（条目小，最终都要完整进 data.json）。
+      const [conversations, messages, imageAssets, settings] = await Promise.all([
+        iterateAll<Conversation>(storage, STORE_NAMES.conversations),
+        iterateAll<Message>(storage, STORE_NAMES.messages),
+        iterateAll<ImageAsset>(storage, STORE_NAMES.imageAssets),
+        loadSettings(),
+      ]);
       // companionUrl 的权威存储是 localStorage 镜像（T3 回滚后）。
       // 不再回查旧 config——PR5 从未发布到 main，没有真实用户在 config 里留有此键。
       const companionUrl = readStorage(COMPANION_URL_MIRROR_KEY, "");
@@ -103,14 +114,21 @@ export function createBackupServices(storage: StudioStorage) {
         // companionUrl 进备份（跨设备迁移需要），accessKey 剥离（敏感，不导出）。
         companionUrl: companionUrl ?? undefined,
       };
-      const entries = [
+
+      // 元数据条目（manifest + data.json）先行，blob 条目随后逐个追加。
+      const entries: { name: string; blob: Blob }[] = [
         jsonEntry(MANIFEST_FILE, manifest),
         jsonEntry(DATA_FILE, data),
-        ...imageBlobs.map((record) => ({
-          name: blobEntryName(record.key),
-          blob: record.blob,
-        })),
       ];
+
+      // 图片二进制逐个拉取并立即转成 zip entry，避免全部 blob 同时驻留内存。
+      // 仅导出有 blobKey 的图片资源；与 restore 的 validateImageBlobs 校验对称。
+      for (const asset of imageAssets) {
+        if (!asset.blobKey) continue;
+        const blob = await storage.loadImageBlob(asset.blobKey);
+        if (!blob) continue; // blob 缺失跳过（restore 侧只在有 blobKey 时校验存在性）
+        entries.push({ name: blobEntryName(asset.blobKey), blob });
+      }
 
       return createZipArchive(entries);
     },

@@ -20,7 +20,7 @@ export {
   type StoreName,
   type StudioStorage,
 } from "./types";
-export { listPageWithFallback, pageRecordsInMemory } from "./inMemoryPage";
+export { iterateAll, listPageWithFallback, pageRecordsInMemory } from "./inMemoryPage";
 
 export { IndexedDbStorage } from "./IndexedDbStorage";
 export { CompanionStorage } from "./CompanionStorage";

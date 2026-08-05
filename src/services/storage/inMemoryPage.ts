@@ -91,3 +91,58 @@ export async function listPageWithFallback<T>(
   const all = await storage.list(store);
   return pageRecordsInMemory<T>(all, store, opts);
 }
+
+/** 默认页大小（仅 STORE_SORT_FIELDS 列出的 store 适用）。 */
+const ITERATE_DEFAULT_PAGE_SIZE = 200;
+
+/**
+ * 拉取某 store 的全部记录，但分批请求（server 模式分页 PR-e，备份导出专用）。
+ *
+ * 与 `list()` 的区别：list() 是一次性全量（Companion 单次全表 HTTP / IndexedDB 单事务）；
+ * 本函数在 storage 支持 listPage 时用游标逐页拉取，每页一次请求/事务，避免单次全量
+ * 把整张大表物化进一次响应/内存峰值。语义仍是"拉完全部"，返回完整数组。
+ *
+ * 仅适用于 STORE_SORT_FIELDS 列出的 store（conversations / messages / imageAssets）。
+ * 不支持 listPage 的后端（当前不存在）回退单次 list()。
+ *
+ * 可选 onPage 回调：每拉完一页触发一次，供调用方在条目累计时做流式处理（如逐批构造
+ * zip entry），而不必等全部记录到齐。
+ */
+export async function iterateAll<T>(
+  storage: StudioStorage,
+  store: StoreName,
+  opts?: {
+    /** 按 conversationId 过滤（仅 CONVERSATION_FILTERABLE_STORES 适用）。 */
+    conversationId?: string;
+    /** 每页条数，默认 200（不超过 Companion LIST_PAGE_MAX_LIMIT）。 */
+    pageSize?: number;
+    /** 每拉完一页触发，参数为本页累计条数。 */
+    onPage?: (accumulated: number) => void;
+  },
+): Promise<T[]> {
+  // 不支持 listPage 的后端回退单次全量（当前三实现全部支持 listPage，此分支为兜底）。
+  if (!storage.listPage) {
+    const all = await storage.list<T>(store);
+    opts?.onPage?.(all.length);
+    return all;
+  }
+
+  const limit = opts?.pageSize ?? ITERATE_DEFAULT_PAGE_SIZE;
+  const accumulated: T[] = [];
+  let before: string | undefined;
+  // 循环翻页直到游标耗尽。
+  for (;;) {
+    const page = await storage.listPage<T>(store, {
+      limit,
+      ...(before !== undefined ? { before } : {}),
+      ...(opts?.conversationId !== undefined
+        ? { conversationId: opts.conversationId }
+        : {}),
+    });
+    accumulated.push(...page.data);
+    opts?.onPage?.(accumulated.length);
+    if (page.nextCursor === null) break;
+    before = page.nextCursor;
+  }
+  return accumulated;
+}

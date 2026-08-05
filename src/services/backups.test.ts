@@ -105,15 +105,18 @@ describe("studio backups", () => {
   });
 
   it("exports manifest, data, and blobs without API key or preview URLs", async () => {
-    spyStorage.list.mockImplementation((storeName: string) => {
-      if (storeName === STORE_NAMES.conversations) return [conversation];
-      if (storeName === STORE_NAMES.messages) return [message];
-      if (storeName === STORE_NAMES.imageAssets) return [imageAsset];
-      if (storeName === STORE_NAMES.imageBlobs) {
-        return [{ key: imageAsset.blobKey, blob: new Blob(["image-data"]) }];
-      }
-      return [];
+    // PR-e 后 create() 走 iterateAll（listPage 游标分批）+ loadImageBlob（逐个 blob）。
+    // mock listPage 按 store 返回单页数据，loadImageBlob 返回二进制。
+    spyStorage.listPage.mockImplementation((storeName: string) => {
+      if (storeName === STORE_NAMES.conversations)
+        return Promise.resolve({ data: [conversation], nextCursor: null, total: 1 });
+      if (storeName === STORE_NAMES.messages)
+        return Promise.resolve({ data: [message], nextCursor: null, total: 1 });
+      if (storeName === STORE_NAMES.imageAssets)
+        return Promise.resolve({ data: [imageAsset], nextCursor: null, total: 1 });
+      return Promise.resolve({ data: [], nextCursor: null, total: 0 });
     });
+    spyStorage.loadImageBlob.mockResolvedValue(new Blob(["image-data"]));
     mocks.loadSettings.mockResolvedValue(settings);
 
     const backup = await createStudioBackup();
