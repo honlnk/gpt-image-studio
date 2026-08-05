@@ -25,7 +25,7 @@ import {
 } from "./schema.js";
 import type { DatasetRecord, UserRecord } from "./types.js";
 
-/** Companion 数据根目录（与 credentials.ts 的 CONFIG_DIR 对齐）。 */
+/** Companion 数据根目录。显式 GPT_IMAGE_STUDIO_CONFIG_DIR 优先；默认按部署形态隔离：local = ~/.gpt-image-studio，server = ~/.gpt-image-studio-docker。Docker 显式 /data。 */
 export const CONFIG_DIR =
   process.env.GPT_IMAGE_STUDIO_CONFIG_DIR ?? join(homedir(), ".gpt-image-studio");
 

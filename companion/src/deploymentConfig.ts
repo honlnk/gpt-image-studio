@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 /**
  * 部署形态配置（阶段三 PR1 引入）。
@@ -16,7 +17,10 @@ export type DeploymentConfig = {
   mode: DeploymentMode;
   /** 监听地址：local 恒为 127.0.0.1，server 可配（默认 0.0.0.0）。 */
   host: string;
-  /** 数据根目录（沿用 GPT_IMAGE_STUDIO_CONFIG_DIR 约定，保持兼容）。 */
+  /**
+   * 数据根目录。显式 GPT_IMAGE_STUDIO_CONFIG_DIR 优先；默认按部署形态隔离：
+   * local = ~/.gpt-image-studio，server = ~/.gpt-image-studio-docker。
+   */
   dataDir: string;
 };
 
@@ -44,7 +48,7 @@ export function resolveDeploymentConfig(
   const mode = resolveMode(
     process.env.COMPANION_DEPLOYMENT_MODE ?? opts.mode ?? "local",
   );
-  const dataDir = process.env.GPT_IMAGE_STUDIO_CONFIG_DIR ?? defaultDataDir();
+  const dataDir = process.env.GPT_IMAGE_STUDIO_CONFIG_DIR ?? defaultDataDir(mode);
   const requestedHost = process.env.COMPANION_HOST ?? opts.host;
 
   if (mode === "local") {
@@ -74,8 +78,11 @@ function resolveMode(value: string): DeploymentMode {
   );
 }
 
-function defaultDataDir(): string {
-  // 沿用 storage/db.ts 的约定，避免引入新变量名。
-  // 这里不直接 import CONFIG_DIR 是为了打破潜在的循环依赖与初始化顺序耦合。
-  return `${homedir()}/.gpt-image-studio`;
+function defaultDataDir(mode: DeploymentMode): string {
+  // local/server 使用独立默认目录，避免两种运行形态互相读写凭据、SQLite 与图片数据。
+  // Docker 显式设置 GPT_IMAGE_STUDIO_CONFIG_DIR=/data，不经过这里。
+  return join(
+    homedir(),
+    mode === "server" ? ".gpt-image-studio-docker" : ".gpt-image-studio",
+  );
 }

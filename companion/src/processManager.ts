@@ -7,16 +7,14 @@ import {
   openSync,
   readdirSync,
   readFileSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
-const CONFIG_DIR = join(homedir(), ".gpt-image-studio");
-const LOGS_DIR = join(CONFIG_DIR, "logs");
-const PID_FILE = join(CONFIG_DIR, "companion.pid");
+const CONTROL_DIR = join(homedir(), ".gpt-image-studio");
+const PID_FILE = join(CONTROL_DIR, "companion.pid");
 const LOG_RETENTION_DAYS = 7;
 
 export type ManagedProcessInfo = {
@@ -29,6 +27,8 @@ export type ManagedProcessInfo = {
   host?: string;
   /** 部署形态 local/server（阶段三 PR1）。旧版记录无此字段，读取时为 undefined。 */
   deploymentMode?: string;
+  /** 业务数据和日志目录。旧版记录无此字段，读取时为 undefined。 */
+  dataDir?: string;
 };
 
 export type StartManagedProcessInput = {
@@ -39,19 +39,21 @@ export type StartManagedProcessInput = {
   host?: string;
   /** 部署形态 local/server（阶段三 PR1）。 */
   deploymentMode?: string;
+  /** 业务数据和日志根目录。 */
+  dataDir: string;
 };
 
 export function getPidFilePath(): string {
   return PID_FILE;
 }
 
-export function getLogsDir(): string {
-  return LOGS_DIR;
+export function getLogsDir(dataDir = getCurrentDataDir()): string {
+  return join(dataDir, "logs");
 }
 
-export function getLogFilePath(date = new Date()): string {
+export function getLogFilePath(date = new Date(), dataDir = getCurrentDataDir()): string {
   const yyyyMmDd = formatLocalDate(date);
-  return join(LOGS_DIR, `companion-${yyyyMmDd}.log`);
+  return join(getLogsDir(dataDir), `companion-${yyyyMmDd}.log`);
 }
 
 export function readManagedProcessInfo(): ManagedProcessInfo | null {
@@ -66,7 +68,7 @@ export function readManagedProcessInfo(): ManagedProcessInfo | null {
 }
 
 export function writeManagedProcessInfo(info: ManagedProcessInfo): void {
-  ensureRuntimeDirs();
+  ensureControlDir();
   writeFileSync(PID_FILE, JSON.stringify(info, null, 2), { mode: 0o600 });
 }
 
@@ -76,9 +78,10 @@ export function clearManagedProcessInfo(): void {
   } catch {}
 }
 
-export function ensureRuntimeDirs(): void {
-  if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
-  if (!existsSync(LOGS_DIR)) mkdirSync(LOGS_DIR, { recursive: true, mode: 0o700 });
+export function ensureRuntimeDirs(dataDir = getCurrentDataDir()): void {
+  ensureControlDir();
+  const logsDir = getLogsDir(dataDir);
+  if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true, mode: 0o700 });
 }
 
 export function isProcessRunning(pid: number): boolean {
@@ -90,8 +93,7 @@ export function isProcessRunning(pid: number): boolean {
   }
 }
 
-export function cleanupOldLogs(now = new Date(), logsDir = LOGS_DIR): string[] {
-  if (logsDir === LOGS_DIR) ensureRuntimeDirs();
+export function cleanupOldLogs(now = new Date(), logsDir = getLogsDir()): string[] {
   const cutoffMs = now.getTime() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const removed: string[] = [];
 
@@ -113,6 +115,13 @@ export function cleanupOldLogs(now = new Date(), logsDir = LOGS_DIR): string[] {
   return removed;
 }
 
+export function buildManagedProcessEnv(dataDir: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    GPT_IMAGE_STUDIO_CONFIG_DIR: dataDir,
+  };
+}
+
 export function readLastLines(filePath: string, lineCount: number): string[] {
   if (!existsSync(filePath)) return [];
   const content = readFileSync(filePath, "utf-8");
@@ -130,8 +139,8 @@ export function readLogChunkSince(filePath: string, byteOffset: number): string 
 }
 
 export function startManagedProcess(input: StartManagedProcessInput): ManagedProcessInfo {
-  ensureRuntimeDirs();
-  cleanupOldLogs();
+  ensureRuntimeDirs(input.dataDir);
+  cleanupOldLogs(new Date(), getLogsDir(input.dataDir));
 
   const existing = readManagedProcessInfo();
   if (existing && isProcessRunning(existing.pid)) {
@@ -139,7 +148,7 @@ export function startManagedProcess(input: StartManagedProcessInput): ManagedPro
   }
   if (existing) clearManagedProcessInfo();
 
-  const logFile = getLogFilePath();
+  const logFile = getLogFilePath(new Date(), input.dataDir);
   const out = openSync(logFile, "a");
   const err = openSync(logFile, "a");
   const args = [
@@ -167,6 +176,7 @@ export function startManagedProcess(input: StartManagedProcessInput): ManagedPro
   const child = spawn(process.execPath, args, {
     detached: true,
     stdio: ["ignore", out, err],
+    env: buildManagedProcessEnv(input.dataDir),
   });
   child.unref();
   closeSync(out);
@@ -180,6 +190,7 @@ export function startManagedProcess(input: StartManagedProcessInput): ManagedPro
     startedAt: new Date().toISOString(),
     host: input.host,
     deploymentMode: input.deploymentMode,
+    dataDir: input.dataDir,
   };
   writeManagedProcessInfo(info);
   appendLogLine(logFile, `[manager] started ${basename(process.argv[1])} PID ${info.pid}`);
@@ -204,4 +215,14 @@ function formatLocalDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function ensureControlDir(): void {
+  if (!existsSync(CONTROL_DIR)) {
+    mkdirSync(CONTROL_DIR, { recursive: true, mode: 0o700 });
+  }
+}
+
+function getCurrentDataDir(): string {
+  return process.env.GPT_IMAGE_STUDIO_CONFIG_DIR ?? CONTROL_DIR;
 }

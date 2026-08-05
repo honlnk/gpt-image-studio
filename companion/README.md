@@ -87,7 +87,7 @@ npx tsx companion/src/main.ts serve
 gpt-image-studio start
 ```
 
-后台启动 companion 服务，日志写入 `~/.gpt-image-studio/logs/`，PID 信息写入 `~/.gpt-image-studio/companion.pid`。`start` 只负责启动服务，需要配对时请另行运行 `gpt-image-studio pair`。
+后台启动 companion 服务，日志写入 `<dataDir>/logs/`，PID 信息写入 `~/.gpt-image-studio/companion.pid`。`<dataDir>` 默认按部署形态隔离：`local` 模式为 `~/.gpt-image-studio`，`server` 模式为 `~/.gpt-image-studio-docker`，可用 `GPT_IMAGE_STUDIO_CONFIG_DIR` 覆盖。`start` 只负责启动服务，需要配对时请另行运行 `gpt-image-studio pair`。
 
 `start` 支持和 `serve` 相同的端口、channel、origin 和 session 参数。
 
@@ -182,12 +182,18 @@ npx tsx companion/src/main.ts unpair
 
 ## 数据目录
 
-所有本地状态保存在 `~/.gpt-image-studio/`：
+所有本地状态保存在 `<dataDir>/`，默认按部署形态隔离：
+
+- `local` 模式（默认）：`~/.gpt-image-studio`
+- `server` 模式：`~/.gpt-image-studio-docker`
+- 可用环境变量 `GPT_IMAGE_STUDIO_CONFIG_DIR` 覆盖（Docker 部署固定为 `/data`）
 
 | 文件 | 内容 |
 |------|------|
 | `credentials.json` | API Base URL + API Key |
 | `session.json` | 配对 session token |
+
+> PID 控制文件 `companion.pid` 固定放在 `~/.gpt-image-studio/`，便于 `stop`/`status` 在未指定 mode 时也能定位后台进程。
 
 ## 升级
 

@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   resolveDeploymentConfig,
@@ -29,7 +31,7 @@ describe("resolveDeploymentConfig", () => {
       const cfg = resolveDeploymentConfig();
       expect(cfg.mode).toBe("local");
       expect(cfg.host).toBe("127.0.0.1");
-      expect(cfg.dataDir).toMatch(/\.gpt-image-studio$/);
+      expect(cfg.dataDir).toBe(join(homedir(), ".gpt-image-studio"));
     });
   });
 
@@ -77,6 +79,7 @@ describe("resolveDeploymentConfig", () => {
       const cfg = resolveDeploymentConfig({ mode: "server" });
       expect(cfg.mode).toBe("server");
       expect(cfg.host).toBe("0.0.0.0");
+      expect(cfg.dataDir).toBe(join(homedir(), ".gpt-image-studio-docker"));
     });
 
     it("显式 host 生效", () => {
@@ -121,6 +124,18 @@ describe("resolveDeploymentConfig", () => {
       process.env.GPT_IMAGE_STUDIO_CONFIG_DIR = "/custom/data";
       const cfg = resolveDeploymentConfig();
       expect(cfg.dataDir).toBe("/custom/data");
+    });
+
+    it("显式 dataDir 在 local 模式优先于默认 ~/.gpt-image-studio", () => {
+      process.env.GPT_IMAGE_STUDIO_CONFIG_DIR = "/custom/local";
+      const cfg = resolveDeploymentConfig({ mode: "local" });
+      expect(cfg.dataDir).toBe("/custom/local");
+    });
+
+    it("显式 dataDir 在 server 模式优先于默认 ~/.gpt-image-studio-docker", () => {
+      process.env.GPT_IMAGE_STUDIO_CONFIG_DIR = "/custom/server";
+      const cfg = resolveDeploymentConfig({ mode: "server" });
+      expect(cfg.dataDir).toBe("/custom/server");
     });
   });
 

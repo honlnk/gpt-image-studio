@@ -197,7 +197,7 @@ server {
 | `ADMIN_API_KEY` | 是（server） | 平台级管理密钥，宿主调 `/admin/revoke` |
 | `MAIN_APP_URL` | OSS 模式必填 | 宿主地址（STS 签发接口） |
 | `MAIN_APP_API_KEY` | OSS 模式必填 | Companion 调宿主的凭证 |
-| `GPT_IMAGE_STUDIO_CONFIG_DIR` | 否（Docker 默认 `/data`） | 数据根目录 |
+| `GPT_IMAGE_STUDIO_CONFIG_DIR` | 否 | 数据根目录。local 模式默认 `~/.gpt-image-studio`，server 模式默认 `~/.gpt-image-studio-docker`，Docker 部署固定 `/data` |
 | `COMPANION_OSS_LONG_TERM_AK` | 否（默认关闭，**仅本地调试**） | `1`/`true` 时 server 模式的 OSS 允许用 `oss-credentials.json` 长期 AK（违背 D11，生产禁用；无宿主 STS 时的本地演示逃生门） |
 
 ---

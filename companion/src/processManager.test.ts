@@ -2,7 +2,13 @@ import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { cleanupOldLogs, getLogFilePath, readLastLines, readLogChunkSince } from "./processManager.js";
+import {
+  buildManagedProcessEnv,
+  cleanupOldLogs,
+  getLogFilePath,
+  readLastLines,
+  readLogChunkSince,
+} from "./processManager.js";
 
 describe("process manager helpers", () => {
   it("uses dated companion log file names", () => {
@@ -43,5 +49,29 @@ describe("process manager helpers", () => {
     expect(removed).toEqual([oldLog]);
     expect(readLastLines(freshLog, 1)).toEqual(["fresh"]);
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("process manager dataDir isolation", () => {
+  it("日志路径跟随传入的 dataDir", () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "companion-server-"));
+    const path = getLogFilePath(new Date(2026, 4, 25, 12, 0, 0), dataDir);
+
+    expect(path).toBe(join(dataDir, "logs", "companion-2026-05-25.log"));
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it("子进程环境显式注入 dataDir", () => {
+    const env = buildManagedProcessEnv("/opt/server-data");
+
+    expect(env.GPT_IMAGE_STUDIO_CONFIG_DIR).toBe("/opt/server-data");
+  });
+
+  it("子进程环境保留父进程既有变量", () => {
+    process.env.PLACEHOLDER_MARKER = "keep-me";
+    const env = buildManagedProcessEnv("/opt/server-data");
+
+    expect(env.PLACEHOLDER_MARKER).toBe("keep-me");
+    delete process.env.PLACEHOLDER_MARKER;
   });
 });
