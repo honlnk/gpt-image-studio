@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { effectScope, ref } from "vue";
+import { effectScope, nextTick, ref } from "vue";
 import type { Ref } from "vue";
 import { useCompanionConnection } from "./useCompanionConnection";
 import type {
@@ -76,6 +76,7 @@ function setupComposable(options: Options = {}) {
   const companionAccessKey = ref(options.companionAccessKey ?? "test-key-1");
   const onClearAccessKey = vi.fn();
   const onApplyProviderInfo = vi.fn();
+  const onApplyDirectProviderInfo = vi.fn();
   const onAccessKeyAcquired = vi.fn();
 
   const result = scope.run(() =>
@@ -85,6 +86,7 @@ function setupComposable(options: Options = {}) {
       companionAccessKey,
       onClearAccessKey,
       onApplyProviderInfo,
+      onApplyDirectProviderInfo,
       onAccessKeyAcquired,
     }),
   )!;
@@ -95,7 +97,24 @@ function setupComposable(options: Options = {}) {
     refs: { connectionMode, companionUrl, companionAccessKey },
     onClearAccessKey,
     onApplyProviderInfo,
+    onApplyDirectProviderInfo,
     onAccessKeyAcquired,
+  };
+}
+
+/** vitest 默认 node 环境没有 document：手搓最小 stub，只覆盖 composable 用到的
+ *  addEventListener + visibilityState，并暴露 dispatch 供用例触发事件。 */
+function createFakeDocument() {
+  const listeners = new Map<string, Set<() => void>>();
+  return {
+    visibilityState: "visible",
+    addEventListener(type: string, cb: () => void) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(cb);
+    },
+    dispatch(type: string) {
+      listeners.get(type)?.forEach((cb) => cb());
+    },
   };
 }
 
@@ -106,6 +125,7 @@ describe("useCompanionConnection", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("probes immediately when connectionMode is localCompanion", async () => {
@@ -129,10 +149,27 @@ describe("useCompanionConnection", () => {
   it("does not probe when connectionMode is direct", async () => {
     mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
 
-    setupComposable({ connectionMode: "direct" });
+    const { onApplyDirectProviderInfo } = setupComposable({
+      connectionMode: "direct",
+    });
 
     await new Promise((r) => setTimeout(r, 10));
     expect(mocks.checkCompanionHealth).not.toHaveBeenCalled();
+    expect(onApplyDirectProviderInfo).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads Companion status in direct mode without applying it to the workbench", async () => {
+    const status = makeStatus({ provider: "glm", model: "glm-image" });
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatusResult.mockResolvedValue({ ok: true, status });
+
+    const { result, onApplyProviderInfo } = setupComposable({
+      connectionMode: "direct",
+    });
+    await result.checkStatus();
+
+    expect(result.companionAuthStatus.value).toEqual(status);
+    expect(onApplyProviderInfo).not.toHaveBeenCalled();
   });
 
   it("re-probes when switching to localCompanion", async () => {
@@ -146,6 +183,26 @@ describe("useCompanionConnection", () => {
     await vi.waitFor(() => {
       expect(mocks.checkCompanionHealth).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("restores direct defaults when switching away from localCompanion", async () => {
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatusResult.mockResolvedValue({
+      ok: true,
+      status: makeStatus({ provider: "glm", model: "glm-image" }),
+    });
+
+    const { refs, onApplyProviderInfo, onApplyDirectProviderInfo } =
+      setupComposable();
+    await vi.waitFor(() => {
+      expect(onApplyProviderInfo).toHaveBeenCalledWith(
+        expect.objectContaining({ model: "glm-image" }),
+      );
+    });
+
+    refs.connectionMode.value = "direct";
+    await nextTick();
+    expect(onApplyDirectProviderInfo).toHaveBeenCalledTimes(1);
   });
 
   it("clears access key when auth/status returns 401 (invalidToken)", async () => {
@@ -175,6 +232,21 @@ describe("useCompanionConnection", () => {
     expect(onApplyProviderInfo).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "openai" }),
     );
+  });
+
+  it("connects in direct mode without applying Companion provider info", async () => {
+    const status = makeStatus({ provider: "glm", model: "glm-image" });
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatus.mockResolvedValue(status);
+
+    const { result, onApplyProviderInfo } = setupComposable({
+      connectionMode: "direct",
+      companionAccessKey: "",
+    });
+
+    await result.connectWithKey("valid-uuid-key");
+    expect(result.companionAuthStatus.value).toEqual(status);
+    expect(onApplyProviderInfo).not.toHaveBeenCalled();
   });
 
   it("clears access key and reports error when key is invalid", async () => {
@@ -209,5 +281,53 @@ describe("useCompanionConnection", () => {
     result.disconnect();
     expect(onClearAccessKey).toHaveBeenCalledTimes(1);
     expect(onApplyProviderInfo).toHaveBeenCalledWith(null);
+  });
+
+  it("re-probes when the page becomes visible again in localCompanion mode", async () => {
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    mocks.getCompanionAuthStatusResult.mockResolvedValue({
+      ok: true,
+      status: makeStatus({ model: "gpt-image-2" }),
+    });
+
+    const fakeDocument = createFakeDocument();
+    vi.stubGlobal("document", fakeDocument);
+
+    const { onApplyProviderInfo } = setupComposable();
+    await vi.waitFor(() => {
+      expect(mocks.checkCompanionHealth).toHaveBeenCalledTimes(1);
+    });
+
+    // 模拟用户在 Companion 管理页（另一个标签页）切换了 provider 再切回来：
+    // 重新可见时重新探测 /auth/status，回流最新的 model。
+    mocks.getCompanionAuthStatusResult.mockResolvedValue({
+      ok: true,
+      status: makeStatus({
+        provider: "doubao",
+        model: "doubao-seedream-5-0-pro",
+      }),
+    });
+    fakeDocument.dispatch("visibilitychange");
+
+    // 第二段链路是 health → authStatus → apply，等最终结果落地而不是只等 health 计数。
+    await vi.waitFor(() => {
+      expect(mocks.checkCompanionHealth).toHaveBeenCalledTimes(2);
+      expect(onApplyProviderInfo).toHaveBeenLastCalledWith(
+        expect.objectContaining({ model: "doubao-seedream-5-0-pro" }),
+      );
+    });
+  });
+
+  it("does not re-probe on visibilitychange in direct mode", async () => {
+    mocks.checkCompanionHealth.mockResolvedValue(HEALTH_ONLINE);
+    const fakeDocument = createFakeDocument();
+    vi.stubGlobal("document", fakeDocument);
+
+    setupComposable({ connectionMode: "direct" });
+    await new Promise((r) => setTimeout(r, 10));
+
+    fakeDocument.dispatch("visibilitychange");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(mocks.checkCompanionHealth).not.toHaveBeenCalled();
   });
 });

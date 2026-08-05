@@ -34,3 +34,6 @@ desktop/src-tauri/WixTools/
 
 # ZCode agent workspace (plans only)
 .zcode/plans/
+
+# qiankun 宿主示例的本地配置（含 JWT，用 config.example.json 复制生成）
+examples/qiankun-host/config.json

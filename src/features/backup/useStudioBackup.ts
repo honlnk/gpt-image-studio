@@ -1,17 +1,17 @@
-import { createStudioBackup, restoreStudioBackup } from "../../services/backups";
+import type { BackupServices } from "../../services/backups";
 import { track } from "../analytics/useAnalyticsTracker";
 import { formatError } from "../../shared/errors";
 import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
-import type { Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioBackupInput = {
+  /** 阶段一 PR4：backup service 由 ViewModel 注入（决策 T1 + §6.3）。 */
+  backupServices: BackupServices;
   activeConversationId: Ref<string>;
   attachedImages: Ref<string[]>;
   composerText: Ref<string>;
-  conversations: Ref<Conversation[]>;
-  imageAssets: Ref<ImageAsset[]>;
-  messages: Ref<Message[]>;
+  /** 清空两个 store 的分页状态与窗口（PR-c：导入后由 restore 按分页模型重建）。 */
+  resetPagination: () => void;
   notifyError: (message: string) => void;
   notifySuccess: (message: string) => void;
   onStorageError: (error: unknown) => void;
@@ -22,7 +22,7 @@ export function useStudioBackup(input: UseStudioBackupInput) {
   async function exportBackup() {
     track("backup.export_requested", { kind: "project" }, "system");
     try {
-      const backup = await createStudioBackup();
+      const backup = await input.backupServices.create();
       const url = createObjectUrl(backup);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -41,10 +41,8 @@ export function useStudioBackup(input: UseStudioBackupInput) {
   async function importBackup(file: File) {
     track("backup.import_requested", { kind: "project", sizeBytes: file.size }, "system");
     try {
-      await restoreStudioBackup(file);
-      input.conversations.value = [];
-      input.messages.value = [];
-      input.imageAssets.value = [];
+      await input.backupServices.restore(file);
+      input.resetPagination();
       input.attachedImages.value = [];
       input.composerText.value = "";
       input.activeConversationId.value = "";

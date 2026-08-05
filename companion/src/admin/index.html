@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Companion 管理页</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="page-header">
+        <h1>Companion 管理页</h1>
+        <p class="page-subtitle">
+          管理本地 Companion 服务：状态、API 凭据与日志。和命令行工具完全等价，所有操作只在本机 loopback 下可用。
+        </p>
+      </header>
+
+      <!-- ① 状态总览 -->
+      <section id="status-card" class="card">
+        <div class="status-row">
+          <span id="status-dot" class="status-dot offline"></span>
+          <span id="status-text" class="status-text">检测中…</span>
+          <span id="status-version" class="status-version"></span>
+          <button id="refresh-status" class="btn-text" type="button">刷新</button>
+        </div>
+        <div id="offline-hint" class="offline-hint" hidden>
+          <p class="hint-text">Companion 离线。请检查服务是否在运行：</p>
+          <div class="hint-code">
+            <div>gpt-image-studio start</div>
+          </div>
+        </div>
+        <div id="auth-summary" class="auth-summary" hidden></div>
+      </section>
+
+      <!-- ②.5 凭据损坏恢复（损坏时才显示） -->
+      <section id="corrupt-card" class="card corrupt-card" hidden>
+        <div class="corrupt-title">⚠️ 凭据文件异常</div>
+        <p id="corrupt-message" class="corrupt-message"></p>
+        <p class="corrupt-hint">
+          可以尝试从备份恢复；若备份也坏了，或不需要历史配置，可重置成空配置后重新添加。
+        </p>
+        <div class="corrupt-actions">
+          <button id="restore-btn" class="btn-secondary" type="button">从备份恢复</button>
+          <button id="reset-btn" class="btn-danger-outline" type="button">重置成空配置</button>
+        </div>
+      </section>
+
+      <!-- ③ 凭据列表 -->
+      <section id="credentials-card" class="card" hidden>
+        <div class="card-header">
+          <h2 class="card-title">API 凭据</h2>
+          <button id="add-btn" class="btn-outline-sm" type="button">+ 新增</button>
+        </div>
+        <p id="credentials-loading" class="muted-text">加载中…</p>
+        <p id="credentials-empty" class="muted-text" hidden>暂无 provider 配置，点击「新增」添加。</p>
+
+        <!-- 新增/编辑表单 -->
+        <div id="cred-form" class="cred-form" hidden>
+          <div id="form-title" class="form-title">新增配置</div>
+          <label class="field">
+            <span class="field-label">名称</span>
+            <input id="f-label" type="text" placeholder="如：豆包测试号" />
+          </label>
+          <label class="field">
+            <span class="field-label">Provider</span>
+            <select id="f-provider"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">API Base URL</span>
+            <input id="f-baseurl" type="text" placeholder="https://..." />
+          </label>
+          <label class="field">
+            <span class="field-label">Model</span>
+            <input id="f-model" type="text" placeholder="模型 ID" />
+          </label>
+          <label class="field">
+            <span class="field-label">API Key</span>
+            <input id="f-apikey" type="password" autocomplete="off" placeholder="sk-..." />
+          </label>
+          <div class="form-actions">
+            <button id="form-submit" class="btn-primary" type="button">保存</button>
+            <button id="form-cancel" class="btn-outline" type="button">取消</button>
+          </div>
+        </div>
+
+        <!-- 凭据列表容器 -->
+        <div id="cred-list" class="cred-list"></div>
+        <p id="cred-error" class="error-text"></p>
+      </section>
+
+      <!-- ③.5 存储位置（数据集） -->
+      <section id="storage-card" class="card" hidden>
+        <h2 class="card-title">存储位置</h2>
+        <p class="muted-text">
+          会话与图片数据的存放位置。切换后原位置数据不会删除，切回可找回。
+        </p>
+        <p id="storage-loading" class="muted-text">加载中…</p>
+
+        <div id="storage-body" hidden>
+          <div class="storage-current">
+            <span class="storage-current-key">当前位置：</span>
+            <span id="storage-current-label"></span>
+          </div>
+
+          <div class="storage-options">
+            <label class="storage-option">
+              <input type="radio" name="storage-kind" value="filesystem-default" />
+              <span class="option-text">
+                <span class="option-title">默认目录（推荐）</span>
+                <span class="option-desc">存到 Companion 默认目录，无需配置，数据安全。</span>
+              </span>
+            </label>
+            <label class="storage-option">
+              <input type="radio" name="storage-kind" value="filesystem-custom" />
+              <span class="option-text">
+                <span class="option-title">指定目录</span>
+                <span class="option-desc">存到指定文件夹，图片可直接用文件管理器打开。需输入绝对路径。</span>
+              </span>
+            </label>
+            <div id="storage-custom-dir" class="storage-subform">
+              <div class="subform-inner">
+                <div class="subform-content">
+                  <label class="field">
+                    <span class="field-label">目录绝对路径</span>
+                    <div class="dir-input-row">
+                      <div class="dir-select-wrap">
+                        <input id="storage-dir" type="text" placeholder="/Users/yourname/Pictures/GPT-Image-Studio" />
+                        <button id="storage-dir-dropdown-btn" class="dir-dropdown-btn" type="button" aria-label="展开历史目录" title="历史目录">▾</button>
+                        <ul id="storage-dir-list" class="dir-dropdown-list" hidden></ul>
+                      </div>
+                      <button id="storage-pick-dir" class="btn-outline-sm" type="button">选择文件夹…</button>
+                    </div>
+                  </label>
+                  <p class="hint-text">目录必须已存在且可写，不允许系统敏感目录。点输入框右侧 ▾ 可从历史使用过的目录中直接选择。</p>
+                </div>
+              </div>
+            </div>
+            <label class="storage-option">
+              <input type="radio" name="storage-kind" value="oss" />
+              <span class="option-text">
+                <span class="option-title">阿里云 OSS</span>
+                <span class="option-desc">上传到阿里云 OSS，跨设备访问。需配置 bucket 和 AccessKey。</span>
+              </span>
+            </label>
+            <div id="storage-oss-form" class="storage-subform">
+              <div class="subform-inner">
+                <div class="subform-content">
+                  <div id="storage-oss-summary" class="oss-summary" hidden>
+                    <p id="storage-oss-current" class="hint-text"></p>
+                    <div class="oss-summary-actions">
+                      <button id="storage-oss-reconfig" type="button" class="btn-outline-sm">重新配置</button>
+                    </div>
+                  </div>
+                  <div id="storage-oss-fields">
+                    <label class="field">
+                      <span class="field-label">Endpoint</span>
+                      <input id="storage-oss-endpoint" type="text" placeholder="oss-cn-hangzhou.aliyuncs.com" />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Bucket</span>
+                      <input id="storage-oss-bucket" type="text" placeholder="my-bucket" />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">AccessKey ID</span>
+                      <input id="storage-oss-ak" type="text" placeholder="LTAI..." />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">AccessKey Secret</span>
+                      <input id="storage-oss-sk" type="password" autocomplete="off" placeholder="••••••••" />
+                    </label>
+                    <p class="hint-text">保存前会做连通性测试，凭据错误将被拒绝。AccessKey 只存在 Companion 本地（切换存储位置不会丢失）。已保存过凭据时，AccessKey 留空即沿用；修改 Endpoint/Bucket 则需重新填写。</p>
+                    <div id="storage-oss-cancel-wrap" class="oss-summary-actions" hidden>
+                      <button id="storage-oss-reconfig-cancel" type="button" class="btn-text">取消</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p id="storage-error" class="error-text"></p>
+          <p id="storage-success" class="success-text" hidden></p>
+          <div id="storage-switch-wrap" class="storage-switch-wrap">
+            <div class="subform-inner">
+              <button id="storage-switch-btn" class="btn-primary" type="button">切换存储位置</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ④ 日志 -->
+      <section id="logs-card" class="card" hidden>
+        <h2 class="card-title">日志</h2>
+        <div class="logs-toolbar">
+          <input id="log-date" type="date" class="date-input" />
+          <select id="log-lines" class="lines-select">
+            <option value="50">最近 50 行</option>
+            <option value="100" selected>最近 100 行</option>
+            <option value="200">最近 200 行</option>
+          </select>
+          <button id="refresh-logs" class="btn-outline-sm" type="button">刷新</button>
+        </div>
+        <p id="logs-error" class="error-text"></p>
+        <pre id="logs-pre" class="logs-pre" hidden></pre>
+        <p id="logs-empty" class="muted-text" hidden>暂无日志。</p>
+        <p id="logs-hint" class="muted-text">点击「刷新」加载日志。</p>
+      </section>
+
+      <!-- 确认对话框（删除 / 重置共用） -->
+      <div id="dialog-backdrop" class="dialog-backdrop" hidden>
+        <div class="dialog">
+          <div id="dialog-title" class="dialog-title"></div>
+          <p id="dialog-desc" class="dialog-desc"></p>
+          <div class="dialog-actions">
+            <button id="dialog-cancel" class="btn-outline" type="button">取消</button>
+            <button id="dialog-confirm" class="btn-danger" type="button">确定</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

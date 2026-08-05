@@ -5,7 +5,7 @@ import {
 import {
   PROMPT_REWRITE_GUARD_PREFIX,
   normalizePromptRewriteGuardText,
-} from "./imagesApi";
+} from "./promptRewriteGuard";
 import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
 import { FIXED_IMAGE_MODEL } from "../shared/models";
@@ -18,7 +18,8 @@ import type {
   PromptMode,
   PromptRewriteGuardHistoryItem,
 } from "../types/studio";
-import { getFromStore, putInStore, STORE_NAMES } from "./db";
+import { STORE_NAMES, type StudioStorage } from "./storage";
+import { resolveStorage } from "./storage/resolveStorage";
 
 const SETTINGS_KEY = "app";
 
@@ -27,25 +28,67 @@ type SettingsRecord = {
   value: StoredAppSettings;
 };
 
+/** 应用设置（settings 表，key="app"）的存储服务。阶段一 PR2 改工厂注入（决策 T1）。 */
+export type SettingsServices = ReturnType<typeof createSettingsServices>;
+
+export function createSettingsServices(storage: StudioStorage) {
+  return {
+    async load() {
+      const record = await storage.get<SettingsRecord>(
+        STORE_NAMES.settings,
+        SETTINGS_KEY,
+      );
+
+      if (!record?.value) return undefined;
+
+      return normalizeSettings(record.value);
+    },
+    save(settings: AppSettings) {
+      return storage.put<SettingsRecord>(STORE_NAMES.settings, {
+        key: SETTINGS_KEY,
+        value: {
+          ...settings,
+          model: FIXED_IMAGE_MODEL,
+        },
+      });
+    },
+  };
+}
+
+/**
+ * 轻量配置服务（settings 表的 __config__: 前缀命名空间）。
+ *
+ * 封装 storage.readConfig/writeConfig 的通用 KV 配置能力（与 SettingsServices
+ * 的区别：SettingsServices 操作 "app" 记录即业务 AppSettings，ConfigServices
+ * 操作 __config__:xxx 记录即运行时 KV 配置，不进 AppSettings 结构）。
+ *
+ * 历史：阶段一 PR5 曾用它收编 companionUrl/companionAccessKey（决策 T3），
+ * 后在阶段二回滚为 localStorage 镜像权威（连接配置存进自选后端会形成鸡生蛋），
+ * 兜底迁移代码也已移除（PR5 从未发布到 main，无真实用户数据）。工厂本身保留
+ * 作为 StudioStorage config 能力的正当暴露，供未来通用 KV 配置使用。
+ */
+export type ConfigServices = ReturnType<typeof createConfigServices>;
+
+export function createConfigServices(storage: StudioStorage) {
+  return {
+    read<T>(key: string) {
+      return storage.readConfig<T>(key);
+    },
+    write<T>(key: string, value: T) {
+      return storage.writeConfig<T>(key, value);
+    },
+  };
+}
+
+// ─── 模块级默认实例（向后兼容，PR6 移除） ───
+const defaultServices = createSettingsServices(resolveStorage());
+
 export async function loadSettings() {
-  const record = await getFromStore<SettingsRecord>(
-    STORE_NAMES.settings,
-    SETTINGS_KEY,
-  );
-
-  if (!record?.value) return undefined;
-
-  return normalizeSettings(record.value);
+  return defaultServices.load();
 }
 
 export function saveSettings(settings: AppSettings) {
-  return putInStore<SettingsRecord>(STORE_NAMES.settings, {
-    key: SETTINGS_KEY,
-    value: {
-      ...settings,
-      model: FIXED_IMAGE_MODEL,
-    },
-  });
+  return defaultServices.save(settings);
 }
 
 type StoredAppSettings = Omit<

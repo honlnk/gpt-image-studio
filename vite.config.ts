@@ -1,7 +1,7 @@
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin, type Rollup } from 'vite'
 import { copyFileSync, existsSync } from 'node:fs'
 
 // https://vite.dev/config/
@@ -25,6 +25,30 @@ export default defineConfig(({ mode }) => ({
     vue(),
     mode === 'development' && vueDevTools(),
     tailwindcss(),
+    // qiankun 嵌入态 CSS 注入（见 src/main.ts injectEmbeddedCss）需要运行期拿到
+    // bundle CSS 的 URL，但产物文件名带 hash 构建前无法预知。这里在 generateBundle
+    // 阶段把 entry chunk 里的 __EMBEDDED_CSS_FILE__ 占位符替换成真实 CSS 文件名。
+    {
+      name: 'embedded-css-url',
+      generateBundle(_, bundle) {
+        const cssAsset = Object.values(bundle).find(
+          (a): a is Rollup.OutputAsset =>
+            a.type === 'asset' && a.fileName.endsWith('.css'),
+        )
+        if (!cssAsset) return
+        for (const chunk of Object.values(bundle)) {
+          if (
+            chunk.type === 'chunk' &&
+            chunk.code.includes('__EMBEDDED_CSS_FILE__')
+          ) {
+            chunk.code = (chunk as Rollup.OutputChunk).code.replaceAll(
+              '__EMBEDDED_CSS_FILE__',
+              cssAsset.fileName,
+            )
+          }
+        }
+      },
+    } satisfies Plugin,
     // GitHub Pages SPA fallback：直接访问/刷新 /companion 时 GH Pages 返回 404.html。
     // 构建后把 index.html 复制一份成 404.html（GH Pages 对未知路径返回它，状态码 200），
     // SPA 得以加载后由 App.vue 顶层路由分发接管。

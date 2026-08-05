@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getActiveCredential } from "../credentials.js";
 import type { CompanionSecurityConfig } from "../securityConfig.js";
 import type {
@@ -6,22 +6,21 @@ import type {
   OpenAIImageRequest,
   ProviderConfig,
 } from "../providers/types.js";
-import { resolveAdapter } from "../providers/registry.js";
+import { resolveAdapter, listProviderIds } from "../providers/registry.js";
 import { extractBoundary, parseMultipart } from "../providers/multipart.js";
+import type { ParsedEditBody } from "../providers/multipart.js";
+import {
+  KNOWN_EDIT_FIELDS,
+  KNOWN_GENERATE_FIELDS,
+} from "../shared/knownFields.js";
+import {
+  ProviderCallError,
+  type ProviderErrorCategory,
+} from "../providers/providerErrors.js";
 
 type ImagesRoutesOptions = {
   security: CompanionSecurityConfig;
 };
-
-/** web 发的已知文本字段名（其余字段进 extra 透传）。 */
-const KNOWN_GENERATE_FIELDS = ["model", "prompt", "size", "background", "output_format"];
-const KNOWN_EDIT_FIELDS = [
-  "model",
-  "prompt",
-  "size",
-  "background",
-  "output_format",
-];
 
 export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptions) {
   app.post("/images/generations", async (req, reply) => {
@@ -42,20 +41,37 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
 
     const config = toProviderConfig(creds);
     const adapter = resolveAdapter(config);
+    if (!adapter) {
+      const valid = listProviderIds().sort().join(", ");
+      return reply.status(503).send({
+        error: `凭据配置的 provider "${creds.provider}" 未注册，请检查或重新配置。已注册的有：${valid}`,
+      });
+    }
     if (!adapter.capability.generate) {
       return reply.status(501).send({ error: "当前 provider 不支持文生图" });
     }
 
     const request = toGenerateRequest(body);
+    logNormalizedImageRequest(app, {
+      operation: "generate",
+      provider: adapter.id,
+      model: request.model,
+      size: request.size,
+      resolution: request.resolution,
+      background: request.background,
+      outputFormat: request.outputFormat,
+    });
     let result;
     try {
-      result = await adapter.generate(request, config);
+      result = await withClientSignal(req, reply, (signal) =>
+        adapter.generate(request, config, { signal }),
+      );
     } catch (error) {
-      return reply.status(502).send({ error: errorMessage(error) });
+      return reply.status(502).send(errorPayload(error));
     }
 
     return reply.send({
-      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt }],
+      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt, mime_type: result.mimeType }],
     });
   });
 
@@ -77,17 +93,6 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
     }
 
     const rawBody = req.body as Buffer;
-    const validationError = validateEditMultipart(rawBody, opts.security);
-    if (validationError) {
-      return reply.status(400).send({ error: validationError });
-    }
-
-    const config = toProviderConfig(creds);
-    const adapter = resolveAdapter(config);
-    if (!adapter.capability.edit || !adapter.edit) {
-      return reply.status(501).send({ error: "当前 provider 不支持图片编辑" });
-    }
-
     const boundary = extractBoundary(req.headers["content-type"]!);
     if (!boundary) {
       return reply.status(400).send({ error: "multipart 请求缺少 boundary" });
@@ -97,21 +102,75 @@ export async function imagesRoutes(app: FastifyInstance, opts: ImagesRoutesOptio
       return reply.status(400).send({ error: parsed.message });
     }
 
+    // 只对结构化解析结果做一次语义校验，确保校验对象与 Adapter 收到的数据完全一致。
+    const validationError = validateEditMultipart(parsed, opts.security);
+    if (validationError) {
+      return reply.status(400).send({ error: validationError });
+    }
+
+    const config = toProviderConfig(creds);
+    const adapter = resolveAdapter(config);
+    if (!adapter) {
+      const valid = listProviderIds().sort().join(", ");
+      return reply.status(503).send({
+        error: `凭据配置的 provider "${creds.provider}" 未注册，请检查或重新配置。已注册的有：${valid}`,
+      });
+    }
+    if (!adapter.capability.edit || !adapter.edit) {
+      return reply.status(501).send({ error: "当前 provider 不支持图片编辑" });
+    }
+
     // mask 能力校验：带 mask 但 provider 不支持 → 明确报错
     if (parsed.mask && !adapter.capability.mask) {
       return reply.status(400).send({ error: "当前 provider 不支持遮罩局部编辑" });
     }
 
+    // Provider 专属参考图数量上限（比全局 maxEditImages 更细，如豆包 10 张、qwen 3 张）。
+    // 声明在 adapter.editConstraints.maxImages；未声明时 fallback 到全局安全配置兜底。
+    const providerMaxImages = adapter.editConstraints?.maxImages;
+    if (providerMaxImages !== undefined && parsed.images.length > providerMaxImages) {
+      return reply.status(400).send({
+        error: `当前 provider 编辑最多支持 ${providerMaxImages} 张参考图`,
+      });
+    }
+
+    // Provider 专属单张参考图大小上限（如豆包 30MB、qwen/wan 10MB、openai 50MB）。
+    // 声明在 adapter.editConstraints.maxImageBytes；未声明时由全局 body 上限兜底。
+    const providerMaxImageBytes = adapter.editConstraints?.maxImageBytes;
+    if (providerMaxImageBytes !== undefined) {
+      const oversized = parsed.images.find(
+        (img) => img.blob.length > providerMaxImageBytes,
+      );
+      if (oversized) {
+        const limitMB = (providerMaxImageBytes / 1024 / 1024).toFixed(0);
+        return reply.status(400).send({
+          error: `单张参考图大小超过当前 provider 上限 ${limitMB}MB`,
+        });
+      }
+    }
+
     const editRequest = toEditRequest(parsed);
+    logNormalizedImageRequest(app, {
+      operation: "edit",
+      provider: adapter.id,
+      model: editRequest.model,
+      size: editRequest.size,
+      resolution: editRequest.resolution,
+      background: editRequest.background,
+      outputFormat: editRequest.outputFormat,
+    });
+    const edit = adapter.edit;
     let result;
     try {
-      result = await adapter.edit(editRequest, config);
+      result = await withClientSignal(req, reply, (signal) =>
+        edit(editRequest, config, { signal }),
+      );
     } catch (error) {
-      return reply.status(502).send({ error: errorMessage(error) });
+      return reply.status(502).send(errorPayload(error));
     }
 
     return reply.send({
-      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt }],
+      data: [{ b64_json: result.b64Json, revised_prompt: result.revisedPrompt, mime_type: result.mimeType }],
     });
   });
 }
@@ -135,7 +194,7 @@ function toProviderConfig(creds: {
 function toGenerateRequest(body: Record<string, unknown>): OpenAIImageRequest {
   const extra: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
-    if (!KNOWN_GENERATE_FIELDS.includes(key)) {
+    if (!(KNOWN_GENERATE_FIELDS as readonly string[]).includes(key)) {
       extra[key] = value;
     }
   }
@@ -143,6 +202,7 @@ function toGenerateRequest(body: Record<string, unknown>): OpenAIImageRequest {
     model: String(body.model),
     prompt: String(body.prompt),
     size: String(body.size ?? "1024x1024"),
+    resolution: optionalString(body.companion_resolution),
     background: String(body.background ?? "auto"),
     outputFormat: String(body.output_format ?? "png"),
     extra,
@@ -157,7 +217,7 @@ function toEditRequest(parsed: {
 }): OpenAIImageEditRequest {
   const editExtra: Record<string, string> = {};
   for (const [key, value] of Object.entries(parsed.fields)) {
-    if (!KNOWN_EDIT_FIELDS.includes(key)) {
+    if (!(KNOWN_EDIT_FIELDS as readonly string[]).includes(key)) {
       editExtra[key] = value;
     }
   }
@@ -165,6 +225,7 @@ function toEditRequest(parsed: {
     model: parsed.fields.model ?? "",
     prompt: parsed.fields.prompt ?? "",
     size: parsed.fields.size ?? "1024x1024",
+    resolution: optionalString(parsed.fields.companion_resolution),
     background: parsed.fields.background ?? "auto",
     outputFormat: parsed.fields.output_format ?? "png",
     extra: {},
@@ -174,9 +235,90 @@ function toEditRequest(parsed: {
   };
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return "未知错误";
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * 把异常转成回传给 Web 的 502 响应体。
+ *
+ * ProviderCallError（分类错误）→ 带 `category` 字段；其他 Error → 只带 `error`。
+ * Web 端按向后兼容读 `payload.error` 即可，`category` 是给未来差异化处理用的。
+ */
+export function errorPayload(error: unknown): { error: string; category?: ProviderErrorCategory } {
+  if (error instanceof ProviderCallError) {
+    return { error: error.message, category: error.category };
+  }
+  if (error instanceof Error && error.message) {
+    return { error: error.message };
+  }
+  return { error: "未知错误" };
+}
+
+/**
+ * 在客户端断开时取消 provider 调用。
+ *
+ * 监听 **socket** 的 'close' 事件（浏览器刷新/关页面/网络断开都会触发），
+ * 当响应尚未完整写出（`writableEnded` 为 false）时调用 controller.abort()，
+ * 让 AbortSignal 一路透传到 provider 的 fetch，立即取消上游请求，释放凭据/连接。
+ *
+ * 为什么监听 socket 而非 `req.raw`：Node 的 `IncomingMessage` 在请求体被完整
+ * 读取后就会 emit 'close'（即使连接本身保活），这在 async handler await 期间
+ * 会过早触发，导致正常请求被误判为取消。socket 的 'close' 只在底层连接真正
+ * 关闭时才触发——keep-alive 连接复用时不会触发，客户端中途断开才会触发。
+ *
+ * `writableEnded` 检查避免正常响应完成后误触发 abort——响应已写完时 socket close
+ *（连接关闭或 keep-alive 回收）不应再 abort，此时 abort 已无意义，而且会污染日志、
+ * 误导调试。
+ *
+ * finally 里 off 掉 listener，防止 EventEmitter 在请求结束后仍持有引用导致泄漏。
+ */
+export async function withClientSignal<T>(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  fn: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const socket = req.raw.socket;
+  const onClose = () => {
+    if (!reply.raw.writableEnded) {
+      controller.abort();
+    }
+  };
+  socket.on("close", onClose);
+  try {
+    return await fn(controller.signal);
+  } finally {
+    socket.off("close", onClose);
+  }
+}
+
+function logNormalizedImageRequest(
+  app: FastifyInstance,
+  request: {
+    operation: "generate" | "edit";
+    provider: string;
+    model: string;
+    size: string;
+    resolution?: string;
+    background: string;
+    outputFormat: string;
+  },
+): void {
+  if (process.env.GPT_IMAGE_STUDIO_DEBUG_REQUESTS !== "1") return;
+  app.log.info(
+    {
+      event: "companion.image_request_normalized",
+      operation: request.operation,
+      provider: request.provider,
+      model: request.model,
+      size: request.size,
+      resolution: request.resolution,
+      background: request.background,
+      output_format: request.outputFormat,
+    },
+    "normalized image request",
+  );
 }
 
 function isJsonRequest(contentType: string | undefined): boolean {
@@ -203,28 +345,31 @@ function validateGenerationBody(body: Record<string, unknown>): string | null {
   return null;
 }
 
-export function validateEditMultipart(body: Buffer, security: CompanionSecurityConfig): string | null {
-  const text = body.toString("latin1");
-  const imagePartNames = [...text.matchAll(/name="image(?:\[\])?"/g)];
-  if (imagePartNames.length === 0) {
+export function validateEditMultipart(
+  parsed: ParsedEditBody,
+  security: CompanionSecurityConfig,
+): string | null {
+  if (parsed.images.length === 0) {
     return "编辑请求至少需要一张引用图片";
   }
-  if (imagePartNames.length > security.maxEditImages) {
+  if (parsed.images.length > security.maxEditImages) {
     return `编辑请求最多支持 ${security.maxEditImages} 张引用图片`;
   }
 
-  const partHeaders = text.match(/Content-Disposition:[\s\S]*?(?=\r\n\r\n)/g) ?? [];
-  for (const header of partHeaders) {
-    if (!/name="(?:image(?:\[\])?|mask)"/.test(header)) continue;
-    const mime = /Content-Type:\s*([^\r\n]+)/i.exec(header)?.[1]?.trim().toLowerCase();
-    if (!mime) {
+  const files = parsed.mask ? [...parsed.images, parsed.mask] : parsed.images;
+  for (const file of files) {
+    if (!file.mimeType) {
       return "图片 part 缺少 Content-Type";
     }
-    if (/name="mask"/.test(header) && mime !== "image/png") {
+    if (file.blob.length === 0) {
+      return "图片 part 不能为空";
+    }
+
+    if (file === parsed.mask && file.mimeType !== "image/png") {
       return "mask 必须是 image/png";
     }
-    if (/name="image(?:\[\])?"/.test(header) && !security.allowedEditImageMimeTypes.includes(mime)) {
-      return `不支持的图片类型：${mime}`;
+    if (file !== parsed.mask && !security.allowedEditImageMimeTypes.includes(file.mimeType)) {
+      return `不支持的图片类型：${file.mimeType}`;
     }
   }
 

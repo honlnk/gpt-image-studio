@@ -4,18 +4,21 @@
 # Users open http://localhost:8080 and use "直连模式" (direct mode) with their
 # own OpenAI-compatible Images API base URL + key. No backend needed.
 #
-# Optional `companion` profile: runs the local credential proxy as a sidecar.
-# IMPORTANT: companion/src/server.ts currently binds 127.0.0.1 only, so it is
-# NOT reachable from the host browser out of the box. Enable it only after
-# patching the source to support --host 0.0.0.0 (see notes at bottom of this
-# file). Until then, keep it disabled and use direct mode.
+# Optional `companion` profile: runs the Companion backend as a sidecar.
+# Companion 现已支持可配置监听地址（阶段三 PR1），可绑定 0.0.0.0 供容器外访问。
+# 启用方式：docker compose --profile companion up
+#
+# 镜像源：image 字段已指向 registry 全名（ghcr.io / docker.io）。
+# 首次运行前先 `docker compose pull` 拉预构建镜像；
+# 如需本地改代码重新构建，保留 `build:` 字段并执行 `docker compose build`。
 
 services:
   web:
-    build:
-      context: .
-      target: web
-    image: gpt-image-studio:latest
+    image: ghcr.io/honlnk/gpt-image-studio-web:latest
+    # 如需从源码构建（修改前端后），取消下行注释：
+    # build:
+    #   context: .
+    #   target: web
     container_name: gpt-image-studio-web
     ports:
       - "8080:80"
@@ -26,27 +29,56 @@ services:
       timeout: 3s
       retries: 3
 
-  # --- Optional companion sidecar (disabled by default) ---
-  # Uncomment the lines below AND apply the source patch described at the
-  # bottom of this file before enabling.
-  #
-  # companion:
-  #   profiles: ["companion"]
-  #   build:
-  #     context: .
-  #     target: companion
-  #   image: gpt-image-studio-companion:latest
-  #   container_name: gpt-image-studio-companion
-  #   ports:
-  #     - "19750:19750"
-  #   # The container's 127.0.0.1 is not the host's; bind 0.0.0.0 in the app
-  #   # and tell the browser to reach companion at http://localhost:19750
-  #   # (host port mapping) OR at http://companion:19750 if you front it.
-  #   command: ["node", "dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750", "--allow-origin", "http://localhost:8080"]
-  #   volumes:
-  #     # Persist credentials + pairing state across restarts
-  #     - companion-data:/root/.gpt-image-studio
-  #   restart: unless-stopped
+  # --- Optional companion backend (enable with --profile companion) ---
+  companion:
+    profiles: ["companion"]
+    image: ghcr.io/honlnk/gpt-image-studio-companion:latest
+    # 如需从源码构建（修改 companion 后），取消下行注释：
+    # build:
+    #   context: .
+    #   target: companion
+    container_name: gpt-image-studio-companion
+    ports:
+      - "19750:19750"
+    volumes:
+      # 持久化 SQLite master db + 业务 db + 图片 + 凭据
+      - companion-data:/data
+    environment:
+      # PR1 阶段：仍是 local 行为（accessKey 信任模型），但可远程访问
+      # PR2 起 server 模式接入 JWT_SECRET / ADMIN_API_KEY 等
+      - GPT_IMAGE_STUDIO_CONFIG_DIR=/data
+    restart: unless-stopped
+    # 监听 0.0.0.0 让宿主浏览器可通过 http://localhost:19750 访问
+    # 如需让宿主前端（http://localhost:8080）跨域访问 Companion，加 --allow-origin
+    command: ["node", "companion/dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750", "--allow-origin", "http://localhost:8080"]
 
-# volumes:
-#   companion-data:
+  # --- server 模式 companion（qiankun 嵌入演示，profile companion-server） ---
+  # JWT 认证 + 多用户隔离，配合 examples/qiankun-host 使用（见 examples/README.md）。
+  # 需要环境变量：JWT_SECRET（与宿主共享）、ADMIN_API_KEY（平台级管理密钥）。
+  companion-server:
+    profiles: ["companion-server"]
+    image: ghcr.io/honlnk/gpt-image-studio-companion:latest
+    # 如需从源码构建，取消下行注释：
+    # build:
+    #   context: .
+    #   target: companion
+    container_name: gpt-image-studio-companion-server
+    ports:
+      - "19751:19751"
+    volumes:
+      # 独立数据目录（与 local 模式的 ~/.gpt-image-studio 隔离）；
+      # OSS 长期 AK（oss-credentials.json）和 provider 凭据（credentials.json）放这里
+      - ${HOME}/.gpt-image-studio-docker:/data
+    environment:
+      - GPT_IMAGE_STUDIO_CONFIG_DIR=/data
+      - COMPANION_DEPLOYMENT_MODE=server
+      - JWT_SECRET=${JWT_SECRET:?需要 JWT_SECRET 环境变量（与宿主共享的 HS256 密钥）}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:?需要 ADMIN_API_KEY 环境变量（平台级管理密钥）}
+      # 逃生门（仅本地调试）：server 模式 OSS 用 oss-credentials.json 长期 AK。
+      # 违背 D11（生产应走宿主 STS 签发），无宿主后端的本地演示才开启。
+      - COMPANION_OSS_LONG_TERM_AK=1
+    restart: unless-stopped
+    command: ["node", "companion/dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19751", "--deployment-mode", "server", "--allow-origin", "http://127.0.0.1:5599"]
+
+volumes:
+  companion-data:

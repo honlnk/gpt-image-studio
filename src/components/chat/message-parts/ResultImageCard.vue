@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { onMounted, watch } from "vue";
 import type { ImageAsset, Message } from "../../../types/studio";
+import { useImagesStore } from "../../../stores/imagesStore";
 import Tooltip from "../../ui/Tooltip.vue";
 import { durationLabel, imageDownloadName } from "./messageImageFormat";
 
@@ -17,6 +19,15 @@ const emit = defineEmits<{
   previewImage: [id: string];
   refreshImage: [message: Message, imageId: string];
 }>();
+
+const imagesStore = useImagesStore();
+
+// PR9 懒加载：消息里的图片挂载时按需加载 blob（去重由 store 保证）。
+function ensurePreview() {
+  if (props.image) imagesStore.ensurePreviewLoaded(props.imageId);
+}
+onMounted(ensurePreview);
+watch(() => props.imageId, ensurePreview);
 
 function attachActionLabel() {
   if (!props.image) return "不可引用";
@@ -53,13 +64,33 @@ function attachActionLabel() {
         </span>
       </button>
       <div
-        v-else
+        v-else-if="!image || !image.blobKey"
         class="flex h-full w-full flex-col items-center justify-center gap-1 border border-dashed border-gray-300 bg-gray-50 px-4 text-center"
       >
         <span class="text-sm font-medium text-gray-500">图片已删除</span>
         <span class="text-xs text-gray-400">
           这张图片已从图片库移除，无法显示预览
         </span>
+      </div>
+      <!-- PR9：加载失败（blob 缺失/网络错误）可点击重试，与"已删除"明确区分 -->
+      <button
+        v-else-if="imagesStore.isPreviewError(imageId)"
+        class="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1 border border-dashed border-gray-300 bg-gray-50 px-4 text-center"
+        type="button"
+        @click="imagesStore.ensurePreviewLoaded(imageId)"
+      >
+        <span class="text-sm font-medium text-gray-500">加载失败</span>
+        <span class="text-xs text-gray-400">点击重试</span>
+      </button>
+      <!-- PR9：加载中骨架（idle/loading），不再误显示为"已删除" -->
+      <div
+        v-else
+        class="flex h-full w-full flex-col items-center justify-center gap-2 bg-gray-50 px-4 text-center"
+      >
+        <span
+          class="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500"
+        ></span>
+        <span class="text-xs text-gray-400">加载中…</span>
       </div>
     </div>
     <figcaption class="px-3 py-2">

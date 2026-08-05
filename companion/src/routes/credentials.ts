@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type {
   CompanionCredentialsListResponse,
   CompanionCredentialInput,
@@ -10,12 +10,17 @@ import type { ProviderPreset } from "../providerPresets.js";
 import { PROVIDER_PRESETS } from "../providerPresets.js";
 import { loopbackGuard } from "../middleware/loopback.js";
 import {
+  consumeCorruptionEvent,
   listCredentials,
   addCredential,
   updateCredential,
   removeCredential,
   activateCredential,
+  resetEmptyStore,
+  restoreLatestBackup,
 } from "../credentials.js";
+import { withStoreErrorBoundary } from "./storeRouteWrapper.js";
+import { parseCredentialInput, validateCredentialInput } from "./credentialInput.js";
 
 /**
  * 凭证管理路由（Web 面板 + CLI 共用）：多配置 CRUD + 激活切换。
@@ -42,21 +47,36 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     return PROVIDER_PRESETS;
   });
 
-  app.get<{ Reply: CompanionCredentialsListResponse }>("/credentials", async () => {
-    return listCredentials();
+  app.get<{ Reply: CompanionCredentialsListResponse }>("/credentials", async (_req, reply) => {
+    return withStoreErrorBoundary(reply, () => {
+      const store = listCredentials();
+      // store 正常加载后，检查是否有未消费的损坏事件。
+      // 场景：Web 端连续发多次 /credentials，第一次触发损坏备份，后续请求文件已不在，
+      // 返正常空列表——若不检查事件，credError 会被后续 200 清空，用户看不到损坏提示。
+      // 事件在 addCredential 成功后清除（语义：用户已重新配置，损坏翻篇）。
+      const event = consumeCorruptionEvent();
+      if (event) {
+        // 复用 handleStoreError 的 reply 发送逻辑（返 never，绕过 Reply 类型约束）
+        reply.status(500);
+        return { error: event.message, corrupt: true } as never;
+      }
+      return store;
+    });
   });
 
   app.post<{
     Body: CompanionCredentialInput;
     Reply: CompanionCredentialMutationResponse;
   }>("/credentials", async (req, reply) => {
-    const input = parseInput(req.body);
-    const error = validateInput(input);
+    const input = parseCredentialInput(req.body);
+    const error = validateCredentialInput(input);
     if (error) {
       return reply.status(400).send({ error } as never);
     }
-    const entry = addCredential(input);
-    return { ok: true, entry };
+    return withStoreErrorBoundary(reply, () => {
+      const entry = addCredential(input);
+      return { ok: true, entry };
+    });
   });
 
   app.put<{
@@ -64,54 +84,66 @@ export async function credentialsRoutes(app: FastifyInstance, opts?: Credentials
     Body: CompanionCredentialInput;
     Reply: CompanionCredentialMutationResponse;
   }>("/credentials/:id", async (req, reply) => {
-    const input = parseInput(req.body);
-    const error = validateInput(input);
+    const input = parseCredentialInput(req.body);
+    const error = validateCredentialInput(input);
     if (error) {
       return reply.status(400).send({ error } as never);
     }
-    const entry = updateCredential(req.params.id, input);
-    if (!entry) {
-      return reply.status(404).send({ error: "凭据不存在" } as never);
-    }
-    return { ok: true, entry };
+    return withStoreErrorBoundary(reply, () => {
+      const entry = updateCredential(req.params.id, input);
+      if (!entry) {
+        return reply.status(404).send({ error: "凭据不存在" } as never);
+      }
+      return { ok: true, entry };
+    });
   });
 
   app.delete<{
     Params: { id: string };
     Reply: CompanionCredentialDeleteResponse;
   }>("/credentials/:id", async (req, reply) => {
-    const removed = removeCredential(req.params.id);
-    if (!removed) {
-      return reply.status(404).send({ error: "凭据不存在" } as never);
-    }
-    return { ok: true };
+    return withStoreErrorBoundary(reply, () => {
+      const removed = removeCredential(req.params.id);
+      if (!removed) {
+        return reply.status(404).send({ error: "凭据不存在" } as never);
+      }
+      return { ok: true };
+    });
   });
 
   app.post<{
     Params: { id: string };
     Reply: CompanionCredentialActivateResponse;
   }>("/credentials/:id/activate", async (req, reply) => {
-    const ok = activateCredential(req.params.id);
-    if (!ok) {
-      return reply.status(404).send({ error: "凭据不存在" } as never);
-    }
-    return { ok: true, activeId: req.params.id };
+    return withStoreErrorBoundary(reply, () => {
+      const ok = activateCredential(req.params.id);
+      if (!ok) {
+        return reply.status(404).send({ error: "凭据不存在" } as never);
+      }
+      return { ok: true, activeId: req.params.id };
+    });
   });
-}
 
-function parseInput(body: unknown): CompanionCredentialInput {
-  const b = (body ?? {}) as Record<string, unknown>;
-  return {
-    label: typeof b.label === "string" ? b.label : undefined,
-    provider: typeof b.provider === "string" ? b.provider : undefined,
-    apiBaseUrl: typeof b.apiBaseUrl === "string" ? b.apiBaseUrl : "",
-    apiKey: typeof b.apiKey === "string" ? b.apiKey : "",
-    model: typeof b.model === "string" ? b.model : undefined,
-  };
-}
+  /**
+   * 重置成空配置：写合法空 store + 清除损坏事件。
+   * 用户看到凭据损坏提示后选择「重置成空配置」时调用——放弃损坏历史，回到首次使用状态。
+   */
+  app.post("/credentials/reset-empty", async (_req, reply) => {
+    return withStoreErrorBoundary(reply, () => {
+      resetEmptyStore();
+      return { ok: true };
+    });
+  });
 
-function validateInput(input: CompanionCredentialInput): string | null {
-  if (!input.apiBaseUrl.trim()) return "apiBaseUrl 不能为空";
-  if (!input.apiKey.trim()) return "apiKey 不能为空";
-  return null;
+  /**
+   * 从最近备份恢复：找最新的 credentials.json.corrupt-{ts}.json 尝试恢复。
+   * 成功 → 覆盖 credentials.json + 清除事件 + 删掉已恢复的备份。
+   * 失败（备份也坏了）→ 抛 CredentialStoreError，原状不变，用户可改试 reset-empty。
+   */
+  app.post("/credentials/restore-backup", async (_req, reply) => {
+    return withStoreErrorBoundary(reply, () => {
+      const store = restoreLatestBackup();
+      return { ok: true, entries: store.entries.length, activeId: store.activeId };
+    });
+  });
 }

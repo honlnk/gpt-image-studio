@@ -1,10 +1,4 @@
-import type { Conversation, ImageAsset, Message } from "../types/studio";
-import { getAllFromStore, STORE_NAMES } from "./db";
-
-type ImageBlobRecord = {
-  key: string;
-  blob: Blob;
-};
+import { type StudioStorage } from "./storage";
 
 export type StorageUsage = {
   imageBytes: number;
@@ -14,63 +8,44 @@ export type StorageUsage = {
   quotaBytes?: number;
 };
 
-export async function estimateStorageUsage(): Promise<StorageUsage> {
-  const [
-    conversations,
-    messages,
-    imageAssets,
-    imageBlobs,
-    settings,
-    conversationDrafts,
-    browserEstimate,
-  ] = await Promise.all([
-    getAllFromStore<Conversation>(STORE_NAMES.conversations),
-    getAllFromStore<Message>(STORE_NAMES.messages),
-    getAllFromStore<ImageAsset>(STORE_NAMES.imageAssets),
-    getAllFromStore<ImageBlobRecord>(STORE_NAMES.imageBlobs),
-    getAllFromStore<unknown>(STORE_NAMES.settings),
-    getAllFromStore<unknown>(STORE_NAMES.conversationDrafts),
-    estimateBrowserStorage(),
-  ]);
+/** 容量估算服务。阶段一 PR3 改工厂注入（决策 T1）。 */
+export type StorageUsageServices = ReturnType<
+  typeof createStorageUsageServices
+>;
 
-  const imageBytes = imageBlobs.reduce(
-    (total, record) => total + (record.blob?.size ?? 0),
-    0,
-  );
-  const serializedMetadataBytes = byteSizeOfJson({
-    conversations,
-    messages,
-    imageAssets,
-    settings,
-    conversationDrafts,
-  });
-  const browserUsageBytes = browserEstimate.usage;
-  const metadataBytes = Math.max(
-    serializedMetadataBytes,
-    browserUsageBytes ? browserUsageBytes - imageBytes : 0,
-  );
-
+export function createStorageUsageServices(storage: StudioStorage) {
   return {
-    imageBytes,
-    metadataBytes,
-    projectBytes: imageBytes + metadataBytes,
-    browserUsageBytes,
-    quotaBytes: browserEstimate.quota,
+    /**
+     * 容量估算（server 模式分页 PR-e）：委托存储后端的 estimateStoredBytes 聚合，
+     * 不再整库拉取 6 张表在客户端求和——Companion 实现走 /storage/usage
+     * 服务端 SQL 聚合，messages 表再大也不会把全量数据拖过网络。
+     * IndexedDB 实现仍是本地全量求和（本地磁盘，毫秒级，无网络成本）。
+     */
+    async estimate(): Promise<StorageUsage> {
+      const [stored, browserEstimate] = await Promise.all([
+        storage.estimateStoredBytes(),
+        // 可选方法：仅本地 IndexedDB 实现提供（浏览器 quota 概念），
+        // Companion 模式数据在服务端，无浏览器 quota 语义。
+        storage.estimateQuota?.() ??
+          Promise.resolve<{ usage?: number; quota?: number }>({}),
+      ]);
+
+      const imageBytes = stored.imageBytes;
+      const browserUsageBytes = browserEstimate.usage;
+      // browser 总占用（含 IndexedDB 页开销等）通常大于 JSON 序列化体积，
+      // 取大者更接近用户感知的"占了浏览器多少空间"。
+      const metadataBytes = Math.max(
+        stored.metadataBytes,
+        browserUsageBytes ? browserUsageBytes - imageBytes : 0,
+      );
+
+      return {
+        imageBytes,
+        metadataBytes,
+        projectBytes: imageBytes + metadataBytes,
+        browserUsageBytes,
+        quotaBytes: browserEstimate.quota,
+      };
+    },
   };
-}
-
-async function estimateBrowserStorage() {
-  if (!navigator.storage?.estimate) {
-    return {};
-  }
-
-  try {
-    return await navigator.storage.estimate();
-  } catch {
-    return {};
-  }
-}
-
-function byteSizeOfJson(value: unknown) {
-  return new Blob([JSON.stringify(value)]).size;
 }

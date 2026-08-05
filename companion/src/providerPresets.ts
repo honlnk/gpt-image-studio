@@ -1,10 +1,11 @@
+import { PROVIDER_PROFILES } from "./providers/providerProfiles.js";
+
 /**
- * login 命令（CLI）和凭证管理面板（Web）共用的 provider 预设：
- * 每个 provider 的默认 base url + 默认 model + 简介。
+ * login 命令（CLI）和凭证管理面板（Web）共用的 provider 预设视图。
  *
  * 这份列表是"用户选 provider"的单一来源——CLI 的 login 菜单和 Web 面板的
  * provider 下拉都读这里（Web 通过 GET /credentials/presets 拿到）。
- * 新增 provider 时：先在 registry 注册 adapter，再在这里加一项预设即可。
+ * 实际静态数据来自 providers/profiles/{id}.json，避免默认 URL/model 与能力配置分离。
  */
 export type ProviderPreset = {
   id: string;
@@ -13,47 +14,32 @@ export type ProviderPreset = {
   defaultModel: string;
 };
 
-export const PROVIDER_PRESETS: ProviderPreset[] = [
-  {
-    id: "openai",
-    label: "OpenAI 兼容（gpt-image-2 / 中转站）",
-    defaultBaseUrl: "https://api.packyapi.com/v1/images",
-    defaultModel: "gpt-image-2",
-  },
-  {
-    id: "glm",
-    label: "GLM-Image（智谱 Zhipu）",
-    defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4/images",
-    defaultModel: "glm-image",
-  },
-  {
-    id: "doubao",
-    label: "豆包 Seedream（火山方舟 ByteDance）",
-    defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3/images",
-    defaultModel: "doubao-seedream-5-0-lite",
-  },
-  {
-    id: "qwen",
-    label: "Qwen-Image（阿里云百炼 DashScope）",
-    defaultBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
-    defaultModel: "qwen-image-2.0-pro",
-  },
-  {
-    id: "wan",
-    label: "通义万相 Wan（阿里云百炼 DashScope）",
-    defaultBaseUrl: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
-    defaultModel: "wan2.7-image",
-  },
-  {
-    id: "grok",
-    label: "Grok Imagine（xAI）",
-    defaultBaseUrl: "https://api.x.ai/v1/images",
-    defaultModel: "grok-imagine-image",
-  },
-  {
-    id: "gemini",
-    label: "Gemini Image（Google）",
-    defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
-    defaultModel: "gemini-2.5-flash-image",
-  },
-];
+/**
+ * 从 profile 的 preset 元数据生成对外兼容的预设列表。
+ * order 只用于稳定排序，不暴露给 Web/CLI。
+ */
+export const PROVIDER_PRESETS: ProviderPreset[] = Object.entries(PROVIDER_PROFILES)
+  .sort(([, a], [, b]) => a.preset.order - b.preset.order)
+  .map(([id, profile]) => ({
+    id,
+    label: profile.preset.label,
+    defaultBaseUrl: profile.preset.defaultBaseUrl,
+    defaultModel: profile.preset.defaultModel,
+  }));
+
+/**
+ * 按 provider id 取预设。adapter 的 describe() / generate() / edit() 用它做
+ * `config.model ?? getPreset(id).defaultModel` 的回退，不再各自声明 DEFAULT_*_MODEL。
+ * 未配置的 provider id 返回 undefined（由调用方决定回退策略）。
+ */
+export function getProviderPreset(providerId: string): ProviderPreset | undefined {
+  return PROVIDER_PRESETS.find((p) => p.id === providerId);
+}
+
+/**
+ * 按 provider id 取默认 model。未配置时返回 undefined。
+ * 这是各 adapter `config.model ?? ...` 回退的单一数据源。
+ */
+export function getDefaultModel(providerId: string): string | undefined {
+  return getProviderPreset(providerId)?.defaultModel;
+}

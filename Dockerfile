@@ -34,11 +34,9 @@ RUN printf 'server {\n\
 
 EXPOSE 80
 
-# ---- Stage 3 (optional): companion CLI ----
-# NOTE: companion/src/server.ts hardcodes host 127.0.0.1. To use it inside a
-# container you must first add a --host option and bind 0.0.0.0, otherwise the
-# host browser cannot reach 127.0.0.1:19750 (that points at the host, not the
-# container). See docker-compose.yml for the optional companion service.
+# ---- Stage 3: companion server (phase 3) ----
+# Companion 现已支持 --host/--deployment-mode（阶段三 PR1），可绑定 0.0.0.0 供容器外访问。
+# 数据持久化走 /data 卷（SQLite + 图片 + 凭据），由 GPT_IMAGE_STUDIO_CONFIG_DIR 指向。
 FROM node:20-alpine AS companion
 
 RUN corepack enable
@@ -54,4 +52,11 @@ COPY companion ./companion
 
 RUN pnpm --filter @honlnk/image-studio-companion build
 
+# 数据持久化挂载点（SQLite master db + 业务 db + 图片文件 + 凭据）
+ENV GPT_IMAGE_STUDIO_CONFIG_DIR=/data
+RUN mkdir -p /data
+
 EXPOSE 19750
+
+# 默认监听 0.0.0.0 让容器外可访问；部署形态 local（PR2 起 server 模式接入 JWT）
+CMD ["node", "companion/dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19750"]

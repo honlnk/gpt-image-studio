@@ -1,15 +1,10 @@
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, type WatchStopHandle } from "vue";
 import { defineStore } from "pinia";
-import {
-  deleteImageAsset,
-  deleteImageBlob,
-  loadImageBlob,
-  saveImageAsset,
-  saveImageBlob,
-} from "../services/imageAssets";
+import type { ImageAssetServices } from "../services/imageAssets";
 import { readImageDimensions } from "../services/imageMetadata";
-import { estimateStorageUsage, type StorageUsage } from "../services/storageUsage";
-import { isoTimestamp } from "../shared/dateTime";
+import { toPlainImageAsset } from "../services/messageSerialization";
+import type { StorageUsage, StorageUsageServices } from "../services/storageUsage";
+import { isoTimestamp, timestampFromCreatedAt } from "../shared/dateTime";
 import { formatError } from "../shared/errors";
 import { createId } from "../shared/id";
 import { createObjectUrl, revokeObjectUrls } from "../shared/objectUrls";
@@ -19,15 +14,35 @@ import type { ImageAsset, Message } from "../types/studio";
 import type { Ref } from "vue";
 
 type ImagesStoreContext = {
+  /** 阶段一 PR2：service 通过 context 注入（决策 T1）。
+   *  imageMetadata/messageSerialization 暂留模块级 import（非存储层，不在阶段一范围）。
+   *  storageUsage 必须走注入——它曾用模块级默认实例（无参 resolveStorage 恒为
+   *  IndexedDbStorage），导致 Companion 模式下容量估算错读浏览器 IndexedDB。 */
+  services: {
+    imageAssets: ImageAssetServices;
+    storageUsage: StorageUsageServices;
+  };
   activeConversationId: Ref<string>;
   messages: Ref<Message[]>;
   onStorageError: (error: unknown) => void;
 };
 
+/** 图片库全局分页页大小（server 模式分页 PR-c）。 */
+export const IMAGE_ASSETS_PAGE_SIZE = 100;
+
 export const useImagesStore = defineStore("images", () => {
   const attachedImages = ref<string[]>([]);
+  // imageAssets 语义（PR-c）：已加载窗口 = 全局第一页 + 当前会话全量 + 按需补加载，
+  // 按 createdAt DESC 维护。不再是全量表。
   const imageAssets = ref<ImageAsset[]>([]);
   const storageUsage = ref<StorageUsage | null>(null);
+  // ─── 分页状态（server 模式分页 PR-c） ───
+  const assetsNextCursor = ref<string | null>(null);
+  const assetsTotal = ref(0);
+  const isLoadingMoreAssets = ref(false);
+  /** 已完成全量加载的会话 id（切会话时聊天区引用/"当前会话"tab 完整性保证）。 */
+  const assetsEnsuredConversationId = ref("");
+  let ensureAssetsPromise: Promise<void> | null = null;
   let context: ImagesStoreContext | null = null;
 
   const activeAttachments = computed(() =>
@@ -44,8 +59,28 @@ export const useImagesStore = defineStore("images", () => {
     { flush: "post" },
   );
 
+  let stopActiveConversationWatch: WatchStopHandle | null = null;
+
   function configureImagesStore(nextContext: ImagesStoreContext) {
     context = nextContext;
+    // 切换会话时，新会话的图片自动插队到懒加载队首（createdAt 降序 = 最新的
+    // 先加载，对齐"聊天区从最下面逐层向上"的体感）。重复 configure（连接模式
+    // 切换重建 ViewModel）时先停旧 watch，避免叠加。
+    stopActiveConversationWatch?.();
+    stopActiveConversationWatch = watch(
+      () => nextContext.activeConversationId.value,
+      (conversationId) => {
+        if (!conversationId) return;
+        prioritizePreviews(
+          imageAssets.value
+            .filter((image) => image.conversationId === conversationId)
+            .sort(
+              (a, b) => timestampFromCreatedAt(b) - timestampFromCreatedAt(a),
+            )
+            .map((image) => image.id),
+        );
+      },
+    );
   }
 
   function revokePreviewUrls() {
@@ -95,8 +130,8 @@ export const useImagesStore = defineStore("images", () => {
 
     try {
       await Promise.all([
-        deleteImageAsset(id),
-        image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+        input.services.imageAssets.deleteAsset(id),
+        image.blobKey ? input.services.imageAssets.deleteBlob(image.blobKey) : Promise.resolve(),
       ]);
       await refreshStorageUsage();
       feedback.notifySuccess("图片已删除。");
@@ -121,8 +156,8 @@ export const useImagesStore = defineStore("images", () => {
     try {
       await Promise.all(
         deletedImages.flatMap((image) => [
-          deleteImageAsset(image.id),
-          image.blobKey ? deleteImageBlob(image.blobKey) : Promise.resolve(),
+          input.services.imageAssets.deleteAsset(image.id),
+          image.blobKey ? input.services.imageAssets.deleteBlob(image.blobKey) : Promise.resolve(),
         ]),
       );
       await refreshStorageUsage();
@@ -147,7 +182,7 @@ export const useImagesStore = defineStore("images", () => {
       image,
       ...imageAssets.value.filter((item) => item.id !== id),
     ];
-    await saveImageAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+    await input.services.imageAssets.saveAsset(toPlainImageAsset(image)).catch(input.onStorageError);
     return true;
   }
 
@@ -163,7 +198,7 @@ export const useImagesStore = defineStore("images", () => {
       image,
       ...imageAssets.value.filter((item) => item.id !== id),
     ];
-    await saveImageAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+    await input.services.imageAssets.saveAsset(toPlainImageAsset(image)).catch(input.onStorageError);
 
     // 颜色分组事件分类：set（无→有）/ changed（有→不同）/ cleared（有→无）。
     const hadColor = Boolean(previousColor);
@@ -233,8 +268,8 @@ export const useImagesStore = defineStore("images", () => {
     };
 
     await Promise.all([
-      saveImageBlob(blobKey, file),
-      saveImageAsset(toPlainImageAsset(imageAsset)),
+      input.services.imageAssets.saveBlob(blobKey, file),
+      input.services.imageAssets.saveAsset(toPlainImageAsset(imageAsset)),
     ]).catch(input.onStorageError);
 
     return imageAsset;
@@ -276,44 +311,200 @@ export const useImagesStore = defineStore("images", () => {
     imageAssets.value = imageAssets.value.filter((item) => item.id !== id);
   }
 
-  async function hydrateImagePreviews(assets: ImageAsset[]) {
+  // ─── 预览懒加载（阶段三 PR9）───
+  //
+  // hydrate 只装配 metadata（previewUrl 留空），blob 按需加载：
+  // - 当前会话图片由 configureImagesStore 的 watch / hydrate 自动插队队首；
+  // - 其余图片由组件可见性（IntersectionObserver）或挂载时 ensurePreviewLoaded 触发。
+  // 并发上限 2：OSS 后端带宽共享（实测聚合 ~10MB/s），并发越高每张越慢；
+  // IndexedDB 本地读毫秒级，低并发也无感。
+  //
+  // 状态机：idle（previewStates 无记录）→ loading → loaded（以 previewUrl 存在
+  // 表达，不记录）或 error（可重试）。组件据此区分"加载中"与"已删除"占位。
+  const previewStates = ref<Record<string, "loading" | "error">>({});
+  const previewQueue: string[] = [];
+  const previewInFlight = new Set<string>();
+  const PREVIEW_MAX_CONCURRENT = 2;
+
+  function isPreviewLoading(id: string) {
+    return previewStates.value[id] === "loading";
+  }
+
+  function isPreviewError(id: string) {
+    return previewStates.value[id] === "error";
+  }
+
+  /** 按需加载单张预览。已加载/排队中/加载中去重；error 态可重试。 */
+  function ensurePreviewLoaded(id: string) {
+    const image = imageById(id);
+    if (!image?.blobKey || image.previewUrl) return;
+    if (previewInFlight.has(id) || previewQueue.includes(id)) return;
+    previewQueue.push(id);
+    pumpPreviewQueue();
+  }
+
+  /**
+   * 把一组 id 插队到队首（保持传入顺序），用于当前会话图片优先加载。
+   * 不在此处按 imageAssets 过滤——hydrate 调用时 imageAssets 尚未赋值，
+   * 可加载性（blobKey 存在、无 previewUrl）由 pump 时校验，失效 id 自动跳过。
+   */
+  function prioritizePreviews(ids: string[]) {
+    if (!ids.length) return;
+    const idSet = new Set(ids);
+    const rest = previewQueue.filter((queued) => !idSet.has(queued));
+    previewQueue.length = 0;
+    previewQueue.push(...ids, ...rest);
+    pumpPreviewQueue();
+  }
+
+  function pumpPreviewQueue() {
+    while (previewInFlight.size < PREVIEW_MAX_CONCURRENT && previewQueue.length) {
+      const id = previewQueue.shift()!;
+      if (previewInFlight.has(id)) continue;
+      const image = imageById(id);
+      if (!image?.blobKey || image.previewUrl) continue;
+      previewInFlight.add(id);
+      previewStates.value = { ...previewStates.value, [id]: "loading" };
+      void loadPreviewBlob(id).finally(() => {
+        previewInFlight.delete(id);
+        pumpPreviewQueue();
+      });
+    }
+  }
+
+  async function loadPreviewBlob(id: string) {
     const input = getContext();
-    return Promise.all(
-      assets.map(async (asset) => {
-        if (!asset.blobKey) return asset;
+    const image = imageById(id);
+    if (!image?.blobKey) return;
+    try {
+      const blob = await input.services.imageAssets.loadBlob(image.blobKey);
+      if (!blob) throw new Error(`图片二进制不存在：${image.blobKey}`);
 
-        const blob = await loadImageBlob(asset.blobKey);
-        if (!blob) return asset;
-
-        const restoredAsset = {
-          ...asset,
-          previewUrl: createObjectUrl(blob),
-        };
-
-        if (restoredAsset.width && restoredAsset.height) {
-          return restoredAsset;
-        }
-
+      let nextAsset: ImageAsset = { ...image, previewUrl: createObjectUrl(blob) };
+      if (!nextAsset.width || !nextAsset.height) {
         const dimensions = await readImageDimensions(blob);
-        if (!dimensions) return restoredAsset;
-
-        const updatedAsset = {
-          ...restoredAsset,
-          width: dimensions.width,
-          height: dimensions.height,
-        };
-        await saveImageAsset(toPlainImageAsset(updatedAsset)).catch(input.onStorageError);
-        return updatedAsset;
-      }),
-    );
+        if (dimensions) {
+          nextAsset = {
+            ...nextAsset,
+            width: dimensions.width,
+            height: dimensions.height,
+          };
+          await input.services.imageAssets
+            .saveAsset(toPlainImageAsset(nextAsset))
+            .catch(input.onStorageError);
+        }
+      }
+      imageAssets.value = imageAssets.value.map((item) =>
+        item.id === id ? nextAsset : item,
+      );
+      const { [id]: _cleared, ...restStates } = previewStates.value;
+      previewStates.value = restStates;
+    } catch {
+      // 加载失败只标记 error（组件显示"点击重试"），不上报 onStorageError——
+      // 单张 blob 缺失/网络抖动不代表后端不可用。
+      previewStates.value = { ...previewStates.value, [id]: "error" };
+    }
   }
 
   async function refreshStorageUsage() {
     const input = getContext();
-    storageUsage.value = await estimateStorageUsage().catch((error) => {
+    storageUsage.value = await input.services.storageUsage.estimate().catch((error) => {
       input.onStorageError(error);
       return storageUsage.value;
     });
+  }
+
+  // ─── 分页加载（server 模式分页 PR-c） ───
+
+  /** 合并去重写入（保持 createdAt DESC）。会话全量与全局页有重叠时不会重复。 */
+  function mergeAssets(incoming: ImageAsset[]) {
+    if (!incoming.length) return;
+    const seen = new Set(imageAssets.value.map((asset) => asset.id));
+    const fresh = incoming.filter((asset) => !seen.has(asset.id));
+    if (!fresh.length) return;
+    imageAssets.value = [...imageAssets.value, ...fresh].sort(
+      (a, b) => timestampFromCreatedAt(b) - timestampFromCreatedAt(a),
+    );
+  }
+
+  /** 启动恢复：加载全局第一页（整体替换）。返回本页数据供调用方做种子校验。 */
+  async function loadAssetsFirstPage() {
+    const page = await getContext().services.imageAssets.listAssetsPage({
+      limit: IMAGE_ASSETS_PAGE_SIZE,
+    });
+    imageAssets.value = page.data;
+    assetsNextCursor.value = page.nextCursor;
+    assetsTotal.value = page.total;
+    return page.data;
+  }
+
+  /** 图片库"全部图片"滚到底：追加下一页。 */
+  async function loadMoreAssets() {
+    const cursor = assetsNextCursor.value;
+    if (!cursor || isLoadingMoreAssets.value) return;
+    isLoadingMoreAssets.value = true;
+    try {
+      const page = await getContext().services.imageAssets.listAssetsPage({
+        before: cursor,
+        limit: IMAGE_ASSETS_PAGE_SIZE,
+      });
+      mergeAssets(page.data);
+      assetsNextCursor.value = page.nextCursor;
+      assetsTotal.value = page.total;
+    } catch (error) {
+      getContext().onStorageError(error);
+    } finally {
+      isLoadingMoreAssets.value = false;
+    }
+  }
+
+  /**
+   * 保证某会话的图片元数据全部加载（切会话时调用）：
+   * 聊天区消息的图片引用、"当前会话"tab、草稿附件都依赖它完整。
+   * 单会话图片量有限（几十张级），全量可接受。幂等 + 在飞去重。
+   */
+  async function ensureConversationAssets(conversationId: string) {
+    if (!conversationId || assetsEnsuredConversationId.value === conversationId) {
+      return;
+    }
+    if (ensureAssetsPromise) return ensureAssetsPromise;
+    ensureAssetsPromise = (async () => {
+      try {
+        const assets =
+          await getContext().services.imageAssets.listAssetsByConversation(conversationId);
+        mergeAssets(assets);
+        assetsEnsuredConversationId.value = conversationId;
+        // service 返回 DESC（新→旧），插队队首让当前会话图片优先出图
+        prioritizePreviews(assets.map((asset) => asset.id));
+      } catch (error) {
+        getContext().onStorageError(error);
+      } finally {
+        ensureAssetsPromise = null;
+      }
+    })();
+    return ensureAssetsPromise;
+  }
+
+  /** 按需补加载窗口外的单张图片（草稿附件等）。 */
+  async function ensureAssetsLoaded(ids: string[]) {
+    const missing = ids.filter((id) => !imageById(id));
+    if (!missing.length) return;
+    try {
+      const assets = await Promise.all(
+        missing.map((id) => getContext().services.imageAssets.getAsset(id)),
+      );
+      mergeAssets(assets.filter((asset): asset is ImageAsset => Boolean(asset)));
+    } catch (error) {
+      getContext().onStorageError(error);
+    }
+  }
+
+  /** 清空分页状态与图片窗口（备份导入等全量重置场景）。 */
+  function resetPagination() {
+    imageAssets.value = [];
+    assetsNextCursor.value = null;
+    assetsTotal.value = 0;
+    assetsEnsuredConversationId.value = "";
   }
 
   function getContext() {
@@ -326,8 +517,13 @@ export const useImagesStore = defineStore("images", () => {
 
   return {
     activeAttachments,
+    assetsEnsuredConversationId,
+    assetsNextCursor,
+    assetsTotal,
     attachedImages,
     imageAssets,
+    isLoadingMoreAssets,
+    previewStates,
     storageUsage,
     attachImage,
     clearTransientMask,
@@ -335,42 +531,24 @@ export const useImagesStore = defineStore("images", () => {
     createMaskAsset,
     deleteImage,
     deleteImages,
-    hydrateImagePreviews,
+    ensureAssetsLoaded,
+    ensureConversationAssets,
+    ensurePreviewLoaded,
     imageById,
     importImages,
+    isPreviewError,
+    isPreviewLoading,
+    loadAssetsFirstPage,
+    loadMoreAssets,
+    prioritizePreviews,
     refreshStorageUsage,
     removeAttachment,
     renameImage,
+    resetPagination,
     revokePreviewUrls,
     setImageTagColor,
   };
 });
-
-function toPlainImageAsset(imageAsset: ImageAsset): ImageAsset {
-  return {
-    id: imageAsset.id,
-    blobKey: imageAsset.blobKey,
-    name: imageAsset.name,
-    source: imageAsset.source,
-    tagColor: imageAsset.tagColor,
-    mimeType: imageAsset.mimeType,
-    width: imageAsset.width,
-    height: imageAsset.height,
-    sizeBytes: imageAsset.sizeBytes,
-    conversationId: imageAsset.conversationId,
-    messageId: imageAsset.messageId,
-    prompt: imageAsset.prompt,
-    revisedPrompt: imageAsset.revisedPrompt,
-    referencedImageIds: imageAsset.referencedImageIds
-      ? [...imageAsset.referencedImageIds]
-      : undefined,
-    editSourceImageId: imageAsset.editSourceImageId,
-    generationDurationMs: imageAsset.generationDurationMs,
-    isEditMask: imageAsset.isEditMask,
-    createdAt: imageAsset.createdAt,
-    updatedAt: imageAsset.updatedAt,
-  };
-}
 
 function revokeRemovedPreviewUrls(
   previousImages: ImageAsset[] | undefined,

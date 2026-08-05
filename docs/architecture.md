@@ -164,4 +164,4 @@ src/stores/
 
 Companion 应该是可选能力。浏览器直连模式继续作为默认模式保留。
 
-Companion 不属于 `src/`。它通过明确的 HTTP 协议和 Web App 通信，协议相关类型分别保留在 Web App 与 companion 内部，避免为了简单工具额外发布共享协议包。Web App 永远不应该读取 companion 中保存的真实凭据。
+Companion 不属于 `src/`。它通过明确的 HTTP 协议和 Web App 通信，协议相关类型分别保留在 Web App 与 companion 内部，避免为了简单工具额外发布共享协议包。受信 Origin 可以通过 Companion 凭据管理接口读取和管理普通 Provider API Key；具体信任边界、连接密钥职责和剩余风险以 [ADR 002](decisions/002-companion-security-boundary.md) 为准。

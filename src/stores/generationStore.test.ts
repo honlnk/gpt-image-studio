@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { computed, ref } from "vue";
 import { useGenerationStore } from "./generationStore";
+import { createImageAssetServices } from "../services/imageAssets";
+import { createMessageServices } from "../services/messages";
+import {
+  createSpyStorage,
+  type SpyStorage,
+} from "../services/storage/createSpyStorage";
 import type {
   Conversation,
   GenerationParams,
@@ -66,6 +72,12 @@ function buildContext(overrides: ContextOverrides = {}) {
   const supportsEdit = overrides.supportsEdit ?? true;
   const attachedImages = ref<string[]>(overrides.attachedImages ?? []);
   const composerText = ref(overrides.composerText ?? "一只猫");
+  // 阶段一 PR2：store 通过 context 接收注入的 service。测试用 spy storage 构造。
+  const spyStorage: SpyStorage = createSpyStorage();
+  const services = {
+    imageAssets: createImageAssetServices(spyStorage),
+    messages: createMessageServices(spyStorage),
+  };
   const imageClient: ImageClient = {
     generate: vi.fn().mockResolvedValue({ b64Json: "b64" }),
     edit: vi.fn().mockResolvedValue({ b64Json: "b64" }),
@@ -90,6 +102,7 @@ function buildContext(overrides: ContextOverrides = {}) {
   const messages = ref<Message[]>([]);
   const store = useGenerationStore();
   store.configureGenerationStore({
+    services,
     activeConversationId: ref("conv-1"),
     activeConversation: computed(() => undefined),
     attachedImages,

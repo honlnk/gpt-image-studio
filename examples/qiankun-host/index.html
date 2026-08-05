@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>qiankun 宿主 · GPT Image Studio 嵌入预览</title>
+<style>
+  :root {
+    --host-bar-height: 44px;
+    --sidebar-width: 240px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #f5f5f5; display: flex; flex-direction: column; height: 100vh;
+  }
+
+  /* ─── 顶栏 ─── */
+  .host-bar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px; height: var(--host-bar-height);
+    background: #1a1a2e; color: #fff; font-size: 13px;
+    flex-shrink: 0; z-index: 9999;
+  }
+  .host-bar b { color: #4fc3f7; }
+  .host-bar .pill {
+    background: #16213e; padding: 4px 10px; border-radius: 12px; font-size: 12px;
+  }
+  .host-bar .ok { color: #66bb6a; }
+  .host-bar .err { color: #ef5350; }
+  .host-bar button {
+    background: #4fc3f7; color: #000; border: none; padding: 5px 12px;
+    border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  #status { margin-left: auto; font-size: 12px; }
+
+  /* ─── 主体：左列表 + 右子应用 ─── */
+  .host-body { display: flex; flex: 1; min-height: 0; }
+
+  /* ─── 宿主侧会话列表（PR8 §3.3） ─── */
+  .host-sidebar {
+    width: var(--sidebar-width); flex-shrink: 0;
+    background: #171717; color: #e5e5e5;
+    display: flex; flex-direction: column; border-right: 1px solid #2a2a2a;
+  }
+  .host-sidebar .new-btn {
+    margin: 12px; padding: 10px; background: rgba(255,255,255,0.1);
+    color: #fff; border: none; border-radius: 8px; cursor: pointer;
+    font-size: 13px; text-align: center; transition: background 0.15s;
+  }
+  .host-sidebar .new-btn:hover { background: rgba(255,255,255,0.2); }
+  /* 设置按钮：次级样式（描边），与主操作"新建"区分 */
+  .host-sidebar .settings-btn {
+    background: transparent; border: 1px solid rgba(255,255,255,0.25);
+    margin-top: -4px; color: #ccc;
+  }
+  .host-sidebar .settings-btn:hover { background: rgba(255,255,255,0.08); }
+  .host-sidebar .list-title {
+    padding: 4px 16px 8px; font-size: 11px; color: #888;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .host-sidebar .conv-list {
+    flex: 1; overflow-y: auto; padding: 0 8px 12px;
+  }
+  .host-sidebar .conv-item {
+    display: flex; align-items: center; gap: 4px;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    margin-bottom: 2px; font-size: 13px; color: #aaa;
+    transition: background 0.1s;
+  }
+  .host-sidebar .conv-item:hover { background: rgba(255,255,255,0.05); color: #ddd; }
+  .host-sidebar .conv-item.active {
+    background: rgba(255,255,255,0.12); color: #fff;
+  }
+  .host-sidebar .conv-item .title {
+    flex: 1; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .host-sidebar .conv-item .ops {
+    display: none; gap: 2px; flex-shrink: 0;
+  }
+  .host-sidebar .conv-item:hover .ops { display: flex; }
+  .host-sidebar .conv-item .op-btn {
+    background: transparent; border: none; color: #777; cursor: pointer;
+    padding: 2px 4px; font-size: 11px; border-radius: 3px;
+  }
+  .host-sidebar .conv-item .op-btn:hover { background: rgba(255,255,255,0.1); color: #ddd; }
+  .host-sidebar .conv-item .op-btn.del:hover { color: #f87171; }
+  .host-sidebar .empty {
+    padding: 32px 16px; text-align: center; color: #666; font-size: 12px;
+  }
+  .host-sidebar .loading {
+    padding: 16px; text-align: center; color: #666; font-size: 12px;
+  }
+
+  /* ─── 登录页 ─── */
+  .login-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    background: #f5f5f5;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .login-overlay.hidden { display: none; }
+  .login-card {
+    background: #1a1a2e; color: #fff; border-radius: 12px;
+    padding: 40px 48px; width: 320px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+  .login-card h1 { font-size: 18px; margin: 0 0 8px; }
+  .login-card .sub { font-size: 12px; color: #888; margin-bottom: 24px; }
+  .login-card .login-btn {
+    width: 100%; padding: 12px; font-size: 14px;
+    background: #4fc3f7; color: #000; border: none; border-radius: 8px;
+    cursor: pointer;
+  }
+  .login-card .login-btn:disabled { opacity: 0.6; cursor: default; }
+  .login-card .login-msg { margin-top: 16px; font-size: 12px; min-height: 16px; color: #aaa; }
+  .login-card .login-msg.err { color: #ef5350; }
+
+  /* ─── 子应用挂载容器 ─── */
+  #image-studio-container {
+    flex: 1; min-width: 0; background: #fff;
+    height: calc(100vh - var(--host-bar-height));
+  }
+
+  /* ─── 管理页（#/admin 全屏遮罩） ─── */
+  /* 视觉风格复刻 companion/src/admin/styles.css 的色板/卡片/按钮 */
+  #admin-overlay {
+    position: fixed; inset: 0; z-index: 10001;
+    background: #f9fafb; color: #111827;
+    font-size: 14px; line-height: 1.6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+    overflow-y: auto;
+  }
+  #admin-overlay.hidden { display: none; }
+  .admin-bar {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 20px; height: 44px;
+    background: #1a1a2e; color: #fff; font-size: 13px;
+  }
+  .admin-bar b { color: #4fc3f7; }
+  .admin-bar .back-btn {
+    margin-left: auto; background: #4fc3f7; color: #000;
+    border: none; padding: 5px 12px; border-radius: 6px;
+    cursor: pointer; font-size: 12px;
+  }
+  .admin-container { max-width: 720px; margin: 0 auto; padding: 24px 20px 80px; }
+  .admin-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .admin-card h2 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
+  .admin-card .muted { color: #6b7280; font-size: 13px; }
+  .admin-card .error { color: #b91c1c; font-size: 13px; margin: 8px 0; min-height: 16px; }
+  .admin-card .ok-msg { color: #15803d; font-size: 13px; margin: 8px 0; min-height: 16px; }
+  /* 状态卡 */
+  .admin-status-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .admin-dot { width: 10px; height: 10px; border-radius: 50%; background: #d1d5db; }
+  .admin-dot.online { background: #22c55e; }
+  .admin-status-meta { color: #374151; font-size: 13px; }
+  .admin-status-meta b { color: #111827; }
+  /* 凭据卡 */
+  .cred-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .cred-head .btn-add {
+    background: #111827; color: #fff; border: none; border-radius: 6px;
+    padding: 5px 12px; cursor: pointer; font-size: 12px;
+  }
+  .cred-entry {
+    border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 8px;
+  }
+  .cred-entry.active { border-color: #111827; box-shadow: 0 0 0 1px #111827; }
+  .cred-entry-top { display: flex; align-items: center; gap: 8px; }
+  .cred-entry-top .name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cred-entry-top .badge { font-size: 11px; color: #15803d; border: 1px solid #15803d; border-radius: 10px; padding: 1px 8px; }
+  .cred-entry-top .op {
+    background: transparent; border: 1px solid #d1d5db; border-radius: 4px;
+    padding: 3px 10px; cursor: pointer; font-size: 12px; color: #374151;
+  }
+  .cred-entry-top .op.danger { color: #b91c1c; border-color: #b91c1c; }
+  .cred-entry-detail { margin-top: 8px; font-size: 13px; color: #374151; }
+  .cred-entry-detail .row { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+  .cred-entry-detail .k { color: #6b7280; min-width: 72px; }
+  .cred-entry-detail .v { font-family: ui-monospace, monospace; word-break: break-all; }
+  .cred-form { border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+  .cred-form .ftitle { font-weight: 600; margin-bottom: 8px; }
+  .cred-form label { display: block; margin-bottom: 8px; }
+  .cred-form label span { display: block; font-size: 12px; color: #6b7280; margin-bottom: 2px; }
+  .cred-form input, .cred-form select {
+    width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px;
+    font-size: 13px; box-sizing: border-box;
+  }
+  .cred-form .factions { display: flex; gap: 8px; margin-top: 4px; }
+  .cred-form .btn-save { background: #111827; color: #fff; border: none; border-radius: 6px; padding: 6px 16px; cursor: pointer; font-size: 13px; }
+  .cred-form .btn-cancel { background: transparent; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 16px; cursor: pointer; font-size: 13px; }
+  /* 数据集卡 */
+  .ds-current { padding: 8px 0; font-size: 13px; color: #374151; }
+  .ds-current b { color: #111827; }
+  .ds-list { margin-top: 8px; }
+  .ds-item {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px;
+  }
+  .ds-item.active { border-color: #111827; box-shadow: 0 0 0 1px #111827; }
+  .ds-item .info { flex: 1; min-width: 0; }
+  .ds-item .info .lbl { font-weight: 600; font-size: 13px; }
+  .ds-item .info .sub { font-size: 12px; color: #6b7280; word-break: break-all; }
+  .ds-item .op {
+    background: transparent; border: 1px solid #d1d5db; border-radius: 4px;
+    padding: 3px 10px; cursor: pointer; font-size: 12px; color: #374151;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="host-bar">
+  <b>🏠 qiankun 宿主</b>
+  <span class="pill">子应用: gpt-image-studio</span>
+  <span class="pill">companionUrl: <span id="companion-url">-</span></span>
+  <button onclick="reloadSubApp()">重新挂载子应用</button>
+  <button onclick="openAdminPage()">⚙️ 管理页</button>
+  <button onclick="hostLogout()">退出登录</button>
+  <span id="status">⏳ 等待子应用激活...</span>
+</div>
+
+<div class="host-body">
+  <!-- 宿主侧会话列表（PR8 §3.3）：数据来自 Companion API，写操作委托子应用 -->
+  <aside class="host-sidebar" aria-label="会话列表">
+    <button class="new-btn" onclick="hostCreateConversation()">+ 新建会话</button>
+    <button class="new-btn settings-btn" onclick="hostOpenSettings()">⚙️ 设置</button>
+    <div class="list-title">历史会话</div>
+    <div id="conv-list" class="conv-list">
+      <div class="loading">加载中...</div>
+    </div>
+  </aside>
+
+  <!-- qiankun 子应用挂载点 -->
+  <div id="image-studio-container">子应用加载中...</div>
+</div>
+
+<!-- 登录页：一个按钮，点击后自动完成 签 JWT → 确保数据集激活 → 挂载子应用 -->
+<div id="login-overlay" class="login-overlay hidden">
+  <div class="login-card">
+    <h1>GPT Image Studio</h1>
+    <div class="sub">qiankun 嵌入预览 · 演示账号一键登录</div>
+    <button id="login-btn" class="login-btn" onclick="hostLogin()">登 录</button>
+    <div id="login-msg" class="login-msg"></div>
+  </div>
+</div>
+
+<!-- 管理页（#/admin hash 路由触发）：server 模式适配版，复刻默认管理页视觉。
+     端点适配：状态 /health+/auth/me、凭据 /admin/credentials/*（ADMIN_API_KEY）、
+     数据集 /storage/datasets（JWT）。砍掉日志卡（server 无用户级日志）与目录选择（远程无意义）。 -->
+<div id="admin-overlay" class="hidden">
+  <div class="admin-bar">
+    <b>⚙️ 平台管理</b>
+    <span class="pill" id="admin-companion-url">-</span>
+    <span class="pill" id="admin-user">-</span>
+    <button class="back-btn" onclick="closeAdminPage()">← 返回工作台</button>
+  </div>
+  <div class="admin-container">
+    <!-- 状态卡 -->
+    <div class="admin-card">
+      <h2>状态总览</h2>
+      <div class="admin-status-row">
+        <span id="admin-dot" class="admin-dot"></span>
+        <span id="admin-status-text" class="admin-status-meta">检测中…</span>
+        <span id="admin-version" class="admin-status-meta"></span>
+      </div>
+      <div id="admin-health-detail" class="admin-status-meta" style="margin-top:8px"></div>
+    </div>
+
+    <!-- API 凭据卡 -->
+    <div class="admin-card">
+      <div class="cred-head">
+        <h2>API 凭据</h2>
+        <button class="btn-add" id="admin-cred-add" onclick="adminCredStartAdd()">+ 新增</button>
+      </div>
+      <p class="muted">平台级共享凭据：管理员在此统一配置，所有运营人员共享。走 <code>/admin/credentials/*</code>（ADMIN_API_KEY 鉴权）。</p>
+      <div id="admin-cred-form" class="cred-form" hidden>
+        <div class="ftitle" id="admin-cred-form-title">新增配置</div>
+        <label><span>名称</span><input id="admin-f-label" type="text" placeholder="如：豆包测试号" /></label>
+        <label><span>Provider</span><select id="admin-f-provider"></select></label>
+        <label><span>API Base URL</span><input id="admin-f-baseurl" type="text" placeholder="https://..." /></label>
+        <label><span>Model</span><input id="admin-f-model" type="text" placeholder="模型 ID" /></label>
+        <label><span>API Key</span><input id="admin-f-apikey" type="password" autocomplete="off" placeholder="sk-..." /></label>
+        <div class="factions">
+          <button class="btn-save" onclick="adminCredSubmit()">保存</button>
+          <button class="btn-cancel" onclick="adminCredCancelForm()">取消</button>
+        </div>
+      </div>
+      <div id="admin-cred-list"></div>
+      <p class="error" id="admin-cred-error"></p>
+    </div>
+
+    <!-- 存储位置卡（用户级数据集，JWT） -->
+    <div class="admin-card">
+      <h2>存储位置</h2>
+      <p class="muted">当前登录用户的数据集（<code>/storage/datasets</code>，JWT 鉴权）。server 模式下每个用户独立隔离。</p>
+      <div id="admin-ds-current" class="ds-current"></div>
+      <div id="admin-ds-list" class="ds-list"></div>
+      <p class="error" id="admin-ds-error"></p>
+    </div>
+
+    <!-- 平台说明卡（替代日志卡） -->
+    <div class="admin-card">
+      <h2>平台说明</h2>
+      <p class="muted">
+        · API 凭据由管理员在此统一配置，运营人员无需关心 API Key / 模型选择。<br>
+        · 凭据是平台级共享的，所有用户共用当前激活的那套配置。<br>
+        · server 模式不提供日志查看与本机目录选择（远程无意义）。
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── 嵌入配置（注入给子应用的 props） ───
+// config.json（gitignore，本地私有）格式见 config.example.json。
+// jwt 不再手写进配置——登录流程在浏览器内用 jwtSecret 自签（WebCrypto HMAC-SHA256）。
+let HOST_CONFIG = { companionUrl: '', jwtSecret: '', adminApiKey: '', user: null, oss: null, jwt: '', hideSidebar: true };
+
+async function loadConfig() {
+  try {
+    const res = await fetch('./config.json');
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  return {
+    companionUrl: 'http://127.0.0.1:19751',
+    jwtSecret: '',
+    adminApiKey: '',
+    user: { sub: 'qiankun-preview-user', displayName: 'qiankun 预览用户' },
+    oss: null,
+    hideSidebar: true,
+  };
+}
+
+// ─── 浏览器内 JWT 自签（HS256，仅本地 demo） ───
+// 生产语义里 JWT 应由宿主后端签发；本 demo 宿主是纯静态页、没有后端，
+// 故把签发搬进浏览器。secret 与此前一样只存在于 gitignore 的 config.json，
+// 安全水位不变。
+function b64urlBytes(bytes) {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlText(s) {
+  return b64urlBytes(new TextEncoder().encode(s));
+}
+async function signJwt(secret, payload) {
+  const header = b64urlText(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = b64urlText(JSON.stringify(payload));
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${header}.${body}`));
+  return `${header}.${body}.${b64urlBytes(new Uint8Array(sig))}`;
+}
+
+// ─── JWT 本地缓存：未过期则跳过登录页直接进主界面 ───
+const JWT_CACHE_KEY = 'qiankun-demo-jwt';
+const JWT_TTL_SECONDS = 30 * 24 * 3600; // 30 天
+
+function readCachedJwt() {
+  try {
+    const token = localStorage.getItem(JWT_CACHE_KEY);
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    // 60s 余量，避免边界时刻拿着将过期 token 发请求 401
+    if (!payload.exp || payload.exp * 1000 < Date.now() + 60000) return null;
+    return token;
+  } catch (e) { return null; }
+}
+
+// ─── 登录流程：签 JWT → 确保数据集激活 → 返回 JWT ───
+async function performLogin(msgEl) {
+  if (!HOST_CONFIG.jwtSecret) throw new Error('config.json 缺少 jwtSecret');
+  msgEl.textContent = '正在签发登录凭证...';
+  const now = Math.floor(Date.now() / 1000);
+  const jwt = await signJwt(HOST_CONFIG.jwtSecret, {
+    sub: HOST_CONFIG.user.sub,
+    display_name: HOST_CONFIG.user.displayName,
+    iat: now,
+    exp: now + JWT_TTL_SECONDS,
+  });
+
+  // 确保该用户有激活数据集：清库/首次登录后是 404，自动激活 OSS 数据集，
+  // 不再手动 curl POST /storage/datasets/activate。
+  msgEl.textContent = '正在检查数据集...';
+  const headers = { Authorization: `Bearer ${jwt}` };
+  const activeRes = await fetch(`${HOST_CONFIG.companionUrl}/storage/datasets/active`, { headers });
+  if (activeRes.status === 404) {
+    if (!HOST_CONFIG.oss) throw new Error('config.json 缺少 oss 配置，无法自动初始化数据集');
+    msgEl.textContent = '正在初始化 OSS 数据集...';
+    const actRes = await fetch(`${HOST_CONFIG.companionUrl}/storage/datasets/activate`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        storageKind: 'oss',
+        storageConfig: HOST_CONFIG.oss,
+        imageStoreKind: 'oss',
+        label: `OSS ${HOST_CONFIG.oss.bucket}`,
+      }),
+    });
+    if (!actRes.ok) throw new Error(`初始化数据集失败：HTTP ${actRes.status} ${await actRes.text()}`);
+  } else if (!activeRes.ok) {
+    throw new Error(`检查数据集失败：HTTP ${activeRes.status}`);
+  }
+  return jwt;
+}
+
+async function hostLogin() {
+  const btn = document.getElementById('login-btn');
+  const msgEl = document.getElementById('login-msg');
+  btn.disabled = true;
+  msgEl.className = 'login-msg';
+  try {
+    const jwt = await performLogin(msgEl);
+    localStorage.setItem(JWT_CACHE_KEY, jwt);
+    boot(jwt);
+  } catch (e) {
+    msgEl.className = 'login-msg err';
+    msgEl.textContent = `登录失败：${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+function hostLogout() {
+  localStorage.removeItem(JWT_CACHE_KEY);
+  location.reload();
+}
+
+// ─── 宿主侧会话列表数据层（PR8 §2.1 读用 API） ───
+let conversations = [];
+// 当前激活会话 id：由子应用的 active-conversation-changed 消息维护（PR8 §2.5）。
+// 为什么不能只读地址栏 ?c=：子应用切换会话用 pushState/replaceState 写 URL，
+// 二者都不触发 popstate，宿主监听地址栏感知不到激活变化，必须靠显式消息。
+// 初始值 null 时 renderConvList 回退读 URL ?c=（覆盖刷新恢复场景）。
+let hostActiveConvId = null;
+
+/** GET /storage/conversations（JWT 鉴权），按 updatedAt 降序排 */
+async function loadConversations() {
+  const listEl = document.getElementById('conv-list');
+  try {
+    const res = await fetch(`${HOST_CONFIG.companionUrl}/storage/conversations`, {
+      headers: { Authorization: `Bearer ${HOST_CONFIG.jwt}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { data } = await res.json();
+    conversations = (data || []).sort((a, b) =>
+      new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0),
+    );
+  } catch (e) {
+    listEl.innerHTML = `<div class="empty">加载失败：${e.message}<br>请确认 Companion server 模式已启动</div>`;
+    return;
+  }
+  renderConvList();
+}
+
+/** 渲染会话列表，高亮激活会话（优先消息维护的 hostActiveConvId，回退 URL ?c=） */
+function renderConvList() {
+  const listEl = document.getElementById('conv-list');
+  const activeId = hostActiveConvId ?? new URLSearchParams(location.search).get('c');
+  if (!conversations.length) {
+    listEl.innerHTML = '<div class="empty">暂无会话，点击上方新建</div>';
+    return;
+  }
+  listEl.innerHTML = conversations.map((c) => {
+    const isActive = c.id === activeId;
+    const escTitle = escapeHtml(c.title || '(未命名)');
+    return `
+      <div class="conv-item ${isActive ? 'active' : ''}" data-id="${c.id}">
+        <span class="title" onclick="hostSelectConversation('${c.id}')" title="${escTitle}">${escTitle}</span>
+        <span class="ops">
+          <button class="op-btn" onclick="event.stopPropagation();hostRenameConversation('${c.id}')" title="重命名">✏️</button>
+          <button class="op-btn del" onclick="event.stopPropagation();hostDeleteConversation('${c.id}')" title="删除">🗑️</button>
+        </span>
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (m) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;',
+  }[m]));
+}
+
+// ─── 写操作：postMessage 委托子应用（PR8 §2.1 写委托） ───
+function hostSelectConversation(id) {
+  window.postMessage({ type: 'select-conversation', id }, location.origin);
+}
+function hostCreateConversation() {
+  window.postMessage({ type: 'create-conversation' }, location.origin);
+}
+function hostDeleteConversation(id) {
+  // 即时删除无确认——与子应用自带侧边栏的行为一致（ConversationSidebar
+  // 删除也不弹确认）。数据不可逆，列表 UI 与子应用保持同一交互约定。
+  window.postMessage({ type: 'delete-conversation', id }, location.origin);
+}
+function hostRenameConversation(id) {
+  // RenameDialog 由子应用弹，这里只发指令
+  window.postMessage({ type: 'rename-conversation', id }, location.origin);
+}
+function hostOpenSettings() {
+  // 打开子应用的设置弹窗（嵌入态下连接配置只读，PR8 §2.2 open-settings）
+  window.postMessage({ type: 'open-settings' }, location.origin);
+}
+
+// ─── 监听子应用反向消息 ───
+// conversations-changed → 列表内容变了，重新拉取；
+// active-conversation-changed → 激活会话变了，更新高亮（地址栏 ?c= 靠
+// pushState/replaceState 写，不触发 popstate，必须靠这个消息感知）。
+window.addEventListener('message', (event) => {
+  if (event.origin !== location.origin) return;
+  if (!event.data || typeof event.data !== 'object') return;
+  if (event.data.type === 'conversations-changed') {
+    loadConversations();
+  } else if (event.data.type === 'active-conversation-changed') {
+    hostActiveConvId = event.data.id || null;
+    renderConvList();
+  }
+});
+
+// ─── 浏览器前进/后退时回退高亮（?c= 随历史条目变化，此时有 popstate） ───
+window.addEventListener('popstate', () => {
+  hostActiveConvId = null;  // 回到 URL 驱动
+  renderConvList();
+});
+
+// ═══ 管理页（#/admin hash 路由） ═══
+// server 模式适配版：端点走 ADMIN_API_KEY（凭据）/ JWT（数据集）/ 公开（health）。
+// 不依赖被禁用的 /admin/api/*（commit 657c172，__local__ 视图多租户下误导）。
+
+function openAdminPage() { location.hash = '#/admin'; }
+function closeAdminPage() {
+  // 有历史可回就回，否则清 hash
+  if (location.hash === '#/admin') history.back();
+}
+
+window.addEventListener('hashchange', () => {
+  const isAdmin = location.hash === '#/admin';
+  document.getElementById('admin-overlay').classList.toggle('hidden', !isAdmin);
+  // 主工作台显隐（侧边栏 + 子应用容器）
+  const body = document.querySelector('.host-body');
+  if (body) body.style.display = isAdmin ? 'none' : 'flex';
+  if (isAdmin) loadAdminData();
+});
+
+// 管理页状态
+const adminState = {
+  presets: [],
+  credentials: [],
+  activeCredId: null,
+  editingCredId: '',  // '' = 未编辑（列表态），'new' = 新增，其它 = 编辑某 id
+  datasets: [],
+  activeDataset: null,
+};
+
+// 带 ADMIN_API_KEY 的 fetch（凭据管理）
+async function adminFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  headers['Authorization'] = `Bearer ${HOST_CONFIG.adminApiKey}`;
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const res = await fetch(`${HOST_CONFIG.companionUrl}${path}`, { ...options, headers });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// 带 JWT 的 fetch（数据集）
+async function jwtFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  headers['Authorization'] = `Bearer ${HOST_CONFIG.jwt}`;
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const res = await fetch(`${HOST_CONFIG.companionUrl}${path}`, { ...options, headers });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function loadAdminData() {
+  // 顶栏信息
+  document.getElementById('admin-companion-url').textContent = HOST_CONFIG.companionUrl;
+  document.getElementById('admin-user').textContent =
+    `用户: ${HOST_CONFIG.user?.displayName || '-'}`;
+  await Promise.all([loadAdminStatus(), loadAdminCredentials(), loadAdminDatasets()]);
+}
+
+async function loadAdminStatus() {
+  const dot = document.getElementById('admin-dot');
+  const text = document.getElementById('admin-status-text');
+  const ver = document.getElementById('admin-version');
+  const detail = document.getElementById('admin-health-detail');
+  try {
+    const health = await fetch(`${HOST_CONFIG.companionUrl}/health`).then(r => r.json());
+    dot.classList.add('online');
+    text.textContent = 'Companion 在线';
+    ver.textContent = health.version ? `v${health.version}` : '';
+  } catch {
+    dot.classList.remove('online');
+    text.textContent = 'Companion 离线';
+    ver.textContent = '';
+    detail.textContent = '请检查 Companion server 模式是否已启动';
+    return;
+  }
+  // 当前登录用户信息（JWT）
+  try {
+    const me = await jwtFetch('/auth/me');
+    detail.innerHTML = `登录用户：<b>${escapeHtml(me.displayName || me.userId || '-')}</b>（userId: <code>${escapeHtml(me.userId || '-')}</code>）`;
+  } catch (e) {
+    detail.textContent = `获取用户信息失败：${e.message}`;
+  }
+}
+
+function maskKey(key) {
+  if (!key) return '';
+  if (key.length <= 8) return '***';
+  return key.slice(0, 8) + '***';
+}
+function providerLabel(id) {
+  const p = adminState.presets.find(x => x.id === id);
+  return p ? p.label : id || '（未设置）';
+}
+
+async function loadAdminCredentials() {
+  const errEl = document.getElementById('admin-cred-error');
+  errEl.textContent = '';
+  try {
+    const [presets, data] = await Promise.all([
+      adminFetch('/admin/credentials/presets'),
+      adminFetch('/admin/credentials'),
+    ]);
+    adminState.presets = presets || [];
+    adminState.credentials = data.entries || [];
+    adminState.activeCredId = data.activeId || null;
+    // 填 provider 下拉
+    const sel = document.getElementById('admin-f-provider');
+    sel.innerHTML = adminState.presets.map(p => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join('');
+    renderAdminCredentials();
+  } catch (e) {
+    errEl.textContent = `加载凭据失败：${e.message}`;
+  }
+}
+
+function renderAdminCredentials() {
+  const listEl = document.getElementById('admin-cred-list');
+  const formEl = document.getElementById('admin-cred-form');
+  const addBtn = document.getElementById('admin-cred-add');
+  // 表单态
+  if (adminState.editingCredId !== '') {
+    formEl.hidden = false;
+    addBtn.hidden = true;
+    listEl.innerHTML = '';
+    return;
+  }
+  formEl.hidden = true;
+  addBtn.hidden = false;
+  if (!adminState.credentials.length) {
+    listEl.innerHTML = '<p class="muted">暂无 provider 配置，点击「新增」添加。</p>';
+    return;
+  }
+  listEl.innerHTML = adminState.credentials.map(entry => {
+    const isActive = entry.id === adminState.activeCredId;
+    return `
+      <div class="cred-entry ${isActive ? 'active' : ''}">
+        <div class="cred-entry-top">
+          <span class="name">${escapeHtml(entry.label || '(未命名)')}</span>
+          ${isActive ? '<span class="badge">激活中</span>' : `<button class="op" onclick="adminCredActivate('${entry.id}')">激活</button>`}
+          <button class="op" onclick="adminCredStartEdit('${entry.id}')">编辑</button>
+          <button class="op danger" onclick="adminCredDelete('${entry.id}')">删除</button>
+        </div>
+        <div class="cred-entry-detail">
+          <div class="row"><span class="k">Provider</span><span class="v">${escapeHtml(providerLabel(entry.provider))}</span></div>
+          <div class="row"><span class="k">Base URL</span><span class="v">${escapeHtml(entry.apiBaseUrl)}</span></div>
+          <div class="row"><span class="k">Model</span><span class="v">${escapeHtml(entry.model || '（未设置）')}</span></div>
+          <div class="row"><span class="k">API Key</span><span class="v">${escapeHtml(maskKey(entry.apiKey))}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function adminCredStartAdd() {
+  adminState.editingCredId = 'new';
+  document.getElementById('admin-cred-form-title').textContent = '新增配置';
+  const first = adminState.presets[0] || {};
+  document.getElementById('admin-f-label').value = '';
+  document.getElementById('admin-f-provider').value = first.id || '';
+  document.getElementById('admin-f-baseurl').value = first.defaultBaseUrl || '';
+  document.getElementById('admin-f-model').value = first.defaultModel || '';
+  document.getElementById('admin-f-apikey').value = '';
+  renderAdminCredentials();
+}
+
+function adminCredStartEdit(id) {
+  const entry = adminState.credentials.find(c => c.id === id);
+  if (!entry) return;
+  adminState.editingCredId = id;
+  document.getElementById('admin-cred-form-title').textContent = '编辑配置';
+  document.getElementById('admin-f-label').value = entry.label || '';
+  document.getElementById('admin-f-provider').value = entry.provider || '';
+  document.getElementById('admin-f-baseurl').value = entry.apiBaseUrl || '';
+  document.getElementById('admin-f-model').value = entry.model || '';
+  document.getElementById('admin-f-apikey').value = entry.apiKey || '';
+  renderAdminCredentials();
+}
+
+function adminCredCancelForm() {
+  adminState.editingCredId = '';
+  renderAdminCredentials();
+}
+
+async function adminCredSubmit() {
+  const errEl = document.getElementById('admin-cred-error');
+  errEl.textContent = '';
+  const input = {
+    label: document.getElementById('admin-f-label').value.trim(),
+    provider: document.getElementById('admin-f-provider').value,
+    apiBaseUrl: document.getElementById('admin-f-baseurl').value.trim(),
+    apiKey: document.getElementById('admin-f-apikey').value.trim(),
+    model: document.getElementById('admin-f-model').value.trim(),
+  };
+  if (!input.apiBaseUrl || !input.apiKey) {
+    errEl.textContent = 'API Base URL 和 API Key 不能为空';
+    return;
+  }
+  try {
+    if (adminState.editingCredId === 'new') {
+      await adminFetch('/admin/credentials', { method: 'POST', body: JSON.stringify(input) });
+    } else {
+      await adminFetch(`/admin/credentials/${adminState.editingCredId}`, { method: 'PUT', body: JSON.stringify(input) });
+    }
+    adminState.editingCredId = '';
+    await loadAdminCredentials();
+  } catch (e) {
+    errEl.textContent = `保存失败：${e.message}`;
+  }
+}
+
+async function adminCredActivate(id) {
+  const errEl = document.getElementById('admin-cred-error');
+  errEl.textContent = '';
+  try {
+    await adminFetch(`/admin/credentials/${id}/activate`, { method: 'POST' });
+    await loadAdminCredentials();
+  } catch (e) {
+    errEl.textContent = `激活失败：${e.message}`;
+  }
+}
+
+async function adminCredDelete(id) {
+  const errEl = document.getElementById('admin-cred-error');
+  errEl.textContent = '';
+  if (!confirm('确定删除这条凭据？')) return;
+  try {
+    await adminFetch(`/admin/credentials/${id}`, { method: 'DELETE' });
+    await loadAdminCredentials();
+  } catch (e) {
+    errEl.textContent = `删除失败：${e.message}`;
+  }
+}
+
+async function loadAdminDatasets() {
+  const errEl = document.getElementById('admin-ds-error');
+  const curEl = document.getElementById('admin-ds-current');
+  const listEl = document.getElementById('admin-ds-list');
+  errEl.textContent = '';
+  try {
+    const data = await jwtFetch('/storage/datasets');
+    adminState.datasets = data.datasets || [];
+    adminState.activeDataset = adminState.datasets.find(d => d.is_active) || null;
+    if (adminState.activeDataset) {
+      curEl.innerHTML = `当前位置：<b>${escapeHtml(adminState.activeDataset.label || '-')}</b>（${escapeHtml(adminState.activeDataset.image_store_kind || '-')}）`;
+    } else {
+      curEl.innerHTML = '<span class="muted">暂无激活数据集</span>';
+    }
+    if (!adminState.datasets.length) {
+      listEl.innerHTML = '<p class="muted">暂无数据集。</p>';
+      return;
+    }
+    listEl.innerHTML = adminState.datasets.map(d => {
+      const isActive = d.is_active;
+      let sub = d.storage_kind || '';
+      try {
+        const cfg = d.storage_config ? JSON.parse(d.storage_config) : null;
+        if (cfg) {
+          if (cfg.directory) sub = `目录: ${cfg.directory}`;
+          else if (cfg.bucket) sub = `OSS: ${cfg.endpoint || ''}/${cfg.bucket}`;
+        }
+      } catch {}
+      return `
+        <div class="ds-item ${isActive ? 'active' : ''}">
+          <div class="info">
+            <div class="lbl">${escapeHtml(d.label || '-')}</div>
+            <div class="sub">${escapeHtml(sub)}</div>
+          </div>
+          ${isActive ? '<span class="badge" style="font-size:11px;color:#15803d;border:1px solid #15803d;border-radius:10px;padding:1px 8px">当前</span>' : ''}
+        </div>`;
+    }).join('');
+  } catch (e) {
+    errEl.textContent = `加载数据集失败：${e.message}`;
+  }
+}
+</script>
+
+<!-- qiankun UMD：本地 vendor（examples/qiankun-host/vendor/），不走 CDN。
+     之前用 unpkg，国内网络下阻塞式加载经常卡数秒，拖慢整个挂载流程。
+     版本仍锁 2.10.5，升级时替换 vendor 文件并同步改这里。 -->
+<script src="./vendor/qiankun-2.10.5.umd.js"></script>
+
+<script>
+(async function () {
+  HOST_CONFIG = { ...HOST_CONFIG, ...(await loadConfig()) };
+  document.getElementById('companion-url').textContent = HOST_CONFIG.companionUrl;
+
+  // 有未过期的缓存 JWT → 跳过登录页直接进主界面；否则等用户点登录按钮
+  const cached = readCachedJwt();
+  if (cached) boot(cached);
+  else document.getElementById('login-overlay').classList.remove('hidden');
+})();
+
+// 登录成功后启动主界面：注册并挂载 qiankun 子应用（只执行一次）
+let booted = false;
+function boot(jwt) {
+  if (booted) return;
+  booted = true;
+  HOST_CONFIG.jwt = jwt;
+  document.getElementById('login-overlay').classList.add('hidden');
+
+  const qiankun = window.qiankun;
+  if (!qiankun) {
+    document.getElementById('status').innerHTML =
+      '<span class="err">❌ qiankun UMD 未加载（检查 vendor 文件）</span>';
+    return;
+  }
+
+  qiankun.registerMicroApps([
+    {
+      name: 'gpt-image-studio',
+      entry: '//127.0.0.1:4173',
+      container: '#image-studio-container',
+      activeRule: location.pathname,
+      props: {
+        companionUrl: HOST_CONFIG.companionUrl,
+        jwt: HOST_CONFIG.jwt,
+        hideSidebar: HOST_CONFIG.hideSidebar,
+      },
+    },
+  ]);
+
+  window.addEventListener('single-spa:app-change', (evt) => {
+    const apps = evt.detail?.appsByNewStatus;
+    if (apps && apps.MOUNTED) {
+      document.getElementById('status').innerHTML =
+        '<span class="ok">✅ 子应用已挂载（MOUNTED）</span>';
+      // 子应用挂载后加载会话列表（依赖 Companion server 已就绪）
+      loadConversations();
+    }
+  });
+
+  // sandbox: false——本 demo 只有一个子应用、无样式/全局冲突需要隔离，
+  // 不需要 LegacySandbox。沙箱会给子应用所有 window 全局读写套 Proxy，
+  // 对整个运行期（Vue 渲染/fetch/store）都有可观损耗，是嵌入态明显慢于
+  // 独立态（8888）的最大单一因素。真实宿主若需要隔离，可用提速沙箱
+  // { speedy: true } 替代 true（qiankun 2.x 实验特性，开销小得多）。
+  qiankun.start({ sandbox: false, prefetch: false });
+
+  window._reloadSubApp = function () {
+    document.getElementById('image-studio-container').innerHTML = '重新加载中...';
+    location.reload();
+  };
+}
+
+function reloadSubApp() {
+  if (window._reloadSubApp) window._reloadSubApp();
+  else location.reload();
+}
+</script>
+</body>
+</html>

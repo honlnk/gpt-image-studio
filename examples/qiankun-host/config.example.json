@@ -1,0 +1,8 @@
+{
+  "companionUrl": "http://127.0.0.1:19751",
+  "jwtSecret": "REPLACE_WITH_JWT_SECRET",
+  "adminApiKey": "REPLACE_WITH_ADMIN_API_KEY",
+  "user": { "sub": "qiankun-preview-user", "displayName": "qiankun 预览用户" },
+  "oss": { "endpoint": "oss-cn-beijing.aliyuncs.com", "bucket": "gpt-image-blob" },
+  "hideSidebar": true
+}

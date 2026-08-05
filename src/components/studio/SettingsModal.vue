@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import type {
   AnalyticsPromptCapture,
   ApiMode,
@@ -13,9 +13,11 @@ import type {
   PromptWordbanks,
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
+import { readStorage, writeStorage } from "../../shared/localStorage";
 import AboutPanel from "../settings/AboutPanel.vue";
 import AnalyticsPanel from "../settings/AnalyticsPanel.vue";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
+import CompanionInfoPanel from "../settings/CompanionInfoPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
 import BatchOperationsPanel from "../settings/BatchOperationsPanel.vue";
 import FavoritePromptsPanel from "../settings/FavoritePromptsPanel.vue";
@@ -23,10 +25,12 @@ import GeneralSettingsPanel from "../settings/GeneralSettingsPanel.vue";
 import PromptGuardSettingsPanel from "../settings/PromptGuardSettingsPanel.vue";
 import PromptModeSettingsPanel from "../settings/PromptModeSettingsPanel.vue";
 import ConfirmInputModal from "../ui/ConfirmInputModal.vue";
+import BaseModal from "../ui/BaseModal.vue";
 
 type SettingsTab =
   | "general"
   | "api"
+  | "companion"
   | "promptMode"
   | "favoritePrompts"
   | "prompt"
@@ -101,27 +105,51 @@ const activeTab = ref<SettingsTab>("general");
 const pendingBackupFile = ref<File | null>(null);
 const isRestoreConfirmOpen = ref(false);
 
-const tabs: { key: SettingsTab; label: string }[] = [
-  { key: "general", label: "通用" },
-  { key: "api", label: "接口" },
-  { key: "promptMode", label: "提示词模式" },
-  { key: "favoritePrompts", label: "常用提示词" },
-  { key: "prompt", label: "提示词保护" },
-  { key: "backup", label: "数据备份" },
-  { key: "batch", label: "批量操作" },
-  { key: "analytics", label: "行为日志" },
-  { key: "about", label: "关于" },
-];
+// 接口 tab 仅 direct 模式显示（纯直连配置）；Companion tab 仅 Companion 模式显示。
+// Companion 的 provider 凭据/存储位置等配置都在 Companion 自带管理页维护。
+const tabs = computed<{ key: SettingsTab; label: string }[]>(() => {
+  const base: { key: SettingsTab; label: string }[] = [{ key: "general", label: "通用" }];
+  if (props.connectionMode === "localCompanion") {
+    base.push({ key: "companion", label: "Companion" });
+  } else {
+    base.push({ key: "api", label: "接口" });
+  }
+  base.push(
+    { key: "promptMode", label: "提示词模式" },
+    { key: "favoritePrompts", label: "常用提示词" },
+    { key: "prompt", label: "提示词保护" },
+    { key: "backup", label: "数据备份" },
+    { key: "batch", label: "批量操作" },
+    { key: "analytics", label: "行为日志" },
+    { key: "about", label: "关于" },
+  );
+  return base;
+});
+
+// 记住上次浏览的 tab：打开时恢复（initialTab 外部指定优先），切换时写回。
+// 纯 UI 偏好、与数据后端无关，存 localStorage（与连接配置镜像同一存储）。
+const SETTINGS_TAB_STORAGE_KEY = "gpt-image-studio:settings-tab";
+
+function isVisibleTab(tab: string): tab is SettingsTab {
+  return tabs.value.some((t) => t.key === tab);
+}
 
 watch(
   () => props.isOpen,
   (isOpen) => {
     if (!isOpen) return;
-    if (props.initialTab) {
-      activeTab.value = props.initialTab;
-    }
+    // 优先级：initialTab（如「批量操作」跳转）> 记忆值 > general。
+    // 记忆值当前不可见时回退 general（如 Companion 模式下记忆的 "api"）。
+    const remembered = readStorage(SETTINGS_TAB_STORAGE_KEY, "");
+    const candidate = props.initialTab ?? (isVisibleTab(remembered) ? remembered : "general");
+    activeTab.value = isVisibleTab(candidate) ? candidate : "general";
   },
 );
+
+watch(activeTab, (tab) => {
+  if (!props.isOpen) return;
+  writeStorage(SETTINGS_TAB_STORAGE_KEY, tab);
+});
 
 function requestBackupImport(file: File) {
   pendingBackupFile.value = file;
@@ -151,19 +179,14 @@ function forwardSavePromptWordbank(
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="isOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-3"
-      role="presentation"
-      @mousedown.self="emit('close')"
-    >
-      <section
-        aria-labelledby="settingsTitle"
-        aria-modal="true"
-        class="flex h-[min(88vh,44rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
-        role="dialog"
-      >
+  <BaseModal
+    :is-open="isOpen"
+    z-class="z-50"
+    backdrop-class="bg-black/50 px-3"
+    content-class="flex h-[min(88vh,44rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+    aria-labelledby="settingsTitle"
+    @close="emit('close')"
+  >
         <div
           class="flex items-start justify-between border-b border-gray-200 px-5 py-4"
         >
@@ -220,12 +243,13 @@ function forwardSavePromptWordbank(
             <GeneralSettingsPanel
               v-if="activeTab === 'general'"
               :auto-retry-on-network-error="autoRetryOnNetworkError"
+              :connection-mode="connectionMode"
               @update:auto-retry-on-network-error="emit('update:autoRetryOnNetworkError', $event)"
+              @update:connection-mode="emit('update:connectionMode', $event)"
             />
 
             <ApiSettingsPanel
               v-else-if="activeTab === 'api'"
-              :connection-mode="connectionMode"
               :api-base-url="apiBaseUrl"
               :api-base-url-mode="apiBaseUrlMode"
               :api-mode="apiMode"
@@ -233,7 +257,6 @@ function forwardSavePromptWordbank(
               :model="model"
               :stream-images="streamImages"
               :stream-partial-images="streamPartialImages"
-              @update:connection-mode="emit('update:connectionMode', $event)"
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
               @update:api-base-url-mode="emit('update:apiBaseUrlMode', $event)"
               @update:api-mode="emit('update:apiMode', $event)"
@@ -242,6 +265,8 @@ function forwardSavePromptWordbank(
               @update:stream-images="emit('update:streamImages', $event)"
               @update:stream-partial-images="emit('update:streamPartialImages', $event)"
             />
+
+            <CompanionInfoPanel v-else-if="activeTab === 'companion'" />
 
             <PromptModeSettingsPanel
               v-else-if="activeTab === 'promptMode'"
@@ -315,9 +340,7 @@ function forwardSavePromptWordbank(
             关闭
           </button>
         </div>
-      </section>
-    </div>
-  </Teleport>
+  </BaseModal>
 
   <ConfirmInputModal
     confirm-label="恢复备份"

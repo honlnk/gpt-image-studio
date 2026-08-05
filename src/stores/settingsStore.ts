@@ -10,10 +10,12 @@ import {
 } from "../services/generationParams";
 import {
   PROMPT_REWRITE_GUARD_PREFIX,
-  getCustomSizeError,
   normalizePromptRewriteGuardText,
+} from "../services/promptRewriteGuard";
+import {
+  getCustomSizeError,
   type SizeConstraints,
-} from "../services/imagesApi";
+} from "../services/sizeConstraints";
 import {
   createFavoritePrompt,
   normalizeFavoritePromptUpdate,
@@ -25,10 +27,26 @@ import {
   normalizePromptWordbanks,
   normalizeWordbankTerms,
 } from "../services/promptWordbanks";
-import { saveSettings } from "../services/settings";
+import {
+  createSettingsServices,
+  type SettingsServices,
+} from "../services/settings";
+import { resolveStorage } from "../services/storage/resolveStorage";
+import {
+  MAX_PROMPT_REWRITE_GUARD_HISTORY,
+  addPromptGuardHistoryItem,
+  displayApiBaseUrl,
+  getPromptWordbankTerms,
+  normalizeBackground,
+  normalizePromptRewriteGuardHistory,
+  setPromptWordbankTerms,
+  stripImagesApiPath,
+  toPlainFavoritePrompt,
+  toPlainPromptRewriteGuardHistoryItem,
+} from "../services/settingsSerialization";
 import { isoTimestamp } from "../shared/dateTime";
-import { createId } from "../shared/id";
 import { readStorage, writeStorage } from "../shared/localStorage";
+import { COMPANION_DEFAULT_URL } from "../shared/constants";
 import { FIXED_IMAGE_MODEL } from "../shared/models";
 import type {
   CompanionAuthStatus,
@@ -54,7 +72,19 @@ const SETTINGS_STORAGE_KEYS = {
   apiBaseUrl: "gpt-image-studio:api-base-url",
   companionUrl: "gpt-image-studio:companion-url",
   companionAccessKey: "gpt-image-studio:companion-access-key",
+  connectionMode: "gpt-image-studio:connection-mode",
 } as const;
+
+/**
+ * 从 localStorage 镜像读 connectionMode（启动期同步可用）；非法值回退 direct。
+ * resolveStorage 在 ViewModel setup 时同步读 connectionMode 快照装配 storage 后端，
+ * 而 settings 记录存在所选后端内部（异步 hydrate 才可得）——所以必须有这个同步镜像，
+ * 否则独立态每次启动都恒装配成 IndexedDbStorage（reload 也救不回来）。
+ */
+function readConnectionModeMirror(): ConnectionMode {
+  const raw = readStorage(SETTINGS_STORAGE_KEYS.connectionMode, "direct");
+  return raw === "localCompanion" ? "localCompanion" : "direct";
+}
 
 const SIZE_RATIO_OPTIONS = [
   { value: "21:9", label: "21:9", widthRatio: 21, heightRatio: 9 },
@@ -99,12 +129,31 @@ const DEFAULT_PROVIDER_CAPABILITY: CompanionProviderCapability = {
   backgrounds: ["auto", "opaque"],
   outputFormats: ["png", "webp", "jpeg"],
 };
-const MAX_PROMPT_REWRITE_GUARD_HISTORY = 20;
 const IMAGE_COUNT_PRESETS = [1, 2, 3, 4, 6, 8, 10, 12] as const;
 type ImageCountMode = "preset" | "custom";
 
 export const useSettingsStore = defineStore("settings", () => {
-  const connectionMode = ref<ConnectionMode>("direct");
+  // 阶段一 PR2/PR5：settingsStore 新增 configure 机制（5 store 里唯一原本没有的）。
+  // settings service 通过注入获取；未注入时用默认实例（resolveStorage）。
+  // （曾注入 config service 持久化 companionUrl/accessKey——已回滚为 localStorage 镜像，
+  // 见下方 watch 注释。）
+  let settingsServices: SettingsServices = createSettingsServices(
+    resolveStorage(),
+  );
+
+  function configureSettingsStore(input: {
+    services: SettingsServices;
+  }) {
+    settingsServices = input.services;
+  }
+
+  // 初始值同步读 localStorage 镜像（而非硬编码 "direct"）——resolveStorage 在
+  // ViewModel setup 时读它的快照装配后端，hydrate 不会回写它（见 applySettings）。
+  const connectionMode = ref<ConnectionMode>(readConnectionModeMirror());
+  // 阶段三 PR5：qiankun 嵌入态标记。true 时连接配置由宿主注入，禁用持久化与设置面板编辑。
+  const isEmbedded = ref(false);
+  // 阶段三 PR7：嵌入态是否隐藏子应用自带侧边栏（默认 true，会话管理交宿主）。见文档 §2.5。
+  const hideSidebarInEmbed = ref(true);
   const apiMode = ref<ApiMode>("images");
   const model = ref(FIXED_IMAGE_MODEL);
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
@@ -130,7 +179,7 @@ export const useSettingsStore = defineStore("settings", () => {
     },
   ]);
   const companionUrl = ref(
-    readStorage(SETTINGS_STORAGE_KEYS.companionUrl, "http://127.0.0.1:19750"),
+    readStorage(SETTINGS_STORAGE_KEYS.companionUrl, COMPANION_DEFAULT_URL),
   );
   const companionAccessKey = ref(
     readStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, ""),
@@ -323,30 +372,40 @@ export const useSettingsStore = defineStore("settings", () => {
   /**
    * 写入 companion /auth/status 回流的 provider 元信息。
    * status 为 null（离线/未配对/失配）时重置为 OpenAI 默认 capability + 约束，
-   * 保证 UI 行为回到 gpt-image-2 默认。
+   * 但保留上次 Companion model，避免临时离线时模型标签闪烁。
    */
+  function resetProviderUiDefaults() {
+    providerCapability.value = {
+      ...DEFAULT_PROVIDER_CAPABILITY,
+      backgrounds: [...DEFAULT_PROVIDER_CAPABILITY.backgrounds],
+      outputFormats: [...DEFAULT_PROVIDER_CAPABILITY.outputFormats],
+    };
+    sizeStep.value = DEFAULT_SIZE_STEP;
+    minCustomDimension.value = DEFAULT_MIN_CUSTOM_DIMENSION;
+    maxCustomDimension.value = DEFAULT_MAX_CUSTOM_DIMENSION;
+    maxCustomPixels.value = DEFAULT_MAX_CUSTOM_PIXELS;
+    minCustomPixels.value = DEFAULT_MIN_CUSTOM_PIXELS;
+    maxAspectRatio.value = DEFAULT_MAX_ASPECT_RATIO;
+    resolutionOptions.value = DEFAULT_RESOLUTION_OPTIONS.map((o) => ({ ...o }));
+
+    if (!DEFAULT_PROVIDER_CAPABILITY.backgrounds.includes(background.value)) {
+      background.value = DEFAULT_PROVIDER_CAPABILITY.backgrounds[0] ?? "auto";
+    }
+    if (!DEFAULT_PROVIDER_CAPABILITY.outputFormats.includes(outputFormat.value)) {
+      outputFormat.value = DEFAULT_PROVIDER_CAPABILITY.outputFormats[0] ?? "png";
+    }
+
+    const defaultValues = DEFAULT_RESOLUTION_OPTIONS.map((o) => o.value);
+    if (!defaultValues.includes(sizeResolution.value)) {
+      sizeResolution.value = defaultValues[0] ?? "1k";
+    }
+    const ratio = normalizeSizePreset(activeSizePreset.value);
+    if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
+  }
+
   function applyProviderInfo(status: CompanionAuthStatus | null) {
     if (!status || !status.ready) {
-      providerCapability.value = {
-        ...DEFAULT_PROVIDER_CAPABILITY,
-        backgrounds: [...DEFAULT_PROVIDER_CAPABILITY.backgrounds],
-        outputFormats: [...DEFAULT_PROVIDER_CAPABILITY.outputFormats],
-      };
-      sizeStep.value = DEFAULT_SIZE_STEP;
-      minCustomDimension.value = DEFAULT_MIN_CUSTOM_DIMENSION;
-      maxCustomDimension.value = DEFAULT_MAX_CUSTOM_DIMENSION;
-      maxCustomPixels.value = DEFAULT_MAX_CUSTOM_PIXELS;
-      minCustomPixels.value = DEFAULT_MIN_CUSTOM_PIXELS;
-      maxAspectRatio.value = DEFAULT_MAX_ASPECT_RATIO;
-      resolutionOptions.value = DEFAULT_RESOLUTION_OPTIONS.map((o) => ({ ...o }));
-      // 离线时若当前选中档不在默认列表（如刚从豆包切回 direct，还停在 3k），回退第一个。
-      const defaultValues = DEFAULT_RESOLUTION_OPTIONS.map((o) => o.value);
-      if (!defaultValues.includes(sizeResolution.value)) {
-        sizeResolution.value = defaultValues[0] ?? "1k";
-      }
-      const ratio = normalizeSizePreset(activeSizePreset.value);
-      if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
-      // 离线时 model 不回退——保留用户上次生效的 model，避免 UI 闪烁
+      resetProviderUiDefaults();
       return;
     }
 
@@ -384,17 +443,26 @@ export const useSettingsStore = defineStore("settings", () => {
     if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
   }
 
+  /** 切回浏览器直连时恢复完整的 OpenAI 默认状态，包括固定模型。 */
+  function applyDirectProviderInfo() {
+    resetProviderUiDefaults();
+    model.value = FIXED_IMAGE_MODEL;
+  }
+
   function applySettings(settings: AppSettings) {
     const defaults = normalizeGenerationParams(settings.defaults);
-    connectionMode.value = settings.connectionMode;
+    // connectionMode 故意不从 settings 记录回写：它是连接配置（决定读哪个后端），
+    // 启动期权威源是 localStorage 镜像 + 用户切换。数据集内的记录可能是上一个
+    // 后端时代留下的旧值（如切回 direct 后 IndexedDB 里仍存着 localCompanion），
+    // 回写会把模式顶回去，造成 storage 后端与 UI 状态错配。
     apiKey.value = settings.apiKey;
     apiBaseUrlMode.value = settings.apiBaseUrlMode;
     apiBaseUrl.value = displayApiBaseUrl(settings.apiBaseUrl, settings.apiBaseUrlMode);
     apiMode.value = settings.apiMode;
     streamImages.value = settings.streamImages;
     streamPartialImages.value = settings.streamPartialImages;
-    // model 不再强制写死：优先用持久化的值，companion 回流时会覆盖。
-    // 兜底 FIXED_IMAGE_MODEL（兼容旧持久化数据无 model 字段的情况）。
+    // localCompanion 先恢复上次模型，随后由 /auth/status 覆盖；direct 在函数末尾
+    // 通过 applyDirectProviderInfo 强制恢复 FIXED_IMAGE_MODEL。
     model.value = settings.model || FIXED_IMAGE_MODEL;
     promptMode.value = settings.promptMode;
     promptWordbanks.value = normalizePromptWordbanks(settings.promptWordbanks);
@@ -426,6 +494,9 @@ export const useSettingsStore = defineStore("settings", () => {
     quality.value = defaults.quality;
     background.value = normalizeBackground(defaults.background);
     outputFormat.value = defaults.outputFormat;
+    if (connectionMode.value === "direct") {
+      applyDirectProviderInfo();
+    }
   }
 
   function currentSettings(): AppSettings {
@@ -485,7 +556,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   function saveCurrentSettings() {
-    return saveSettings(currentSettings());
+    return settingsServices.save(currentSettings());
   }
 
   function savePromptRewriteGuardText(text: string) {
@@ -566,12 +637,54 @@ export const useSettingsStore = defineStore("settings", () => {
     );
   }
 
-  watch(companionUrl, (v) =>
-    writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v),
-  );
-  watch(companionAccessKey, (v) =>
-    writeStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, v),
-  );
+  // companionUrl/accessKey 的权威存储是 localStorage 镜像（启动期同步可读——
+  // resolveStorage 装配、useCompanionConnection 的 immediate watch 都依赖它）。
+  // 曾按决策 T3 收编到 StudioStorage.config（IndexedDB __config__: 前缀），已回滚：
+  // 连接配置存进「由它自己选中的后端」会形成鸡生蛋——Companion 模式下读 config
+  // 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401 卡死。
+  // ref 初始值同步读 localStorage（上方声明），变化时写回镜像。
+  // 阶段三 PR5：嵌入态（isEmbedded）跳过持久化——连接配置由宿主注入，不写回本地。
+  watch(companionUrl, (v) => {
+    if (isEmbedded.value) return;
+    writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v);
+  });
+  watch(companionAccessKey, (v) => {
+    if (isEmbedded.value) return;
+    writeStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, v);
+  });
+  // connectionMode 镜像写回 localStorage：resolveStorage 在每次启动（含切换后的 reload）
+  // setup 时同步读它装配后端。hydrate 不会改它（applySettings 不回写，见上方注释），
+  // 故无需 isHydrated 守卫；嵌入态由宿主固定，跳过持久化（同 companionUrl/accessKey）。
+  watch(connectionMode, (v) => {
+    if (isEmbedded.value) return;
+    writeStorage(SETTINGS_STORAGE_KEYS.connectionMode, v);
+  });
+
+  /**
+   * 阶段三 PR5/PR7：应用 qiankun 嵌入态配置（由宿主注入）。
+   *
+   * 嵌入态下连接信息由宿主管控：
+   * - companionUrl = 宿主部署的 Companion 服务地址
+   * - jwt = 宿主签发的 JWT（作为 Bearer token，原 accessKey 位置）
+   * - connectionMode 固定 localCompanion（禁止 direct，凭据安全由平台负责）
+   * - isEmbedded = true（禁用持久化 + 设置面板编辑）
+   * - hideSidebar = 是否隐藏子应用自带侧边栏（PR7，默认 true，会话管理交宿主）
+   *
+   * 必须在 useStudioViewModel 装配（resolveStorage 读 connectionMode.value）之前调用，
+   * 即 qiankun mount(props) 时、app.mount 之前。
+   */
+  function applyEmbeddedConfig(input: {
+    companionUrl: string;
+    jwt: string;
+    /** 嵌入态隐藏侧边栏，省略时默认 true。 */
+    hideSidebar?: boolean;
+  }) {
+    companionUrl.value = input.companionUrl;
+    companionAccessKey.value = input.jwt;
+    connectionMode.value = "localCompanion";
+    isEmbedded.value = true;
+    hideSidebarInEmbed.value = input.hideSidebar ?? true;
+  }
   // Companion 模式只支持 Images API。切到 companion 时若残留 responses，
   // 强制校正为 images，避免发出注定抛「仅支持 Images API」的请求。
   // （apiMode 选择器 UI 仅在 direct 模式可见，切走后该值不会自动重置。）
@@ -587,15 +700,20 @@ export const useSettingsStore = defineStore("settings", () => {
     apiBaseUrl,
     apiBaseUrlMode,
     apiKey,
+    applyDirectProviderInfo,
     applyProviderInfo,
     providerCapability,
     autoRetryOnNetworkError,
     analyticsEnabled,
+    configureSettingsStore,
     analyticsPromptCapture,
     companionConnected,
     companionAccessKey,
     companionUrl,
     connectionMode,
+    isEmbedded,
+    hideSidebarInEmbed,
+    applyEmbeddedConfig,
     applySettings,
     applyImageCount,
     applyImageCountMode,
@@ -652,104 +770,3 @@ export const useSettingsStore = defineStore("settings", () => {
   };
 });
 
-function getPromptWordbankTerms(
-  wordbanks: PromptWordbanks,
-  section: PromptWordbankSectionKey,
-) {
-  if (section === "pose.safe") return wordbanks.pose.safe;
-  if (section === "pose.creative") return wordbanks.pose.creative;
-  if (section === "pose.nsfw") return wordbanks.pose.nsfw;
-  return wordbanks.adultInspiration;
-}
-
-function setPromptWordbankTerms(
-  wordbanks: PromptWordbanks,
-  section: PromptWordbankSectionKey,
-  terms: string[],
-) {
-  const next = clonePromptWordbanks(wordbanks);
-  if (section === "pose.safe") next.pose.safe = [...terms];
-  if (section === "pose.creative") next.pose.creative = [...terms];
-  if (section === "pose.nsfw") next.pose.nsfw = [...terms];
-  if (section === "adultInspiration") next.adultInspiration = [...terms];
-  return next;
-}
-
-function normalizePromptRewriteGuardHistory(
-  history: PromptRewriteGuardHistoryItem[] | undefined,
-  currentText: string,
-) {
-  const seen = new Set<string>();
-  const normalizedItems = (Array.isArray(history) ? history : [])
-    .map((item) => ({
-      id: item.id || createId("prompt-guard"),
-      text: normalizePromptRewriteGuardText(item.text),
-      createdAt: item.createdAt || isoTimestamp(),
-    }))
-    .filter((item) => {
-      if (seen.has(item.text)) return false;
-      seen.add(item.text);
-      return true;
-    });
-
-  if (!seen.has(currentText)) {
-    normalizedItems.unshift({
-      id: createId("prompt-guard"),
-      text: currentText,
-      createdAt: isoTimestamp(),
-    });
-  }
-
-  return normalizedItems.slice(0, MAX_PROMPT_REWRITE_GUARD_HISTORY);
-}
-
-function addPromptGuardHistoryItem(
-  history: PromptRewriteGuardHistoryItem[],
-  text: string,
-) {
-  if (history[0]?.text === text) return history;
-
-  return [
-    {
-      id: createId("prompt-guard"),
-      text,
-      createdAt: isoTimestamp(),
-    },
-    ...history.filter((item) => item.text !== text),
-  ].slice(0, MAX_PROMPT_REWRITE_GUARD_HISTORY);
-}
-
-function toPlainPromptRewriteGuardHistoryItem(
-  item: PromptRewriteGuardHistoryItem,
-): PromptRewriteGuardHistoryItem {
-  return {
-    id: item.id,
-    text: item.text,
-    createdAt: item.createdAt,
-  };
-}
-
-function toPlainFavoritePrompt(item: FavoritePrompt): FavoritePrompt {
-  return {
-    id: item.id,
-    title: item.title,
-    text: item.text,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-  };
-}
-
-function normalizeBackground(background: GenerationParams["background"]) {
-  if (background === "transparent") return "auto";
-
-  return background;
-}
-
-function displayApiBaseUrl(apiBaseUrl: string, mode: AppSettings["apiBaseUrlMode"]) {
-  if (mode === "full") return apiBaseUrl;
-  return stripImagesApiPath(apiBaseUrl);
-}
-
-function stripImagesApiPath(apiBaseUrl: string) {
-  return apiBaseUrl.trim().replace(/\/+$/, "").replace(/\/v1\/images$/i, "");
-}

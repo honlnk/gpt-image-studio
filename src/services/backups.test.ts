@@ -1,33 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
 import { PROMPT_REWRITE_GUARD_PREFIX } from "./imagesApi";
-import { createStudioBackup, restoreStudioBackup } from "./backups";
-import { STORE_NAMES } from "./db";
+import {
+  createSpyStorage,
+  type SpyStorage,
+} from "./storage/createSpyStorage";
 import { createZipArchive } from "./zipArchive";
 import { defaultPromptWordbanks } from "./promptWordbanks";
 
-const mocks = vi.hoisted(() => ({
-  clearStore: vi.fn(),
-  getAllFromStore: vi.fn(),
-  loadSettings: vi.fn(),
-  putInStore: vi.fn(),
-  saveSettings: vi.fn(),
+const spyStorage: SpyStorage = createSpyStorage();
+
+vi.mock("./storage/resolveStorage", () => ({
+  resolveStorage: () => spyStorage,
 }));
 
-vi.mock("./db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./db")>();
-  return {
-    ...actual,
-    clearStore: mocks.clearStore,
-    getAllFromStore: mocks.getAllFromStore,
-    putInStore: mocks.putInStore,
-  };
-});
+const mocks = vi.hoisted(() => ({
+  loadSettings: vi.fn(),
+  saveSettings: vi.fn(),
+}));
 
 vi.mock("./settings", () => ({
   loadSettings: mocks.loadSettings,
   saveSettings: mocks.saveSettings,
 }));
+
+const { createStudioBackup, restoreStudioBackup } = await import("./backups");
+const { STORE_NAMES } = await import("./storage");
 
 const conversation: Conversation = {
   id: "conversation-1",
@@ -101,21 +99,24 @@ const settings: AppSettings = {
 describe("studio backups", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.clearStore.mockResolvedValue(undefined);
-    mocks.putInStore.mockResolvedValue(undefined);
+    spyStorage.clear.mockResolvedValue(undefined);
+    spyStorage.put.mockResolvedValue(undefined);
     mocks.saveSettings.mockResolvedValue(undefined);
   });
 
   it("exports manifest, data, and blobs without API key or preview URLs", async () => {
-    mocks.getAllFromStore.mockImplementation((storeName: string) => {
-      if (storeName === STORE_NAMES.conversations) return [conversation];
-      if (storeName === STORE_NAMES.messages) return [message];
-      if (storeName === STORE_NAMES.imageAssets) return [imageAsset];
-      if (storeName === STORE_NAMES.imageBlobs) {
-        return [{ key: imageAsset.blobKey, blob: new Blob(["image-data"]) }];
-      }
-      return [];
+    // PR-e 后 create() 走 iterateAll（listPage 游标分批）+ loadImageBlob（逐个 blob）。
+    // mock listPage 按 store 返回单页数据，loadImageBlob 返回二进制。
+    spyStorage.listPage.mockImplementation((storeName: string) => {
+      if (storeName === STORE_NAMES.conversations)
+        return Promise.resolve({ data: [conversation], nextCursor: null, total: 1 });
+      if (storeName === STORE_NAMES.messages)
+        return Promise.resolve({ data: [message], nextCursor: null, total: 1 });
+      if (storeName === STORE_NAMES.imageAssets)
+        return Promise.resolve({ data: [imageAsset], nextCursor: null, total: 1 });
+      return Promise.resolve({ data: [], nextCursor: null, total: 0 });
     });
+    spyStorage.loadImageBlob.mockResolvedValue(new Blob(["image-data"]));
     mocks.loadSettings.mockResolvedValue(settings);
 
     const backup = await createStudioBackup();
@@ -126,7 +127,7 @@ describe("studio backups", () => {
     expect(manifest).toMatchObject({
       app: "gpt-image-studio",
       version: 1,
-      excludes: ["apiKey"],
+      excludes: ["apiKey", "companionAccessKey"],
     });
     expect(data.settings).toEqual({
       connectionMode: settings.connectionMode,
@@ -171,7 +172,7 @@ describe("studio backups", () => {
     await expect(restoreStudioBackup(fileFromBlob(backup))).rejects.toThrow(
       "这不是 GPT Image Studio 的备份文件。",
     );
-    expect(mocks.clearStore).not.toHaveBeenCalled();
+    expect(spyStorage.clear).not.toHaveBeenCalled();
   });
 
   it("rejects missing image blob files before clearing existing stores", async () => {
@@ -186,7 +187,7 @@ describe("studio backups", () => {
     await expect(restoreStudioBackup(fileFromBlob(backup))).rejects.toThrow(
       "备份缺少图片文件：blob 1",
     );
-    expect(mocks.clearStore).not.toHaveBeenCalled();
+    expect(spyStorage.clear).not.toHaveBeenCalled();
   });
 
   it("restores records and preserves the current API key", async () => {
@@ -215,17 +216,17 @@ describe("studio backups", () => {
 
     await restoreStudioBackup(fileFromBlob(backup));
 
-    expect(mocks.clearStore).toHaveBeenCalledTimes(5);
-    expect(mocks.putInStore).toHaveBeenCalledWith(
+    expect(spyStorage.clear).toHaveBeenCalledTimes(5);
+    expect(spyStorage.put).toHaveBeenCalledWith(
       STORE_NAMES.conversations,
       conversation,
     );
-    expect(mocks.putInStore).toHaveBeenCalledWith(STORE_NAMES.messages, message);
-    expect(mocks.putInStore).toHaveBeenCalledWith(
+    expect(spyStorage.put).toHaveBeenCalledWith(STORE_NAMES.messages, message);
+    expect(spyStorage.put).toHaveBeenCalledWith(
       STORE_NAMES.imageAssets,
       expect.not.objectContaining({ previewUrl: expect.anything() }),
     );
-    expect(mocks.putInStore).toHaveBeenCalledWith(
+    expect(spyStorage.put).toHaveBeenCalledWith(
       STORE_NAMES.imageBlobs,
       expect.objectContaining({
         key: "blob 1",

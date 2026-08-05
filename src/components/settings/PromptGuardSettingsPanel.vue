@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { PROMPT_REWRITE_GUARD_PREFIX } from "../../services/imagesApi";
+import { PROMPT_REWRITE_GUARD_PREFIX } from "../../services/promptRewriteGuard";
+import { copyText as copyTextToClipboard } from "../../shared/clipboard";
 import type { PromptRewriteGuardHistoryItem } from "../../types/studio";
 
 const props = defineProps<{
@@ -50,7 +51,7 @@ function restoreHistory(id: string) {
 
 async function copyHistory(item: PromptRewriteGuardHistoryItem) {
   try {
-    await navigator.clipboard.writeText(item.text);
+    await copyTextToClipboard(item.text);
     copiedId.value = item.id;
     window.setTimeout(() => {
       if (copiedId.value === item.id) copiedId.value = "";

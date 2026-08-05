@@ -1,15 +1,18 @@
 import { defineStore } from "pinia";
 import { storeToRefs } from "pinia";
 import { useSettingsStore } from "./settingsStore";
-import { useCompanionConnection, useCompanionManagement } from "../features/companion";
+import { useCompanionConnection } from "../features/companion";
 
 /**
- * Companion 连接 + 管理的共享状态（单例 store）。
+ * Companion 连接状态的共享 store（单例）。
+ *
+ * 阶段零之后，provider 凭据管理已迁移到 Companion 自带管理页（127.0.0.1:19750/admin），
+ * 本 store 只保留 connection 半边——驱动工作台的 Companion 状态徽标和 localCompanion 模式
+ * 下的 provider 能力感知。凭据 CRUD、损坏恢复、日志查看都不再由 Web 项目承载。
  *
  * 为什么是 store 而不是 composable：
- * useCompanionConnection / useCompanionManagement 每次调用返回新实例（独立的 reactive 状态、
- * 独立的 watch 探活轮询）。工作台和 /companion 管理页如果各自实例化，就会双份探活、
- * 状态割裂（在一处连接了，另一处不知道）。Pinia store 是单例，两个页面拿到同一份状态。
+ * useCompanionConnection 每次调用返回新实例（独立的 reactive 状态、独立的 watch 探活轮询）。
+ * 多个组件各自实例化会重复探活、状态割裂。Pinia store 是单例，所有消费者拿到同一份状态。
  *
  * 与 settingsStore 的关系：
  * - 连接所需的 companionUrl / companionAccessKey / connectionMode 仍由 settingsStore 持有
@@ -32,16 +35,9 @@ export const useCompanionStore = defineStore("companion", () => {
       settings.companionAccessKey = "";
     },
     onApplyProviderInfo: settings.applyProviderInfo,
+    onApplyDirectProviderInfo: settings.applyDirectProviderInfo,
     onAccessKeyAcquired: (key) => {
       settings.companionAccessKey = key;
-    },
-  });
-
-  const management = useCompanionManagement({
-    companionUrl,
-    companionAccessKey,
-    onCredentialsChanged: () => {
-      void connection.checkStatus();
     },
   });
 
@@ -55,23 +51,5 @@ export const useCompanionStore = defineStore("companion", () => {
     checkStatus: connection.checkStatus,
     connectWithKey: connection.connectWithKey,
     disconnect: connection.disconnect,
-    // 凭据列表 + 日志（useCompanionManagement）
-    presets: management.presets,
-    credentialList: management.credentialList,
-    activeCredentialId: management.activeCredentialId,
-    logs: management.logs,
-    loadingPresets: management.loadingPresets,
-    loadingCredentials: management.loadingCredentials,
-    savingCredentials: management.savingCredentials,
-    logsLoading: management.logsLoading,
-    credError: management.credError,
-    logsError: management.logsError,
-    loadPresets: management.loadPresets,
-    loadCredentials: management.loadCredentials,
-    addCredential: management.addCredential,
-    updateCredential: management.updateCredential,
-    removeCredential: management.removeCredential,
-    activateCredential: management.activateCredential,
-    loadLogs: management.loadLogs,
   };
 });

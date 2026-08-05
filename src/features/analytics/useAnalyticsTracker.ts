@@ -3,9 +3,11 @@ import type {
   AnalyticsEventSource,
   AnalyticsPromptCapture,
 } from "../../types/studio";
+import type { AnalyticsEventServices } from "../../services/analyticsEvents";
+import { createAnalyticsEventServices } from "../../services/analyticsEvents";
+import { resolveStorage } from "../../services/storage/resolveStorage";
 import { createId } from "../../shared/id";
 import { isoTimestamp } from "../../shared/dateTime";
-import { saveAnalyticsEventsBatch } from "../../services/analyticsEvents";
 
 /**
  * Analytics tracker (V1.0)
@@ -33,6 +35,19 @@ const FLUSH_DELAY_MS = 500;
 const FLUSH_BATCH_SIZE = 50;
 
 const PROMPT_LIKE_KEYS = new Set(["prompt", "text", "content"]);
+
+/**
+ * 阶段一 PR4：analyticsEvents service 通过 initTrackerStorage 注入（决策 T1）。
+ * 模块级单例默认用 resolveStorage() 实例（向后兼容），ViewModel 装配时统一注入。
+ */
+let analyticsEventsService: AnalyticsEventServices = createAnalyticsEventServices(
+  resolveStorage(),
+);
+
+/** 供 ViewModel 在装配点注入统一的 analyticsEvents service。 */
+export function initTrackerStorage(services: AnalyticsEventServices) {
+  analyticsEventsService = services;
+}
 
 const state: TrackerConfig & TrackerContext = {
   enabled: true,
@@ -141,7 +156,7 @@ function flushNow() {
   const batch = queue.splice(0, queue.length);
   flushPromise = flushPromise
     .then(async () => {
-      await saveAnalyticsEventsBatch(batch);
+      await analyticsEventsService.saveBatch(batch);
       try {
         onFlushed?.(batch.length);
       } catch {

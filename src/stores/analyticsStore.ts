@@ -7,10 +7,11 @@ import {
   setTrackerContext,
 } from "../features/analytics/useAnalyticsTracker";
 import {
-  clearAnalyticsEvents,
-  listAnalyticsEvents,
+  createAnalyticsEventServices,
+  type AnalyticsEventServices,
 } from "../services/analyticsEvents";
 import { createAnalyticsExportArchive } from "../services/analyticsExport";
+import { resolveStorage } from "../services/storage/resolveStorage";
 import { createObjectUrl, revokeObjectUrl } from "../shared/objectUrls";
 import { createId } from "../shared/id";
 
@@ -28,19 +29,37 @@ function getOrCreateSessionId() {
   }
 }
 
+type AnalyticsStoreServices = {
+  /** 阶段一 PR2：analyticsEvents service 通过 configure 注入（决策 T1）。
+   *  analyticsExport 暂留模块级 import（它是导出编排逻辑，非纯存储层）。 */
+  analyticsEvents: AnalyticsEventServices;
+};
+
+// 模块级默认 service 实例，供未显式注入时使用（PR4 后 ViewModel 统一注入）。
+const defaultServices: AnalyticsStoreServices = {
+  analyticsEvents: createAnalyticsEventServices(resolveStorage()),
+};
+
 export const useAnalyticsStore = defineStore("analytics", () => {
   const eventCount = ref(0);
   const sessionId = getOrCreateSessionId();
+  let services: AnalyticsStoreServices = defaultServices;
 
   // flush 成功落库后同步递增计数，让面板能实时反映新增事件。
   setFlushedListener((count) => {
     eventCount.value += count;
   });
 
-  function configure(settings: Pick<
-    AppSettings,
-    "analyticsEnabled" | "analyticsPromptCapture"
-  >) {
+  function configure(
+    settings: Pick<
+      AppSettings,
+      "analyticsEnabled" | "analyticsPromptCapture"
+    >,
+    injectedServices?: AnalyticsStoreServices,
+  ) {
+    if (injectedServices) {
+      services = injectedServices;
+    }
     configureTracker({
       enabled: settings.analyticsEnabled,
       promptCapture: settings.analyticsPromptCapture,
@@ -56,9 +75,16 @@ export const useAnalyticsStore = defineStore("analytics", () => {
     setTrackerContext(context);
   }
 
+  function requireServices(): AnalyticsStoreServices {
+    if (!services) {
+      throw new Error("Analytics store services are not configured.");
+    }
+    return services;
+  }
+
   async function refreshEventCount() {
     try {
-      const events = await listAnalyticsEvents();
+      const events = await requireServices().analyticsEvents.list();
       eventCount.value = events.length;
     } catch {
       eventCount.value = 0;
@@ -76,7 +102,7 @@ export const useAnalyticsStore = defineStore("analytics", () => {
   }
 
   async function clearEvents() {
-    await clearAnalyticsEvents();
+    await requireServices().analyticsEvents.clear();
     eventCount.value = 0;
   }
 

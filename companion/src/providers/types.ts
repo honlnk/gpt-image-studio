@@ -77,6 +77,52 @@ export type ResolutionOption = {
 };
 
 /**
+ * Provider 图片编辑专属限制；未声明时由全局安全配置兜底。
+ *
+ * 定义在 types.ts（而非 providerProfiles.ts）是因为 ProviderAdapter 接口也持有它，
+ * 避免两个文件互相 import 形成循环依赖。
+ */
+export type ProviderEditConstraints = {
+  /** 上游允许的最大参考图数量。 */
+  maxImages?: number;
+  /** 上游允许的单张参考图最大字节数。 */
+  maxImageBytes?: number;
+  /** 编辑支持的分辨率档位；可少于文生图档位（如 Wan Pro 不支持编辑 4K）。 */
+  resolutionOptions?: readonly ResolutionOption[];
+};
+
+/**
+ * adapter 翻译专用的私有配置，不回流 web。
+ *
+ * 与 resolutionOptions/sizeConstraints 的区别：那两个字段会通过 /auth/status 回流给 web
+ * 供 UI 渲染；本字段只被 companion 内部的 adapter 读取，用于协议翻译。物理隔离确保
+ * 翻译细节不泄漏到 web 端。
+ *
+ * 各字段全部可选，provider 按自己的协议差异按需声明。OpenAI 兼容家族（用 WxH 像素）
+ * 通常不需要此字段；Gemini/Grok 这类用枚举值传 size/resolution 的才需要。
+ */
+export type ProviderAdapterConfig = {
+  /**
+   * 该 provider 官方支持的 aspect_ratio 枚举（如 Gemini/Grok）。
+   * adapter 据此判断 web 发来的比例是否合法——在枚举内则传给上游，否则不传（让上游自选）。
+   * 未声明时 adapter 自行处理（如 WxH 家族不认 aspect_ratio，无需此字段）。
+   */
+  supportedAspectRatios?: readonly string[];
+  /**
+   * 分辨率档位到上游实际值的映射。
+   * key = web 档位 value（如 "1k"），val = 发给上游的值（如 Gemini 的 "1K"）。
+   * 未声明时 adapter 直接用 web 档位 value 透传。
+   */
+  resolutionMap?: Readonly<Record<string, string>>;
+  /**
+   * 该 provider 官方支持的 resolution 枚举白名单（如 Grok 只有 1k/2k）。
+   * 与 resolutionMap 互斥：resolutionMap 带"值映射"，这里只带"合法性校验"。
+   * web 发来的档位若不在此列则不传给上游。
+   */
+  supportedResolutions?: readonly string[];
+};
+
+/**
  * OpenAI 形状的文生图请求。adapter.generate 的入参。
  * 来自 web 的请求体（route 层已做 HTTP 边界校验）。
  *
@@ -90,6 +136,8 @@ export type OpenAIImageRequest = {
   prompt: string;
   /** OpenAI 形状的 size，例如 "1024x1024" / "auto"。 */
   size: string;
+  /** Companion 能力协议中的分辨率档位，例如 "1k" / "2k" / "4k"。 */
+  resolution?: string;
   background: string;
   outputFormat: string;
   /** web 请求体中上述已知字段之外的所有字段，原样保留。 */
@@ -120,11 +168,16 @@ export type OpenAIImageEditRequest = OpenAIImageRequest & {
 
 /**
  * adapter 统一的输出形状。routes/images.ts 会把它再包成
- * `{ data: [{ b64_json, revised_prompt }] }` 返回给 web。
+ * `{ data: [{ b64_json, revised_prompt, mime_type }] }` 返回给 web。
+ *
+ * mimeType 是图片字节的真实格式（来自厂商响应字段、URL 下载的 Content-Type，
+ * 或对 base64 的 magic bytes 嗅探），web 据此给 ImageAsset.mimeType 赋值，
+ * 避免标签与字节不符。未探测到时为 undefined，web 回退到 outputFormat 猜测。
  */
 export type OpenAIImageResult = {
   b64Json: string;
   revisedPrompt?: string;
+  mimeType?: string;
 };
 
 /**
@@ -140,9 +193,17 @@ export type ProviderConfig = {
 };
 
 /**
+ * generate/edit 的可选第三参。
+ * `signal` 透传自 route 层：浏览器断开时 route 构造的 AbortController.abort()，
+ * 让 provider 的上游 fetch 同步取消。不传时上游请求按 fetch 默认行为进行。
+ */
+export type ProviderCallOptions = {
+  signal?: AbortSignal;
+};
+
+/**
  * Provider adapter 接口。输入输出都是 OpenAI 形状。
  *
- * - describe() 返回给人看的展示信息（/auth/status 的 accountLabel 等）。
  * - generate() 文生图，所有 provider 必须实现。
  * - edit() 图片编辑，可选；未实现时 capability.edit 应为 false，
  *   route 层据此返回 501。
@@ -150,6 +211,9 @@ export type ProviderConfig = {
  *   web 删除写死档位 + maxPixels 运行时过滤后，直接渲染本字段。
  * - getSizeConstraints/getResolutionOptions 可选：用于 Wan 这类能力会随 model
  *   变化的 provider。未提供时使用静态字段。
+ *
+ * generate/edit 的第三参 `options` 可选，承载 AbortSignal 等调用元数据；
+ * 现有调用方不传仍合法，因此接口向后兼容。
  */
 export type ProviderAdapter = {
   readonly id: string;
@@ -157,18 +221,20 @@ export type ProviderAdapter = {
   readonly sizeConstraints: SizeConstraints;
   /** 该 provider 支持的分辨率档位，companion 声明、web 渲染。 */
   readonly resolutionOptions: readonly ResolutionOption[];
+  /** Provider 专属编辑限制（maxImages 等）；未声明时由全局安全配置兜底。 */
+  readonly editConstraints?: ProviderEditConstraints;
   getSizeConstraints?(config: ProviderConfig): SizeConstraints;
   getResolutionOptions?(config: ProviderConfig): readonly ResolutionOption[];
-
-  describe(config: ProviderConfig): { label: string; providerId: string };
 
   generate(
     request: OpenAIImageRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult>;
 
   edit?(
     request: OpenAIImageEditRequest,
     config: ProviderConfig,
+    options?: ProviderCallOptions,
   ): Promise<OpenAIImageResult>;
 };

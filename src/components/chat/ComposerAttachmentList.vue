@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watchEffect } from "vue";
 import type { ImageAsset } from "../../types/studio";
+import { useImagesStore } from "../../stores/imagesStore";
+import { formatFileSizeCompact } from "../../shared/fileFormatters";
 import Tooltip from "../ui/Tooltip.vue";
 
 type EditingPairAttachment = {
@@ -27,6 +29,16 @@ const emit = defineEmits<{
   previewImage: [id: string];
   removeAttachment: [id: string];
 }>();
+
+const imagesStore = useImagesStore();
+
+// PR9 懒加载：草稿恢复的引用图片 previewUrl 为空，挂载/变化时触发加载
+// （store 内部去重，重复触发无副作用）。
+watchEffect(() => {
+  for (const image of props.activeAttachments) {
+    if (!image.previewUrl) imagesStore.ensurePreviewLoaded(image.id);
+  }
+});
 
 const attachmentRows = computed(() =>
   createAttachmentRows(
@@ -95,12 +107,9 @@ const totalSizeBytes = computed(() =>
   props.activeAttachments.reduce((sum, img) => sum + (img.sizeBytes ?? 0), 0),
 );
 
-const totalSizeLabel = computed(() => {
-  const bytes = totalSizeBytes.value;
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
-});
+const totalSizeLabel = computed(() =>
+  formatFileSizeCompact(totalSizeBytes.value),
+);
 </script>
 
 <template>
@@ -121,6 +130,15 @@ const totalSizeLabel = computed(() => {
           :alt="attachmentName(item)"
           :src="attachmentPreviewUrl(item)"
         />
+        <!-- PR9：blob 加载中显示占位（引用图片来自草稿恢复时 previewUrl 为空） -->
+        <div
+          v-else
+          class="flex h-full w-20 items-center justify-center bg-gray-100"
+        >
+          <span
+            class="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500"
+          ></span>
+        </div>
         <!-- 左上角编辑三角标识 -->
         <span v-if="item.kind === 'editingPair'" class="absolute left-0 top-0">
           <svg class="h-7 w-7" viewBox="0 0 28 28" aria-hidden="true">

@@ -1,7 +1,8 @@
-import { computed, onMounted, proxyRefs, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, proxyRefs, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
 import { useStudioConversations } from "../../features/conversations";
+import { useStudioDrafts } from "../../features/drafts/useStudioDrafts";
 import { useStudioFeedback } from "../../features/feedback";
 import {
   createDirectImagesClient,
@@ -11,39 +12,47 @@ import {
 } from "../../features/generation";
 import { useStudioImages } from "../../features/images";
 import { useStudioSettings } from "../../features/settings";
+import { initTrackerStorage } from "../../features/analytics/useAnalyticsTracker";
 import { useCompanionStore } from "../../stores/companionStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { withNetworkRetry } from "../../services/networkRetry";
 import { clonePromptWordbanks } from "../../services/promptWordbanks";
-import {
-  deleteConversationDraft,
-  deleteConversationDrafts,
-  loadConversationDraft,
-  saveConversationDraft,
-} from "../../services/conversationDrafts";
-import { saveSettings } from "../../services/settings";
+import { createConversationServices } from "../../services/conversations";
+import { createMessageServices } from "../../services/messages";
+import { createImageAssetServices } from "../../services/imageAssets";
+import { createSettingsServices, createConfigServices } from "../../services/settings";
+import { createConversationDraftServices } from "../../services/conversationDrafts";
+import { createAnalyticsEventServices } from "../../services/analyticsEvents";
+import { createBackupServices } from "../../services/backups";
+import { createStorageUsageServices } from "../../services/storageUsage";
+import { createTimeFieldMigrationServices } from "../../services/timeFieldMigration";
+import { resolveStorage } from "../../services/storage/resolveStorage";
+import { copyText as copyTextToClipboard } from "../../shared/clipboard";
 import {
   applyUrlSettings,
   getPromptFromUrlParams,
   hasUrlGenerationParams,
 } from "../../services/urlSettings";
-import { readJsonStorage, readStorage } from "../../shared/localStorage";
+import {
+  readConversationIdFromUrl,
+  writeConversationIdToUrl,
+} from "../../services/conversationUrl";
+import {
+  notifyHostActiveConversationChanged,
+  notifyHostConversationsChanged,
+  setHostActions,
+} from "../../services/embeddedBridge";
 import { useAnalyticsStore } from "../../stores/analyticsStore";
 import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useComposerStore } from "../../stores/composerStore";
 import type {
   AnalyticsPromptCapture,
-  ConversationDraft,
-  GenerationParams,
   Message,
   PromptMode,
   PromptRequestSettings,
   PromptWordbankSectionKey,
 } from "../../types/studio";
-
-const STORAGE_KEYS = {
-  draftComposerText: "gpt-image-studio:draft-composer-text",
-  draftAttachments: "gpt-image-studio:draft-attachments",
-} as const;
+import { CONNECTION_MODE_SWITCHED_KEY } from "../../shared/constants";
 
 type SettingsTab =
   | "general"
@@ -68,9 +77,42 @@ type RenameImageDialogState = {
 
 export function useStudioViewModel() {
   const isHydrated = ref(false);
+
+  // ─── 阶段二 PR6：装配顺序调整 ───
+  // 先取 settingsStore 实例（Pinia 单例，重复调用返回同一实例），拿到 connectionMode /
+  // companionUrl / companionAccessKey 的 ref，供 resolveStorage 按 connectionMode 分叉。
+  // 必须在 resolveStorage 之前，因为 CompanionStorage 需要这两个 ref 的惰性 getter。
+  const settingsStore = useSettingsStore();
+  const settingsRefs = storeToRefs(settingsStore);
+
+  // ─── service 工厂全集（唯一装配点，决策 T1 + §6.3） ───
+  // 所有 service 共享同一个 storage 实例（resolveStorage），store/feature 通过注入获取。
+  // 阶段一恒返回 IndexedDbStorage；阶段二 localCompanion → CompanionStorage；阶段四 isTauriRuntime → NativeStorage。
+  // getter 闭包持有 ref，每次 fetch 惰性读取最新值（避免装配顺序耦合）。
+  const storage = resolveStorage({
+    connectionMode: settingsRefs.connectionMode.value,
+    getCompanionUrl: () => settingsRefs.companionUrl.value,
+    getCompanionAccessKey: () => settingsRefs.companionAccessKey.value,
+  });
+  const services = {
+    conversations: createConversationServices(storage),
+    messages: createMessageServices(storage),
+    imageAssets: createImageAssetServices(storage),
+    settings: createSettingsServices(storage),
+    config: createConfigServices(storage),
+    drafts: createConversationDraftServices(storage),
+    analyticsEvents: createAnalyticsEventServices(storage),
+    backup: createBackupServices(storage),
+    storageUsage: createStorageUsageServices(storage),
+    timeFieldMigration: createTimeFieldMigrationServices(storage),
+  };
+  // analytics tracker 是模块级单例，无法通过参数注入，用 init 注入 service。
+  initTrackerStorage(services.analyticsEvents);
+
   const settings = useStudioSettings({
     isHydrated,
     onStorageError: reportStorageError,
+    services: { settings: services.settings },
   });
   const composerState = useComposerStore();
   const {
@@ -81,11 +123,6 @@ export function useStudioViewModel() {
     isLibraryOpen,
   } = storeToRefs(composerState);
   const isSettingsOpen = ref(false);
-  const legacyComposerText = readStorage(STORAGE_KEYS.draftComposerText, "");
-  const legacyAttachedImageIds = readJsonStorage<string[]>(STORAGE_KEYS.draftAttachments, []);
-  let isApplyingDraft = false;
-  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
-  let draftSwitchQueue = Promise.resolve();
 
   const previewImageId = ref("");
   const settingsInitialTab = ref<SettingsTab | undefined>(undefined);
@@ -107,22 +144,62 @@ export function useStudioViewModel() {
   // 探活/配对/凭证/日志全收拢在这里，不重复实例化、不重复轮询。
   const companionStore = useCompanionStore();
   const conversations = useStudioConversations({
+    services: {
+      conversations: services.conversations,
+      messages: services.messages,
+    },
     clearDraft: clearConversationDraft,
     onStorageError: reportStorageError,
     refreshStorageUsage: refreshImagesStorageUsage,
   });
   const messages = conversations.messages;
   const images = useStudioImages({
+    services: {
+      imageAssets: services.imageAssets,
+      storageUsage: services.storageUsage,
+    },
     activeConversationId: conversations.activeConversationId,
     messages,
     onStorageError: reportStorageError,
   });
 
+  // clearConversationDraft 留在 ViewModel 而非 useStudioDrafts：
+  // 它被 useStudioConversations 通过 clearDraft 参数消费，又依赖 images/composerState，
+  // 搬进 drafts 会构成 drafts ↔ conversations ↔ images 的环。
   function clearConversationDraft() {
     images.attachedImages.value = [];
     composerText.value = "";
     composerState.clearEditSelection();
   }
+
+  // 草稿管理：select/create/delete 会话时的草稿同步、防抖保存、URL 覆盖。
+  // analytics 埋点留在 ViewModel 包装层，drafts 不依赖 analytics。
+  const drafts = useStudioDrafts({
+    draftServices: services.drafts,
+    isHydrated,
+    composerText,
+    editModeEnabled,
+    activeEditSourceImageId,
+    activeEditMaskImageId,
+    activeConversationId: conversations.activeConversationId,
+    attachedImages: images.attachedImages,
+    imageById: images.imageById,
+    ensureAssetsLoaded: images.ensureAssetsLoaded,
+    activeSizePreset: settings.activeSizePreset,
+    imageWidth: settings.imageWidth,
+    imageHeight: settings.imageHeight,
+    quality: settings.quality,
+    background: settings.background,
+    outputFormat: settings.outputFormat,
+    applySizePreset: settings.applySizePreset,
+    applySizeResolution: settings.applySizeResolution,
+    currentGenerationParams: settings.currentGenerationParams,
+    selectConversation: conversations.selectConversation,
+    createConversation: conversations.createConversation,
+    deleteConversation: conversations.deleteConversation,
+    deleteConversations: conversations.deleteConversations,
+    onStorageError: reportStorageError,
+  });
 
   function refreshImagesStorageUsage() {
     return images.refreshStorageUsage();
@@ -155,6 +232,11 @@ export function useStudioViewModel() {
       }
     },
   );
+  // 注意：connectionMode 切换的重建逻辑已移至 App.vue（组件级 :key 重建，替代
+  // 整页 window.location.reload）。App.vue 监听 settingsStore.connectionMode，
+  // 切换时先持久化再改 appKey 触发 <StudioShell> 卸载重建，本函数会重新执行
+  // resolveStorage() 按新模式装配 storage。sessionStorage 标记也由 App.vue 写入，
+  // 下方的 onMounted 读它显示切换成功提示。
   const imageClient: ImageClient = {
     generate(input) {
       if (
@@ -205,6 +287,10 @@ export function useStudioViewModel() {
     imageById: images.imageById,
     imageClient,
     messages,
+    services: {
+      imageAssets: services.imageAssets,
+      messages: services.messages,
+    },
     supportsEdit: computed(() => settings.providerCapability.value.edit),
     notifyUnsupportedEdit: () =>
       feedback.notifyError(
@@ -227,30 +313,46 @@ export function useStudioViewModel() {
       promptRewriteGuardText: settings.promptRewriteGuardText.value,
     };
   }
+  // 分页状态整体重置（备份导入后 restore 重跑的前置）：两个 store 的
+  // 列表/窗口/游标一起清（PR-c）。
+  function resetStudioPagination() {
+    conversations.resetPagination();
+    images.resetPagination();
+  }
   const { restoreFromStorage } = useStudioRestore({
+    services: {
+      conversations: services.conversations,
+      messages: services.messages,
+      imageAssets: services.imageAssets,
+      settings: services.settings,
+      timeFieldMigration: services.timeFieldMigration,
+    },
+    companionUrl: settings.companionUrl,
+    companionAccessKey: settings.companionAccessKey,
+    isEmbedded: settings.isEmbedded,
     activeConversationId: conversations.activeConversationId,
     applySettings: settings.applySettings,
     attachedImages: images.attachedImages,
-    conversations: conversations.conversations,
-    hydrateImagePreviews: images.hydrateImagePreviews,
-    imageAssets: images.imageAssets,
+    ensureConversationAssets: images.ensureConversationAssets,
     isHydrated,
-    messages,
+    loadAssetsFirstPage: images.loadAssetsFirstPage,
+    loadConversationMessages: conversations.loadConversationMessages,
+    loadConversationsFirstPage: conversations.loadConversationsFirstPage,
     notifyError: feedback.notifyError,
     onStorageError: reportStorageError,
     refreshStorageUsage: images.refreshStorageUsage,
+    resetPagination: resetStudioPagination,
     saveCurrentSettings: settings.saveCurrentSettings,
   });
   const backup = useStudioBackup({
+    backupServices: services.backup,
     activeConversationId: conversations.activeConversationId,
     attachedImages: images.attachedImages,
     composerText,
-    conversations: conversations.conversations,
-    imageAssets: images.imageAssets,
-    messages,
     notifyError: feedback.notifyError,
     notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
+    resetPagination: resetStudioPagination,
     restoreFromStorage,
   });
   const previewImage = computed(() => images.imageById(previewImageId.value));
@@ -308,6 +410,38 @@ export function useStudioViewModel() {
   }
 
   onMounted(() => {
+    // popstate 注册放在 onMounted 同步部分（非 .then 内）：hydration 走 catch
+    // 分支时 .then 不执行，但浏览器前进/后退此时仍需可用。
+    window.addEventListener("popstate", onPopState);
+    // 注入宿主 postMessage 指令桥接（阶段三 PR7 §2.3 + PR8 §2.3 多操作）。
+    // 嵌入态下宿主发 select/create/delete/rename 消息时，main.ts 的监听器分发到此。
+    // 通知宿主的时机：
+    // - create/delete 完成后发 conversations-changed（列表内容变了，宿主刷新）；
+    // - rename 只负责打开 RenameDialog，真正的通知在 confirmRenameConversation
+    //   确认后发出——此处发的话宿主刷新看到的还是旧标题；
+    // - select 不发 conversations-changed（列表内容没变）；激活态变化由下方
+    //   watch 统一发 active-conversation-changed（pushState 不触发 popstate，
+    //   宿主无法靠监听地址栏感知，必须显式通知）。
+    // 独立态下监听器不响应（__POWERED_BY_QIANKUN__ 守卫），注入也无副作用；
+    // 两个 notify 在独立态都是 no-op。
+    setHostActions({
+      select: switchToConversationIfValid,
+      create: async () => {
+        await drafts.createConversationWithDraft();
+        notifyHostConversationsChanged();
+      },
+      delete: async (id: string) => {
+        await drafts.deleteConversationWithDraft(id);
+        notifyHostConversationsChanged();
+      },
+      rename: (id: string) => {
+        void renameConversation(id);
+      },
+      openSettings: () => {
+        openSettingsDefault();
+      },
+    });
+
     void restoreFromStorage().then(async () => {
       const urlSearchParams = new URLSearchParams(window.location.search);
       const urlPrompt = getPromptFromUrlParams(urlSearchParams);
@@ -315,30 +449,51 @@ export function useStudioViewModel() {
 
       await applyUrlSettings(
         settings.currentSettings(),
-        saveSettings,
+        services.settings.save,
         settings.applySettings,
       ).catch(reportStorageError);
+
+      // provider 回流排序保证（阶段二 PR7 后暴露的时序竞争）：
+      // setup 期 companionStore 的 immediate watch 就发出了 /auth/status 探测，
+      // 它比 hydrate 快时，applyProviderInfo 先落地、随后被 applySettings 用 settings
+      // 记录里的旧 model 顶回去（记录又持久化旧值，永不自愈），页面一直显示切换前的
+      // 模型。这里在 hydrate + urlSettings 之后用已拿到的 status 重放一次回流，确保
+      // 「先恢复记录值、后覆盖回流值」的顺序成立；status 仍在途也没关系，在途的
+      // checkStatus 完成时会自然应用（已在 applySettings 之后）。
+      if (settings.connectionMode.value === "localCompanion") {
+        settings.applyProviderInfo(companionStore.companionAuthStatus);
+      }
 
       analytics.configure(settings.currentSettings());
       void analytics.refreshEventCount();
 
-      const activeConversationId = conversations.activeConversationId.value;
-      if (!activeConversationId) return;
+      // 草稿初始化时序：必须在 restore + urlSettings + analytics 之后。
+      // initDraftsOnMount 内部处理 loadConversationDraft / legacy 迁移 / URL 覆盖。
+      await drafts.initDraftsOnMount({
+        urlPrompt,
+        shouldApplyUrlGenerationParams,
+      });
 
-      const draft = await loadConversationDraft(activeConversationId).catch(reportStorageError);
-      if (draft) {
-        applyConversationDraft(draft);
-        applyUrlDraftOverrides(urlPrompt, shouldApplyUrlGenerationParams);
-        return;
+      // 切换连接模式 reload 后的「切换成功」提示：reload 前由 connectionMode
+      // watch 写入 sessionStorage 标记，这里读到后按当前模式显示成功文案并清除标记。
+      // 放在 hydrate 全流程末尾，避免被后续初始化覆盖或抢焦点。
+      try {
+        const switched = sessionStorage.getItem(CONNECTION_MODE_SWITCHED_KEY);
+        if (switched) {
+          sessionStorage.removeItem(CONNECTION_MODE_SWITCHED_KEY);
+          const modeLabel =
+            switched === "localCompanion" ? "本地 Companion" : "浏览器直连";
+          feedback.notifySuccess(`已切换到「${modeLabel}」模式。`);
+        }
+      } catch {
+        // sessionStorage 不可用时静默降级。
       }
-
-      if (legacyComposerText || legacyAttachedImageIds.length) {
-        applyConversationDraft(createLegacyDraft(activeConversationId));
-      } else {
-        applyConversationDraft(createDefaultDraft(activeConversationId));
-      }
-      applyUrlDraftOverrides(urlPrompt, shouldApplyUrlGenerationParams);
     });
+  });
+
+  onUnmounted(() => {
+    window.removeEventListener("popstate", onPopState);
+    setHostActions(null);
   });
 
   watch(
@@ -349,78 +504,9 @@ export function useStudioViewModel() {
     },
   );
 
-  watch(
-    [
-      composerText,
-      images.attachedImages,
-      settings.activeSizePreset,
-      settings.imageWidth,
-      settings.imageHeight,
-      settings.quality,
-      settings.background,
-      settings.outputFormat,
-      editModeEnabled,
-      activeEditSourceImageId,
-      activeEditMaskImageId,
-      conversations.activeConversationId,
-    ],
-    () => {
-      if (!isHydrated.value || isApplyingDraft) return;
-      scheduleSaveActiveDraft();
-    },
-    { deep: true },
-  );
-
-  function createDefaultDraft(conversationId: string): ConversationDraft {
-    return {
-      conversationId,
-      composerText: "",
-      attachedImageIds: [],
-      editModeEnabled: false,
-      generationParams: settings.currentGenerationParams(),
-      updatedAtMs: Date.now(),
-    };
-  }
-
-  function createLegacyDraft(conversationId: string): ConversationDraft {
-    return {
-      conversationId,
-      composerText: legacyComposerText,
-      attachedImageIds: legacyAttachedImageIds,
-      editModeEnabled: false,
-      generationParams: settings.currentGenerationParams(),
-      updatedAtMs: Date.now(),
-    };
-  }
-
-  function applyConversationDraft(draft: ConversationDraft) {
-    isApplyingDraft = true;
-    composerText.value = draft.composerText;
-    images.attachedImages.value = draft.attachedImageIds.filter((id) => Boolean(images.imageById(id)));
-    editModeEnabled.value = draft.editModeEnabled;
-    activeEditSourceImageId.value = draft.editSourceImageId ?? "";
-    activeEditMaskImageId.value = draft.editMaskImageId ?? "";
-    applyGenerationParams(draft.generationParams);
-    isApplyingDraft = false;
-  }
-
-  function applyGenerationParams(params: GenerationParams) {
-    settings.applySizeResolution(params.resolution);
-    settings.applySizePreset(params.size);
-    settings.imageWidth.value = params.width;
-    settings.imageHeight.value = params.height;
-    settings.quality.value = params.quality;
-    settings.background.value = params.background;
-    settings.outputFormat.value = params.outputFormat;
-  }
-
   async function copyText(text: string) {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        copyTextWithTextarea(text);
-      }
+      await copyTextToClipboard(text);
       feedback.notifySuccess("文本已复制。");
     } catch (error) {
       feedback.notifyError("复制失败，请手动选择文本复制。");
@@ -430,95 +516,85 @@ export function useStudioViewModel() {
 
   function loadMessageConfig(message: Message) {
     composerText.value = message.content;
-    images.attachedImages.value = message.referencedImageIds.filter((id) =>
-      Boolean(images.imageById(id)),
-    );
+    // PR-c：不按 imageById 过滤（图片可能在窗口外/仍在加载），id 保留 + 按需补加载。
+    images.attachedImages.value = [...message.referencedImageIds];
+    void images.ensureAssetsLoaded(message.referencedImageIds).catch(reportStorageError);
     composerState.clearEditSelection();
     editModeEnabled.value = false;
 
     if (message.generationParams) {
-      applyGenerationParams(message.generationParams);
+      drafts.applyGenerationParams(message.generationParams);
     }
 
-    const conversationId = conversations.activeConversationId.value;
-    if (conversationId) {
-      void saveConversationDraft(currentConversationDraft(conversationId)).catch(
-        reportStorageError,
-      );
-    }
+    void drafts.saveDraftForCurrentConversation().catch(reportStorageError);
     feedback.notifySuccess("已加载到输入面板。");
   }
 
-  function applyUrlDraftOverrides(
-    prompt: string | undefined,
-    shouldApplyGenerationParams: boolean,
-  ) {
-    if (prompt === undefined && !shouldApplyGenerationParams) return;
-
-    isApplyingDraft = true;
-    if (prompt !== undefined) composerText.value = prompt;
-    if (shouldApplyGenerationParams) {
-      applyGenerationParams(settings.currentGenerationParams());
-    }
-    isApplyingDraft = false;
-    void saveActiveDraft().catch(reportStorageError);
-  }
-
-  function currentConversationDraft(conversationId: string): ConversationDraft {
-    return {
-      conversationId,
-      composerText: composerText.value,
-      attachedImageIds: [...images.attachedImages.value],
-      editModeEnabled: editModeEnabled.value,
-      editSourceImageId: activeEditSourceImageId.value || undefined,
-      editMaskImageId: activeEditMaskImageId.value || undefined,
-      generationParams: settings.currentGenerationParams(),
-      updatedAtMs: Date.now(),
-    };
-  }
-
-  function scheduleSaveActiveDraft() {
-    if (draftSaveTimer) {
-      clearTimeout(draftSaveTimer);
-    }
-    draftSaveTimer = setTimeout(() => {
-      draftSaveTimer = null;
-      void saveActiveDraft();
-    }, 250);
-  }
-
-  async function saveActiveDraft() {
-    const conversationId = conversations.activeConversationId.value;
-    if (!conversationId) return;
-
-    const draft = currentConversationDraft(conversationId);
-    await saveConversationDraft(draft).catch(reportStorageError);
-  }
-
+  // selectConversationWithDraft 在 drafts 之上包一层 analytics 埋点：
+  // setContext + track 必须在 select 前同步触发，drafts 本身不依赖 analytics。
   function selectConversationWithDraft(id: string) {
     analytics.setContext({ conversationId: id, imageId: undefined });
     track("conversation.selected", { conversationId: id }, "system");
-    draftSwitchQueue = draftSwitchQueue
-      .catch(reportStorageError)
-      .then(async () => {
-        await saveActiveDraft();
-        conversations.selectConversation(id);
-        const nextDraft = await loadConversationDraft(id).catch(reportStorageError);
-        if (nextDraft) {
-          applyConversationDraft(nextDraft);
-        } else {
-          applyConversationDraft(createDefaultDraft(id));
-        }
-      });
+    drafts.selectConversationWithDraft(id);
+    // 主动切换进历史栈（阶段三 PR7 §2.2/§3.4 主动切换）。
+    // push 去重比较 URL 当前值（非激活 id）：popstate 恢复触发的切换，浏览器
+    // 已更新地址栏到目标值，此时 URL === id 不会再 push；否则按一次后退就压
+    // 一条新记录、"前进"永远失效。watch 兜底也会同步，但那是 replace 不进栈。
+    if (readConversationIdFromUrl() !== id) {
+      writeConversationIdToUrl(id, "push");
+    }
   }
 
-  async function createConversationWithDraft() {
-    await saveActiveDraft();
-    await conversations.createConversation();
-    const id = conversations.activeConversationId.value;
+  // ─── 当前对话 ↔ URL 双向同步（阶段三 PR7 §2.2/§3.4） ───
+
+  // 消息窗口 + 会话图片的惰性加载（server 模式分页 PR-c）：
+  // 单点覆盖所有激活路径（选择/新建/删除回落/popstate/宿主消息/restore 初始），
+  // store 内部幂等去重（窗口已是该会话 / ensure 在飞去重），重复触发不重复拉取。
+  watch(
+    conversations.activeConversationId,
+    (id) => {
+      void conversations.loadConversationMessages(id).catch(reportStorageError);
+      void images.ensureConversationAssets(id).catch(reportStorageError);
+    },
+  );
+
+  // 兜底同步（replace）：任何路径（选择/新建/删除回落/popstate 恢复）导致激活
+  // 变化，若与 URL 当前值不一致则 replaceState 同步。覆盖 selectConversationWithDraft
+  // 之外的两条路径——新建会话（createConversation）、删除当前会话后的回落
+  // （deleteConversation 内 conversations[0]?.id）。replace 不污染历史栈：
+  // 删除回落/新建视为"开新文档"而非"导航"。selectConversationWithDraft 内的
+  // push 已同步 URL，watch 触发时 URL 已一致、跳过 replace，无重复。
+  //
+  // 同时在此发 active-conversation-changed（PR8 §2.5）：嵌入态下宿主列表的
+  // 高亮依赖激活态信号——pushState/replaceState 都不触发 popstate，宿主无法
+  // 靠监听地址栏感知激活变化，必须显式通知。单点覆盖所有激活路径（含初始
+  // hydrate 后的首次激活，顺带解决宿主 MOUNTED 时 ?c= 尚未写入的高亮竞态）。
+  watch(
+    conversations.activeConversationId,
+    (id) => {
+      const urlId = readConversationIdFromUrl();
+      if (urlId !== (id || null)) {
+        writeConversationIdToUrl(id ?? "", "replace");
+      }
+      notifyHostActiveConversationChanged(id ?? "");
+    },
+  );
+
+  // 校验 id 有效后切换会话（popstate 恢复 + 宿主 postMessage 切换共用）。
+  // 无效 id（已删除会话的历史条目、宿主传入不存在的 id）静默跳过，watch 兜底会
+  // replace 同步 URL。selectConversationWithDraft 内的 push 去重保证不重复进栈。
+  function switchToConversationIfValid(id: string) {
+    if (!id || id === conversations.activeConversationId.value) return;
+    const exists = conversations.conversations.value.some((item) => item.id === id);
+    if (!exists) return;
+    selectConversationWithDraft(id);
+  }
+
+  // popstate 恢复：浏览器前进/后退。读 URL，校验后切换。
+  function onPopState() {
+    const id = readConversationIdFromUrl();
     if (!id) return;
-    applyConversationDraft(createDefaultDraft(id));
-    await saveConversationDraft(currentConversationDraft(id)).catch(reportStorageError);
+    switchToConversationIfValid(id);
   }
 
   async function renameConversation(id: string) {
@@ -547,6 +623,9 @@ export function useStudioViewModel() {
     cancelRenameConversation();
     if (nextTitle === previousTitle) return;
     await conversations.renameConversation(conversationId, nextTitle);
+    // 重命名实际完成后才通知宿主刷新列表（PR8）——hostActions.rename 只是
+    // 打开弹窗，在那里通知会让宿主刷到旧标题。
+    notifyHostConversationsChanged();
     analytics.setContext({ conversationId });
     track("conversation.renamed", { conversationId }, "system");
     feedback.notifySuccess("会话已重命名。");
@@ -676,41 +755,18 @@ export function useStudioViewModel() {
     persistSettingsChange();
   }
 
-  async function deleteConversationWithDraft(id: string) {
-    await conversations.deleteConversation(id);
-    await deleteConversationDraft(id).catch(reportStorageError);
-
-    const activeId = conversations.activeConversationId.value;
-    if (!activeId) return;
-    const draft = await loadConversationDraft(activeId).catch(reportStorageError);
-    if (draft) {
-      applyConversationDraft(draft);
-    } else {
-      applyConversationDraft(createDefaultDraft(activeId));
-    }
-  }
-
+  // deleteConversationWithDraft / deleteConversationsWithDraft 直接转发给 drafts。
+  // deleteConversationsWithDraft 在无激活会话时需清空 composer，由 ViewModel 补一层。
   async function deleteConversationsWithDraft(ids: string[]) {
-    await conversations.deleteConversations(ids);
-    await deleteConversationDrafts(ids).catch(reportStorageError);
-
-    const activeId = conversations.activeConversationId.value;
-    if (!activeId) {
+    await drafts.deleteConversationsWithDraft(ids);
+    if (!conversations.activeConversationId.value) {
       clearConversationDraft();
-      return;
-    }
-
-    const draft = await loadConversationDraft(activeId).catch(reportStorageError);
-    if (draft) {
-      applyConversationDraft(draft);
-    } else {
-      applyConversationDraft(createDefaultDraft(activeId));
     }
   }
 
   const sidebar = proxyRefs({
-    createConversation: createConversationWithDraft,
-    deleteConversation: deleteConversationWithDraft,
+    createConversation: drafts.createConversationWithDraft,
+    deleteConversation: drafts.deleteConversationWithDraft,
     openSettings: openSettingsDefault,
     renameConversation,
     selectConversation: selectConversationWithDraft,
@@ -727,11 +783,15 @@ export function useStudioViewModel() {
   const chatMessages = proxyRefs({
     activeAttachmentIds: attachedImageIds,
     activeMessages: conversations.activeMessages,
+    // 聊天区向上翻页（server 模式分页 PR-d）
+    hasMoreHistory: computed(() => conversations.messagesNextCursor !== null),
+    loadingHistory: conversations.isLoadingEarlierMessages,
   });
   const chatActions = {
     closeAllEditors: composerState.closeAllEditors,
     copyText,
     generateAnother: generation.generateAnother,
+    loadEarlierMessages: () => void conversations.loadEarlierMessages(),
     loadMessageConfig,
     openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,
@@ -796,6 +856,8 @@ export function useStudioViewModel() {
     apiBaseUrlMode: settings.apiBaseUrlMode,
     apiKey: settings.apiKey,
     connectionMode: settings.connectionMode,
+    companionUrl: settings.companionUrl,
+    companionAccessKey: settings.companionAccessKey,
     favoritePrompts: settings.favoritePrompts,
     promptMode: settings.promptMode,
     promptWordbanks: settings.promptWordbanks,
@@ -888,16 +950,4 @@ export function useStudioViewModel() {
 
 function reportStorageError(error: unknown) {
   console.error("Failed to access local studio storage.", error);
-}
-
-function copyTextWithTextarea(text: string) {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  document.body.removeChild(textarea);
 }

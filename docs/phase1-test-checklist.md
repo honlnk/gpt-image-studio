@@ -123,7 +123,8 @@ EOF
 # 然后 pnpm dev:companion 重启服务
 ```
 
-> 注意：credentials.json 和 session.json（配对状态）都在 `~/.gpt-image-studio/`。换 provider 不影响配对，session token 复用，web 端不用重新配对。
+> 历史说明：本文执行时使用 `session.json` 和配对 session token。当前实现已改用持久化
+> 连接密钥；切换 Provider 不会更换连接密钥，Web 端无需重新连接。
 
 ### 联调清单
 

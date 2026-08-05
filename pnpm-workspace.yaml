@@ -1,2 +1,6 @@
 packages:
-  - "companion"
+  - companion
+
+onlyBuiltDependencies:
+  - esbuild
+  - better-sqlite3

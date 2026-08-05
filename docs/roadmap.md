@@ -232,12 +232,12 @@ type GenerationParams = {
 - 已完成：Responses API 与流式图片预览。浏览器直连模式支持 `Images API` 与 `Responses API` 切换（`apiMode`），开启流式时解析 SSE partial image 并在 `PendingGenerationCard` 展示最新中间图预览；partial image 仅存运行时内存，完成后按现有流程写入图片库；Companion 模式暂限 Images API（`docs/responses-streaming-plan.md`）。
 - 已完成：桌面端打包第一版（Tauri v2）。新增 `desktop/src-tauri` 工程骨架，原样嵌入现有 `dist/` 构建产物，不改动 `src/`；Companion 保持外部独立，桌面端经 `127.0.0.1` 连接，体验与浏览器端一致；macOS arm64 可产出 `.app` / `.dmg`（`docs/desktop-packaging.md`）。代码签名、跨平台、内嵌 Companion sidecar 后置。
 - 后置：更细的图片库筛选，例如来源、格式、时间等。
-- 无限期后置：File System Access API 本地目录导出。
+- 已废弃：File System Access API 本地目录导出。本地文件化能力将由 Companion 后端化承担（见 `docs/evolution-roadmap.md` 阶段二），不再走浏览器 File System Access API 这条路。
 
 ### 后续候选方向
 
 1. 继续打磨错误提示和操作反馈，例如单张删除、会话删除、存储失败回滚提示。
 2. 增加更细的图片库筛选，例如来源、格式、时间等。
 3. 桌面端打包后续：macOS 代码签名 / notarization、Windows / Linux 跨平台构建、Tauri updater 自动更新、内嵌 Companion sidecar（需先解决 Node 二进制化 + notarization，详见 `docs/desktop-packaging.md`）。
-4. 本地 CLI Companion（`companion.md`）— 后台服务管理已完成：`start` / `stop` / `restart` / `logs`；系统 keychain 后置。
+4. 本地 CLI Companion（`companion.md`）— 后台服务管理已完成：`start` / `stop` / `restart` / `logs`；认证已从早期一次性配对码升级为持久化连接密钥（access key）；凭据存储已支持损坏备份/恢复。系统 keychain（macOS Keychain / Windows Credential Manager 等操作系统级凭据加密）仍为后续能力，未实现。
 5. 用户行为日志系统（`analytics-event-logging-plan.md`）— V1 全部完成（V1.0 核心闭环 + V1.1 高频控件/Markdown 分片导出 + V1.2 颜色分组专项/会话级分片）。后续可在 V2 分析层（满意度代理指标、漏斗转化）继续。

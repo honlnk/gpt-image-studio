@@ -3,6 +3,27 @@ export type CompanionHealthResponse = {
   version: string;
 };
 
+/**
+ * 请求级用户上下文（阶段三 PR2 多租户）。
+ *
+ * authMiddleware 验证通过后挂到 req.user：
+ * - local 模式：userId 恒为 '__local__'（虚拟用户，阶段二兼容）。
+ * - server 模式：userId 来自 JWT sub，displayName 来自 JWT display_name claim。
+ *
+ * storage 路由从 req.user.userId 定位用户数据目录，实现多租户隔离。
+ */
+export type RequestUser = {
+  userId: string;
+  displayName?: string;
+};
+
+// Fastify 类型扩展：让 req.user 有类型
+declare module "fastify" {
+  interface FastifyRequest {
+    user?: RequestUser;
+  }
+}
+
 export type CompanionAuthStatus = {
   provider: string;
   mode: "api_key";

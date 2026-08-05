@@ -1,5 +1,14 @@
 import { storeToRefs } from "pinia";
 import { useGenerationStore } from "../../stores/generationStore";
+import {
+  createImageAssetServices,
+  type ImageAssetServices,
+} from "../../services/imageAssets";
+import {
+  createMessageServices,
+  type MessageServices,
+} from "../../services/messages";
+import { resolveStorage } from "../../services/storage/resolveStorage";
 import type { ImageClient } from "./imageClients/imageClient";
 import type {
   Conversation,
@@ -46,13 +55,28 @@ type UseStudioGenerationInput = {
     summary: string,
     updatedAt?: string,
   ) => Conversation | null;
+  /** 阶段一 PR2：存储服务注入。可选——未传时用默认实例。PR4 在 ViewModel 统一注入。 */
+  services?: {
+    imageAssets: ImageAssetServices;
+    messages: MessageServices;
+  };
+};
+
+// 模块级默认 service 实例，供未显式注入时使用（PR4 后 ViewModel 统一注入）。
+const defaultStorage = resolveStorage();
+const defaultServices = {
+  imageAssets: createImageAssetServices(defaultStorage),
+  messages: createMessageServices(defaultStorage),
 };
 
 export function useStudioGeneration(input: UseStudioGenerationInput) {
   const generation = useGenerationStore();
   const refs = storeToRefs(generation);
 
-  generation.configureGenerationStore(input);
+  generation.configureGenerationStore({
+    ...input,
+    services: input.services ?? defaultServices,
+  });
 
   return {
     ...refs,

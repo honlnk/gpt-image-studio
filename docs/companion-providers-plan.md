@@ -2,6 +2,10 @@
 
 更新日期：2026-06-20
 
+> 本文保留多 Provider 翻译层的设计和实施记录。当前受信 Web Origin 可以读取和管理
+> 普通 Provider API Key；安全信任模型以
+> [ADR 002](decisions/002-companion-security-boundary.md) 为准。
+
 ## 背景
 
 现有架构：
@@ -27,9 +31,12 @@ Web App ──OpenAI 形状请求(固定 gpt-image-2)──> Companion 翻译层
 - Web App 保持只兼容 OpenAI / gpt-image-2 形状，不引入多供应商、不引入多模型切换、不改 `imagesApi.ts` 的请求构造与响应解析。
 - Companion 对外接口基本不变：`/images/generations`、`/images/edits` 仍是 OpenAI 形状请求体，仍返回 `data[0].b64_json`；唯一扩展是现有的 `/auth/status` 顺手多返回 provider 元信息（model + size 约束），见下。
 - Companion 内部新增一层 provider adapter，根据当前 provider 把 OpenAI 形状请求翻译成对应厂商的形状，再把厂商响应翻译回 OpenAI 形状。
-- Provider 选择和凭据配置完全在 companion CLI 侧完成，Web 永远不知道背后接的是哪家；但 Web 需要知道背后接的是什么模型及其参数约束，这些信息通过现有的 `/auth/status` 回流，不新增接口。
+- Provider 选择和凭据配置可以在 companion CLI 或受信 Web 设置页完成。Web 通过
+  `/auth/status` 获取当前 Provider、模型及其参数约束。
 
-这是 ADR 002「Companion 安全边界」和 ADR 003「连接模式」的自然延伸：companion 本来就是「Web 与真实凭据之间的隔离层」，在隔离层里做协议翻译不破坏任何现有边界。
+这是 ADR 002「Companion 安全边界」和 ADR 003「连接模式」的自然延伸：Companion
+负责本地凭据存储、Provider 协议翻译和图片请求代理；受信 Web Origin 是普通 Provider
+API Key 的受信管理主体。
 
 ## 关键调研：国产图像 API 是三条独立的线
 
@@ -267,7 +274,8 @@ capability 只覆盖 GLM 明确有差异的维度（mask / backgrounds / outputF
 | `companion/src/routes/auth.ts` | `/auth/status` 返回当前 adapter 的 `model`、`sizeConstraints`、`capability`；`provider` 读真实 `creds.provider` | ✅ 阶段一 |
 | `companion/src/credentials.ts` | `Credentials` 加 `provider`/`model`，读时缺省兼容 | ✅ 阶段一 |
 | `companion/src/providers/glm.ts` | GLM-Image adapter：generate（裁剪参数 + size 规整 + URL→b64）；声明 sizeConstraints + 能力（mask=false, backgrounds 去 transparent, outputFormats 去 webp）；edit 不实现 | ✅ 阶段二 |
-| `companion/src/providers/urlToB64.ts` | 通用 URL→b64（带超时 + 指数退避重试） | ✅ 阶段二 |
+| `companion/src/providers/urlToB64.ts` | 受限 URL→b64：HTTPS、公网地址、逐跳重定向、图片签名、32 MiB 流式上限、瞬时错误重试 | ✅ 阶段二，安全加固完成 |
+| `companion/src/providers/outboundAddressPolicy.ts` | Provider 图片下载的公网地址与 DNS/socket 绑定策略 | ✅ 安全加固 |
 | `companion/src/main.ts` | login 命令支持选 provider（openai/glm 预设）+ 填 model；status 显示 provider/model | ✅ 阶段二 |
 | `src/types/companion.ts` | `CompanionAuthStatus` 新增 `model`、`sizeConstraints`、`capability` 字段 | ✅ 阶段一 web |
 | `src/stores/settingsStore.ts` | `SIZE_STEP` / `MAX_CUSTOM_*` 改为 ref；`backgroundOptions` / `formatOptions` 按 capability 过滤的 computed；`applyProviderInfo` 回流；model 跟随 companion；`transparentDisabled` 改读 capability | ✅ 阶段一 web |
@@ -307,7 +315,8 @@ companion/src/providers/
   openai.ts       # 现有透传逻辑搬过来，作为默认/兼容 adapter（阶段一已落地）
   multipart.ts    # multipart 解析器：route 层把原始 Buffer 拆成 images[]/mask/字段（阶段一已落地）
   glm.ts          # GLM-Image（智谱）adapter
-  urlToB64.ts     # 通用工具：provider 返回 URL 时 fetch 转 base64（阶段二）
+  urlToB64.ts     # 受限工具：provider 返回公网 HTTPS 图片时流式下载并转 base64
+  outboundAddressPolicy.ts # 出站公网地址校验与受控 DNS lookup
   taskPoller.ts   # 通用工具：异步 provider 的「提交 task → 轮询状态 → 取结果」封装（阶段一已落地）
 ```
 
@@ -571,7 +580,8 @@ companion/src/providers/
   openai.test.ts          # 透传 adapter 行为（从现有 routes/images.test.ts 拆出）
   glm.test.ts             # GLM 翻译：OpenAI 形状入参 → GLM 请求体、GLM 响应(URL) → OpenAI 形状(b64)
   glm.params.test.ts      # 参数校验：transparent 报错、webp 报错、size 兜底规整
-  urlToB64.test.ts        # URL→b64 工具
+  urlToB64.test.ts        # 受限 URL→b64：类型、大小、重定向和重试策略
+  outboundAddressPolicy.test.ts # 公网 IP、DNS 混合结果和特殊地址写法
   taskPoller.test.ts      # 异步轮询：提交 → 轮询 → 超时 → 取结果（mock，不依赖真实网络）
 ```
 
@@ -641,7 +651,10 @@ companion/src/providers/
 接入 GLM-Image 文生图，打通第一条非 OpenAI 链路。
 
 - [x] 新增 `companion/src/providers/glm.ts`
-- [x] 新增 `companion/src/providers/urlToB64.ts`（通用 URL→b64，带超时 + 指数退避重试）
+- [x] 新增 `companion/src/providers/urlToB64.ts`（受限 URL→b64：HTTPS、公网地址、
+  逐跳重定向、PNG/JPEG/WebP 双重校验、32 MiB 流式上限、瞬时错误重试）
+- [x] 新增 `companion/src/providers/outboundAddressPolicy.ts`（阻止非公网地址，并将 DNS
+  校验结果绑定到实际 HTTPS socket）
 - [x] 实现 generate：OpenAI 形状 → GLM `/images/generations` 请求体（裁剪 `background`/`output_format`/`extra`）
 - [x] 声明 GLM 的 `sizeConstraints`（step=32, 512–2048, maxPixels=4194304, minPixels=0, maxAspectRatio=null, defaultSize=1280x1280）
 - [x] 声明 GLM 的 `capability`（edit=false, mask=false, backgrounds=[auto,opaque], outputFormats=[png,jpeg]）
@@ -650,7 +663,8 @@ companion/src/providers/
 - [x] `login` 命令支持选 provider（openai/glm 预设）+ 填 model，写入 `provider` + `model` 字段
 - [x] `status` 显示 provider + model 信息
 - [x] registry 注册 glm adapter
-- [x] 单元测试：glm(18) 含 normalizeGlmSize 全路径 + generate 翻译/裁剪/错误；urlToB64(4)；/auth/status GLM 回流(1)
+- [x] 单元测试：GLM 请求翻译与尺寸规整；URL 下载协议、地址、DNS、重定向、类型、
+  大小和重试策略；`/auth/status` Provider 能力回流
 - [ ] 手动联调：真实智谱 API Key 文生图跑通（待用户侧，需真实 Key）
 
 **验收**：companion 侧 70 测试通过、tsc + build 干净。用户配置 GLM 凭据后，参数栏自动隐藏 GLM 不支持的选项（区域编辑/透明背景/webp），文生图与 OpenAI 体验一致。编辑图此时报「不支持」（因为 `capability.edit=false`，route 层返回 501）。真实联调由用户用智谱 API Key 完成。
@@ -686,7 +700,11 @@ companion/src/providers/
 
 5. **本轮不做多 profile 持久化**：`login` 是覆盖式，切换 provider 要重新输凭据。如果后续用户频繁在 OpenAI / GLM 间切换，这会变成痛点，届时再引入 `use <provider>` + 多 profile 存储。
 
-6. **URL→b64 的稳定性**：GLM 返回的图片 URL 有时效性。companion 必须在拿到 URL 后立即 fetch 转换，不能缓存 URL 稍后用。urlToB64 工具要带超时和重试，避免 GLM 侧 URL 失效导致整条生成失败。
+6. **URL→b64 的稳定性与兼容边界**：GLM、Qwen 和 Wan 返回的图片 URL 有时效性，
+   companion 必须在拿到 URL 后立即转换，不能缓存 URL 稍后用。当前下载器只允许公网
+   HTTPS，最多 3 次逐跳校验的重定向，只接受 PNG/JPEG/WebP，单张最大 32 MiB，并只对
+   瞬时网络错误、HTTP 408、429 和 5xx 重试。只提供 HTTP、私网 URL、其他图片类型或
+   超大图片的自定义 Provider 需要调整其返回方式。
 
 ## 成本估算
 

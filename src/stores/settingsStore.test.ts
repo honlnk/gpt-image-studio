@@ -8,6 +8,9 @@ import type { CompanionAuthStatus } from "../types/companion";
 const store: Record<string, string> = {};
 beforeEach(() => {
   setActivePinia(createPinia());
+  // 清掉上一用例的 localStorage 残留——connectionMode 镜像会写入 stub，
+  // 不清理的话会泄漏到后续用例的 store 初始化。
+  for (const key of Object.keys(store)) delete store[key];
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => store[k] ?? null,
     setItem: (k: string, v: string) => {
@@ -156,6 +159,62 @@ describe("settingsStore capability-driven UI", () => {
     // 离线：model 保留，不回退（避免 UI 闪烁）
     s.applyProviderInfo(null);
     expect(s.model).toBe("glm-image");
+  });
+
+  it("restores OpenAI model and UI defaults when switching to direct mode", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(
+      makeStatus({
+        model: "glm-image",
+        capability: {
+          generate: true,
+          edit: false,
+          mask: false,
+          backgrounds: ["auto"],
+          outputFormats: ["png"],
+        },
+        sizeConstraints: {
+          step: 32,
+          min: 512,
+          max: 2048,
+          maxPixels: 4194304,
+          minPixels: 0,
+          maxAspectRatio: null,
+          defaultSize: "1280x1280",
+        },
+        resolutionOptions: [
+          { value: "1k", label: "1K", targetPixels: 1024 * 1024 },
+          { value: "2k", label: "2K", targetPixels: 2048 * 2048 },
+        ],
+      }),
+    );
+
+    s.applyDirectProviderInfo();
+
+    expect(s.model).toBe("gpt-image-2");
+    expect(s.providerCapability.edit).toBe(true);
+    expect(s.providerCapability.mask).toBe(true);
+    expect(s.sizeStep).toBe(16);
+    expect(s.minCustomDimension).toBe(16);
+    expect(s.maxCustomDimension).toBe(3840);
+    expect(s.sizeResolutionOptions.map((option) => option.value)).toEqual([
+      "1k",
+      "2k",
+      "4k",
+    ]);
+  });
+
+  it("does not restore a persisted Companion model while hydrating direct mode", () => {
+    const s = useSettingsStore();
+    s.applyProviderInfo(makeStatus({ model: "glm-image" }));
+    const persisted = s.currentSettings();
+    persisted.connectionMode = "direct";
+
+    s.applySettings(persisted);
+
+    expect(s.model).toBe("gpt-image-2");
+    expect(s.providerCapability.edit).toBe(true);
+    expect(s.sizeStep).toBe(16);
   });
 
   it("defaults to OpenAI size constraints (16-3840, step 16, 4K visible)", () => {
@@ -417,5 +476,69 @@ describe("settingsStore connectionMode → apiMode 校正", () => {
 
     // 切回 direct 不应被改写
     expect(s.apiMode).toBe("responses");
+  });
+});
+
+describe("settingsStore connectionMode localStorage 镜像", () => {
+  const MIRROR_KEY = "gpt-image-studio:connection-mode";
+
+  it("初始化时同步读 localStorage 镜像（resolveStorage 启动期快照来源）", () => {
+    store[MIRROR_KEY] = "localCompanion";
+    const s = useSettingsStore();
+    expect(s.connectionMode).toBe("localCompanion");
+  });
+
+  it("镜像值非法时回退 direct", () => {
+    store[MIRROR_KEY] = "garbage";
+    const s = useSettingsStore();
+    expect(s.connectionMode).toBe("direct");
+  });
+
+  it("用户切换 connectionMode 时写回镜像", async () => {
+    const s = useSettingsStore();
+    s.connectionMode = "localCompanion";
+    await nextTick();
+    expect(store[MIRROR_KEY]).toBe("localCompanion");
+  });
+
+  it("applySettings 不从 settings 记录回写 connectionMode（防止旧数据集残留值顶回）", () => {
+    store[MIRROR_KEY] = "localCompanion";
+    const s = useSettingsStore();
+    expect(s.connectionMode).toBe("localCompanion");
+
+    const persisted = s.currentSettings();
+    persisted.connectionMode = "direct";
+    s.applySettings(persisted);
+
+    expect(s.connectionMode).toBe("localCompanion");
+  });
+
+  it("嵌入态（applyEmbeddedConfig）不写镜像", async () => {
+    const s = useSettingsStore();
+    s.applyEmbeddedConfig({ companionUrl: "http://x", jwt: "y" });
+    await nextTick();
+    expect(store[MIRROR_KEY]).toBeUndefined();
+  });
+});
+
+describe("settingsStore companion 凭据 localStorage 镜像", () => {
+  const URL_KEY = "gpt-image-studio:companion-url";
+  const ACCESS_KEY = "gpt-image-studio:companion-access-key";
+
+  it("companionUrl / companionAccessKey 变化时写回 localStorage 镜像", async () => {
+    const s = useSettingsStore();
+    s.companionUrl = "http://127.0.0.1:29999";
+    s.companionAccessKey = "test-key-123";
+    await nextTick();
+    expect(store[URL_KEY]).toBe("http://127.0.0.1:29999");
+    expect(store[ACCESS_KEY]).toBe("test-key-123");
+  });
+
+  it("嵌入态（applyEmbeddedConfig）不写 companion 凭据镜像", async () => {
+    const s = useSettingsStore();
+    s.applyEmbeddedConfig({ companionUrl: "http://x", jwt: "jwt-token" });
+    await nextTick();
+    expect(store[URL_KEY]).toBeUndefined();
+    expect(store[ACCESS_KEY]).toBeUndefined();
   });
 });

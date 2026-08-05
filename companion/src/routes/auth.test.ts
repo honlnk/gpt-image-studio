@@ -10,6 +10,10 @@ afterEach(() => vi.doUnmock("../credentials.js"));
 /**
  * mock getActiveCredential：返回 CredentialEntry 或 null。
  * 测试只关心 /auth/status 的回流，不碰真实文件系统。
+ *
+ * 损坏探测由 /credentials 负责（它返 500+corrupt）；/auth/status 用
+ * getActiveCredential，它内部 catch CredentialStoreError 返 null，
+ * 让本路由走「无凭据」正常分支——所以这里只需 mock getActiveCredential。
  */
 async function makeApp(creds: unknown) {
   vi.doMock("../credentials.js", () => ({
@@ -334,8 +338,9 @@ describe("/auth/status provider info backflow", () => {
       backgrounds: ["auto", "opaque"],
       outputFormats: ["png", "jpeg", "webp"],
     });
-    // Gemini 档位：[1k, 2k, 4k]（Gemini 3 系列）
+    // Gemini 档位：[512, 1k, 2k, 4k]
     expect(body.resolutionOptions.map((o: { value: string }) => o.value)).toEqual([
+      "512",
       "1k",
       "2k",
       "4k",

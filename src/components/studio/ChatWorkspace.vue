@@ -4,6 +4,7 @@ import { storeToRefs } from "pinia";
 import { useComposerStore } from "../../stores/composerStore";
 import { useGenerationStore } from "../../stores/generationStore";
 import { useImagesStore } from "../../stores/imagesStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type {
   Conversation,
   Message,
@@ -27,6 +28,9 @@ type ChatWorkspaceHeader = {
 type ChatWorkspaceMessages = {
   activeAttachmentIds: string[];
   activeMessages: Message[];
+  /** 窗口之前还有更早的历史页（server 模式分页 PR-d）。 */
+  hasMoreHistory: boolean;
+  loadingHistory: boolean;
 };
 
 type ChatWorkspaceActions = {
@@ -34,6 +38,7 @@ type ChatWorkspaceActions = {
   closeAllEditors: () => void;
   copyText: (text: string) => void;
   generateAnother: (message: Message) => void;
+  loadEarlierMessages: () => void;
   loadMessageConfig: (message: Message) => void;
   openConversations: () => void;
   openFavoritePromptSettings: () => void;
@@ -56,13 +61,21 @@ const composerState = useComposerStore();
 const { selectingEditImageId: selectingImageId } = storeToRefs(composerState);
 const generation = useGenerationStore();
 const images = useImagesStore();
+const settings = useSettingsStore();
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 const showQqModal = ref(false);
 
-/** 跳转到 /companion 管理页（配对/凭证/日志）。 */
-function goToCompanionPage() {
-  window.location.href = "/companion";
+/**
+ * 打开 Companion 自带的 provider 管理页（凭据 CRUD / 损坏恢复 / 日志）。
+ * 阶段零之后，provider 凭据管理迁移到 Companion 自己的 /admin 页面，
+ * Web 项目不再承载凭据管理 UI（边界正本清源，见 docs/evolution-roadmap.md 第四章）。
+ * server/嵌入态下 Companion 管理页已禁用（多租户管理面在宿主），不跳转。
+ */
+function openCompanionAdmin() {
+  if (settings.isEmbedded) return
+  const base = settings.companionUrl.replace(/\/$/, "");
+  window.open(`${base}/admin`, "_blank", "noopener,noreferrer");
 }
 let dragDepth = 0;
 
@@ -209,11 +222,15 @@ function imageFilesFromTransfer(
           "
           type="button"
           :title="
-            header.companionStatus.online
-              ? `Companion 在线${header.companionStatus.version ? ' v' + header.companionStatus.version : ''}，点击管理`
-              : 'Companion 离线，点击管理'
+            settings.isEmbedded
+              ? header.companionStatus.online
+                ? 'Companion 在线（server 模式管理页由宿主提供）'
+                : 'Companion 离线'
+              : header.companionStatus.online
+                ? `Companion 在线${header.companionStatus.version ? ' v' + header.companionStatus.version : ''}，点击管理`
+                : 'Companion 离线，点击管理'
           "
-          @click="goToCompanionPage"
+          @click="openCompanionAdmin"
         >
           <span
             class="inline-block h-2 w-2 rounded-full"
@@ -298,12 +315,15 @@ function imageFilesFromTransfer(
 
     <MessageList
       :attached-image-ids="messages.activeAttachmentIds"
+      :has-more-history="messages.hasMoreHistory"
       :image-by-id="images.imageById"
+      :loading-history="messages.loadingHistory"
       :messages="messages.activeMessages"
       @attach-image="images.attachImage"
       @continue-edit="continueEdit"
       @copy-text="actions.copyText"
       @generate-another="actions.generateAnother"
+      @load-earlier="actions.loadEarlierMessages"
       @load-message-config="actions.loadMessageConfig"
       @preview-image="actions.previewImage"
       @refresh-image="actions.refreshImage"

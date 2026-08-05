@@ -1,24 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalyticsEvent, Conversation } from "../types/studio";
-import { createAnalyticsExportArchive } from "./analyticsExport";
-import { STORE_NAMES } from "./db";
+import {
+  createSpyStorage,
+  type SpyStorage,
+} from "./storage/createSpyStorage";
 
-const mocks = vi.hoisted(() => ({
-  getAllFromStore: vi.fn(),
-  listConversations: vi.fn(),
+const spyStorage: SpyStorage = createSpyStorage();
+
+vi.mock("./storage/resolveStorage", () => ({
+  resolveStorage: () => spyStorage,
 }));
 
-vi.mock("./db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./db")>();
-  return {
-    ...actual,
-    getAllFromStore: mocks.getAllFromStore,
-  };
-});
+const mocks = vi.hoisted(() => ({
+  listConversations: vi.fn(),
+}));
 
 vi.mock("./conversations", () => ({
   listConversations: mocks.listConversations,
 }));
+
+const { createAnalyticsExportArchive } = await import("./analyticsExport");
+const { STORE_NAMES } = await import("./storage");
 
 function makeEvent(overrides: Partial<AnalyticsEvent> = {}): AnalyticsEvent {
   return {
@@ -87,12 +89,12 @@ describe("analyticsExport", () => {
   });
 
   it("produces a zip with the standard file layout for empty events", async () => {
-    mocks.getAllFromStore.mockResolvedValue([]);
+    spyStorage.list.mockResolvedValue([]);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
 
-    expect(mocks.getAllFromStore).toHaveBeenCalledWith(
+    expect(spyStorage.list).toHaveBeenCalledWith(
       STORE_NAMES.analyticsEvents,
     );
     expect(files.has("manifest.json")).toBe(true);
@@ -133,7 +135,7 @@ describe("analyticsExport", () => {
         occurredAt: "2026-06-17T01:00:00.000Z",
       }),
     ];
-    mocks.getAllFromStore.mockResolvedValue(events);
+    spyStorage.list.mockResolvedValue(events);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
@@ -158,7 +160,7 @@ describe("analyticsExport", () => {
       makeEvent({ id: "ev-2", occurredAt: "2026-06-02T00:00:00.000Z" }),
       makeEvent({ id: "ev-3", occurredAt: "2026-06-15T00:00:00.000Z" }),
     ];
-    mocks.getAllFromStore.mockResolvedValue(events);
+    spyStorage.list.mockResolvedValue(events);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
@@ -187,7 +189,7 @@ describe("analyticsExport", () => {
         occurredAt: "2026-06-17T00:00:00.000Z",
       }),
     );
-    mocks.getAllFromStore.mockResolvedValue(events);
+    spyStorage.list.mockResolvedValue(events);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
@@ -209,7 +211,7 @@ describe("analyticsExport", () => {
       makeEvent({ id: "ev-1", occurredAt: "2026-06-17T00:00:00.000Z" }),
       makeEvent({ id: "ev-2", occurredAt: "2026-06-17T01:00:00.000Z" }),
     ];
-    mocks.getAllFromStore.mockResolvedValue(events);
+    spyStorage.list.mockResolvedValue(events);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
@@ -224,7 +226,7 @@ describe("analyticsExport", () => {
       makeEvent({ id: "ev-2", eventName: "chat.submit" }),
       makeEvent({ id: "ev-3", eventName: "image.downloaded" }),
     ];
-    mocks.getAllFromStore.mockResolvedValue(events);
+    spyStorage.list.mockResolvedValue(events);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
@@ -254,7 +256,7 @@ describe("analyticsExport", () => {
       // 无 conversationId 的事件不应进入会话分片
       makeEvent({ id: "ev-3", occurredAt: "2026-06-17T02:00:00.000Z" }),
     ];
-    mocks.getAllFromStore.mockResolvedValue(events);
+    spyStorage.list.mockResolvedValue(events);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
@@ -281,7 +283,7 @@ describe("analyticsExport", () => {
         occurredAt: "2026-06-17T00:00:00.000Z",
       }),
     ];
-    mocks.getAllFromStore.mockResolvedValue(events);
+    spyStorage.list.mockResolvedValue(events);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
@@ -312,7 +314,7 @@ describe("analyticsExport", () => {
         payload: { color: "red" },
       }),
     ];
-    mocks.getAllFromStore.mockResolvedValue(events);
+    spyStorage.list.mockResolvedValue(events);
 
     const zip = await createAnalyticsExportArchive();
     const files = await readLocalZipFiles(zip);
@@ -329,7 +331,7 @@ describe("analyticsExport", () => {
   });
 
   it("shows no-color section when no color events exist", async () => {
-    mocks.getAllFromStore.mockResolvedValue([
+    spyStorage.list.mockResolvedValue([
       makeEvent({ id: "ev-1", eventName: "chat.submit" }),
     ]);
 
