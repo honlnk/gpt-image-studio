@@ -326,7 +326,8 @@ export class IndexedDbStorage implements StudioStorage {
   }
 
   async estimateQuota(): Promise<{ usage?: number; quota?: number }> {
-    if (!navigator.storage?.estimate) {
+    // navigator 在非浏览器环境（Node/CI）不存在，直接引用会抛 ReferenceError。
+    if (typeof navigator === "undefined" || !navigator.storage?.estimate) {
       return {};
     }
     try {
