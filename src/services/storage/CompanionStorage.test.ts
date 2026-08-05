@@ -15,7 +15,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "fake-indexeddb/auto";
 import { CompanionStorage } from "./CompanionStorage";
 import { runStudioStorageContractTests } from "./storage.contract.test";
-import { StorageError, STORE_NAMES, type StoreName } from "./types";
+import {
+  CONVERSATION_FILTERABLE_STORES,
+  STORE_NAMES,
+  STORE_SORT_FIELDS,
+  StorageError,
+  decodePageCursor,
+  encodePageCursor,
+  isBeforePageCursor,
+  type StoreName,
+} from "./types";
 
 const TEST_ACCESS_KEY = "test-access-key";
 const TEST_BASE_URL = "http://127.0.0.1:19750";
@@ -158,13 +167,76 @@ function createFakeCompanionServer() {
       return buildResponse(200, { datasets: [] });
     }
 
-    // ─── /storage/:table（list / clear） ───
-    const listMatch = path.match(/^\/storage\/(\w+)$/);
+    // ─── /storage/:table（list / clear；list 支持分页 query 参数，镜像真实后端 listPage） ───
+    const [pathOnly, queryString] = path.split("?");
+    const listMatch = pathOnly.match(/^\/storage\/(\w+)$/);
     if (listMatch && method === "GET") {
       const table = listMatch[1] as StoreName;
       if (!isValidTable(table)) return buildResponse(400, { error: `未知表名：${table}` });
       const map = tables.get(table)!;
-      return buildResponse(200, { data: [...map.values()] });
+      const params = new URLSearchParams(queryString ?? "");
+      const hasPaging =
+        params.has("conversationId") || params.has("before") || params.has("limit");
+      if (!hasPaging) {
+        return buildResponse(200, { data: [...map.values()] });
+      }
+      // 分页模式：镜像 companion/src/storage/businessDb.ts listPage 的语义
+      const sortField = STORE_SORT_FIELDS[table];
+      if (!sortField) {
+        return buildResponse(400, { error: "不支持分页查询", code: "STORAGE_INVALID_QUERY" });
+      }
+      const conversationId = params.get("conversationId") ?? undefined;
+      if (conversationId !== undefined && !CONVERSATION_FILTERABLE_STORES.includes(table)) {
+        return buildResponse(400, {
+          error: "不支持 conversationId 过滤",
+          code: "STORAGE_INVALID_QUERY",
+        });
+      }
+      const limit = params.has("limit") ? Number(params.get("limit")) : 50;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+        return buildResponse(400, { error: "limit 非法", code: "STORAGE_INVALID_QUERY" });
+      }
+      const before = params.get("before");
+      let cursorPos: [string | null, string] | null = null;
+      if (before !== null) {
+        cursorPos = decodePageCursor(before);
+        if (!cursorPos) {
+          return buildResponse(400, { error: "游标无法解析", code: "STORAGE_INVALID_CURSOR" });
+        }
+      }
+      let records = [...map.values()] as Record<string, unknown>[];
+      if (conversationId !== undefined) {
+        records = records.filter((r) => r.conversationId === conversationId);
+      }
+      const sortValueOf = (r: Record<string, unknown>): string | null => {
+        const v = r[sortField];
+        return typeof v === "string" ? v : null;
+      };
+      const keyOf = (r: Record<string, unknown>): string => String(r.id ?? r.key);
+      // DESC：排序值降序，同值主键降序，null 排最后
+      records.sort((a, b) => {
+        const va = sortValueOf(a);
+        const vb = sortValueOf(b);
+        if (va === null && vb === null) return keyOf(b).localeCompare(keyOf(a));
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        if (va !== vb) return vb.localeCompare(va);
+        return keyOf(b).localeCompare(keyOf(a));
+      });
+      const total = records.length;
+      if (cursorPos) {
+        records = records.filter((r) =>
+          isBeforePageCursor(sortValueOf(r), keyOf(r), cursorPos![0], cursorPos![1]),
+        );
+      }
+      const hasMore = records.length > limit;
+      const page = hasMore ? records.slice(0, limit) : records;
+      const last = page[page.length - 1];
+      return buildResponse(200, {
+        data: page,
+        nextCursor: hasMore && last ? encodePageCursor(sortValueOf(last), keyOf(last)) : null,
+        total,
+      });
     }
     if (listMatch && method === "DELETE") {
       const table = listMatch[1] as StoreName;
@@ -249,6 +321,48 @@ describe("CompanionStorage 专项", () => {
 
   it("backend 标识为 companion", () => {
     expect(storage.backend).toBe("companion");
+  });
+
+  it("listPage 透传分页 query 参数（conversationId/before/limit 拼进 URL）", async () => {
+    const cursor = encodePageCursor("2026-01-01T00:00:00.000Z", "m1");
+    await storage.listPage(STORE_NAMES.messages, {
+      conversationId: "c1",
+      before: cursor,
+      limit: 30,
+    });
+    const calledUrl = String(server.fetchImpl.mock.calls[0][0]);
+    expect(calledUrl).toContain("/storage/messages?");
+    expect(calledUrl).toContain("conversationId=c1");
+    expect(calledUrl).toContain(`before=${encodeURIComponent(cursor)}`);
+    expect(calledUrl).toContain("limit=30");
+  });
+
+  it("listPage 无过滤时只带 limit", async () => {
+    await storage.listPage(STORE_NAMES.conversations, { limit: 50 });
+    const calledUrl = String(server.fetchImpl.mock.calls[0][0]);
+    expect(calledUrl).toContain("limit=50");
+    expect(calledUrl).not.toContain("conversationId");
+    expect(calledUrl).not.toContain("before");
+  });
+
+  it("listPage nextCursor 可原样回传翻页（opaque 语义）", async () => {
+    for (let i = 0; i < 3; i++) {
+      await storage.put(STORE_NAMES.messages, {
+        id: `m${i}`,
+        conversationId: "c1",
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+      });
+    }
+    const page1 = await storage.listPage<{ id: string }>(STORE_NAMES.messages, { limit: 2 });
+    expect(page1.data.map((m) => m.id)).toEqual(["m2", "m1"]);
+    expect(page1.nextCursor).not.toBeNull();
+    const page2 = await storage.listPage<{ id: string }>(STORE_NAMES.messages, {
+      before: page1.nextCursor!,
+      limit: 2,
+    });
+    expect(page2.data.map((m) => m.id)).toEqual(["m0"]);
+    expect(page2.nextCursor).toBeNull();
+    expect(page2.total).toBe(3);
   });
 
   it("鉴权失败抛 BACKEND_UNAVAILABLE", async () => {

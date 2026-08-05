@@ -3,10 +3,10 @@ import type { ImageAssetServices } from "../../services/imageAssets";
 import type { MessageServices } from "../../services/messages";
 import type { SettingsServices } from "../../services/settings";
 import type { TimeFieldMigrationServices } from "../../services/timeFieldMigration";
-import { readStorage, writeStorage } from "../../shared/localStorage";
+import { readStorage } from "../../shared/localStorage";
 import { formatError } from "../../shared/errors";
 import { readConversationIdFromUrl } from "../../services/conversationUrl";
-import type { AppSettings, Conversation, ImageAsset, Message } from "../../types/studio";
+import type { AppSettings, Conversation, ImageAsset } from "../../types/studio";
 import type { Ref } from "vue";
 
 /** 阶段一 PR2/PR4：restore 流程需要的 service 全集。
@@ -19,21 +19,36 @@ export type StudioRestoreServices = {
   timeFieldMigration: TimeFieldMigrationServices;
 };
 
+/**
+ * restore 输入（PR-c 按需加载版）。
+ *
+ * 不再接收 conversations/messages/imageAssets 三个 ref 直接赋值——
+ * 分页状态（游标/total/窗口归属）由 store 持有，restore 通过 store 动作驱动加载：
+ * - 会话只拉第一页（侧边栏滚到底再翻页，PR-d）；
+ * - messages 只拉激活会话最新一页（向上滚动翻更早，PR-d）；
+ * - imageAssets 拉全局第一页 + 当前会话全量（聊天区引用/"当前会话"tab 完整性）。
+ * 数据量再大涨，启动耗时基本恒定。
+ */
 type UseStudioRestoreInput = {
   services: StudioRestoreServices;
   activeConversationId: Ref<string>;
   applySettings: (settings: AppSettings) => void;
   attachedImages: Ref<string[]>;
-  conversations: Ref<Conversation[]>;
-  /** PR9：hydrate 只装配 metadata（同步返回），blob 由 imagesStore 懒加载队列补齐。 */
-  hydrateImagePreviews: (assets: ImageAsset[]) => ImageAsset[];
-  imageAssets: Ref<ImageAsset[]>;
   isHydrated: Ref<boolean>;
-  messages: Ref<Message[]>;
   notifyError: (message: string) => void;
   onStorageError: (error: unknown) => void;
   refreshStorageUsage: () => Promise<void>;
   saveCurrentSettings: () => Promise<void>;
+  /** 清空两个 store 的分页状态与窗口（备份导入后 restore 重跑时的前置重置）。 */
+  resetPagination: () => void;
+  /** conversationsStore：加载会话第一页（整体替换），返回本页数据。 */
+  loadConversationsFirstPage: () => Promise<Conversation[]>;
+  /** conversationsStore：加载某会话消息窗口（最新一页，含中断消息归一化）。 */
+  loadConversationMessages: (conversationId: string) => Promise<void>;
+  /** imagesStore：加载图片全局第一页（整体替换），返回本页数据。 */
+  loadAssetsFirstPage: () => Promise<ImageAsset[]>;
+  /** imagesStore：保证某会话图片元数据全量加载。 */
+  ensureConversationAssets: (conversationId: string) => Promise<void>;
   /** companion 凭据 ref，用于迁移回填。
    *  权威存储是 localStorage 镜像（settingsStore 同步初始化 + watch 写回）；
    *  迁移逻辑负责：备份导入刚写过镜像时，把镜像值同步到内存 ref。 */
@@ -60,65 +75,56 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
 
       await services.timeFieldMigration.migrate();
 
-      const [savedSettings, savedConversations, savedMessages, savedImageAssets] =
-        await Promise.all([
-          services.settings.load(),
-          services.conversations.list(),
-          services.messages.list(),
-          services.imageAssets.listAssets(),
-        ]);
-
+      const savedSettings = await services.settings.load();
       if (savedSettings) {
         input.applySettings(savedSettings);
       } else {
         await input.saveCurrentSettings();
       }
 
-      await removeLegacySeedRecords(
-        savedConversations,
-        savedMessages,
-        savedImageAssets,
-      );
+      // 备份导入后 restore 会重跑：先清掉旧窗口/游标，再按分页模型重新加载
+      input.resetPagination();
+      input.attachedImages.value = [];
 
-      const restoredConversations = savedConversations.filter(
-        (conversation) => !LEGACY_SEED_CONVERSATION_IDS.has(conversation.id),
-      );
-      const restoredImages = savedImageAssets.filter(
-        (image) =>
-          !LEGACY_SEED_IMAGE_IDS.has(image.id) &&
-          !(
-            image.conversationId &&
-            LEGACY_SEED_CONVERSATION_IDS.has(image.conversationId)
-          ),
-      );
-      const restoredMessages = savedMessages.filter(
-        (message) =>
-          !LEGACY_SEED_MESSAGE_IDS.has(message.id) &&
-          !LEGACY_SEED_CONVERSATION_IDS.has(message.conversationId),
-      );
+      // ─── 会话第一页（PR-c：不再全量） ───
+      let restoredConversations = await input.loadConversationsFirstPage();
+      // legacy 演示种子（早期版本的 c-1/m-1/img-1）只可能在已加载页里发现——
+      // 它们按时间排在最尾，大数据集第一页之外的老种子会残留，属于可接受的
+      // 上古 dev 时代产物（真实用户的库早在历次启动的全量时代清理干净了）。
+      if (await removeLegacySeedRecords(restoredConversations)) {
+        restoredConversations = await input.loadConversationsFirstPage();
+      }
 
-      input.conversations.value = restoredConversations;
       // 首次激活优先用 URL 里的 ?c=<id>（阶段三 PR7 §2.2 读侧）。
-      // 校验 id 必须存在于恢复后的列表——遵循 D1 数据集隔离：
-      // URL 指向的可能是其它后端/已删除的对话，无效 id 静默回落第一个，不报错。
+      // id 不在第一页时 getById 兜底验证（URL 可能指向翻页区之外的会话）；
+      // 无效 id（已删除/其它后端，D1 数据集隔离）静默回落第一个，不报错。
       const urlConversationId = readConversationIdFromUrl();
-      const urlIdExists = urlConversationId
-        ? restoredConversations.some((c) => c.id === urlConversationId)
-        : false;
-      input.activeConversationId.value = urlIdExists
-        ? urlConversationId!
-        : (restoredConversations[0]?.id ?? "");
+      let activeId = "";
+      if (urlConversationId) {
+        const exists =
+          restoredConversations.some((c) => c.id === urlConversationId) ||
+          Boolean(await services.conversations.getById(urlConversationId));
+        if (exists) activeId = urlConversationId;
+      }
+      if (!activeId) {
+        activeId = restoredConversations[0]?.id ?? "";
+      }
+      input.activeConversationId.value = activeId;
 
-      const normalizedMessages = normalizeRestoredMessages(restoredMessages);
-      input.messages.value = normalizedMessages;
-      await persistNormalizedMessages(restoredMessages, normalizedMessages);
+      // ─── 图片：全局第一页（"全部图片"tab），之后当前会话全量合并 ───
+      const assetsPage = await input.loadAssetsFirstPage();
+      if (await removeLegacySeedImages(assetsPage)) {
+        await input.loadAssetsFirstPage();
+      }
 
-      // PR9：hydrate 只装配 metadata（同步），blob 由懒加载队列后台补齐——
-      // imageAssets 立即赋值，UI 先渲染，图片逐张出现。
-      input.imageAssets.value = input.hydrateImagePreviews(restoredImages);
-      input.attachedImages.value = input.attachedImages.value.filter((id) =>
-        restoredImages.some((image) => image.id === id),
-      );
+      // ─── 当前会话：消息窗口 + 图片全量（并发） ───
+      // ViewModel 的 activeConversationId watch 也会触发这两个加载，
+      // store 内部幂等去重（窗口已是该会话 / ensure 在飞去重），不重复拉取。
+      await Promise.all([
+        input.loadConversationMessages(activeId),
+        input.ensureConversationAssets(activeId),
+      ]);
+
       await input.refreshStorageUsage();
     } catch (error) {
       input.notifyError(`读取本地数据失败：${formatError(error)}`);
@@ -128,58 +134,66 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
     }
   }
 
-  async function persistNormalizedMessages(
-    originalMessages: Message[],
-    restoredMessages: Message[],
-  ) {
-    const changedMessages = restoredMessages.filter(
-      (message, index) => message.status !== originalMessages[index]?.status,
-    );
-
-    if (!changedMessages.length) return;
-
-    await Promise.all(
-      changedMessages.map((message) => services.messages.save(message)),
-    );
-  }
-
+  /**
+   * legacy 演示种子清理（早期版本内置的 c-1/m-1 假数据）。
+   * 仅当会话第一页里发现种子会话时才触发全量清理；返回是否发生了删除。
+   * 删除一律是 no-op 安全的（key 不存在不报错），可直接按 id 盲删。
+   */
   async function removeLegacySeedRecords(
-    conversations: Conversation[],
-    messages: Message[],
-    imageAssets: ImageAsset[],
-  ) {
-    const staleConversations = conversations.filter((conversation) =>
-      LEGACY_SEED_CONVERSATION_IDS.has(conversation.id),
+    conversationsPage: Conversation[],
+  ): Promise<boolean> {
+    const hasSeeds = conversationsPage.some((c) =>
+      LEGACY_SEED_CONVERSATION_IDS.has(c.id),
     );
-    const staleMessages = messages.filter(
-      (message) =>
-        LEGACY_SEED_MESSAGE_IDS.has(message.id) ||
-        LEGACY_SEED_CONVERSATION_IDS.has(message.conversationId),
-    );
-    const staleImages = imageAssets.filter(
-      (image) =>
-        LEGACY_SEED_IMAGE_IDS.has(image.id) ||
-        Boolean(
-          image.conversationId &&
-            LEGACY_SEED_CONVERSATION_IDS.has(image.conversationId),
-        ),
-    );
+    if (!hasSeeds) return false;
 
-    if (!staleConversations.length && !staleMessages.length && !staleImages.length) {
-      return;
-    }
+    const seedConversationIds = [...LEGACY_SEED_CONVERSATION_IDS];
+    const seedMessages = (
+      await Promise.all(
+        seedConversationIds.map((id) => services.messages.listByConversationId(id)),
+      )
+    ).flat();
+    const seedImages = (
+      await Promise.all(
+        seedConversationIds.map((id) =>
+          services.imageAssets.listAssetsByConversation(id),
+        ),
+      )
+    ).flat();
 
     await Promise.all([
-      ...staleConversations.map((conversation) =>
-        services.conversations.remove(conversation.id),
-      ),
-      ...staleMessages.map((message) => services.messages.remove(message.id)),
-      ...staleImages.map((image) => services.imageAssets.deleteAsset(image.id)),
-      ...staleImages
+      ...seedConversationIds.map((id) => services.conversations.remove(id)),
+      ...seedMessages.map((message) => services.messages.remove(message.id)),
+      ...[...LEGACY_SEED_MESSAGE_IDS].map((id) => services.messages.remove(id)),
+      ...seedImages.map((image) => services.imageAssets.deleteAsset(image.id)),
+      ...seedImages
         .map((image) => image.blobKey)
         .filter((blobKey): blobKey is string => Boolean(blobKey))
         .map((blobKey) => services.imageAssets.deleteBlob(blobKey)),
+      ...[...LEGACY_SEED_IMAGE_IDS].map((id) =>
+        services.imageAssets.deleteAsset(id),
+      ),
     ]);
+    return true;
+  }
+
+  /** 种子图片可能在图片第一页（无归属会话的 img-1..4）。返回是否发生了删除。 */
+  async function removeLegacySeedImages(
+    assetsPage: ImageAsset[],
+  ): Promise<boolean> {
+    const staleImages = assetsPage.filter((image) =>
+      LEGACY_SEED_IMAGE_IDS.has(image.id),
+    );
+    if (!staleImages.length) return false;
+    await Promise.all(
+      staleImages.flatMap((image) => [
+        services.imageAssets.deleteAsset(image.id),
+        image.blobKey
+          ? services.imageAssets.deleteBlob(image.blobKey)
+          : Promise.resolve(),
+      ]),
+    );
+    return true;
   }
 
   /**
@@ -242,17 +256,4 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
   return {
     restoreFromStorage,
   };
-}
-
-function normalizeRestoredMessages(messages: Message[]) {
-  return messages.map((message) => {
-    if (message.status !== "pending") return message;
-
-    return {
-      ...message,
-      status: "error",
-      content: "生成中断，请重试。",
-      errorMessage: "页面刷新或会话中断后，未完成的生成任务不会继续运行。",
-    } satisfies Message;
-  });
 }

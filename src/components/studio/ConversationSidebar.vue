@@ -33,6 +33,15 @@ const filteredConversations = computed(() => {
 function closeSidebar() {
   composer.setConversationSidebarOpen(false);
 }
+
+// 滚到底加载下一页会话（server 模式分页 PR-d）。store 内部有游标/在飞守卫，
+// 无更多数据时是 no-op。搜索过滤只是视图层筛选，不影响分页加载。
+function onListScroll(event: Event) {
+  const el = event.target as HTMLElement;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
+    void conversations.loadMoreConversations();
+  }
+}
 </script>
 
 <template>
@@ -146,7 +155,7 @@ function closeSidebar() {
       </div>
     </div>
 
-    <nav class="flex-1 overflow-y-auto px-2 py-1">
+    <nav class="flex-1 overflow-y-auto px-2 py-1" @scroll="onListScroll">
       <div
         v-if="!filteredConversations.length"
         class="px-3 py-8 text-center text-sm text-gray-500"
@@ -198,6 +207,12 @@ function closeSidebar() {
         >
           删除
         </button>
+      </div>
+      <div
+        v-if="conversations.isLoadingMoreConversations"
+        class="px-3 py-2 text-center text-xs text-gray-500"
+      >
+        加载更多会话…
       </div>
     </nav>
 

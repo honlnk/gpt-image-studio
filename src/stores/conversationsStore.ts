@@ -3,12 +3,16 @@ import { defineStore } from "pinia";
 import type {
   ConversationServices,
 } from "../services/conversations";
-import type { MessageServices } from "../services/messages";
+import { normalizeInterruptedMessages, type MessageServices } from "../services/messages";
 import { isoTimestamp } from "../shared/dateTime";
 import { formatError } from "../shared/errors";
 import { createId } from "../shared/id";
 import { useFeedbackStore } from "./feedbackStore";
 import type { Conversation, Message } from "../types/studio";
+
+/** 分页页大小（server 模式分页 PR-c）。 */
+export const CONVERSATIONS_PAGE_SIZE = 50;
+export const MESSAGES_PAGE_SIZE = 50;
 
 type CreateConversationInput = {
   title: string;
@@ -29,8 +33,21 @@ type ConversationsStoreContext = {
 
 export const useConversationsStore = defineStore("conversations", () => {
   const conversations = ref<Conversation[]>([]);
+  // messages 语义（PR-c）：不是全量表，而是「当前会话的已加载窗口」
+  // （正序展示）。切会话由 loadConversationMessages 整体替换；
+  // 向上翻页由 loadEarlierMessages 向前 prepend；新生成的消息尾部 push。
   const messages = ref<Message[]>([]);
   const activeConversationId = ref("");
+  // ─── 分页状态（server 模式分页 PR-c） ───
+  const conversationsNextCursor = ref<string | null>(null);
+  const conversationsTotal = ref(0);
+  const isLoadingMoreConversations = ref(false);
+  /** 消息窗口属于哪个会话 + 该会话向更早翻页的游标。 */
+  const messagesWindowConversationId = ref("");
+  const messagesNextCursor = ref<string | null>(null);
+  const isLoadingEarlierMessages = ref(false);
+  /** 快速连续切会话时的竞态守卫：只有最后一次加载允许落地。 */
+  let messagesLoadToken = 0;
   let conversationWriteQueue = Promise.resolve();
   let context: ConversationsStoreContext | null = null;
 
@@ -65,10 +82,10 @@ export const useConversationsStore = defineStore("conversations", () => {
     });
     if (!confirmed) return;
 
-    const deletedMessages = messages.value.filter(
-      (message) => message.conversationId === id,
-    );
+    const deletedMessages = await input.services.messages.listByConversationId(id);
     conversations.value = conversations.value.filter((item) => item.id !== id);
+    // 消息窗口里已加载的条目同步清掉（窗口模型下内存只持有当前会话一页，
+    // 完整级联删除依赖上面的 listByConversationId 查存储，不依赖内存）
     messages.value = messages.value.filter(
       (message) => message.conversationId !== id,
     );
@@ -99,9 +116,12 @@ export const useConversationsStore = defineStore("conversations", () => {
 
     const input = getContext();
     const feedback = useFeedbackStore();
-    const deletedMessages = messages.value.filter((message) =>
-      idSet.has(message.conversationId),
-    );
+    // 级联删除的消息清单查存储（窗口模型下内存只有当前会话一页，不能依赖内存 filter）
+    const deletedMessages = (
+      await Promise.all(
+        ids.map((id) => input.services.messages.listByConversationId(id)),
+      )
+    ).flat();
     conversations.value = conversations.value.filter(
       (conversation) => !idSet.has(conversation.id),
     );
@@ -216,19 +236,136 @@ export const useConversationsStore = defineStore("conversations", () => {
     return context;
   }
 
+  // ─── 分页加载（server 模式分页 PR-c） ───
+
+  /** 启动恢复：加载会话第一页（整体替换）。返回本页数据供调用方做 URL/种子校验。 */
+  async function loadConversationsFirstPage() {
+    const page = await getContext().services.conversations.listPage({
+      limit: CONVERSATIONS_PAGE_SIZE,
+    });
+    conversations.value = page.data;
+    conversationsNextCursor.value = page.nextCursor;
+    conversationsTotal.value = page.total;
+    return page.data;
+  }
+
+  /** 侧边栏滚到底：追加下一页会话。 */
+  async function loadMoreConversations() {
+    const cursor = conversationsNextCursor.value;
+    if (!cursor || isLoadingMoreConversations.value) return;
+    isLoadingMoreConversations.value = true;
+    try {
+      const page = await getContext().services.conversations.listPage({
+        before: cursor,
+        limit: CONVERSATIONS_PAGE_SIZE,
+      });
+      conversations.value = [...conversations.value, ...page.data];
+      conversationsNextCursor.value = page.nextCursor;
+      conversationsTotal.value = page.total;
+    } catch (error) {
+      getContext().onStorageError(error);
+    } finally {
+      isLoadingMoreConversations.value = false;
+    }
+  }
+
+  /**
+   * 切会话/启动恢复：整体替换消息窗口为该会话最新一页（存储 DESC → 正序展示），
+   * 并把中断的 pending 消息归一为 error（页面刷新后生成不会继续）回写持久化。
+   * 窗口已是该会话时跳过（ViewModel watch 与 restore 显式加载的去重）。
+   */
+  async function loadConversationMessages(conversationId: string) {
+    if (!conversationId) {
+      clearMessagesWindow();
+      return;
+    }
+    if (messagesWindowConversationId.value === conversationId) return;
+    const token = ++messagesLoadToken;
+    const page = await getContext().services.messages.listPageByConversation(
+      conversationId,
+      { limit: MESSAGES_PAGE_SIZE },
+    );
+    if (token !== messagesLoadToken) return; // 已被更新的切换取代，丢弃过期结果
+    const { normalized, changed } = normalizeInterruptedMessages(page.data);
+    messages.value = [...normalized].reverse();
+    messagesWindowConversationId.value = conversationId;
+    messagesNextCursor.value = page.nextCursor;
+    if (changed.length) {
+      void Promise.all(
+        changed.map((message) => getContext().services.messages.save(message)),
+      ).catch(getContext().onStorageError);
+    }
+  }
+
+  /** 聊天区向上滚动：向窗口前部 prepend 更早一页。 */
+  async function loadEarlierMessages() {
+    const cursor = messagesNextCursor.value;
+    const conversationId = messagesWindowConversationId.value;
+    if (!cursor || !conversationId || isLoadingEarlierMessages.value) return;
+    isLoadingEarlierMessages.value = true;
+    try {
+      const page = await getContext().services.messages.listPageByConversation(
+        conversationId,
+        { before: cursor, limit: MESSAGES_PAGE_SIZE },
+      );
+      // 加载期间窗口被切走则丢弃
+      if (messagesWindowConversationId.value !== conversationId) return;
+      const { normalized, changed } = normalizeInterruptedMessages(page.data);
+      messages.value = [...[...normalized].reverse(), ...messages.value];
+      messagesNextCursor.value = page.nextCursor;
+      if (changed.length) {
+        void Promise.all(
+          changed.map((message) => getContext().services.messages.save(message)),
+        ).catch(getContext().onStorageError);
+      }
+    } catch (error) {
+      getContext().onStorageError(error);
+    } finally {
+      isLoadingEarlierMessages.value = false;
+    }
+  }
+
+  /** 清空消息窗口（备份导入等全量重置场景）。 */
+  function clearMessagesWindow() {
+    messagesLoadToken++;
+    messages.value = [];
+    messagesWindowConversationId.value = "";
+    messagesNextCursor.value = null;
+  }
+
+  /** 清空会话列表与分页状态（备份导入等全量重置场景）。 */
+  function resetPagination() {
+    conversations.value = [];
+    conversationsNextCursor.value = null;
+    conversationsTotal.value = 0;
+    clearMessagesWindow();
+  }
+
   return {
     activeConversation,
     activeConversationId,
     activeMessages,
     conversations,
+    conversationsNextCursor,
+    conversationsTotal,
+    isLoadingEarlierMessages,
+    isLoadingMoreConversations,
     messages,
+    messagesNextCursor,
+    messagesWindowConversationId,
+    clearMessagesWindow,
     configureConversationsStore,
     createConversation,
     createConversationRecord,
     deleteConversation,
     deleteConversations,
+    loadConversationMessages,
+    loadConversationsFirstPage,
+    loadEarlierMessages,
+    loadMoreConversations,
     persistConversation,
     renameConversation,
+    resetPagination,
     selectConversation,
     updateConversationSummary,
   };

@@ -123,6 +123,103 @@ export function runStudioStorageContractTests(
       expect(ids).toEqual(["c1", "c2", "c3"]);
     });
 
+    // ─── 分页查询（listPage，T2 修订 / server 模式分页 PR-b） ───
+    //
+    // listPage 是可选方法，但契约套件只对接实现了它的后端（IndexedDb/InMemory），
+    // 这里直接断言存在，未实现会编译期/运行期立刻暴露。
+
+    /** 造 n 条消息，createdAt 逐分钟递增。 */
+    async function seedMessages(n: number, conversationId = "c1", keyPrefix = "m") {
+      for (let i = 0; i < n; i++) {
+        const key = `${keyPrefix}${String(i).padStart(3, "0")}`;
+        await storage.put(STORE_NAMES.messages, {
+          id: key,
+          conversationId,
+          createdAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+        });
+      }
+    }
+
+    it("listPage DESC 排序 + 翻页遍历：不重不漏，末页 nextCursor=null，total 正确", async () => {
+      await seedMessages(5);
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 10; page++) {
+        const result = await storage.listPage!<{ id: string }>(STORE_NAMES.messages, {
+          before: cursor,
+          limit: 2,
+        });
+        seen.push(...result.data.map((m) => m.id));
+        expect(result.total).toBe(5);
+        if (result.nextCursor === null) break;
+        cursor = result.nextCursor;
+      }
+      expect(seen).toEqual(["m004", "m003", "m002", "m001", "m000"]);
+    });
+
+    it("listPage conversationId 过滤：只回该会话记录，total 只算过滤后", async () => {
+      await seedMessages(3, "c1", "a");
+      await seedMessages(2, "c2", "b");
+      const result = await storage.listPage!<{ id: string; conversationId: string }>(
+        STORE_NAMES.messages,
+        { conversationId: "c1", limit: 10 },
+      );
+      expect(result.data).toHaveLength(3);
+      expect(result.data.every((m) => m.conversationId === "c1")).toBe(true);
+      expect(result.total).toBe(3);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it("listPage 相同排序值的多条记录跨页不漏不重（主键 tiebreak）", async () => {
+      const sameTs = new Date(Date.UTC(2026, 0, 1)).toISOString();
+      for (let i = 0; i < 5; i++) {
+        await storage.put(STORE_NAMES.messages, {
+          id: `m${i}`,
+          conversationId: "c1",
+          createdAt: sameTs,
+        });
+      }
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 10; page++) {
+        const result = await storage.listPage!<{ id: string }>(STORE_NAMES.messages, {
+          before: cursor,
+          limit: 2,
+        });
+        seen.push(...result.data.map((m) => m.id));
+        if (result.nextCursor === null) break;
+        cursor = result.nextCursor;
+      }
+      expect(seen).toHaveLength(5);
+      expect(new Set(seen).size).toBe(5);
+    });
+
+    it("listPage conversations 按 updatedAt DESC", async () => {
+      for (let i = 0; i < 3; i++) {
+        await storage.put(STORE_NAMES.conversations, {
+          id: `c${i}`,
+          updatedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+        });
+      }
+      const result = await storage.listPage!<{ id: string }>(STORE_NAMES.conversations, {
+        limit: 2,
+      });
+      expect(result.data.map((c) => c.id)).toEqual(["c2", "c1"]);
+      expect(result.total).toBe(3);
+    });
+
+    it("listPage 不支持分页的 store（settings）抛错", async () => {
+      await expect(
+        storage.listPage!(STORE_NAMES.settings, { limit: 10 }),
+      ).rejects.toThrow();
+    });
+
+    it("listPage conversations 传 conversationId 抛错", async () => {
+      await expect(
+        storage.listPage!(STORE_NAMES.conversations, { conversationId: "c1", limit: 10 }),
+      ).rejects.toThrow();
+    });
+
     // ─── 图片二进制 ───
 
     it("saveImageBlob / loadImageBlob 往返一致", async () => {

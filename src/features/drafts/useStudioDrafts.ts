@@ -32,6 +32,8 @@ type UseStudioDraftsInput = {
   activeConversationId: Ref<string>;
   attachedImages: Ref<string[]>;
   imageById: (id: string) => ImageAsset | undefined;
+  /** 按需补加载窗口外的图片元数据（PR-c：草稿附件可能不在已加载窗口内）。 */
+  ensureAssetsLoaded: (ids: string[]) => Promise<void>;
 
   // settings 的窄接口：只暴露草稿真正读写的字段。
   // 不传整个 settings 对象，避免 drafts 依赖面隐性扩大。
@@ -132,9 +134,11 @@ export function useStudioDrafts(input: UseStudioDraftsInput) {
   function applyConversationDraft(draft: ConversationDraft) {
     isApplyingDraft = true;
     input.composerText.value = draft.composerText;
-    input.attachedImages.value = draft.attachedImageIds.filter((id) =>
-      Boolean(input.imageById(id)),
-    );
+    // PR-c：不按 imageById 过滤——分页窗口模型下附件图片可能尚未加载，
+    // id 保留，activeAttachments computed 显示时自然过滤，加载完成后自动出现。
+    // 窗口外的附件（跨会话引用等）由 ensureAssetsLoaded 按需补加载。
+    input.attachedImages.value = [...draft.attachedImageIds];
+    void input.ensureAssetsLoaded(draft.attachedImageIds).catch(input.onStorageError);
     input.editModeEnabled.value = draft.editModeEnabled;
     input.activeEditSourceImageId.value = draft.editSourceImageId ?? "";
     input.activeEditMaskImageId.value = draft.editMaskImageId ?? "";

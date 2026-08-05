@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { StorageUsage } from "../../services/storageUsage";
+import { useSettingsStore } from "../../stores/settingsStore";
 import Tooltip from "../ui/Tooltip.vue";
 
 const props = defineProps<{
   storageUsage: StorageUsage;
 }>();
+
+const settings = useSettingsStore();
+// Companion 模式数据在服务端（SQLite/OSS），没有浏览器配额概念：
+// 不显示进度条和上限，只给一个已用量的静态数字。
+const isCompanion = computed(() => settings.connectionMode === "localCompanion");
 
 const storageExpanded = ref(false);
 
@@ -47,7 +53,39 @@ function percentOf(value: number, total: number) {
 </script>
 
 <template>
-  <div class="mt-3 rounded-lg border border-gray-200 bg-gray-50">
+  <!-- Companion 模式：无配额语义，静态展示已用量（图片 + 文本与索引） -->
+  <div
+    v-if="isCompanion"
+    class="mt-3 flex items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs"
+  >
+    <span class="font-medium text-gray-700">存储用量</span>
+    <span class="ml-auto text-gray-500">
+      {{ formatBytes(storageUsage.projectBytes) }}
+    </span>
+    <Tooltip
+      :text="`图片 ${formatBytes(storageUsage.imageBytes)}，文本与索引 ${formatBytes(storageUsage.metadataBytes)}。数据存储在 Companion 服务端，上限取决于服务器磁盘或 OSS 用量。`"
+    >
+      <span
+        class="ml-1 inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-300"
+      >
+        <svg
+          class="h-3 w-3"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </svg>
+      </span>
+    </Tooltip>
+  </div>
+  <div v-else class="mt-3 rounded-lg border border-gray-200 bg-gray-50">
     <button
       class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
       @click="storageExpanded = !storageExpanded"

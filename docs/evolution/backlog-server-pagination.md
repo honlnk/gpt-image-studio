@@ -1,6 +1,6 @@
 # Backlog 分析：server 模式全链路分页
 
-> 状态：🔧 进行中——PR-a ✅ 已完成（2026-08-03），PR-b ~ PR-e 未动工
+> 状态：✅ 主体已完成——PR-a ~ PR-d 全部落地（2026-08-03），PR-e 容量估算聚合顺手完成，其余项评估后置
 > 来源：2026-08-03 PR9 验收讨论中提出——server 模式部署到服务器后，全量加载模型不成立
 > 关联：PR9（视口懒加载，与本方案互补）、阶段二（Companion 后端化）、决策 T2（StudioStorage 纯 CRUD）
 
@@ -102,10 +102,10 @@ listPage?<T>(store: StoreName, opts: {
 ## 4. 建议拆分（立项时）
 
 1. **PR-a：Companion 查询能力**——✅ 已完成（2026-08-03）。schema 决策拍板 **方案 B 真实列**（业务 db schema v2：三张可分页表加 `updated_at`/`created_at`/`conversation_id` 派生列 + B-tree 复合索引，v1 旧库打开时自动迁移回填；`value` JSON 仍是数据真相源）。拍板理由：Companion 未上线、无生产数据，此时迁移成本历史最低；方案 A（json_extract）只是"够用"，方案 B 才是 server 化的正道。`/storage/:table` 加分页参数（`conversationId`/`before`/`limit`，不传保持全量旧契约），响应 `{ data, nextCursor, total }`；契约已补录进 `phase2-pr4-storage-routes.md`「分页契约」节。纯后端，前端不动。
-2. **PR-b：StudioStorage 接口扩展**——`listPage` 可选方法 + 双实现 + T2 决策修订。
-3. **PR-c：启动恢复按需加载**——restore 改造 + 切会话惰性拉消息（用户体验收益核心）。
-4. **PR-d：列表 UI 滚动加载**——侧边栏/消息/图片库三个列表 + 计数兼容。
-5. **PR-e（可后置）**：备份导出走分页迭代或专用接口、容量估算聚合接口、虚拟列表评估。
+2. **PR-b：StudioStorage 接口扩展**——✅ 已完成（2026-08-03）。`listPage` 可选方法落进 `types.ts`（含 `ListPageOptions/ListPageResult`、游标编解码 helpers、T2 修订注释），三实现齐备：IndexedDbStorage（排序索引 `openCursor 'prev'` 遍历跳过）、CompanionStorage（透传 HTTP query）、InMemoryStorage（内存分页，逻辑收编 `inMemoryPage.ts` 与 service 层回退路径 `listPageWithFallback` 共享）。契约测试六例三实现共跑。**local 模式拍板：同步启用分页**，单一代码路径，无"local 永远全量"分叉。
+3. **PR-c：启动恢复按需加载**——✅ 已完成（2026-08-03）。restore 不再接收三个数据 ref，改驱动 store 分页动作：会话第一页（50）→ URL `?c=` 定位（第一页找不到 `getById` 兜底）→ 图片全局第一页（100）→ 并发拉当前会话消息窗口（50）+ 当前会话图片全量。messages ref 语义改为"当前会话已加载窗口"（DESC 拉取、正序展示、prepend 翻页、token 竞态守卫、pending→error 归一化收编进 `services/messages.ts`）；级联删除改查存储跨页走透，不再依赖内存 filter。切会话由 ViewModel 的 `activeConversationId` watch 单点驱动加载，store 幂等去重。
+4. **PR-d：列表 UI 滚动加载**——✅ 已完成（2026-08-03）。侧边栏滚到底 `loadMoreConversations`；消息列表向上滚动 `loadEarlierMessages`（prepend 时按 scrollHeight 差值保持视口锚定）；图片库"全部图片"滚到底 `loadMoreAssets`，头部计数"全部"tab 改用服务端 `assetsTotal`（"当前会话"已全量，length 即真实数）。项目无组件挂载测试设施（无 @vue/test-utils），UI 层为薄接线，行为集中在已测的 store 动作。
+5. **PR-e（可后置）**——部分完成：**容量估算聚合 ✅**（`storageUsage.ts` 改委托 `storage.estimateStoredBytes()`，Companion 走 `/storage/usage` 服务端 SQL 聚合，消灭分页化后最后一个自动触发的整库拉取）。**同日修掉一个存量 bug**：`imagesStore.refreshStorageUsage` 原来用 `storageUsage.ts` 的模块级默认实例（无参 `resolveStorage()` 恒为 IndexedDbStorage），导致 Companion 模式下容量面板读的是浏览器 IndexedDB 的数字（表现为"库里没几张图却显示几百 MB"）。修复：storageUsage service 按 T1 决策注入（ViewModel 唯一装配点创建、经 `useStudioImages` 透传进 context），模块级默认实例随唯一调用方消失而删除。**备份导出**：后置——`list()` 无参数全量契约保留，导出是手动低频操作，专用 `/storage/export` 流式接口等 server 模式真实部署后再议。**虚拟列表**：后置——三个列表数据量到几千条级再评估。
 
 每步独立可验收、可回滚（参数可选 + 接口可选 + 运行时回退全量，整条链始终有 fallback）。
 
@@ -113,5 +113,5 @@ listPage?<T>(store: StoreName, opts: {
 
 - ~~json_extract 表达式索引 vs 真实列迁移~~——**PR-a 已拍板：方案 B 真实列迁移**（业务 db schema v2）。Companion 未上线、无生产数据要兼容，迁移成本最低；方案 A（json_extract 表达式索引）被否——它只是"够用"，每次新增查询字段都要迁就 JSON 掏值，server 化方向下会持续制造妥协。
 - `total` 计数要不要、怎么要——**PR-a 已拍板：要**，`COUNT(*)` 每次查（带 conversationId 过滤条件，不含 before/limit）。SQLite COUNT 是毫秒级，缓存收益不抵复杂度。
-- messages 分页后，内存全量 filter 的 `activeMessages`（`conversationsStore.ts:40-44`）要改成"分页窗口 + 已加载缓存"，跨会话未读角标之类依赖全量 messages 的逻辑需逐一排查。（PR-c 时处理）
-- local 模式（IndexedDB）是否同步启用分页加载，还是永远全量回退——建议同步启用，保持单一代码路径。（PR-b 时拍板）
+- ~~messages 分页后，内存全量 filter 的 `activeMessages` 要改成"分页窗口"~~——**PR-c 已落地**：messages ref 语义改为"当前会话已加载窗口"，`activeMessages` 仍是 filter 但输入已是窗口；逐一排查结果：级联删除改查存储跨页走透（`listByConversationId`）、草稿附件改为"保留 id + 按需补加载"（`ensureAssetsLoaded`），无其它全量依赖残留。
+- ~~local 模式（IndexedDB）是否同步启用分页~~——**PR-b 已拍板：同步启用**。IndexedDbStorage 原生实现 `listPage`（排序索引 cursor 遍历），local/server 单一代码路径；运行时回退（`listPageWithFallback`）仅为"后端不支持 listPage"的假设场景兜底，当前三实现全部支持。

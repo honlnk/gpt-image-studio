@@ -13,6 +13,7 @@ import { STORE_NAMES, type StudioStorage } from "./types";
 export type SpyStorage = StudioStorage & {
   // 让每个方法都是 vi.Mock，测试里可断言调用次数/参数。
   list: ReturnType<typeof vi.fn>;
+  listPage: ReturnType<typeof vi.fn>;
   get: ReturnType<typeof vi.fn>;
   put: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
@@ -30,6 +31,7 @@ export function createSpyStorage(): SpyStorage {
   return {
     backend: "indexeddb",
     list: vi.fn().mockResolvedValue([]),
+    listPage: vi.fn().mockResolvedValue({ data: [], nextCursor: null, total: 0 }),
     get: vi.fn().mockResolvedValue(undefined),
     put: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),

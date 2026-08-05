@@ -1,6 +1,7 @@
 import type { Conversation } from "../types/studio";
 import { timestampFromUpdatedAt } from "../shared/dateTime";
-import { STORE_NAMES, type StudioStorage } from "./storage";
+import { STORE_NAMES, type ListPageOptions, type ListPageResult, type StudioStorage } from "./storage";
+import { listPageWithFallback } from "./storage/inMemoryPage";
 import { resolveStorage } from "./storage/resolveStorage";
 
 /**
@@ -23,6 +24,17 @@ export function createConversationServices(storage: StudioStorage) {
       return conversations.sort(
         (a, b) => timestampFromUpdatedAt(b) - timestampFromUpdatedAt(a),
       );
+    },
+    /**
+     * 分页查询（server 模式分页 PR-c）：按 updatedAt DESC 取一页。
+     * 后端未实现 listPage 时回退全量 + 内存分页（listPageWithFallback）。
+     */
+    listPage(opts: ListPageOptions): Promise<ListPageResult<Conversation>> {
+      return listPageWithFallback<Conversation>(storage, STORE_NAMES.conversations, opts);
+    },
+    /** 按 id 取单个会话。URL 恢复（?c=）指向第一页之外的会话时兜底用。 */
+    getById(id: string) {
+      return storage.get<Conversation>(STORE_NAMES.conversations, id);
     },
     save(conversation: Conversation) {
       return storage.put(STORE_NAMES.conversations, conversation);

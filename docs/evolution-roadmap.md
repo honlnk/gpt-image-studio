@@ -266,6 +266,8 @@ export type StorageBackend = "indexeddb" | "companion" | "native";
  * 设计约束（决策 T2）：保持纯 CRUD，不支持 query by index。
  * - list/get/put/delete/clear 是完整能力面，过滤在调用方内存做。
  * - 阶段三若出现性能瓶颈，再扩展 query 钩子或改走 fetch 直查。
+ * - 2026-08-03 修订：新增可选 listPage 分页原语（受控分页，非通用 query），
+ *   见 T2 决策节的修订记录与 backlog-server-pagination.md。
  */
 export interface StudioStorage {
   /** 后端标识，只读。 */
@@ -1393,6 +1395,8 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 **理由**：与现状完全一致（现有 `db.ts` 也只有 CRUD，过滤在 service 层），阶段一零行为变化。引入 query 钩子会带来三件事：①接口复杂度上升；②每个实现（IndexedDB/Companion/Native）都要支持 query 语义；③契约测试要覆盖 query 行为。阶段一直接用户（单设备）场景下，纯 CRUD + 内存过滤的性能完全够用。
 
 **何时扩展**：阶段三服务器多用户场景下，若某 collection 数据量暴增导致 `list` 全表加载成为瓶颈，再考虑扩展 query 钩子，或让 Companion 模式直接走 fetch + 服务端查询。
+
+**修订（2026-08-03，server 模式分页 PR-b）**："何时扩展"的条件已触发——server 模式部署到服务器后，messages/imageAssets 数据量无界增长，启动全量 `list` 不成立。按预定方向落地：接口新增**可选方法** `listPage`（排序字段 DESC + 可选 conversationId 过滤 + 游标翻页），这不是通用 query by index，只是受控的分页原语；未实现的后端由调用方回退 `list` 全量 + 内存分页，纯 CRUD 基线不变。分层方案与决策记录见 `docs/evolution/backlog-server-pagination.md`。
 
 ### T3: companion 凭据收编进 StudioStorage.config（阶段一）
 

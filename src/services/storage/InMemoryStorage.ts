@@ -14,11 +14,15 @@
  * 否则契约套件失去意义。
  */
 import {
+  STORE_KEY_PATHS,
   STORE_NAMES,
   type ImageBlobRecord,
+  type ListPageOptions,
+  type ListPageResult,
   type StoreName,
   type StudioStorage,
 } from "./types";
+import { pageRecordsInMemory } from "./inMemoryPage";
 
 type RecordMap = Map<IDBValidKey, unknown>;
 
@@ -42,6 +46,16 @@ export class InMemoryStorage implements StudioStorage {
   async list<T>(store: StoreName): Promise<T[]> {
     const map = this.requireStore(store);
     return Array.from(map.values()) as T[];
+  }
+
+  /**
+   * 分页查询（server 模式分页 PR-b）。内存全量排序 + 过滤 + 切片——
+   * mock 不追求效率，但必须与真实实现语义一致（DESC、游标、total）。
+   * 逻辑收编在 inMemoryPage.ts（与 service 层回退路径共享）。
+   */
+  async listPage<T>(store: StoreName, opts: ListPageOptions): Promise<ListPageResult<T>> {
+    const records = Array.from(this.requireStore(store).values());
+    return pageRecordsInMemory<T>(records, store, opts);
   }
 
   async get<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined> {
@@ -151,7 +165,7 @@ export class InMemoryStorage implements StudioStorage {
   /** 从记录里按 store 的 keyPath 抽取主键，与 IndexedDB schema 对齐。 */
   private extractKey(store: StoreName, value: unknown): IDBValidKey {
     const record = value as Record<string, unknown>;
-    const keyPath = KEY_PATHS[store];
+    const keyPath = STORE_KEY_PATHS[store];
     const key = record[keyPath];
     if (key === undefined || key === null) {
       throw new Error(
@@ -161,17 +175,6 @@ export class InMemoryStorage implements StudioStorage {
     return key as IDBValidKey;
   }
 }
-
-/** 与 IndexedDbStorage 的 schema（db.ts onupgradeneeded）对齐的 keyPath 映射。 */
-const KEY_PATHS: Record<StoreName, string> = {
-  conversations: "id",
-  messages: "id",
-  imageAssets: "id",
-  imageBlobs: "key",
-  settings: "key",
-  conversationDrafts: "conversationId",
-  analyticsEvents: "id",
-};
 
 function byteSizeOfJson(value: unknown): number {
   return new Blob([JSON.stringify(value)]).size;

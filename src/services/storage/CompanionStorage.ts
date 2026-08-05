@@ -17,7 +17,13 @@
  *   400     → SERIALIZATION_ERROR
  *   其它    → UNKNOWN
  */
-import { StorageError, type StoreName, type StudioStorage } from "./types";
+import {
+  StorageError,
+  type ListPageOptions,
+  type ListPageResult,
+  type StoreName,
+  type StudioStorage,
+} from "./types";
 
 export type CompanionStorageOptions = {
   /** 惰性读取 Companion 服务地址（每次 fetch 时取最新，避免装配顺序耦合）。 */
@@ -51,6 +57,21 @@ export class CompanionStorage implements StudioStorage {
     const res = await this.request("GET", `/storage/${store}`);
     const body = (await res.json()) as { data: T[] };
     return body.data;
+  }
+
+  /**
+   * 分页查询（server 模式分页 PR-b）。透传 Companion 的分页契约
+   * （GET /storage/:table?conversationId&before&limit，契约见
+   * docs/evolution/phase2-pr4-storage-routes.md「分页契约」节）。
+   * nextCursor 是服务端 opaque 游标，原样回传，本地不解析不构造。
+   */
+  async listPage<T>(store: StoreName, opts: ListPageOptions): Promise<ListPageResult<T>> {
+    const params = new URLSearchParams();
+    if (opts.conversationId !== undefined) params.set("conversationId", opts.conversationId);
+    if (opts.before !== undefined) params.set("before", opts.before);
+    params.set("limit", String(opts.limit));
+    const res = await this.request("GET", `/storage/${store}?${params.toString()}`);
+    return (await res.json()) as ListPageResult<T>;
   }
 
   async get<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined> {

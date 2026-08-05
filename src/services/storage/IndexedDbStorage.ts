@@ -11,9 +11,16 @@
  * - estimateStoredBytes / estimateQuota：从 storageUsage.ts 收编的容量估算逻辑。
  */
 import {
+  CONVERSATION_FILTERABLE_STORES,
   STORE_NAMES,
+  STORE_SORT_FIELDS,
   StorageError,
+  decodePageCursor,
+  encodePageCursor,
+  isBeforePageCursor,
   type ImageBlobRecord,
+  type ListPageOptions,
+  type ListPageResult,
   type StudioStorage,
   type StoreName,
 } from "./types";
@@ -140,6 +147,84 @@ export class IndexedDbStorage implements StudioStorage {
     const transaction = db.transaction(store, "readonly");
     const objectStore = transaction.objectStore(store);
     return requestToPromise<T[]>(objectStore.getAll());
+  }
+
+  /**
+   * 分页查询（server 模式分页 PR-b）。沿排序字段索引按 DESC（"prev"）遍历 cursor，
+   * 跳过游标位置之前/不匹配 conversationId 的记录，取 limit 条并多探 1 条判断 hasMore。
+   *
+   * 本地数据量小，遍历跳过的成本可接受；排序字段缺失的记录不在索引里
+   * （IDB 索引跳过缺字段记录），与服务端 NULL 排最后的脏数据容忍语义一致。
+   */
+  async listPage<T>(store: StoreName, opts: ListPageOptions): Promise<ListPageResult<T>> {
+    const sortField = STORE_SORT_FIELDS[store];
+    if (!sortField) {
+      throw new StorageError("UNKNOWN", `store ${store} 不支持分页查询`);
+    }
+    if (opts.conversationId !== undefined && !CONVERSATION_FILTERABLE_STORES.includes(store)) {
+      throw new StorageError("UNKNOWN", `store ${store} 不支持 conversationId 过滤`);
+    }
+    const db = await this.getDb();
+    const transaction = db.transaction(store, "readonly");
+    const objectStore = transaction.objectStore(store);
+
+    // total：过滤条件下的总条数（不受 before/limit 影响）
+    const total =
+      opts.conversationId !== undefined
+        ? await requestToPromise<number>(
+            objectStore
+              .index("conversationId")
+              .count(IDBKeyRange.only(opts.conversationId)),
+          )
+        : await requestToPromise<number>(objectStore.count());
+
+    const cursorPos = opts.before !== undefined ? decodePageCursor(opts.before) : null;
+    const data: T[] = [];
+    let lastSort: string | null = null;
+    let lastKey: string | null = null;
+    let hasMore = false;
+
+    await new Promise<void>((resolve, reject) => {
+      const request = objectStore.index(sortField).openCursor(null, "prev");
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        const sortValue = typeof cursor.key === "string" ? cursor.key : null;
+        const primaryKey = String(cursor.primaryKey);
+        // 游标位置之前（更新一侧）的记录跳过
+        if (cursorPos && !isBeforePageCursor(sortValue, primaryKey, cursorPos[0], cursorPos[1])) {
+          cursor.continue();
+          return;
+        }
+        if (opts.conversationId !== undefined) {
+          const record = cursor.value as { conversationId?: string };
+          if (record.conversationId !== opts.conversationId) {
+            cursor.continue();
+            return;
+          }
+        }
+        if (data.length < opts.limit) {
+          data.push(cursor.value as T);
+          lastSort = sortValue;
+          lastKey = primaryKey;
+          cursor.continue();
+          return;
+        }
+        // 已取满 limit 条，再命中 1 条说明还有下一页
+        hasMore = true;
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    return {
+      data,
+      nextCursor: hasMore && lastKey !== null ? encodePageCursor(lastSort, lastKey) : null,
+      total,
+    };
   }
 
   async get<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined> {

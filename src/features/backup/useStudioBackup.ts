@@ -2,7 +2,6 @@ import type { BackupServices } from "../../services/backups";
 import { track } from "../analytics/useAnalyticsTracker";
 import { formatError } from "../../shared/errors";
 import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
-import type { Conversation, ImageAsset, Message } from "../../types/studio";
 import type { Ref } from "vue";
 
 type UseStudioBackupInput = {
@@ -11,9 +10,8 @@ type UseStudioBackupInput = {
   activeConversationId: Ref<string>;
   attachedImages: Ref<string[]>;
   composerText: Ref<string>;
-  conversations: Ref<Conversation[]>;
-  imageAssets: Ref<ImageAsset[]>;
-  messages: Ref<Message[]>;
+  /** 清空两个 store 的分页状态与窗口（PR-c：导入后由 restore 按分页模型重建）。 */
+  resetPagination: () => void;
   notifyError: (message: string) => void;
   notifySuccess: (message: string) => void;
   onStorageError: (error: unknown) => void;
@@ -44,9 +42,7 @@ export function useStudioBackup(input: UseStudioBackupInput) {
     track("backup.import_requested", { kind: "project", sizeBytes: file.size }, "system");
     try {
       await input.backupServices.restore(file);
-      input.conversations.value = [];
-      input.messages.value = [];
-      input.imageAssets.value = [];
+      input.resetPagination();
       input.attachedImages.value = [];
       input.composerText.value = "";
       input.activeConversationId.value = "";

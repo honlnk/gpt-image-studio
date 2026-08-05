@@ -28,6 +28,9 @@ type ChatWorkspaceHeader = {
 type ChatWorkspaceMessages = {
   activeAttachmentIds: string[];
   activeMessages: Message[];
+  /** 窗口之前还有更早的历史页（server 模式分页 PR-d）。 */
+  hasMoreHistory: boolean;
+  loadingHistory: boolean;
 };
 
 type ChatWorkspaceActions = {
@@ -35,6 +38,7 @@ type ChatWorkspaceActions = {
   closeAllEditors: () => void;
   copyText: (text: string) => void;
   generateAnother: (message: Message) => void;
+  loadEarlierMessages: () => void;
   loadMessageConfig: (message: Message) => void;
   openConversations: () => void;
   openFavoritePromptSettings: () => void;
@@ -311,12 +315,15 @@ function imageFilesFromTransfer(
 
     <MessageList
       :attached-image-ids="messages.activeAttachmentIds"
+      :has-more-history="messages.hasMoreHistory"
       :image-by-id="images.imageById"
+      :loading-history="messages.loadingHistory"
       :messages="messages.activeMessages"
       @attach-image="images.attachImage"
       @continue-edit="continueEdit"
       @copy-text="actions.copyText"
       @generate-another="actions.generateAnother"
+      @load-earlier="actions.loadEarlierMessages"
       @load-message-config="actions.loadMessageConfig"
       @preview-image="actions.previewImage"
       @refresh-image="actions.refreshImage"

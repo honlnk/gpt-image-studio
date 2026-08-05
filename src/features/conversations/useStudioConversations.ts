@@ -48,8 +48,13 @@ export function useStudioConversations(input: UseStudioConversationsInput) {
     createConversationRecord: conversations.createConversationRecord,
     deleteConversation: conversations.deleteConversation,
     deleteConversations: conversations.deleteConversations,
+    loadConversationMessages: conversations.loadConversationMessages,
+    loadConversationsFirstPage: conversations.loadConversationsFirstPage,
+    loadEarlierMessages: conversations.loadEarlierMessages,
+    loadMoreConversations: conversations.loadMoreConversations,
     persistConversation: conversations.persistConversation,
     renameConversation: conversations.renameConversation,
+    resetPagination: conversations.resetPagination,
     selectConversation: conversations.selectConversation,
     updateConversationSummary: conversations.updateConversationSummary,
   };

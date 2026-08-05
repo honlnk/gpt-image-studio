@@ -51,7 +51,7 @@
 
 ## Backlog（已识别、部分进行中）
 
-- **server 模式全链路分页**（🔧 PR-a 已完成，PR-b~e 未动工）：server 部署到服务器后，Companion `/storage/*` 原来全量返回 conversations/messages/imageAssets，数据量大后需改为分页/增量同步，牵动 API 契约、前端 store、恢复逻辑一整条链。配套还有前端图片库的 DOM 分页/虚拟列表（目前仅 blob 懒加载，元数据和 DOM 仍全量）。与 PR9 的视口懒加载不冲突，是互补的两层。**分析稿：[backlog-server-pagination.md](./backlog-server-pagination.md)**（现状、API/SQL/接口/UI 分层方案、PR 拆分、已拍板决策）。已完成：PR-a Companion 查询能力（`/storage/:table` 游标分页参数 + 真实派生列 schema v2 迁移，契约见 [phase2-pr4-storage-routes.md](./phase2-pr4-storage-routes.md)「分页契约」节）。
+- **server 模式全链路分页**（✅ 主体完成 2026-08-03，PR-a~d + 容量估算聚合已落地）：server 部署到服务器后，Companion `/storage/*` 原来全量返回 conversations/messages/imageAssets，数据量大后需改为分页/增量同步，牵动 API 契约、前端 store、恢复逻辑一整条链。配套还有前端图片库的 DOM 分页/虚拟列表（目前仅 blob 懒加载，元数据和 DOM 仍全量）。与 PR9 的视口懒加载不冲突，是互补的两层。**分析稿：[backlog-server-pagination.md](./backlog-server-pagination.md)**（现状、API/SQL/接口/UI 分层方案、PR 拆分、已拍板决策）。已完成：PR-a Companion 查询能力（`/storage/:table` 游标分页参数 + 真实派生列 schema v2 迁移，契约见 [phase2-pr4-storage-routes.md](./phase2-pr4-storage-routes.md)「分页契约」节）；PR-b `StudioStorage.listPage` 三实现 + T2 修订；PR-c 启动恢复按需加载（消息窗口模型）；PR-d 三列表滚动加载 UI；容量估算改服务端聚合。遗留（后置）：备份导出专用流式接口、虚拟列表。
 
 ## 阅读顺序
 

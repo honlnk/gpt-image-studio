@@ -24,6 +24,7 @@ import { createSettingsServices, createConfigServices } from "../../services/set
 import { createConversationDraftServices } from "../../services/conversationDrafts";
 import { createAnalyticsEventServices } from "../../services/analyticsEvents";
 import { createBackupServices } from "../../services/backups";
+import { createStorageUsageServices } from "../../services/storageUsage";
 import { createTimeFieldMigrationServices } from "../../services/timeFieldMigration";
 import { resolveStorage } from "../../services/storage/resolveStorage";
 import { copyText as copyTextToClipboard } from "../../shared/clipboard";
@@ -102,6 +103,7 @@ export function useStudioViewModel() {
     drafts: createConversationDraftServices(storage),
     analyticsEvents: createAnalyticsEventServices(storage),
     backup: createBackupServices(storage),
+    storageUsage: createStorageUsageServices(storage),
     timeFieldMigration: createTimeFieldMigrationServices(storage),
   };
   // analytics tracker 是模块级单例，无法通过参数注入，用 init 注入 service。
@@ -152,7 +154,10 @@ export function useStudioViewModel() {
   });
   const messages = conversations.messages;
   const images = useStudioImages({
-    services: { imageAssets: services.imageAssets },
+    services: {
+      imageAssets: services.imageAssets,
+      storageUsage: services.storageUsage,
+    },
     activeConversationId: conversations.activeConversationId,
     messages,
     onStorageError: reportStorageError,
@@ -179,6 +184,7 @@ export function useStudioViewModel() {
     activeConversationId: conversations.activeConversationId,
     attachedImages: images.attachedImages,
     imageById: images.imageById,
+    ensureAssetsLoaded: images.ensureAssetsLoaded,
     activeSizePreset: settings.activeSizePreset,
     imageWidth: settings.imageWidth,
     imageHeight: settings.imageHeight,
@@ -307,6 +313,12 @@ export function useStudioViewModel() {
       promptRewriteGuardText: settings.promptRewriteGuardText.value,
     };
   }
+  // 分页状态整体重置（备份导入后 restore 重跑的前置）：两个 store 的
+  // 列表/窗口/游标一起清（PR-c）。
+  function resetStudioPagination() {
+    conversations.resetPagination();
+    images.resetPagination();
+  }
   const { restoreFromStorage } = useStudioRestore({
     services: {
       conversations: services.conversations,
@@ -321,14 +333,15 @@ export function useStudioViewModel() {
     activeConversationId: conversations.activeConversationId,
     applySettings: settings.applySettings,
     attachedImages: images.attachedImages,
-    conversations: conversations.conversations,
-    hydrateImagePreviews: images.hydrateImagePreviews,
-    imageAssets: images.imageAssets,
+    ensureConversationAssets: images.ensureConversationAssets,
     isHydrated,
-    messages,
+    loadAssetsFirstPage: images.loadAssetsFirstPage,
+    loadConversationMessages: conversations.loadConversationMessages,
+    loadConversationsFirstPage: conversations.loadConversationsFirstPage,
     notifyError: feedback.notifyError,
     onStorageError: reportStorageError,
     refreshStorageUsage: images.refreshStorageUsage,
+    resetPagination: resetStudioPagination,
     saveCurrentSettings: settings.saveCurrentSettings,
   });
   const backup = useStudioBackup({
@@ -336,12 +349,10 @@ export function useStudioViewModel() {
     activeConversationId: conversations.activeConversationId,
     attachedImages: images.attachedImages,
     composerText,
-    conversations: conversations.conversations,
-    imageAssets: images.imageAssets,
-    messages,
     notifyError: feedback.notifyError,
     notifySuccess: feedback.notifySuccess,
     onStorageError: reportStorageError,
+    resetPagination: resetStudioPagination,
     restoreFromStorage,
   });
   const previewImage = computed(() => images.imageById(previewImageId.value));
@@ -505,9 +516,9 @@ export function useStudioViewModel() {
 
   function loadMessageConfig(message: Message) {
     composerText.value = message.content;
-    images.attachedImages.value = message.referencedImageIds.filter((id) =>
-      Boolean(images.imageById(id)),
-    );
+    // PR-c：不按 imageById 过滤（图片可能在窗口外/仍在加载），id 保留 + 按需补加载。
+    images.attachedImages.value = [...message.referencedImageIds];
+    void images.ensureAssetsLoaded(message.referencedImageIds).catch(reportStorageError);
     composerState.clearEditSelection();
     editModeEnabled.value = false;
 
@@ -535,6 +546,17 @@ export function useStudioViewModel() {
   }
 
   // ─── 当前对话 ↔ URL 双向同步（阶段三 PR7 §2.2/§3.4） ───
+
+  // 消息窗口 + 会话图片的惰性加载（server 模式分页 PR-c）：
+  // 单点覆盖所有激活路径（选择/新建/删除回落/popstate/宿主消息/restore 初始），
+  // store 内部幂等去重（窗口已是该会话 / ensure 在飞去重），重复触发不重复拉取。
+  watch(
+    conversations.activeConversationId,
+    (id) => {
+      void conversations.loadConversationMessages(id).catch(reportStorageError);
+      void images.ensureConversationAssets(id).catch(reportStorageError);
+    },
+  );
 
   // 兜底同步（replace）：任何路径（选择/新建/删除回落/popstate 恢复）导致激活
   // 变化，若与 URL 当前值不一致则 replaceState 同步。覆盖 selectConversationWithDraft
@@ -761,11 +783,15 @@ export function useStudioViewModel() {
   const chatMessages = proxyRefs({
     activeAttachmentIds: attachedImageIds,
     activeMessages: conversations.activeMessages,
+    // 聊天区向上翻页（server 模式分页 PR-d）
+    hasMoreHistory: computed(() => conversations.messagesNextCursor !== null),
+    loadingHistory: conversations.isLoadingEarlierMessages,
   });
   const chatActions = {
     closeAllEditors: composerState.closeAllEditors,
     copyText,
     generateAnother: generation.generateAnother,
+    loadEarlierMessages: () => void conversations.loadEarlierMessages(),
     loadMessageConfig,
     openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,

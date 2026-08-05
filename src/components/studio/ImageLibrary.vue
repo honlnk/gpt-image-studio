@@ -129,6 +129,21 @@ function toggleColorFilter(nextColor: ImageAsset["tagColor"] | "all") {
   activeColorFilter.value = nextColor;
 }
 
+// 头部计数（server 模式分页 PR-d）：窗口是分页加载的，length 只是"已加载"，
+// "全部图片" tab 显示服务端 total；"当前会话" 经 ensureConversationAssets 全量
+// 加载，length 即真实总数。
+const imageCountLabel = computed(() =>
+  activeFilter.value === "all"
+    ? images.assetsTotal
+    : currentConversationImages.value.length,
+);
+
+// 滚到底加载下一页：只有"全部图片"tab 走分页；"当前会话"已全量在内存。
+function onGridLoadMore() {
+  if (activeFilter.value !== "all") return;
+  void images.loadMoreAssets();
+}
+
 function setImageTagColor(
   id: string,
   color: ImageAsset["tagColor"] | undefined,
@@ -158,7 +173,7 @@ function setImageTagColor(
         <div class="flex items-center gap-2">
           <span class="text-base font-semibold text-gray-800">图片库</span>
           <span class="text-sm text-gray-500"
-            >{{ libraryImages.length }} 张图片</span
+            >{{ imageCountLabel }} 张图片</span
           >
         </div>
         <div class="flex items-center gap-1">
@@ -258,8 +273,10 @@ function setImageTagColor(
         :active-filter="activeFilter"
         :attached-image-ids="images.attachedImages"
         :images="filteredImages"
+        :loading-more="activeFilter === 'all' && images.isLoadingMoreAssets"
         :selected-image-id="selectedImage?.id ?? ''"
         @attach-image="images.attachImage"
+        @load-more="onGridLoadMore"
         @preview-image="emit('previewImage', $event)"
         @select-image="selectImage"
       />

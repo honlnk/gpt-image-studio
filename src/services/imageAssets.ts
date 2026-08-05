@@ -1,6 +1,7 @@
 import type { ImageAsset } from "../types/studio";
 import { timestampFromCreatedAt } from "../shared/dateTime";
-import { STORE_NAMES, type StudioStorage } from "./storage";
+import { STORE_NAMES, type ListPageOptions, type ListPageResult, type StudioStorage } from "./storage";
+import { listPageWithFallback } from "./storage/inMemoryPage";
 import { resolveStorage } from "./storage/resolveStorage";
 
 /**
@@ -22,6 +23,36 @@ export function createImageAssetServices(storage: StudioStorage) {
       return imageAssets.sort(
         (a, b) => timestampFromCreatedAt(b) - timestampFromCreatedAt(a),
       );
+    },
+    /**
+     * 分页查询图片元数据（server 模式分页 PR-c）：按 createdAt DESC 取一页，
+     * 可按 conversationId 过滤。total 供图片库"共 N 张"计数。
+     */
+    listAssetsPage(opts: ListPageOptions): Promise<ListPageResult<ImageAsset>> {
+      return listPageWithFallback<ImageAsset>(storage, STORE_NAMES.imageAssets, opts);
+    },
+    /** 按 id 取单张图片元数据（草稿附件等窗口外按需补加载用）。 */
+    getAsset(id: string) {
+      return storage.get<ImageAsset>(STORE_NAMES.imageAssets, id);
+    },
+    /**
+     * 取某会话的全部图片元数据（跨页走透）。切会话时保证聊天区图片引用、
+     * "当前会话"tab 完整——单会话图片量有限（几十张级），全量可接受。
+     */
+    async listAssetsByConversation(conversationId: string): Promise<ImageAsset[]> {
+      const all: ImageAsset[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 1000; page++) {
+        const result = await listPageWithFallback<ImageAsset>(
+          storage,
+          STORE_NAMES.imageAssets,
+          { conversationId, before: cursor, limit: 200 },
+        );
+        all.push(...result.data);
+        if (result.nextCursor === null) break;
+        cursor = result.nextCursor;
+      }
+      return all;
     },
     saveAsset(imageAsset: ImageAsset) {
       return storage.put(STORE_NAMES.imageAssets, imageAsset);
