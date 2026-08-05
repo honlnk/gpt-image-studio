@@ -1469,21 +1469,21 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 
 - [x] 阶段零：Companion 管理页的具体功能清单（对齐当前 `/companion` 页面的哪些功能，日志查看是否保留等）—— 已完成。功能对齐原 `/companion` 页面：状态总览、凭据 CRUD、激活切换、损坏恢复、日志查看。连接管理（accessKey 输入）未纳入管理页（管理页本身就在同源 loopback 下，无需 accessKey）。
 - [x] 阶段零：Web 项目清理 `/companion` 页面后，Companion 连接状态在 Web 项目里如何展示（保留精简的状态徽标？）—— 已完成。保留 ChatWorkspace 顶栏的 Companion 状态徽标（online/offline 圆点 + 版本号 + 点击跳转 `${companionUrl}/admin`），`useCompanionConnection` + `companionStore` 的 connection 半边完整保留。
-- [ ] 阶段一：`StudioStorage` 接口的错误类型粒度（粗粒度 `StorageError` + code 字段 vs 细粒度子类 `KeyNotFoundError` / `QuotaExceededError` 等）—— 阶段一 §6.1 暂采用粗粒度 + code 字段方案（实现成本低、调用方判错统一），是否需要细粒度子类留待 PR1 review 时定。
-- [ ] 阶段一：companion 凭据（companionUrl / companionAccessKey）进备份的安全处理细节—— 阶段一 §6.4 暂定与 `apiKey` 走同等级别的 `stripCompanionCredentials`（导出时剥离）。是否改为加密存储（备份包含但加密、恢复时解密）以支持跨设备迁移，留待 PR5 实施前定。
-- [ ] 阶段一：契约测试套件是否覆盖「storage 实现切换」场景—— 阶段一只有 `IndexedDbStorage` 一个真实实现，是否要在测试里预埋一个 mock 实现（如 `InMemoryStorage`）来验证「换实现不改接口」的承诺，还是等阶段二 `CompanionStorage` 出现后再做跨实现验证，留待 PR1 实施时定。
-- [ ] 阶段一：是否在接口层引入轻量事务—— §6.1 决定阶段一不暴露事务原语，备份/恢复的原子性由 `IndexedDbStorage` 内部保障。阶段二（Companion + SQLite）和阶段三（多用户并发）出现真实的跨方法原子性需求时，再评估是否加 `withTransaction?(fn)` 可选方法。
-- [ ] 阶段二：业务 db 的 SQLite schema 细节（字段类型、索引、迁移版本管理；双层结构 D7 已定，但 7 张表的具体 DDL 未定）
-- [ ] 阶段二：`dataset_registry` 的 schema 细节（字段、配置指纹的归一化规则）
-- [ ] 阶段二：选项 A（指定目录）的目录合法性校验和权限边界（如禁止选系统目录、跨盘符等）
-- [ ] 阶段二：OSS 凭据的录入/存储/校验流程细节（本机模式下 AccessKey 存 `credentials.json`，但前端录入 UX 和连通性测试未定）
-- [ ] 阶段二：数据集管理 UI 的形态（是否在设置里提供"数据集列表/删除/重命名"入口）
-- [ ] 阶段三：JWT 验签的具体加密方案（共享密钥对称 HS256 vs RSA 公私钥非对称 RS256；claim 字段约定）
-- [ ] 阶段三：JWT 有效期与刷新策略的具体参数（有效期多长、静默刷新的触发时机；refresh token 机制已定，不再讨论是否需要）
-- [ ] 阶段三：吊销黑名单的持久化策略（纯内存重启清空 vs 落盘，权衡安全性与性能）
-- [ ] 阶段三：宿主需要开发的接口清单细化（STS 签发接口的具体契约、登出 webhook 的集成方式）
-- [ ] 阶段三：数据集在多用户场景下的语义（仍按存储位置切换，还是每用户固定一个数据集）
-- [ ] 阶段三：CDN 嵌入模式下 GitHub Pages 的流量/带宽限制是否实际构成问题，是否需要备选 CDN
+- [x] 阶段一：`StudioStorage` 接口的错误类型粒度（粗粒度 `StorageError` + code 字段 vs 细粒度子类 `KeyNotFoundError` / `QuotaExceededError` 等）—— 已采用粗粒度 + code 字段方案（`types.ts:216` `StorageError`，实现成本低、调用方判错统一）。阶段二/三实施过程中未出现需要细粒度子类的真实需求，维持现状。
+- [x] 阶段一：companion 凭据（companionUrl / companionAccessKey）进备份的安全处理细节—— 已定：companionUrl 进备份（跨设备迁移需要），companionAccessKey 在导出时剥离（`backups.ts:43`，到新设备重新配对）。未采用加密存储方案——accessKey 敏感且可重新生成，迁移成本可接受。
+- [x] 阶段一：契约测试套件是否覆盖「storage 实现切换」场景—— 已覆盖。`storage.contract.test.ts` 参数化套件对 IndexedDbStorage + InMemoryStorage 跑同一份用例，阶段二 CompanionStorage 接入时同样调用 `runStudioStorageContractTests(...)`，「换实现不改接口」承诺已有契约保障。
+- [x] 阶段一：是否在接口层引入轻量事务—— 维持不引入。阶段一-三实施过程中未出现真实的跨方法原子性需求：备份/恢复原子性由各自实现内部保障，级联删除走存储层透传。`withTransaction` 不作为公开接口暴露。
+- [x] 阶段二：业务 db 的 SQLite schema 细节（字段类型、索引、迁移版本管理）—— 已定。`schema.ts` `BUSINESS_DB_DDL` 含 7 张表完整 DDL，schema v2 加 `updated_at`/`created_at`/`conversation_id` 派生列 + B-tree 复合索引，迁移框架（`BUSINESS_DB_VERSION` + `PRAGMA user_version`）已落地。
+- [x] 阶段二：`dataset_registry` 的 schema 细节（字段、配置指纹的归一化规则）—— 已定。`schema.ts:42`，含 `user_id`（默认 `__local__`，server 模式真实用户）+ `fingerprint`，唯一性为 `(user_id, fingerprint)` 复合索引。
+- [x] 阶段二：选项 A（指定目录）的目录合法性校验和权限边界 —— 已实现。`directoryPicker` + `fileSystemImageStore` 拒绝系统目录（含 normalize 后带尾斜杠的情况，有专门测试覆盖）。
+- [x] 阶段二：OSS 凭据的录入/存储/校验流程细节 —— 已实现。Companion admin 页录入，本机模式存 `credentials.json`，server 模式走 STS 临时凭证。
+- [x] 阶段二：数据集管理 UI 的形态 —— 已实现。Companion admin 页提供数据集列表/激活切换/删除/重命名入口；Web 端在设置页提供存储位置切换。
+- [x] 阶段三：JWT 验签的具体加密方案（共享密钥对称 HS256 vs RSA 公私钥非对称 RS256；claim 字段约定）—— 已定 HS256（`auth.ts:30`，server 模式 JWT 验签 + 过期检查），claim 含 `sub`(userId) + `display_name`。
+- [x] 阶段三：JWT 有效期与刷新策略的具体参数 —— 已定。长期 token（无 exp）与短期 token（≤1h exp）均支持，验签时检查 exp；宿主侧签发策略由宿主决定，Companion 只做验签。
+- [x] 阶段三：吊销黑名单的持久化策略（纯内存重启清空 vs 落盘）—— 已定纯内存（`revocationList.ts`，内存 Map + TTL 自动清理）。理由：JWT 有效期短（≤1h），重启后残留风险窗口 = 剩余有效期，可接受；落盘增加复杂度收益不抵。
+- [x] 阶段三：宿主需要开发的接口清单细化 —— 已落地。STS 签发（OSS 临时凭证）、JWT 签发、`/auth/me`、`/admin/revoke` 吊销接口均已实现；qiankun 宿主 demo（`examples/qiankun-host`）演示浏览器自签 JWT + 自动激活数据集。
+- [x] 阶段三：数据集在多用户场景下的语义 —— 已定。按 `user_id` 隔离（`schema.ts` 主 db 的 `dataset_registry.user_id` 列，`(user_id, fingerprint)` 复合唯一），每用户独立数据集空间。
+- [ ] 阶段三：CDN 嵌入模式下 GitHub Pages 的流量/带宽限制是否实际构成问题，是否需要备选 CDN —— 观察项，需 server 模式真实部署后看流量数据，无法预先关闭。
 - [ ] 阶段四（暂不实施，启动时再决策）：Companion 内化方案（Rust 重写 vs Node sidecar vs 前端直连）
 - [ ] 阶段四（暂不实施，启动时再决策）：是否引入 OS keychain 加密凭据
 - [ ] 阶段四（暂不实施，启动时再决策）：APP 数据与 Web 数据是否允许手动互导
