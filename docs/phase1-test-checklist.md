@@ -43,16 +43,20 @@ pnpm dev
 
 ### 步骤
 
-1. 编辑 `companion/src/providers/openai.ts`，把 `OPENAI_CAPABILITY` 改成模拟 GLM：
+> **注**：Provider 架构已重构，能力（capability）数据现以 JSON profile 文件形式存储在 `companion/src/providers/profiles/openai.json`，adapter 在 `companion/src/providers/adapters/openai.ts`。以下步骤改为编辑 JSON profile 而非 TS 常量。
 
-```ts
-const OPENAI_CAPABILITY: ProviderCapability = {
-  generate: true,
-  edit: false,                    // 原本 true
-  mask: false,                    // 原本 true
-  backgrounds: ["auto", "opaque"],
-  outputFormats: ["png", "jpeg"], // 去掉 webp
-};
+1. 编辑 `companion/src/providers/profiles/openai.json`，把 `capability` 改成模拟 GLM：
+
+```json
+{
+  "capability": {
+    "generate": true,
+    "edit": false,
+    "mask": false,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "jpeg"]
+  }
+}
 ```
 
 2. **重启 companion**（Ctrl+C → `pnpm dev:companion`）
@@ -70,16 +74,18 @@ const OPENAI_CAPABILITY: ProviderCapability = {
 
 ### 收尾（重要）
 
-测完把 `OPENAI_CAPABILITY` 改回原值再提交：
+测完把 `openai.json` 的 `capability` 改回原值再提交：
 
-```ts
-const OPENAI_CAPABILITY: ProviderCapability = {
-  generate: true,
-  edit: true,
-  mask: true,
-  backgrounds: ["auto", "opaque"],
-  outputFormats: ["png", "webp", "jpeg"],
-};
+```json
+{
+  "capability": {
+    "generate": true,
+    "edit": true,
+    "mask": true,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "webp", "jpeg"]
+  }
+}
 ```
 
 ---
@@ -96,9 +102,9 @@ const OPENAI_CAPABILITY: ProviderCapability = {
 cd companion
 
 # 1. 停掉正在跑的 companion 服务（占用 19750 端口的那个终端 Ctrl+C）
-# 2. 用源码版 login（不是全局 gpt-image-studio login！）
-npx tsx src/main.ts login
-#   选 2 (GLM-Image)
+# 2. 用源码版 provider add（旧版 login 命令已改为 provider add 子命令组）
+npx tsx src/main.ts provider add
+#   选 GLM-Image provider
 #   Base URL 回车用默认 (https://open.bigmodel.cn/api/paas/v4/images)
 #   Model 回车用默认 (glm-image)
 #   粘贴智谱 API Key

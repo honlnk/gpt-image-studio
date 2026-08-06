@@ -233,7 +233,7 @@ const promptMode = ref<PromptMode>("default");
 
 ## API 接入
 
-更新 `src/services/imagesApi.ts`：
+更新 `src/services/imagesApi/client.ts`：
 
 ```ts
 type GenerateImageInput = {

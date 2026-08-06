@@ -29,7 +29,7 @@ See `docs/README.md` for the maintained documentation map and `docs/architecture
 
 ### State Management
 
-Pinia stores in `src/stores/` manage cross-component shared state by domain (`settingsStore`, `composerStore`, `imagesStore`, `conversationsStore`, `generationStore`, `analyticsStore`, `feedbackStore`).
+Pinia stores in `src/stores/` manage cross-component shared state by domain (`settingsStore`, `composerStore`, `imagesStore`, `conversationsStore`, `generationStore`, `analyticsStore`, `feedbackStore`, `companionStore`).
 
 `src/app/studio/useStudioViewModel.ts` is the page-level orchestration layer: it coordinates across stores for workflows like draft switching, backup/restore, and preview. `App.vue` calls it once and distributes state/methods to children via props and events.
 
@@ -69,17 +69,17 @@ Minimal local hosts for the two embedding approaches, plain static files exclude
 
 ### Service Layer (`src/services/`)
 
-All IndexedDB access goes through `db.ts` (generic CRUD: `getAllFromStore`, `getFromStore`, `putInStore`, `deleteFromStore`). Domain services build on top:
+All IndexedDB access goes through the `StudioStorage` abstraction (`src/services/storage/`, with `IndexedDbStorage` as the browser implementation and `CompanionStorage` for the companion-backed mode; `resolveStorage.ts` picks the implementation based on `connectionMode`). Domain services are factory-created from a shared storage instance. Key services:
 
 | File | Purpose |
 |------|---------|
 | `conversations.ts` | List/save/delete conversations |
 | `messages.ts` | List/save/delete messages |
 | `imageAssets.ts` | Image metadata + blob CRUD (separate stores) |
-| `settings.ts` | Single-record app settings |
-| `imagesApi.ts` | Browser direct image generation/editing calls, including Images API and Responses API streaming paths |
-| `companionApi.ts` | Browser-to-local Companion health, pairing, auth, and image proxy calls |
-| `conversationDrafts.ts` | Per-conversation draft persistence (localStorage) |
+| `settings.ts` | Single-record app settings + config services |
+| `imagesApi/` | Browser direct image generation/editing calls, including Images API and Responses API streaming paths (barrel entry `imagesApi/index.ts`) |
+| `companionApi.ts` | Browser-to-Companion health check and auth-status calls |
+| `conversationDrafts.ts` | Per-conversation draft persistence (IndexedDB via StudioStorage) |
 | `generationParams.ts` | Generation parameter validation and defaults |
 | `promptBuilder.ts` | Prompt mode wrapping before requests while preserving raw chat prompt text |
 | `favoritePrompts.ts` | Favorite prompt persistence |
@@ -101,11 +101,11 @@ Browser direct mode can use Images API or Responses API depending on settings. R
 
 ### Companion Provider Layer
 
-`companion/src/providers/` contains provider adapters behind a registry. Current adapters include OpenAI-compatible, GLM, Doubao/Volcano Ark Seedream, Qwen-Image, and Wan providers. The Web app should stay capability-driven: provider-specific validation, size translation, task polling, multipart handling, DashScope response parsing, and URL-to-base64 conversion belong in Companion provider modules unless the UI needs a generic capability signal.
+`companion/src/providers/` contains provider adapters behind a registry. Current adapters include OpenAI-compatible, GLM, Doubao/Volcano Ark Seedream, Qwen-Image, Wan, Grok, Gemini, Gemini-OpenAI, and DeepInfra providers. The Web app should stay capability-driven: provider-specific validation, size translation, task polling, multipart handling, DashScope response parsing, and URL-to-base64 conversion belong in Companion provider modules unless the UI needs a generic capability signal.
 
 Companion security boundaries still matter:
-- Listen on `127.0.0.1`, not `0.0.0.0`.
-- Require pairing/session auth for protected routes.
+- Local mode listens on `127.0.0.1`; server mode (`--deployment-mode server`) may listen on `0.0.0.0` and relies on JWT auth + Origin allow-list.
+- Protected routes require either a persistent connection key (local mode, `access-key.json`) or a JWT signed by the host (server mode).
 - Keep credential storage inside Companion; the Web app must not read or export Companion secrets.
 - Keep logs free of authorization headers, full prompts, uploaded image data, and base64 payloads.
 
@@ -137,7 +137,7 @@ Custom size validation for the generic Web UI remains conservative: 16-3840px, m
 
 项目有两份正交的路线图：
 - `docs/roadmap.md` — **业务功能**演进（聊天 UI、图片编辑、备份、分析、提示词模式等）。
-- `docs/evolution-roadmap.md` — **架构形态**演进（存储抽象 / Companion 后端化 / 子项目化 / APP 化的四阶段纲领），待启动。
+- `docs/evolution-roadmap.md` — **架构形态**演进（存储抽象 / Companion 后端化 / 子项目化 / APP 化的四阶段纲领），阶段一至三已完成。
 
 任何架构层面的改动（存储后端、打包方式、运行时形态）都应以 `docs/evolution-roadmap.md` 为准；业务功能迭代以 `docs/roadmap.md` 为准。
 
@@ -149,8 +149,9 @@ See `docs/roadmap.md` for the full business roadmap. Current status:
 - Done: Local analytics V1.0-V1.2 (`src/stores/analyticsStore.ts`, `src/services/analyticsEvents.ts`, `src/services/analyticsExport.ts`); analytics is local-only and excluded from backups
 - Done: Prompt modes (`src/services/promptBuilder.ts`, `docs/prompt-modes.md`)
 - Done: Responses API streaming image previews for browser direct mode (`docs/responses-streaming-plan.md`)
-- Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with first-pairing wait flow; system keychain is deferred
-- Done: Companion provider translation layer with OpenAI-compatible, GLM, Doubao/Seedream, Qwen-Image, and Wan providers (`docs/companion-providers-plan.md`, `docs/companion-doubao-plan.md`)
+- Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with persistent connection key auth (`status`/`reset-key`); system keychain is deferred
+- Done: Companion provider translation layer with OpenAI-compatible, GLM, Doubao/Seedream, Qwen-Image, Wan, Grok, Gemini, Gemini-OpenAI, and DeepInfra providers (`docs/companion-providers-plan.md`, `docs/companion-doubao-plan.md`)
+- Done: Companion server deployment mode with JWT multi-tenancy, storage routes, and OSS STS (`docs/evolution/phase3-overview.md`, `docs/deployment-guide.md`)
 - Done: Tauri v2 desktop packaging first version (`desktop/src-tauri`, `docs/desktop-packaging.md`)
 - Upcoming: finer image-library filters, desktop signing/notarization/cross-platform builds/updater, optional Companion sidecar, analytics V2 analysis layer
 

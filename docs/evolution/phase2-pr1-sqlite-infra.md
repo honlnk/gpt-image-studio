@@ -128,12 +128,10 @@ export type StorageErrorCode =
 
 export class StorageStoreError extends Error {
   readonly code: StorageErrorCode;
-  readonly cause?: unknown;
-  constructor(code: StorageErrorCode, message: string, cause?: unknown) {
-    super(message);
+  constructor(message: string, code: StorageErrorCode, options: { cause?: unknown } = {}) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "StorageStoreError";
     this.code = code;
-    this.cause = cause;
   }
 }
 ```

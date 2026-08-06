@@ -250,6 +250,8 @@ export function createOssImageStore(opts: {
 | `src/features/settings/*` | 设置页新增「存储位置」配置区（选 A/B/C + 目录选择 + OSS 凭据录入） |
 | 顶栏 UI | Companion 模式下显示「Companion 文件系统 / Companion OSS」状态徽标 |
 
+> **注（2026-08）**：上表后四行（settingsStore / useStudioViewModel / features / 顶栏 UI）在 PR7 中曾落地，后于「设置页按连接模式重组」重构（`8af7cd8`）移除——存储位置管理归 Companion 管理页（`/admin`），Web 端不再经手。连接模式切换改由 `src/App.vue` 的组件级 `:key` 重建实现，而非 `window.location.reload`。详见 `phase2-pr7-storage-location-ui.md`。
+
 ## 7. PR 拆分（阶段二）
 
 > 沿用阶段一的 PR 拆分哲学：每个 PR 独立可合并、typecheck/test 全绿、可独立回滚。
@@ -320,7 +322,7 @@ export function createOssImageStore(opts: {
   grep -rn "fetch.*companionUrl.*storage" src/stores/ src/services/ | grep -v "CompanionStorage.ts"
   ```
   应返回空（只有 CompanionStorage.ts 内部允许直连 fetch）
-- ✅ Companion 后端的备份/恢复机制独立可用（提供 `/storage/export` + `/storage/import` 路由，不依赖前端 ZIP）
+- ✅ Companion 后端提供 `/storage/*` 业务数据 CRUD（备份/恢复仍走前端 ZIP，未提供独立的 `/storage/export` + `/storage/import` 路由）
 
 ## 11. 本阶段不做
 

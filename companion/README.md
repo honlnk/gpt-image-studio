@@ -10,7 +10,7 @@
 
 ```bash
 npm install -g @honlnk/image-studio-companion
-gpt-image-studio login
+gpt-image-studio provider add
 gpt-image-studio start
 ```
 
@@ -18,7 +18,7 @@ gpt-image-studio start
 
 ```bash
 pnpm add -g @honlnk/image-studio-companion
-gpt-image-studio login
+gpt-image-studio provider add
 gpt-image-studio start
 ```
 
@@ -60,7 +60,7 @@ gpt-image-studio start
 gpt-image-studio start --channel stable --allow-origin http://localhost:5173
 ```
 
-启动后监听 `127.0.0.1:19750`。如果还没有完成配对，`start` 会在当前终端等待网页端首次配对成功，然后退出；后台服务会继续运行。
+启动后监听 `127.0.0.1:19750`。`start` 启动后台服务后即退出，后台服务持续运行。
 
 ## 命令
 
@@ -77,9 +77,10 @@ npx tsx companion/src/main.ts serve
 | 参数 | 说明 |
 |------|------|
 | `--port <port>` | 指定监听端口，默认 `19750` |
+| `--host <host>` | 指定监听地址，默认 `127.0.0.1`（server 模式默认 `0.0.0.0`） |
+| `--deployment-mode local|server` | 部署形态；local 监听 loopback + 连接密钥认证，server 可远程监听 + JWT 多租户 |
 | `--channel stable|dev` | 指定安全渠道；stable 只允许正式站点，dev 额外允许本地开发 origin |
 | `--allow-origin <origin...>` | 追加允许的完整 origin，不支持通配符 |
-| `--session-ttl-days <days>` | 指定配对 session 有效天数，默认 30 天 |
 
 ### `start` — 后台启动服务
 
@@ -87,9 +88,9 @@ npx tsx companion/src/main.ts serve
 gpt-image-studio start
 ```
 
-后台启动 companion 服务，日志写入 `<dataDir>/logs/`，PID 信息写入 `~/.gpt-image-studio/companion.pid`。`<dataDir>` 默认按部署形态隔离：`local` 模式为 `~/.gpt-image-studio`，`server` 模式为 `~/.gpt-image-studio-docker`，可用 `GPT_IMAGE_STUDIO_CONFIG_DIR` 覆盖。`start` 只负责启动服务，需要配对时请另行运行 `gpt-image-studio pair`。
+后台启动 companion 服务，日志写入 `<dataDir>/logs/`，PID 信息写入 `~/.gpt-image-studio/companion.pid`。`<dataDir>` 默认按部署形态隔离：`local` 模式为 `~/.gpt-image-studio`，`server` 模式为 `~/.gpt-image-studio-docker`，可用 `GPT_IMAGE_STUDIO_CONFIG_DIR` 覆盖。`start` 只负责启动服务。
 
-`start` 支持和 `serve` 相同的端口、channel、origin 和 session 参数。
+`start` 支持和 `serve` 相同的端口、host、deployment-mode、channel 和 origin 参数。
 
 ### `stop` / `restart` — 管理后台服务
 
@@ -111,29 +112,20 @@ gpt-image-studio logs --date 2026-05-25
 
 默认显示当前后台日志最后 100 行。每次 `start` 时会自动清理 7 天前的 companion 日志。
 
-### `pair` — 重新发起配对
+### `provider` — 管理 Provider 凭据
 
 ```bash
-gpt-image-studio pair
-gpt-image-studio pair --port 19750
+gpt-image-studio provider add       # 交互式添加凭据
+gpt-image-studio provider list      # 列出所有凭据
+gpt-image-studio provider show      # 查看当前激活凭据详情
+gpt-image-studio provider edit <id> # 编辑指定凭据
+gpt-image-studio provider remove <id> # 删除指定凭据
+gpt-image-studio provider activate <id> # 切换激活凭据
 ```
 
-进入配对模式并等待网页端发起配对。运行后在网页设置中点击「开始配对」，当前终端会显示 6 位配对码，并等待网页端完成确认。进入配对模式会清除旧的本地 session，适合网页端断开连接后重新连接。
+`provider add` 交互式输入：label → 选择 provider 预设（openai/glm/doubao/qwen/wan/grok/gemini/gemini-openai/deepinfra）→ API Base URL（回车用预设默认值）→ model → API Key（不回显）。
 
-### `login` — 配置 API 凭据
-
-```bash
-gpt-image-studio login
-# 源码开发时
-npx tsx companion/src/main.ts login
-```
-
-交互式输入：
-
-1. **API Base URL** — 回车使用默认值 `https://api.packyapi.com/v1/images`
-2. **API Key** — 输入时不回显
-
-凭据保存到 `~/.gpt-image-studio/credentials.json`。
+凭据保存到 `~/.gpt-image-studio/credentials.json`（多配置结构 `{ entries, activeId }`）。
 
 ### `status` — 查看状态
 
@@ -144,41 +136,17 @@ npx tsx companion/src/main.ts status
 ```
 
 显示：
-- 凭据配置情况（Base URL + 脱敏后的 API Key）
-- 配对状态
+- 凭据配置情况（provider + 脱敏后的 API Key）
+- 连接密钥（access key，用于在网页端粘贴连接）
 - 服务是否运行
 
-### `logout` — 清除凭据
+### `reset-key` — 重置连接密钥
 
 ```bash
-gpt-image-studio logout
-# 源码开发时
-npx tsx companion/src/main.ts logout
+gpt-image-studio reset-key
 ```
 
-删除本地保存的 API 凭据文件。
-
-### `unpair` — 清除网页端配对
-
-```bash
-gpt-image-studio unpair
-# 源码开发时
-npx tsx companion/src/main.ts unpair
-```
-
-删除本地保存的配对 session，不会清除 API 凭据。
-
-## 配对流程
-
-1. 启动 companion 服务（`gpt-image-studio start`）
-2. 运行 `gpt-image-studio pair` 进入配对模式
-3. 在网页端设置中切换到「本地 Companion」模式并点击「开始配对」
-4. 在终端查看 6 位配对码
-5. 在网页端输入配对码完成连接
-
-配对码有效期 5 分钟。配对成功后，session token 保存在 `~/.gpt-image-studio/session.json`，默认有效期 30 天，下次启动服务时自动恢复。可以通过 `--session-ttl-days` 调整有效天数。
-
-网页端点击「断开连接」会通知 Companion 清除本地 session。如果浏览器已经丢失 token，也可以运行 `gpt-image-studio unpair` 手动清除。
+重新生成持久化连接密钥（`access-key.json`）。重置后需在网页端重新粘贴新密钥。
 
 ## 数据目录
 
@@ -190,8 +158,11 @@ npx tsx companion/src/main.ts unpair
 
 | 文件 | 内容 |
 |------|------|
-| `credentials.json` | API Base URL + API Key |
-| `session.json` | 配对 session token |
+| `credentials.json` | Provider 凭据（多配置结构 `{ entries, activeId }`） |
+| `access-key.json` | 持久化连接密钥（0600，`status` 查看 / `reset-key` 重置） |
+| `oss-credentials.json` | OSS AccessKey（仅配置 OSS 存储时存在，0600） |
+| `companion.pid` | 后台进程 PID（固定放 `~/.gpt-image-studio/`） |
+| `logs/` | 后台服务日志 |
 
 > PID 控制文件 `companion.pid` 固定放在 `~/.gpt-image-studio/`，便于 `stop`/`status` 在未指定 mode 时也能定位后台进程。
 
@@ -223,13 +194,13 @@ pnpm install
 pnpm --filter @honlnk/image-studio-companion build
 ```
 
-升级不会自动删除 `~/.gpt-image-studio/` 中的凭据和配对 session。升级后建议运行：
+升级不会自动删除 `~/.gpt-image-studio/` 中的凭据和连接密钥。升级后建议运行：
 
 ```bash
 npx tsx companion/src/main.ts status
 ```
 
-如果服务端口、正式站点 origin 或 session 策略发生变化，重新启动 `serve` 后按网页端提示重新配对。
+如果服务端口、正式站点 origin 或连接密钥发生变化，重启 `serve` 后在网页端重新粘贴连接密钥即可。
 
 ## 卸载与清理
 
@@ -243,38 +214,34 @@ npm uninstall -g @honlnk/image-studio-companion
 pnpm remove -g @honlnk/image-studio-companion
 ```
 
-卸载 npm 包不会自动删除 `~/.gpt-image-studio/` 中的凭据和配对 session。
+卸载 npm 包不会自动删除 `~/.gpt-image-studio/` 中的凭据和连接密钥。
 
 ### 本地状态清理
 
 停止 companion 进程后，可以按需要清理本地状态：
 
 ```bash
-# 只清除 API 凭据
-gpt-image-studio logout
+# 重置连接密钥（网页端需重新粘贴新密钥）
+gpt-image-studio reset-key
 # 源码开发时
-npx tsx companion/src/main.ts logout
-
-# 只清除网页端配对 session
-gpt-image-studio unpair
-# 源码开发时
-npx tsx companion/src/main.ts unpair
+npx tsx companion/src/main.ts reset-key
 
 # 完整删除 companion 本地状态
 rm -rf ~/.gpt-image-studio
 ```
 
-如果只是切换 API key，运行 `login` 覆盖当前凭据即可，不需要删除整个目录。
+如果只是切换 API key，运行 `provider add` 添加新凭据并 `provider activate <id>` 切换即可，不需要删除整个目录。
 
 ## 安全说明
 
-- 服务仅监听 `127.0.0.1`，不对外暴露
+- local 模式（默认）服务仅监听 `127.0.0.1`，不对外暴露
+- server 模式（`--deployment-mode server`）可监听 `0.0.0.0` 以支持远程/容器部署，此时依赖 JWT 认证（HS256，`JWT_SECRET`）+ Origin 白名单 + CORS
 - CORS 白名单默认只允许 `https://image.honlnk.com`
 - `--channel dev` 会额外允许 `http://127.0.0.1:8888` 和 `http://localhost:8888`
 - `--allow-origin` 只接受完整 origin，不支持通配符
-- 非公开端点需要配对后的 Bearer token 鉴权
+- 非公开端点需要 Bearer token 鉴权（local 模式为持久化连接密钥，server 模式为 JWT）
 - 网页端无法读取真实 API Key，只能通过代理发起请求
 - 代理请求会限制 body 大小、引用图片数量和图片 MIME 类型
 - 日志会脱敏 Authorization、API key 和图片 base64 字段
-- 凭据和 session 文件会以 `0600` 权限写入
+- 凭据和连接密钥文件会以 `0600` 权限写入
 - 凭据当前以明文 JSON 保存，请确保在个人设备上使用

@@ -24,8 +24,8 @@
 - CompanionStorage fetch 实现（接入契约测试套件，90 测试用例）
 - resolveStorage 按 connectionMode 分叉（localCompanion → CompanionStorage）
 - ViewModel 装配顺序调整（先 settingsStore 后 storage，getter 惰性读取）
-- StorageLocationPanel.vue 存储位置切换 UI（A/B/C + OSS 配置 + 切换 reload）
-- companionApi.ts 新增数据集/OSS 管理 API
+- ~~StorageLocationPanel.vue 存储位置切换 UI~~（**未落地**，存储位置管理归 Companion 管理页）
+- ~~companionApi.ts 新增数据集/OSS 管理 API~~（**未落地**，`companionApi.ts` 只导出 health/auth-status 调用）
 
 ### 测试覆盖
 - Companion 后端：103 storage 测试 + 31 storage 路由测试 + 33 OSS 测试

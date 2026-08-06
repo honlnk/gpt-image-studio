@@ -29,7 +29,7 @@ See `docs/README.md` for the maintained documentation map and `docs/architecture
 
 ### State Management
 
-Pinia stores in `src/stores/` manage cross-component shared state by domain (`settingsStore`, `composerStore`, `imagesStore`, `conversationsStore`, `generationStore`, `feedbackStore`, `analyticsStore`).
+Pinia stores in `src/stores/` manage cross-component shared state by domain (`settingsStore`, `composerStore`, `imagesStore`, `conversationsStore`, `generationStore`, `feedbackStore`, `analyticsStore`, `companionStore`).
 
 `src/app/studio/useStudioViewModel.ts` is the page-level orchestration layer: it coordinates across stores for workflows like draft switching, backup/restore, and preview. `App.vue` calls it once and distributes state/methods to children via props and events.
 
@@ -59,23 +59,31 @@ src/components/
 
 ### Service Layer (`src/services/`)
 
-All IndexedDB access goes through `db.ts` (generic CRUD: `getAllFromStore`, `getFromStore`, `putInStore`, `deleteFromStore`). Domain services build on top:
+All IndexedDB access goes through the `StudioStorage` abstraction (`src/services/storage/`, with `IndexedDbStorage` as the browser implementation and `CompanionStorage` for the companion-backed mode; `resolveStorage.ts` picks the implementation based on `connectionMode`). Domain services are factory-created from a shared storage instance.
 
 | File | Purpose |
 |------|---------|
 | `conversations.ts` | List/save/delete conversations |
 | `messages.ts` | List/save/delete messages |
 | `imageAssets.ts` | Image metadata + blob CRUD (separate stores) |
-| `settings.ts` | Single-record app settings |
-| `imagesApi.ts` | OpenAI-compatible image generation (`/generations`) and editing (`/edits`) API calls |
-| `conversationDrafts.ts` | Per-conversation draft persistence (localStorage) |
+| `settings.ts` | Single-record app settings + config services |
+| `imagesApi/` | Browser direct image generation/editing calls, including Images API and Responses API streaming paths (barrel entry `imagesApi/index.ts`) |
+| `companionApi.ts` | Browser-to-Companion health check and auth-status calls |
+| `conversationDrafts.ts` | Per-conversation draft persistence (IndexedDB via StudioStorage) |
 | `generationParams.ts` | Generation parameter validation and defaults |
+| `promptBuilder.ts` | Prompt mode wrapping before requests while preserving raw chat prompt text |
+| `favoritePrompts.ts` | Favorite prompt persistence |
+| `promptWordbanks.ts` | Prompt mode wordbank helpers |
 | `imageMetadata.ts` | Read image dimensions via `createImageBitmap` / `HTMLImageElement` |
 | `storageUsage.ts` | Estimate IndexedDB usage via `navigator.storage.estimate()` |
 | `backups.ts` | Full project export/import as ZIP |
-| `analyticsEvents.ts` | Analytics event persistence + JSONL export (excluded from backups) |
-| `analyticsExport.ts` | Analytics ZIP export (manifest + JSONL + Markdown timeline shards) |
+| `analyticsEvents.ts` | Local analytics event persistence |
+| `analyticsExport.ts` | Analytics ZIP/JSONL/Markdown export |
 | `zipArchive.ts` | Hand-written ZIP file creator (CRC32 + binary format) |
+
+### Companion Provider Layer
+
+`companion/src/providers/` contains provider adapters behind a registry. Current adapters include OpenAI-compatible, GLM, Doubao/Volcano Ark Seedream, Qwen-Image, Wan, Grok, Gemini, Gemini-OpenAI, and DeepInfra providers. Local mode listens on `127.0.0.1` with persistent connection key auth; server mode (`--deployment-mode server`) may listen on `0.0.0.0` and uses JWT auth.
 
 ### Generation / Image Client
 
@@ -110,7 +118,7 @@ See `docs/roadmap.md` for the full roadmap. Current status:
 - Phase 5: Experience enhancements — core items done
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
 - Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/mask-editing.md`)
-- Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with first-pairing wait flow; system keychain is deferred
+- Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with persistent connection key auth (`status`/`reset-key`); system keychain is deferred
 - Done: Analytics event logging V1.0 + V1.1 + V1.2 (`docs/analytics-event-logging-plan.md`) — local-first event tracking with `analyticsStore`, `v-track` directive, prompt sanitization. V1.0 core events + V1.1 high-frequency controls (attachments, mask apply, library filter/sort/search, batch ops, settings tabs) + V1.2 color-tag analytics (`image.tag_color_set`/`_changed`/`_cleared` at the store convergence point, `library.filter_by_tag_color`). ZIP export with Markdown timeline sharding, conversation-level shards, and a color-tagging summary section. Analytics V1 complete.
 - Done: Prompt modes (`docs/prompt-modes.md`) — four `PromptMode` values (default/safe/creative/adult); `src/services/promptBuilder.ts` injects mode instructions + wordbank inspiration before the rewrite guard; wordbanks live in `src/services/promptWordbanks.ts`; only the request prompt is wrapped, the stored message keeps the user's original.
 - Done: Responses API + streaming partial-image preview (`docs/responses-streaming-plan.md`) — `apiMode` switches the direct client between Images API and Responses API; when `streamImages` is on, SSE partial images surface in `PendingGenerationCard` via a runtime-only state (not persisted); companion mode stays Images-API-only.

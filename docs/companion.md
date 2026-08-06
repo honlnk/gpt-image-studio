@@ -84,7 +84,7 @@ Vue Web App
   -> OpenAI 兼容 Images API
 ```
 
-当前 `src/services/imagesApi.ts` 已经集中封装了图片生成和编辑请求。后续可以先把它抽象成 provider/client 层，但不需要改变当前用户体验。
+当前 `src/services/imagesApi/` 已经集中封装了图片生成和编辑请求（barrel 入口 `imagesApi/index.ts`）。后续可以先把它抽象成 provider/client 层，但不需要改变当前用户体验。
 
 ### 本地助手模式
 
@@ -121,15 +121,23 @@ Vue 负责：
 ```text
 GET  /health
 GET  /auth/status
+GET  /auth/me                      # server 模式：返回当前 JWT 用户信息
 GET  /credentials/presets
 GET  /credentials
 POST /credentials
+POST /credentials/reset-empty      # 重置为空凭据集
+POST /credentials/restore-backup   # 从备份恢复凭据
 PUT  /credentials/:id
 DELETE /credentials/:id
 POST /credentials/:id/activate
 POST /images/generations
 POST /images/edits
 GET  /logs/tail
+# server 模式额外路由：
+GET/PUT/DELETE /storage/oss/config # OSS 凭据配置
+POST /storage/oss/test             # OSS 连通性测试
+GET/POST/PUT/DELETE /storage/*     # 多租户业务数据（7 表 + 图片二进制 + 数据集）
+POST /admin/revoke                 # 平台级 JWT 吊销（ADMIN_API_KEY 鉴权）
 ```
 
 ### `/health`
@@ -141,9 +149,7 @@ GET  /logs/tail
 ```json
 {
   "app": "gpt-image-studio-companion",
-  "version": "<companion package version>",
-  "paired": true,
-  "runMode": "serve"
+  "version": "<companion package version>"
 }
 ```
 
@@ -157,7 +163,7 @@ Provider 凭据管理接口采用受信 Origin 模型，不要求连接密钥。
 
 ### `/auth/status`
 
-返回本地助手是否已经配置凭据。
+返回本地助手是否已经配置凭据，以及当前 Provider 的能力与尺寸约束。
 
 返回示例：
 
@@ -166,7 +172,28 @@ Provider 凭据管理接口采用受信 Origin 模型，不要求连接密钥。
   "provider": "openai",
   "mode": "api_key",
   "ready": true,
-  "accountLabel": "local API key"
+  "accountLabel": "local API key",
+  "model": "gpt-image-1",
+  "capability": {
+    "generate": true,
+    "edit": true,
+    "mask": true,
+    "backgrounds": ["auto", "opaque"],
+    "outputFormats": ["png", "webp", "jpeg"]
+  },
+  "sizeConstraints": {
+    "step": 16,
+    "min": 16,
+    "max": 3840,
+    "maxPixels": 8294400,
+    "minPixels": 655360,
+    "maxAspectRatio": 3,
+    "defaultSize": "1024x1024"
+  },
+  "resolutionOptions": [
+    { "value": "1k", "label": "1K", "targetPixels": 1048576 },
+    { "value": "4k", "label": "4K", "targetPixels": 4194304 }
+  ]
 }
 ```
 
@@ -221,7 +248,7 @@ API Key 由独立的 `/credentials` 接口向受信 Origin 提供。
   `Content-Type` 一致。
 - 图片响应流式读取，单张默认最大 32 MiB；超过声明或实际字节上限时立即中止。
 - 只重试瞬时网络错误、HTTP 408、429 和 5xx，不重试安全策略、证书和普通 4xx 错误。
-- 默认只监听 `127.0.0.1`，不要监听 `0.0.0.0`。
+- 默认只监听 `127.0.0.1`，不要监听 `0.0.0.0`。server 部署模式（`--deployment-mode server`）是唯一例外：它可配置监听 `0.0.0.0` 以支持远程/容器部署，此时依赖 JWT 认证（HS256，`JWT_SECRET`）+ Origin 白名单 + CORS 作为安全边界，并支持平台级吊销（`/admin/revoke`）。
 - CORS 只允许白名单 origin，不能使用 `Access-Control-Allow-Origin: *`。
 
 后续如果支持文件系统、shell、浏览器自动化等更高权限工具，需要单独做权限模型，不能混在图片代理 MVP 里。
@@ -318,9 +345,9 @@ type AppSettings = {
 把当前图片请求拆成连接层：
 
 ```text
-src/services/imagesApi.ts
-src/services/directImagesClient.ts
-src/services/localCompanionClient.ts
+src/services/imagesApi/              # 当前已拆分为目录（client/http/responses/streaming/types）
+src/features/generation/imageClients/directImagesClient.ts
+src/features/generation/imageClients/localCompanionImagesClient.ts
 ```
 
 或者先保留一个文件，只在内部分支：
@@ -336,6 +363,8 @@ return generateViaDirectApi(...);
 等本地助手协议稳定后再拆文件。
 
 ## Companion CLI MVP
+
+> **勘误（2026-08）**：以下为早期 MVP 设计建议。实际实现的 CLI 命令与此不同——无 `login`/`logout`，改为 `provider add/list/show/edit/remove/activate` + `status`/`reset-key`，认证用持久化连接密钥（`access-key.json`）而非配对码/session。当前命令以 `companion/README.md` 为准。
 
 建议命令：
 

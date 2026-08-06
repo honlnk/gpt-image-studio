@@ -2,6 +2,8 @@
 
 更新日期：2026-06-26（联调完成）
 
+> **勘误（2026-08）**：本文施工记录中的 adapter 路径（如 `companion/src/providers/doubao.ts`）实际已迁移到 `companion/src/providers/adapters/` 子目录；豆包 edit 实际走 `/generations` + JSON `image` 字段（非 multipart `/images/edits`）；`defaultModel` 最新值为 `doubao-seedream-5-0-pro-260628`（见 `companion/src/providers/profiles/doubao.json`）；能力数据现以 JSON profile 形式存储，adapter 用 `createOpenAICompatibleAdapter` 工厂读取 profile。下方施工记录保留原貌作为历史。
+
 ## 背景
 
 `companion-providers-plan.md` 阶段四排了三个后续 provider，按形状接近度排序，豆包（火山方舟 Seedream）排第一——它和 GLM 一样走 OpenAI 兼容的 `/images/generations` 端点、同样返回 `data[0].url`、同样用 `Bearer` 鉴权。

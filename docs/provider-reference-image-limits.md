@@ -12,8 +12,8 @@
 | Provider | 参考图数量 | 单张大小 | 来源 |
 | --- | --- | --- | --- |
 | OpenAI (gpt-image) | 无明确文档上限 | ≤ 50 MB | [官方文档][openai] |
-| 豆包 Seedream 5.0 pro | 2-10 张 | ≤ 30 MB | [官方文档][doubao] |
-| 豆包 Seedream 5.0 lite / 4.5 / 4.0 | 2-14 张 | ≤ 30 MB | [官方文档][doubao] |
+| 豆包 Seedream 5.0 pro | 2-10 张（代码统一 maxImages=10） | ≤ 30 MB | [官方文档][doubao] |
+| 豆包 Seedream 5.0 lite / 4.5 / 4.0 | 2-14 张（官方值；代码统一 maxImages=10，未按 lite 放宽） | ≤ 30 MB | [官方文档][doubao] |
 | Qwen-Image (qwen-image-edit 系列) | 1-3 张 | ≤ 10 MB | [官方文档][qwen] |
 | Wan (通义万相) | ≤ 9 张（实测，无官方文档出处） | ≤ 10 MB | 302.ai 转述 + 代码实测 |
 | Gemini | 无明确文档限制 | 未确认 | — |
@@ -66,6 +66,8 @@ Seedream 5.0 pro：
 - 分辨率档位：`1K`、`2K`（默认 `2K`）
 - 自定义宽高像素：总像素范围 [921600, 4624220]，宽高比 [1/16, 16]
 
+> **注**：以上为上游官方文档值。Companion 代码 `profiles/doubao.json` 实际声明的 `sizeConstraints` 为 `minPixels=3686400` / `maxPixels=16777216`（即 [3.6M, 16M]），与上游官方文档范围不完全一致，以代码实际约束为准。
+
 Seedream 5.0 lite / 4.5 / 4.0：
 - 分辨率档位：`1K`、`2K`（默认）、`3K`、`4K`
 
@@ -83,7 +85,7 @@ Qwen 走 DashScope multimodal-generation 接口，参考图通过 `messages.cont
 
 - 数量：**1-3 张**（官方文档明确）
 - 单张大小：**不超过 10 MB**
-- 分辨率建议：宽高均在 384-3072 px 之间
+- 分辨率建议：宽高均在 384-3072 px 之间（此为上游对**参考图**的官方建议；代码 `profiles/qwen.json` 的 `sizeConstraints` min=512/max=8192 是**生成图**尺寸约束，两者维度不同）
 - 格式：JPG、JPEG、PNG、BMP、TIFF、WEBP、GIF（GIF 仅处理第一帧）
 - 多图输入时，输出图像比例以最后一张参考图为准
 
@@ -161,7 +163,7 @@ Web 端无 per-provider 实时提示，用户传超限图片时由 Companion 在
 
 ### Web 端的通用限制
 
-`src/stores/generationStore.ts` 中硬编码了参考图**总大小** ≤ 20 MB 的限制（所有 provider 通用）：
+`src/services/imageEditRequest.ts` 中硬编码了参考图**总大小** ≤ 20 MB 的限制（所有 provider 通用）：
 ```ts
 const MAX_PAYLOAD_BYTES = 20 * 1024 * 1024;
 ```

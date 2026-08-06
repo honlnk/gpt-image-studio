@@ -1,7 +1,13 @@
 # 阶段二 PR7：前端存储位置 UI + 切换 reload 逻辑
 
-> **状态：✅ 已完成（2026-07-27）**
+> **状态：⚠️ 已完成，后续被重构调整（2026-08）**
 >
+> 本 PR 于 2026-07-27 按「设置页存储位置 UI（A/B/C + OSS 配置）+ `window.location.reload` 切换」落地。后续在「设置页按连接模式重组」重构（`8af7cd8`）中，前端存储位置 UI（`StorageLocationPanel.vue`）、`companionApi` 数据集/OSS 管理 API、`settingsStore.storageLocation` 均被移除——存储位置（数据集）管理改归 Companion 管理页（`/admin`），Web 端不再经手。连接模式切换也由 `window.location.reload` 改为 `src/App.vue` 的组件级 `:key` 重建。
+>
+> 下文保留 PR7 原始计划与实施记录作为历史。
+
+---
+
 > 依赖：PR1-6
 >
 > 目标：Companion 模式下，在设置页提供存储位置选择（A/B/C），切换时触发整套 reload。

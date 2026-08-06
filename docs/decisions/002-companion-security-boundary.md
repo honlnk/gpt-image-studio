@@ -19,35 +19,40 @@ Companion 是可选的本地助手，不是通用本地自动化服务。
 
 ### 网络边界
 
-- 只监听 `127.0.0.1`。
-- 不监听 `0.0.0.0`。
+- local 模式只监听 `127.0.0.1`，不监听 `0.0.0.0`。
+- server 模式（`--deployment-mode server`）可配置监听 `0.0.0.0` 以支持远程/容器部署，此时依赖 JWT 认证 + Origin 白名单 + CORS 作为安全边界。
 - 浏览器请求必须校验 `Origin`。
 - 使用白名单 CORS，不使用通配 `*`。
 - 正式渠道默认只信任 `https://image.honlnk.com`。
 - 开发渠道可以额外信任明确配置的 localhost Origin。
 - 额外 Origin 必须是完整 Origin，不支持通配符或模糊域名匹配。
 
-### 连接密钥
+### 连接密钥与 JWT
 
-Companion 使用持久化连接密钥作为 Bearer token。连接密钥用于保护：
+Companion 受保护接口的认证分两种部署形态：
+- **local 模式**：使用持久化连接密钥（`access-key.json`）作为 Bearer token。
+- **server 模式**：使用宿主签发的 JWT（HS256，`JWT_SECRET`）作为 Bearer token，配合内存级吊销黑名单（`revocationList.ts`）支持主动吊销。
+
+两者保护相同的接口集：
 
 - `/auth/status`
 - `/images/generations`
 - `/images/edits`
 - `/logs/*`
+- `/storage/*`（server 模式多租户数据面）
 - 后续新增的普通受保护接口
 
 连接密钥的主要目标是阻止未获授权的网页调用本地生成、编辑和日志能力。它不用于防御
 同一用户权限下的本机进程，因为这类进程本来就可以读取用户目录中的 Companion 配置。
 
-### Provider 凭据管理
+### Provider 凭据与存储管理
 
-Provider 凭据管理接口采用独立信任模型：
+Provider 凭据管理接口以及 OSS 凭据、平台管理接口采用独立信任模型（loopbackGuard，保护前缀 `/credentials`、`/admin`、`/storage/oss`）：
 
 - 无 `Origin` 的本机 CLI 或本机进程可以访问。
 - loopback Origin 可以访问。
 - Companion 白名单中的受信 Origin 可以访问。
-- 凭据接口不要求连接密钥。
+- 这些接口不要求连接密钥/JWT，而由 loopbackGuard 按 Origin 放行。
 - 受信 Web Origin 可以读取、显示、新增、修改、激活和删除明文 Provider API Key。
 
 这是明确接受的产品决策。官方 Web 站点被视为本地 Provider 凭据的受信主体，而不仅是
@@ -76,8 +81,7 @@ Provider 凭据管理接口采用独立信任模型：
 
 ### 能力范围
 
-当前 Companion 只代理图片生成、图片编辑和相关配置管理。文件系统访问、shell 访问、
-浏览器自动化等更高权限能力不属于当前安全边界；引入时必须单独设计权限模型并新增 ADR。
+Companion 代理图片生成、图片编辑和相关配置管理。server 模式下还提供多租户存储能力（`/storage/*` 七表 CRUD + 图片二进制 + 数据集注册）和平台级吊销能力（`POST /admin/revoke`，由 `ADMIN_API_KEY` 鉴权）。文件系统访问、shell 访问、浏览器自动化等更高权限能力不属于当前安全边界；引入时必须单独设计权限模型并新增 ADR。
 
 OAuth access token 和 refresh token 比普通 Provider API Key 具有更复杂的生命周期和账号
 权限。在正式引入 OAuth 前，需要重新评估其是否允许被受信 Web Origin 读取，不能自动

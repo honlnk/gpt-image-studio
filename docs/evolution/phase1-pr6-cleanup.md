@@ -28,8 +28,8 @@
 - ✅ db.ts 已删除，全代码库无引用
 - ✅ ImageBlobRecord 统一从 `storage/types` 导入，无本地重复定义
 - ✅ store/feature 层的 service import 全部是 createXxxServices 工厂或 import type 或编排入口
-- ✅ companion 凭据已收编到 StudioStorage.config，无 localStorage. 直连
-- ✅ ViewModel 是唯一 service 工厂装配点（创建 9 个工厂：8 service + 1 config）
+- ⚠️ 已回滚：~~companion 凭据已收编到 StudioStorage.config~~（PR5 目标 1 回滚为 localStorage 镜像权威，见 `phase1-pr5-companion-credentials.md` 回滚说明；companion 凭据走 shared/localStorage 封装，无裸 `localStorage.` 直连）
+- ✅ ViewModel 是唯一 service 工厂装配点（创建 10 个工厂：8 domain service + 1 config + 1 storageUsage 跨 collection service）
 - ✅ 运行时行为零变化（双轨制 + 默认实例用同一 resolveStorage）
 
 ## 实施记录

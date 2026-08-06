@@ -11,7 +11,7 @@
 - Web 侧 `localCompanionImagesClient`
 - Companion 图片路由与 multipart 解析
 - Provider Adapter 契约和 Registry
-- OpenAI、GLM、豆包、Qwen、Wan、Grok、Gemini Adapter
+- OpenAI、GLM、豆包、Qwen、Wan、Grok、Gemini、Gemini-OpenAI、DeepInfra Adapter
 - Provider 能力回流
 - 凭据、连接密钥、Origin 和 URL 下载边界
 
@@ -57,6 +57,8 @@ Web generation params
 | Wan | DashScope multimodal generation | 支持，无 mask | 模型相关尺寸能力、URL 下载转 base64 |
 | Grok | `/images/generations` 和 `/images/edits` JSON | 支持，无 mask | 比例和分辨率字段、多图 data URL |
 | Gemini | `generateContent` JSON | 支持，无 mask | `parts`、`inline_data`、图片生成配置 |
+| Gemini-OpenAI | OpenAI 兼容协议中转 Gemini | 支持，无 mask | 复用 OpenAI 协议形状调用 Gemini OpenAI 兼容端点 |
+| DeepInfra | OpenAI 兼容聚合 | 支持（multipart 透传） | OpenAI 兼容透传，多 provider 聚合 |
 
 ## 做得合理的部分
 

@@ -1,6 +1,6 @@
 # 桌面端打包方案
 
-更新日期：2026-06-19
+更新日期：2026-08-06
 
 ## 方向
 
@@ -18,7 +18,7 @@ GPT Image Studio 的第一版桌面端基于 **Tauri v2**，把现有 Web App（
 
 可行性已验证：
 
-- 现有 `dist/` 是 `base: './'` 相对路径、单 JS chunk + 单 CSS，Tauri 可直接嵌入。
+- 现有 `dist/` 是 `base: '/'` 根路径、单 JS chunk + 单 CSS，Tauri 可直接嵌入。
 - IndexedDB、`URL.createObjectURL`、`navigator.clipboard`、SSE streaming 在 macOS WKWebView 下都能正常工作。
 - `urlSettings.ts` 在桌面环境下 `window.location.search` 为空，自动走无参数分支，无需改动。
 - Companion 连接（`fetch("http://127.0.0.1:19750")`）正常，只需在 CSP 放行 loopback。
@@ -129,7 +129,7 @@ pnpm tauri icon desktop/src-tauri/app-icon.png -o desktop/src-tauri/icons
 
 1. 用户照常 `npm install -g @honlnk/image-studio-companion` 安装并 `gpt-image-studio start` 启动。
 2. 桌面端在设置页切换到「本地 Companion」，检测 `127.0.0.1:19750` 健康状态。
-3. 配对流程（6 位配对码）与浏览器端完全一致。
+3. 粘贴连接密钥（`gpt-image-studio status` 查看的 access key）完成连接，与浏览器端完全一致。
 
 桌面端的 IndexedDB 数据与浏览器端隔离（不同 webview 实例，不同 origin 数据分区），互不影响。
 

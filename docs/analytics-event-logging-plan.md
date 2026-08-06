@@ -103,7 +103,7 @@ type AnalyticsSettings = {
 
 ### 6.1 IndexedDB
 
-在 `src/services/db.ts` 中新增 store：
+在 `src/services/storage/IndexedDbStorage.ts` 中新增 store：
 
 - `analyticsEvents`
 
@@ -300,7 +300,7 @@ analytics-export-YYYYMMDD-HHmmss.zip
 
 ### 9.2 修改文件（重点）
 
-- `src/services/db.ts`：新增 `analyticsEvents` store 与索引。
+- `src/services/storage/IndexedDbStorage.ts`：新增 `analyticsEvents` store 与索引。
 - `src/main.ts`：注册 `v-track` 指令，初始化 tracker。
 - `src/app/studio/useStudioViewModel.ts`：注入 tracker，上下文桥接。
 - `src/features/generation/useStudioGeneration.ts`：请求生命周期事件。

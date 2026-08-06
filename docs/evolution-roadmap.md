@@ -893,7 +893,7 @@ describe("IndexedDbStorage contract", () => {
 
 ## 八、阶段三：服务化与可嵌入（多用户 SaaS 形态）✅
 
-> **实施完成**。详见 [`evolution/phase3-overview.md`](./evolution/phase3-overview.md) + 6 个 PR 文档 + [`deployment-guide.md`](./deployment-guide.md)。
+> **实施完成**。详见 [`evolution/phase3-overview.md`](./evolution/phase3-overview.md) + 9 个 PR 文档 + [`deployment-guide.md`](./deployment-guide.md)。
 >
 > 落地摘要：
 > - **PR1**：`COMPANION_DEPLOYMENT_MODE`（local/server）+ `--host` 可配置 + Docker 化（Dockerfile stage 3 + compose companion 服务 + `/data` 卷）。
@@ -1496,7 +1496,7 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 | 文档 | 关注点 | 阶段标记 |
 |---|---|---|
 | [`roadmap.md`](./roadmap.md) | **业务功能**演进（聊天 UI、图片编辑、备份、分析、提示词模式等） | 第一到第五阶段（已完成）+ 候选方向 |
-| 本文档 | **架构形态**演进（存储、集成、打包、交付） | 阶段一到阶段四（待启动） |
+| 本文档 | **架构形态**演进（存储、集成、打包、交付） | 阶段一到三（已完成）+ 阶段四（待启动） |
 
 两份文档正交：
 - 业务功能可以在任何架构形态下迭代（如"提示词模式"在阶段一的 IndexedDB 和阶段二的 Companion 后端下都能工作）

@@ -225,8 +225,8 @@ type GenerationParams = {
 - 已完成：Generation Jobs。生成任务队列化，支持并发生成、状态追踪和页面关闭保护（`src/stores/generationStore.ts`）。
 - 已完成：Per-conversation Drafts。每个会话独立保存草稿文本和生成参数（`src/services/conversationDrafts.ts`）。
 - 已完成：遮罩局部编辑。支持画笔、橡皮、矩形、圆形多工具绘制 mask，支持多选区叠加、撤销重做、软边、缩放平移（`docs/mask-editing.md`）。
-- 已完成：用户行为日志系统 V1.0。本地优先的事件采集，覆盖 V1.0 核心事件闭环（chat / generation / image / conversation / settings / backup）。模块级 tracker 单例 + `v-track` 指令 + `analyticsStore`，prompt 四档脱敏（默认 `length_only`），节流批量落库，JSONL 导出，不纳入备份（`docs/analytics-event-logging-plan.md`）。V1.1（高频控件）与 V1.2（颜色分组专项）待后续迭代。
-- 已完成：用户行为日志系统 V1.1。补齐 11 个高频控件事件（附件增删、区域编辑开关、应用 mask、库筛选/排序/搜索、批量下载/删除、设置 tab 切换）；导出由单 JSONL 升级为 ZIP 包（`manifest.json` + `README.md` + `events/raw/events.jsonl` + `reports/summary.md` + `reports/timeline/*.md`），Markdown 时间线按 7 天窗口 + 1000 events / 2 MB 兜底分片（`src/services/analyticsExport.ts`）。V1.2（颜色分组专项）待后续迭代。
+- 已完成：用户行为日志系统 V1.0。本地优先的事件采集，覆盖 V1.0 核心事件闭环（chat / generation / image / conversation / settings / backup）。模块级 tracker 单例 + `v-track` 指令 + `analyticsStore`，prompt 四档脱敏（默认 `length_only`），节流批量落库，JSONL 导出，不纳入备份（`docs/analytics-event-logging-plan.md`）。
+- 已完成：用户行为日志系统 V1.1。补齐 11 个高频控件事件（附件增删、区域编辑开关、应用 mask、库筛选/排序/搜索、批量下载/删除、设置 tab 切换）；导出由单 JSONL 升级为 ZIP 包（`manifest.json` + `README.md` + `events/raw/events.jsonl` + `reports/summary.md` + `reports/timeline/*.md`），Markdown 时间线按 7 天窗口 + 1000 events / 2 MB 兜底分片（`src/services/analyticsExport.ts`）。
 - 已完成：用户行为日志系统 V1.2。补齐颜色分组专项事件（`image.tag_color_set` / `_changed` / `_cleared` 在 store 单点埋点按前后色对比区分、`library.filter_by_tag_color` 标记颜色过滤按钮含"全部"）；导出新增 `reports/conversations/*.md` 会话级分片（按 conversationId 分组、标题解析自分片阈值复用），`summary.md` 增「颜色分组行为」专题段（操作分布 + 颜色分布），manifest 加 `conversationShards` 索引。Analytics V1 全部完成。
 - 已完成：提示词模式。新增四档 `PromptMode`（默认 / 安全 / 创意 / 开放），`promptBuilder.ts` 在请求前按模式注入说明与词库灵感，词库与请求逻辑分离；聊天记录保留原始 prompt，模式包装只影响发送给接口的请求文本；直连与 Companion 两种连接模式行为一致（`docs/prompt-modes.md`）。
 - 已完成：Responses API 与流式图片预览。浏览器直连模式支持 `Images API` 与 `Responses API` 切换（`apiMode`），开启流式时解析 SSE partial image 并在 `PendingGenerationCard` 展示最新中间图预览；partial image 仅存运行时内存，完成后按现有流程写入图片库；Companion 模式暂限 Images API（`docs/responses-streaming-plan.md`）。

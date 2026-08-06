@@ -139,10 +139,11 @@
 
 ### C. Companion provider 层
 
-#### C1. `gemini.ts` 未迁移到共享 `assertEditImageCount` ｜ low
+#### C1. `gemini.ts` 未迁移到共享 `assertEditImageCount` ｜ low（已修复，见复审记录）
 - **位置**：`companion/src/providers/adapters/gemini.ts:91-93`
 - **问题**：`editGuards.ts` 头部注释明确目标是收敛各 adapter 的"0 张图抛错 / 过多图抛错"样板，`qwen.ts`、`wan.ts` 已迁移，但 `gemini.ts:91-93` 仍手写 `if (request.images.length === 0) throw new Error("Gemini 图片编辑需要至少一张参考图。")`，措辞也略有不同（"图片编辑" vs 共享版的"图像编辑"）。
 - **影响**：正是抽取旨在消除的不一致；Gemini 属不同 adapter 家族（editConstraints 可能不声明 maxImages），但零图守卫形状相同，可调用 `assertEditImageCount("Gemini", request.images.length, undefined)`。属外观/可维护性问题，非 bug。
+- **修复**：复审时已修复，`gemini.ts` 已 import 并使用 `assertEditImageCount("Gemini", ...)`。
 
 #### C2. 工厂路径（`openaiCompatible.ts`）的 edit 守卫未被迁移，且未在注释中声明 ｜ low（信息性）
 - **位置**：`companion/src/providers/editGuards.ts:14-17`（注释）vs `companion/src/providers/openaiCompatible.ts:307,377`
