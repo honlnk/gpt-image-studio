@@ -2,7 +2,7 @@
 
 > **状态**：✅ 已完成（2026-07-27，6 个 PR 全部合入）
 > **前置**：阶段零 ✅ 已完成（Companion 自带管理页，Web 项目 `/companion` 页面已移除）
-> **纲领**：[`evolution-roadmap.md` 第六章](../evolution-roadmap.md#六阶段一前端存储抽象层地基)
+> **纲领**：[`evolution-roadmap.md` 第六章](../../plans/evolution-roadmap.md#六阶段一前端存储抽象层地基)
 > **核心原则**：运行时行为零变化，存储后端变得可替换。
 
 ## 目标

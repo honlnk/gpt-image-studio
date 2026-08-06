@@ -1,6 +1,6 @@
 # 阶段三总览：服务化与可嵌入（多用户 SaaS 形态）
 
-> 纲领来源：[`../evolution-roadmap.md`](../evolution-roadmap.md) 第八章 + 决策 D8–D14。
+> 纲领来源：[`../evolution-roadmap.md`](../../plans/evolution-roadmap.md) 第八章 + 决策 D8–D14。
 > 本文档是阶段三的**施工总图**：定调关键技术决策、给出 PR 拆分顺序、定义全局验收门槛。每个 PR 的细节落到 `phase3-prN-*.md`。
 
 ## 一、目标

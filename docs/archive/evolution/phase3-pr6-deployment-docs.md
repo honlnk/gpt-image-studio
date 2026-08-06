@@ -6,7 +6,7 @@
 
 ## 一、交付物
 
-[`docs/deployment-guide.md`](../deployment-guide.md) —— 完整部署教程，覆盖：
+[`docs/deployment-guide.md`](../../guides/deployment-guide.md) —— 完整部署教程，覆盖：
 
 1. **部署形态总览**：local vs server 模式对比表。
 2. **本机模式部署**：阶段二默认行为的安装/启动/凭据管理。

@@ -25,7 +25,7 @@ No linter or formatter is configured. Vitest is configured for service-level tes
 
 Local-first AI image creation workbench. Vue 3 + Composition API (`<script setup>`), no router. Only runtime dependency beyond Vue is Pinia for state management. ZIP creation/reading, base64 conversion, image dimension reading, storage usage estimation, and analytics export are project-owned code rather than large app-level helper libraries.
 
-See `docs/README.md` for the maintained documentation map and `docs/architecture.md` for the current architecture direction.
+See `docs/README.md` for the maintained documentation map and `docs/architecture/architecture.md` for the current architecture direction.
 
 ### State Management
 
@@ -136,23 +136,23 @@ Custom size validation for the generic Web UI remains conservative: 16-3840px, m
 ## Roadmap
 
 项目有两份正交的路线图：
-- `docs/roadmap.md` — **业务功能**演进（聊天 UI、图片编辑、备份、分析、提示词模式等）。
-- `docs/evolution-roadmap.md` — **架构形态**演进（存储抽象 / Companion 后端化 / 子项目化 / APP 化的四阶段纲领），阶段一至三已完成。
+- `docs/plans/roadmap.md` — **业务功能**演进（聊天 UI、图片编辑、备份、分析、提示词模式等）。
+- `docs/plans/evolution-roadmap.md` — **架构形态**演进（存储抽象 / Companion 后端化 / 子项目化 / APP 化的四阶段纲领），阶段一至三已完成。
 
-任何架构层面的改动（存储后端、打包方式、运行时形态）都应以 `docs/evolution-roadmap.md` 为准；业务功能迭代以 `docs/roadmap.md` 为准。
+任何架构层面的改动（存储后端、打包方式、运行时形态）都应以 `docs/plans/evolution-roadmap.md` 为准；业务功能迭代以 `docs/plans/roadmap.md` 为准。
 
-See `docs/roadmap.md` for the full business roadmap. Current status:
+See `docs/plans/roadmap.md` for the full business roadmap. Current status:
 - Phases 1-4: Done (chat UI, IndexedDB persistence, text-to-image, image editing with references)
 - Phase 5: Experience enhancements — core items done
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
-- Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/mask-editing.md`)
+- Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/architecture/mask-editing.md`)
 - Done: Local analytics V1.0-V1.2 (`src/stores/analyticsStore.ts`, `src/services/analyticsEvents.ts`, `src/services/analyticsExport.ts`); analytics is local-only and excluded from backups
-- Done: Prompt modes (`src/services/promptBuilder.ts`, `docs/prompt-modes.md`)
-- Done: Responses API streaming image previews for browser direct mode (`docs/responses-streaming-plan.md`)
+- Done: Prompt modes (`src/services/promptBuilder.ts`, `docs/plans/prompt-modes.md`)
+- Done: Responses API streaming image previews for browser direct mode (`docs/plans/responses-streaming-plan.md`)
 - Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with persistent connection key auth (`status`/`reset-key`); system keychain is deferred
-- Done: Companion provider translation layer with OpenAI-compatible, GLM, Doubao/Seedream, Qwen-Image, Wan, Grok, Gemini, Gemini-OpenAI, and DeepInfra providers (`docs/companion-providers-plan.md`, `docs/companion-doubao-plan.md`)
-- Done: Companion server deployment mode with JWT multi-tenancy, storage routes, and OSS STS (`docs/evolution/phase3-overview.md`, `docs/deployment-guide.md`)
-- Done: Tauri v2 desktop packaging first version (`desktop/src-tauri`, `docs/desktop-packaging.md`)
+- Done: Companion provider translation layer with OpenAI-compatible, GLM, Doubao/Seedream, Qwen-Image, Wan, Grok, Gemini, Gemini-OpenAI, and DeepInfra providers (`docs/companion/companion-providers-plan.md`, `docs/companion/companion-doubao-plan.md`)
+- Done: Companion server deployment mode with JWT multi-tenancy, storage routes, and OSS STS (`docs/archive/evolution/phase3-overview.md`, `docs/guides/deployment-guide.md`)
+- Done: Tauri v2 desktop packaging first version (`desktop/src-tauri`, `docs/guides/desktop-packaging.md`)
 - Upcoming: finer image-library filters, desktop signing/notarization/cross-platform builds/updater, optional Companion sidecar, analytics V2 analysis layer
 
 ## Conventions

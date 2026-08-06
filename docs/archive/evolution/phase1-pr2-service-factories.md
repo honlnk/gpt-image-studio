@@ -3,7 +3,7 @@
 > **状态**：✅ 已完成
 > **依赖**：PR1 ✅
 > **风险**：中（store 改造面大，但每个 store 独立）
-> **纲领**：[`evolution-roadmap.md` §6.2](../evolution-roadmap.md)
+> **纲领**：[`evolution-roadmap.md` §6.2](../../plans/evolution-roadmap.md)
 
 ## 目标
 

@@ -2,7 +2,7 @@
 
 > 本文档覆盖 GPT Image Studio 的两种部署形态：**本机模式**（单用户本地工具）与**服务器模式**（多用户 SaaS 后端 + qiankun 嵌入前端）。
 >
-> 架构背景见 [`evolution-roadmap.md`](./evolution-roadmap.md) 第六~八章 + [`evolution/phase3-overview.md`](./evolution/phase3-overview.md)。
+> 架构背景见 [`evolution-roadmap.md 第六~八章 + [`evolution/phase3-overview.md`](../archive/evolution/phase3-overview.md)。
 
 ---
 

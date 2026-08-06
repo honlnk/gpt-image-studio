@@ -2,7 +2,7 @@
 
 > **状态：✅ 已完成（2026-07-27）**
 >
-> 对应纲领：[`evolution-roadmap.md` 第七章](../evolution-roadmap.md#七阶段二companion-后端化真实数据)
+> 对应纲领：[`evolution-roadmap.md` 第七章](../../plans/evolution-roadmap.md#七阶段二companion-后端化真实数据)
 >
 > 前置：阶段一已完成（`StudioStorage` 抽象层就位，`CompanionStorage` 是 throw 骨架）。
 

@@ -1,6 +1,6 @@
 # 架构演进实施计划
 
-> 本目录是 [`evolution-roadmap.md`](../evolution-roadmap.md) 的**执行落地层**。
+> 本目录是 [`evolution-roadmap.md`](../../plans/evolution-roadmap.md) 的**执行落地层**。
 > - `evolution-roadmap.md` 是**纲领**（为什么做、做成什么样、决策依据）。
 > - 本目录是**施工图**（按什么顺序做、每一步具体改哪些文件、验收门槛是什么）。
 >
@@ -55,7 +55,7 @@
 
 ## 阅读顺序
 
-1. 先读 [`../evolution-roadmap.md`](../evolution-roadmap.md) 第六/七/八章理解阶段设计动机与决策。
+1. 先读 [`../evolution-roadmap.md`](../../plans/evolution-roadmap.md) 第六/七/八章理解阶段设计动机与决策。
 2. 进入某阶段时，先读该阶段 `overview.md` 把握全局。
 3. 实施某个 PR 前，读对应 `prN-*.md`，按其中的「改造清单」「验收门槛」「回滚策略」执行。
 4. 每个 PR 合并后，在对应文档末尾追加「实施记录」段（实际改了什么、与计划的偏差、遗留问题）。
@@ -70,7 +70,7 @@
 
 ## 与 roadmap.md 的关系
 
-- [`../roadmap.md`](../roadmap.md)：**业务功能**演进（做什么功能）。
-- [`../evolution-roadmap.md`](../evolution-roadmap.md) + 本目录：**架构形态**演进（以什么形态交付）。
+- [`../roadmap.md`](../../plans/roadmap.md)：**业务功能**演进（做什么功能）。
+- [`../evolution-roadmap.md`](../../plans/evolution-roadmap.md) + 本目录：**架构形态**演进（以什么形态交付）。
 
 两者正交。业务功能迭代优先保证"用户可见行为不变"；架构演进优先保证"接口对齐"。

@@ -3,7 +3,7 @@
 > **状态**：⚠️ 已被后续修复回滚（凭据存储部分）
 > **依赖**：PR4 ✅
 > **风险**：中（涉及敏感凭据 + hydrate 时序，需仔细回归）
-> **纲领**：[`evolution-roadmap.md` §6.4](../evolution-roadmap.md) + 决策 T3
+> **纲领**：[`evolution-roadmap.md` §6.4](../../plans/evolution-roadmap.md) + 决策 T3
 
 > **回滚说明（阶段二实测后）**：目标 1（companionUrl/accessKey 收编到 `StudioStorage.config`）已回滚为 **localStorage 镜像权威**。
 > 原因：连接配置存进「由它自己选中的后端」会形成鸡生蛋——Companion 模式下读 config 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401 卡死；

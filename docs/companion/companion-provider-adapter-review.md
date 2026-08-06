@@ -16,7 +16,7 @@
 - 凭据、连接密钥、Origin 和 URL 下载边界
 
 本文描述的是当前实现诊断，不替代各 Provider 的专项接入方案。安全信任模型以
-[ADR 002](decisions/002-companion-security-boundary.md) 为准。
+[ADR 002](../decisions/002-companion-security-boundary.md) 为准。
 
 ## 当前架构
 
@@ -746,7 +746,7 @@ type ProviderCapability = {
 | Wan | 9 | 10MB | 302.ai 转述 |
 | Grok / Gemini / DeepInfra | — | — | 未确认，不加 |
 
-详见 `docs/provider-reference-image-limits.md`。
+详见 `docs/architecture/provider-reference-image-limits.md`。
 
 **豆包多图 adapter 修复**：
 

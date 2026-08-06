@@ -3,7 +3,7 @@
 > **状态**：✅ 已完成
 > **依赖**：无（纯新增）
 > **风险**：低（db.ts 并存，业务代码暂不切换，零行为变化）
-> **纲领**：[`evolution-roadmap.md` §6.1, §6.5](../evolution-roadmap.md)
+> **纲领**：[`evolution-roadmap.md` §6.1, §6.5](../../plans/evolution-roadmap.md)
 
 ## 目标
 

@@ -4,7 +4,7 @@
 
 > 本文保留多 Provider 翻译层的设计和实施记录。当前受信 Web Origin 可以读取和管理
 > 普通 Provider API Key；安全信任模型以
-> [ADR 002](decisions/002-companion-security-boundary.md) 为准。
+> [ADR 002](../decisions/002-companion-security-boundary.md) 为准。
 >
 > **勘误（2026-08）**：本文施工记录中的 adapter 文件路径（如 `companion/src/providers/openai.ts`）实际已迁移到 `companion/src/providers/adapters/` 子目录；`taskPoller.ts` 已删除（不再需要）；ProviderAdapter 接口已演进（删除 `describe()`，新增 `resolutionOptions`/`editConstraints`/`getSizeConstraints` 等，见 `companion/src/providers/types.ts`）；当前共 9 个 provider（含后续追加的 Grok、Gemini、Gemini-OpenAI、DeepInfra）。下方施工记录保留原貌作为历史。
 

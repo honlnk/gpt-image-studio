@@ -4,7 +4,7 @@
 
 > 当前实现已经使用持久化连接密钥替代早期的一次性配对码和短期 session token。
 > 受信 Origin 可以管理并读取普通 Provider API Key。本文后半部分保留部分历史分阶段
-> 记录；当前安全决策以 [ADR 002](decisions/002-companion-security-boundary.md) 为准。
+> 记录；当前安全决策以 [ADR 002](../decisions/002-companion-security-boundary.md) 为准。
 
 ## 背景
 

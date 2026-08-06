@@ -62,7 +62,7 @@ JWT_SECRET=xxx ADMIN_API_KEY=xxx docker compose --profile companion-server up -d
 | 前端 (web) | `ghcr.io/honlnk/gpt-image-studio-web:latest` / `honlnk/gpt-image-studio-web:latest` |
 | Companion | `ghcr.io/honlnk/gpt-image-studio-companion:latest` / `honlnk/gpt-image-studio-companion:latest` |
 
-详见 [部署指南](docs/deployment-guide.md)。
+详见 [部署指南](docs/guides/deployment-guide.md)。
 
 ### 方式四：桌面端
 
@@ -71,7 +71,7 @@ pnpm dev:desktop      # 开发模式
 pnpm build:desktop    # 构建 .app / .dmg（macOS，需 Rust）
 ```
 
-详见 [桌面端打包方案](docs/desktop-packaging.md)。
+详见 [桌面端打包方案](docs/guides/desktop-packaging.md)。
 
 ## 功能特性
 
@@ -113,7 +113,7 @@ pnpm build:desktop    # 构建 .app / .dmg（macOS，需 Rust）
 | **本地 Companion** | 本机文件（loopback） | 不想暴露 API Key 给浏览器，单机使用 |
 | **服务器模式 (Companion server)** | 服务器 + JWT 多租户 | 多人共用 / 私有化部署 / 嵌入宿主系统 |
 
-服务器模式支持 JWT 认证的多用户数据隔离、qiankun 微前端嵌入、平台级凭据管理 API，详见 [部署指南](docs/deployment-guide.md)。
+服务器模式支持 JWT 认证的多用户数据隔离、qiankun 微前端嵌入、平台级凭据管理 API，详见 [部署指南](docs/guides/deployment-guide.md)。
 
 ## 提示词模式
 
@@ -163,7 +163,7 @@ registerMicroApps([{
 }])
 ```
 
-完整嵌入示例（含宿主管理页）见 `examples/` 目录，部署细节见 [部署指南](docs/deployment-guide.md)。
+完整嵌入示例（含宿主管理页）见 `examples/` 目录，部署细节见 [部署指南](docs/guides/deployment-guide.md)。
 
 ### 嵌入参数（iframe）
 
@@ -209,7 +209,7 @@ pnpm typecheck        # 类型检查
 pnpm build            # 生产构建 → dist/
 ```
 
-桌面端开发（需 [Rust](docs/desktop-packaging.md#前置依赖)）：
+桌面端开发（需 [Rust](docs/guides/desktop-packaging.md#前置依赖)）：
 
 ```bash
 pnpm dev:desktop      # webview + 热重载
@@ -230,20 +230,20 @@ gpt-image-studio/
 
 ## 文档
 
-- [架构说明](docs/architecture.md)
-- [部署指南](docs/deployment-guide.md) — Docker、服务器模式、nginx、qiankun 嵌入
-- [发布指南](docs/release-guide.md) — npm 与 Docker 镜像的 tag 驱动发布流程
-- [产品路线图](docs/roadmap.md)
-- [桌面端打包方案](docs/desktop-packaging.md)
-- [本地 Companion 方案](docs/companion.md)
-- [遮罩编辑](docs/mask-editing.md)
-- [提示词模式](docs/prompt-modes.md)
-- [备份格式](docs/backup-format.md)
+- [架构说明](docs/architecture/architecture.md)
+- [部署指南](docs/guides/deployment-guide.md) — Docker、服务器模式、nginx、qiankun 嵌入
+- [发布指南](docs/guides/release-guide.md) — npm 与 Docker 镜像的 tag 驱动发布流程
+- [产品路线图](docs/plans/roadmap.md)
+- [桌面端打包方案](docs/guides/desktop-packaging.md)
+- [本地 Companion 方案](docs/companion/companion.md)
+- [遮罩编辑](docs/architecture/mask-editing.md)
+- [提示词模式](docs/plans/prompt-modes.md)
+- [备份格式](docs/architecture/backup-format.md)
 - [文档索引](docs/README.md)
 
 ## 发布
 
-本项目通过 git tag 驱动自动化发布（详见 [发布指南](docs/release-guide.md)）：
+本项目通过 git tag 驱动自动化发布（详见 [发布指南](docs/guides/release-guide.md)）：
 
 ```bash
 # 改 companion/package.json version → 提交 → 打 tag → 推送

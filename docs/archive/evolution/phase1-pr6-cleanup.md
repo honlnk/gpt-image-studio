@@ -3,7 +3,7 @@
 > **状态**：✅ 已完成
 > **依赖**：PR1-5 ✅
 > **风险**：低（收尾）
-> **纲领**：[`evolution-roadmap.md` §6.6](../evolution-roadmap.md)
+> **纲领**：[`evolution-roadmap.md` §6.6](../../plans/evolution-roadmap.md)
 
 ## 目标
 

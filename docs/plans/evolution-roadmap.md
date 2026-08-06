@@ -893,7 +893,7 @@ describe("IndexedDbStorage contract", () => {
 
 ## 八、阶段三：服务化与可嵌入（多用户 SaaS 形态）✅
 
-> **实施完成**。详见 [`evolution/phase3-overview.md`](./evolution/phase3-overview.md) + 9 个 PR 文档 + [`deployment-guide.md`](./deployment-guide.md)。
+> **实施完成**。详见 [`evolution/phase3-overview.md`](../archive/evolution/phase3-overview.md) + 9 个 PR 文档 + [`deployment-guide.md`](../guides/deployment-guide.md)。
 >
 > 落地摘要：
 > - **PR1**：`COMPANION_DEPLOYMENT_MODE`（local/server）+ `--host` 可配置 + Docker 化（Dockerfile stage 3 + compose companion 服务 + `/data` 卷）。
@@ -901,7 +901,7 @@ describe("IndexedDbStorage contract", () => {
 > - **PR3**：内存级吊销黑名单（Map + TTL 自动清理）+ `POST /admin/revoke`（平台级 `ADMIN_API_KEY` 鉴权）+ authMiddleware 集成吊销检查 → D10 完整 SSO 生效。
 > - **PR4**：OSS STS 临时凭证（`stsCredentials.ts` 调宿主 `/api/sts/upload-token`，5min 提前续期缓存）+ `createStsOssImageStore`（STS 变化重建 client）→ D11 平台统一 OSS，长期 AK 只存宿主。
 > - **PR5**：qiankun 生命周期（`bootstrap`/`mount`/`unmount`）+ `__POWERED_BY_QIANKUN__` 运行环境感知 + `applyEmbeddedConfig` 注入（companionUrl + JWT + connectionMode 固定 localCompanion）+ 嵌入态禁用连接编辑。
-> - **PR6**：[`docs/deployment-guide.md`](./deployment-guide.md) 完整部署教程（Docker + Nginx + qiankun 注册 + 宿主侧 JWT/STS/revoke 接口指引 + 故障排查）。
+> - **PR6**：[`docs/guides/deployment-guide.md`](../guides/deployment-guide.md) 完整部署教程（Docker + Nginx + qiankun 注册 + 宿主侧 JWT/STS/revoke 接口指引 + 故障排查）。
 >
 > 验收：1114 tests passing，typecheck（web + companion）clean。local 模式阶段二功能 100% 回归。
 
@@ -1124,7 +1124,7 @@ Companion 收到后，把该 user_id（或 jti）加入**内存级吊销黑名�
 
 #### 交付物：部署文档
 
-14. **同步产出部署教程**（`docs/deployment-guide.md` 或类似）
+14. **同步产出部署教程**（`docs/guides/deployment-guide.md` 或类似）
     - **Companion 部署**：Docker 拉取、环境变量配置（JWT 密钥、管理密钥、宿主地址等）、数据卷配置、nginx 反代示例、与宿主的对接步骤
     - **前端嵌入**：宿主如何注册 qiankun 子应用、配置入口 URL（CDN 或自部署）、处理路由冲突、传递 JWT 的方式
     - **宿主侧改造指引**：需要宿主开发的接口清单（STS 签发、登出 webhook 调用）、JWT claim 约定、共享密钥配置

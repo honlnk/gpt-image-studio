@@ -3,7 +3,7 @@
 > **状态**：✅ 已完成
 > **依赖**：PR2 ✅
 > **风险**：低（3 个孤立模块）
-> **纲领**：[`evolution-roadmap.md` §6.2 跨 collection service](../evolution-roadmap.md)
+> **纲领**：[`evolution-roadmap.md` §6.2 跨 collection service](../../plans/evolution-roadmap.md)
 
 ## 目标
 

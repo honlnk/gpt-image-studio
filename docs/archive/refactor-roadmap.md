@@ -6,8 +6,8 @@
 
 相关文档：
 
-- [架构说明](../architecture.md)
-- [本地 CLI Companion](../companion.md)
+- [架构说明](../architecture/architecture.md)
+- [本地 CLI Companion](../companion/companion.md)
 - [并发生成任务](generation-jobs.md)
 - [连接模式 ADR](../decisions/003-connection-modes.md)
 
@@ -501,7 +501,7 @@ type ConversationDraft = {
 
 目标：将 mask 编辑接入对话级草稿和图片编辑请求。
 
-参考文档：[遮罩局部编辑](../mask-editing.md)。
+参考文档：[遮罩局部编辑](../architecture/mask-editing.md)。
 
 建议类型：
 
@@ -535,7 +535,7 @@ type DraftMask = {
 
 目标：在 Web App 结构稳定后，再实现可选 CLI companion。
 
-参考文档：[本地 CLI Companion](../companion.md)。
+参考文档：[本地 CLI Companion](../companion/companion.md)。
 
 建议结构：
 

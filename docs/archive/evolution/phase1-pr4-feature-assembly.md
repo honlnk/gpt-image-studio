@@ -3,7 +3,7 @@
 > **状态**：✅ 已完成
 > **依赖**：PR3 ✅
 > **风险**：中（hydrate 流程是关键路径）
-> **纲领**：[`evolution-roadmap.md` §6.3 运行时装配与工厂](../evolution-roadmap.md)
+> **纲领**：[`evolution-roadmap.md` §6.3 运行时装配与工厂](../../plans/evolution-roadmap.md)
 
 ## 目标
 
