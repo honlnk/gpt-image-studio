@@ -43,6 +43,9 @@ const state = {
   loadingStorage: false,
   switchingStorage: false,
   pickingDirectory: false,
+  // 开机自启
+  autostart: null, // { enabled, platform, linger?, error? }
+  autostartLoading: false,
 };
 
 // ---- DOM 引用 ----
@@ -108,6 +111,12 @@ const el = {
   storageSuccess: $("storage-success"),
   storageSwitchWrap: $("storage-switch-wrap"),
   storageSwitchBtn: $("storage-switch-btn"),
+  // 开机自启
+  autostartCard: $("autostart-card"),
+  autostartPlatform: $("autostart-platform"),
+  autostartToggle: $("autostart-toggle"),
+  autostartHint: $("autostart-hint"),
+  autostartError: $("autostart-error"),
   // 对话框
   dialogBackdrop: $("dialog-backdrop"),
   dialogTitle: $("dialog-title"),
@@ -381,8 +390,8 @@ async function checkStatus() {
     state.authStatus = null;
   }
   renderAll();
-  // 在线则懒加载凭据 + 预设 + 存储位置
-  await Promise.all([loadPresetsAndCredentials(), loadStorage()]);
+  // 在线则懒加载凭据 + 预设 + 存储位置 + 开机自启状态
+  await Promise.all([loadPresetsAndCredentials(), loadStorage(), loadAutostart()]);
 }
 
 async function loadPresetsAndCredentials() {
@@ -613,6 +622,81 @@ async function loadStorage() {
     state.ossConfig = null;
   }
   renderStorage();
+}
+
+// ---- 开机自启 ----
+
+const AUTOSTART_PLATFORM_LABEL = {
+  macos: "macOS 登录项",
+  linux: "systemd 用户服务",
+  windows: "Windows 注册表启动项",
+  unsupported: "当前系统不支持",
+};
+
+async function loadAutostart() {
+  if (!state.online) return;
+  try {
+    state.autostart = await api("/admin/api/autostart/status");
+  } catch {
+    state.autostart = null;
+  }
+  renderAutostart();
+}
+
+function renderAutostart() {
+  const s = state.autostart;
+  el.autostartCard.hidden = !state.online;
+  if (!s) {
+    el.autostartToggle.disabled = true;
+    el.autostartToggle.setAttribute("aria-checked", "false");
+    el.autostartToggle.classList.remove("on");
+    el.autostartPlatform.textContent = "";
+    el.autostartHint.textContent = "";
+    el.autostartError.hidden = true;
+    return;
+  }
+
+  const enabled = s.enabled;
+  el.autostartToggle.disabled = state.autostartLoading || s.platform === "unsupported";
+  el.autostartToggle.setAttribute("aria-checked", String(enabled));
+  el.autostartToggle.classList.toggle("on", enabled);
+  el.autostartPlatform.textContent = AUTOSTART_PLATFORM_LABEL[s.platform] || s.platform;
+
+  // 提示文案
+  const hints = [];
+  if (s.platform === "unsupported") {
+    hints.push("当前系统不支持开机自启（仅 macOS / Linux / Windows）。");
+  } else if (s.platform === "linux" && enabled && !s.linger) {
+    hints.push(
+      "当前为「登录即启」。如需「开机即启」（无需登录），请在终端执行：sudo loginctl enable-linger $USER",
+    );
+  }
+  el.autostartHint.textContent = hints.join(" ");
+
+  // error 字段（如 Linux linger 降级提示）
+  if (s.error && !hints.length) {
+    el.autostartError.textContent = s.error;
+    el.autostartError.hidden = false;
+  } else {
+    el.autostartError.hidden = true;
+  }
+}
+
+async function toggleAutostart() {
+  const s = state.autostart;
+  if (!s || state.autostartLoading || s.platform === "unsupported") return;
+  state.autostartLoading = true;
+  renderAutostart();
+  try {
+    const path = s.enabled ? "/admin/api/autostart/disable" : "/admin/api/autostart/enable";
+    state.autostart = await api(path, { method: "POST" });
+  } catch (e) {
+    el.autostartError.textContent = `切换失败：${e.message}`;
+    el.autostartError.hidden = false;
+  } finally {
+    state.autostartLoading = false;
+    renderAutostart();
+  }
 }
 
 function renderStorage() {
@@ -960,6 +1044,7 @@ function bindEvents() {
   el.restoreBtn.onclick = () => restoreBackup();
   el.resetBtn.onclick = () => askResetEmpty();
   el.refreshLogs.onclick = () => loadLogs();
+  el.autostartToggle.onclick = () => toggleAutostart();
   el.storageSwitchBtn.onclick = () => askStorageSwitch();
   el.storagePickDir.onclick = () => pickDirectory();
   el.storageDirDropdownBtn.onclick = () => toggleDirDropdown();
@@ -1000,6 +1085,7 @@ function renderAll() {
   renderCredentialsVisibility();
   renderCredentials();
   renderForm();
+  renderAutostart();
 }
 
 function main() {

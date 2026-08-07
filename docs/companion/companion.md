@@ -492,10 +492,20 @@ PID 文件建议保存：
 - ✅ `status` 显示后台服务 PID、端口、channel、日志文件路径和启动时间。
 - ✅ 如果 PID 文件存在但进程已不存在，提示 stale PID 并建议重新 `start`。
 
+阶段五补充——开机自启（已完成）：
+
+- ✅ macOS：`~/Library/LaunchAgents/com.honlnk.image-studio-companion.plist`（launchd，RunAtLoad=true / KeepAlive=false，登录时触发）。
+- ✅ Linux：`~/.config/systemd/user/gpt-image-studio-companion.service`（systemd user unit，Type=oneshot / RemainAfterExit=yes / WantedBy=default.target，登录时触发）。
+- ✅ Windows：HKCU `Software\Microsoft\Windows\CurrentVersion\Run` 注册表键（免提权，登录时触发）。
+- 统一语义：三平台均为「用户登录时触发一次现有 `start`」，不做崩溃自动重启（与手动 `start` 行为一致）。`start` 的 detach-and-exit 模式与 KeepAlive/Type=simple 冲突，故 macOS 用 KeepAlive=false、Linux 用 oneshot 规避，无需前台 daemon 模式。
+- Linux 可选 linger：`enable` 尝试无 sudo 开 `loginctl enable-linger`，成功则升级为「开机即启」（无需登录），失败则降级为「登录即启」并在状态里提示手动执行 `sudo loginctl enable-linger $USER`。
+- 两条入口（共用底层 `companion/src/autostart/` 模块）：
+  - CLI：`gpt-image-studio autostart enable/disable/status`（镜像 provider 子命令组）。
+  - 管理页：`/admin` 管理页开关，走 `GET/POST /admin/api/autostart/status|enable|disable`（loopbackGuard 鉴权，本机特权操作，与 provider 凭据管理同属本机信任域，不走 accessKey/JWT）。
+- Companion 是状态权威源：`status` 实时查 plist/unit/注册表是否存在，不在浏览器侧缓存。`enable` 用 `process.execPath` + `process.argv[1]` 冻结绝对路径写进配置（launchd/systemd 用户会话 PATH 极简）。
+
 阶段五暂不做：
 
-- 暂不接入 macOS launchd、Windows Service 或 Linux systemd。
-- 暂不做开机自启。
 - 暂不按端口停止未知进程，避免误杀其它本地服务。
 
 ### 阶段六：更多 provider 和 OAuth

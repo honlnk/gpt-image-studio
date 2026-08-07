@@ -19,7 +19,8 @@ import { closeAllBusinessDbs } from "../storage/businessDb.js";
 import { LOCAL_USER_ID } from "../storage/db.js";
 import { pickDirectoryNative } from "../storage/directoryPicker.js";
 import { validateCustomDirectory } from "../storage/fileSystemImageStore.js";
-import type { CompanionAuthStatus, CompanionLogsTailResponse } from "../types.js";
+import { getAutostartStatus, enableAutostart, disableAutostart } from "../autostart/index.js";
+import type { CompanionAuthStatus, CompanionLogsTailResponse, CompanionAutostartStatusResponse } from "../types.js";
 
 /**
  * Companion 自带管理页（阶段零：边界正本清源）。
@@ -103,6 +104,22 @@ export async function adminRoutes(app: FastifyInstance, opts?: AdminRoutesOption
       throw error;
     }
   });
+
+  // 开机自启管理：写 OS 级配置（launchd plist / systemd unit / 注册表），属于本机特权操作，
+  // 与 provider 凭据管理同属 loopbackGuard 信任域，不走 accessKey/JWT。
+  // 三平台统一语义为「用户登录时触发一次 start」，Companion 是状态权威源（实时查配置文件是否存在）。
+  app.get<{ Reply: CompanionAutostartStatusResponse }>(
+    "/admin/api/autostart/status",
+    async () => getAutostartStatus(),
+  );
+  app.post<{ Reply: CompanionAutostartStatusResponse }>(
+    "/admin/api/autostart/enable",
+    async () => enableAutostart(),
+  );
+  app.post<{ Reply: CompanionAutostartStatusResponse }>(
+    "/admin/api/autostart/disable",
+    async () => disableAutostart(),
+  );
 
   // 原生目录选择框：管理页「选择文件夹…」按钮（浏览器拿不到绝对路径，由同机的 Companion 代弹）。
   // 结构化返回 { ok, path? , canceled? , error? }，恒 200，错误由前端展示。

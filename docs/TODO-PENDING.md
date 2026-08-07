@@ -46,8 +46,6 @@
 
 详见 `docs/companion/companion.md` 阶段六、`docs/plans/roadmap.md`。
 
-- ⏸️ 系统集成自启（macOS launchd / Windows Service / Linux systemd）
-- ⏸️ 开机自启
 - ⏸️ ChatGPT/Codex OAuth 评估 —— 涉及 OAuth token sink、refresh token 轮换、账号额度、Codex app-server 路由等复杂边界，需单独评估，第一版不做
 
 ---
@@ -79,6 +77,7 @@
 - ✅ Companion Provider 能力协议完善（Gemini 动态能力）—— 不做。决策：改用 `gemini-openai` adapter（兼容 GPT 协议中转），最省事收益最高。决策记录见 `docs/companion/companion-provider-adapter-review.md`
 - ✅ CDN 流量观察项 —— 已有缓解决策（见上文 E），状态从"悬而未决"改为"遇压力时执行"
 - ✅ keychain 延后依据 —— 已写入 `docs/companion/companion.md`
+- ✅ 开机自启（macOS launchd / Linux systemd / Windows 注册表）—— 已完成。三平台「登录即启」+ CLI `autostart enable/disable/status` 子命令 + Companion `/admin` 管理页开关。详见 `docs/companion/companion.md` 阶段五补充节
 - ❌ File System Access API 本地目录导出 —— 已废弃，本地文件化能力改由 Companion 后端化承担
 - ❌ 后端物理嵌入宿主项目（拆 package / SpringBoot 包装 / Node 子进程混部）—— 决策 D8 否决，Companion 作为独立服务部署
 - ❌ 每用户自配 OSS（服务器模式）—— 决策 D11 否决，改为平台统一 OSS + STS
