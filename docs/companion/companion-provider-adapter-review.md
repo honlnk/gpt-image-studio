@@ -828,9 +828,28 @@ Provider 配置突然消失，且缺少可诊断日志。~~
 ### 第三批：完善能力协议
 
 1. ~~增加最大参考图数量和大小。~~ 已完成（2026-07-22，详见上文「已完成整改：per-provider 参考图数量与单张大小校验」）。
-2. 将 Gemini 等 Provider 改为模型动态能力。
+2. ~~将 Gemini 等 Provider 改为模型动态能力。~~ 已决策不做（详见下方「决策：Gemini 改用 OpenAI 协议中转方案，不做模型动态能力」）。
 3. ~~未知 Provider 改为显式配置错误。~~ 已完成（2026-07-22，详见上文「已完成整改：未知 Provider 显式报错」）。
 4. ~~补充各 Provider 的端到端契约测试。~~ 已完成（2026-07-22，所有 8 个 provider 的 generate + edit happy-path 均有集成测试覆盖，详见测试基线）。
+
+### 决策：Gemini 改用 OpenAI 协议中转方案，不做模型动态能力
+
+> 状态：已决策（2026-08），替代原「将 Gemini 等 Provider 改为模型动态能力」待办项。
+
+**原问题**：原生 `gemini` adapter（`adapters/gemini.ts`）走 Google 官方 `:generateContent` 协议，不同代/型号的 Gemini 模型在 `aspectRatio` 枚举、`imageSize` 档位上存在差异。原计划仿照 Wan 的 `variants` 机制，为 Gemini 按 modelId 动态返回不同的 `sizeConstraints` / `resolutionOptions`。
+
+**替代方案（已落地）**：新增 `gemini-openai` provider（`adapters/gemini-openai.ts` + `profiles/gemini-openai.json`），针对上游中转服务（PackyCode、各类 API 聚合站）用 **OpenAI Images API 协议**（`/v1/images/generations`、`/v1/images/edits`）转发 Gemini 模型的场景。
+
+选择这个方向、放弃模型动态能力的理由：
+
+- **最省事、收益最高**：`gemini-openai` 复用 `openaiCompatible` 工厂（Images API JSON + multipart edits），零协议翻译代码——整个 adapter 仅 33 行。中转服务负责 Gemini 原生协议的翻译与模型差异抹平，Companion 不再背负"哪个 Gemini 模型支持哪些 aspectRatio / imageSize 枚举"的维护负担。
+- **避开原生协议的模型碎片化**：Google 各代 Gemini 模型（2.0 / 2.5 / flash / pro / nano-banana 等）的尺寸枚举差异大且迭代频繁，为每个 modelId 维护 variant 既易过时又难验证。走 OpenAI 中转协议后，模型差异由中转网关统一处理，Companion 侧能力声明保持稳定。
+- **profile 解耦协议与能力**：`gemini-openai` 的 profile 填 Gemini 能力画像（`mask:false`、`step:1`、`maxAspectRatio:null`、`512/1k/2k/4k` 档位），传输层走 OpenAI 协议——"用什么协议发请求"与"页面显示什么能力"彻底解耦，用户在中转场景下看到的能力提示依然准确。
+
+**取舍**：
+
+- 原生 `gemini` provider（直连 Google 官方 `:generateContent`）仍保留，用于完全兼容 Gemini 原生协议的网关或直连 Google 的场景；它的能力声明维持静态（各模型能力的并集超集），不追加 variants。
+- `variants` + 动态能力机制（`getSizeConstraints` / `getResolutionOptions`）仍保留在接口（`types.ts`）与 Wan adapter 中，未来若出现原生协议场景下必须按模型区分能力的新 provider，可复用该机制。
 
 ## 测试基线
 

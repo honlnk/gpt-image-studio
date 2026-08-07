@@ -41,7 +41,7 @@ Companion 子系统文档（本地 CLI 伴侣的设计、Provider 适配层、�
 | :--- | :--- |
 | [Companion 文档导航](companion/README.md) | Companion 子系统文档索引 |
 | [本地 CLI Companion 方案](companion/companion.md) | 设计、协议、安全要求、分阶段计划 |
-| [多 Provider 翻译层方案](companion/companion-providers-plan.md) | OpenAI / GLM / 豆包 / Qwen / Wan / Grok / Gemini / DeepInfra 共 9 个 Provider |
+| [多 Provider 翻译层方案](companion/companion-providers-plan.md) | OpenAI / GLM / 豆包 / Qwen / Wan / Grok / Gemini / Gemini-OpenAI / DeepInfra 共 9 个 Provider |
 | [豆包 Provider 方案](companion/companion-doubao-plan.md) | 火山方舟 Seedream adapter 独立设计 |
 | [多模型适配层审查](companion/companion-provider-adapter-review.md) | 架构审查、安全决策、风险和整改建议 |
 
