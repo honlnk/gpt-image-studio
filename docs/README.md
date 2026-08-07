@@ -54,6 +54,7 @@ Companion 子系统文档（本地 CLI 伴侣的设计、Provider 适配层、�
 | [部署指南](guides/deployment-guide.md) | Companion server 模式部署、Docker 编排、JWT 多租户配置 |
 | [发布指南](guides/release-guide.md) | npm 包与 Docker 镜像的 tag 驱动发布流程 |
 | [桌面端打包](guides/desktop-packaging.md) | Tauri v2 集成、构建命令和后续路线 |
+| [Cloudflare CDN 加速](guides/cloudflare-cdn-setup.md) | CF 反代 GitHub Pages 消除流量上限（仓库零改动，待执行） |
 | [阶段一测试清单](guides/phase1-test-checklist.md) | 翻译层骨架 + 能力驱动 UI 的手动验证步骤 |
 
 ## Decisions

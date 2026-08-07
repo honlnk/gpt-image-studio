@@ -1115,7 +1115,7 @@ Companion 收到后，把该 user_id（或 jti）加入**内存级吊销黑名�
     - 宿主直接通过 qiankun 加载 `https://image.honlnk.com`（GitHub Pages）的构建产物
     - **用户不需要自己部署前端**，零运维，自动更新
     - 前置条件：`image.honlnk.com` 的 CORS 允许宿主域名、构建产物已做 qiankun 兼容改造、资源路径全部相对化
-    - 风险：GitHub Pages 有流量/带宽限制，若实际使用中受限，降级到自部署模式
+    - 风险：GitHub Pages 有流量/带宽限制，若实际使用中受限，降级到自部署模式。另有更优的 CDN 缓解路径（Cloudflare 反代 GH Pages，仓库零改动），详见 [`guides/cloudflare-cdn-setup.md`](../guides/cloudflare-cdn-setup.md)
 
 13. **可选：自部署（私有化）**
     - 用户从 DockerHub 拉 Web 项目镜像（`honlnk/gpt-image-studio-web`），部署到自己的 nginx
@@ -1483,7 +1483,7 @@ Companion 自带独立的 web 管理页（原生 HTML + vanilla JS + 内联 CSS�
 - [x] 阶段三：吊销黑名单的持久化策略（纯内存重启清空 vs 落盘）—— 已定纯内存（`revocationList.ts`，内存 Map + TTL 自动清理）。理由：JWT 有效期短（≤1h），重启后残留风险窗口 = 剩余有效期，可接受；落盘增加复杂度收益不抵。
 - [x] 阶段三：宿主需要开发的接口清单细化 —— 已落地。STS 签发（OSS 临时凭证）、JWT 签发、`/auth/me`、`/admin/revoke` 吊销接口均已实现；qiankun 宿主 demo（`examples/qiankun-host`）演示浏览器自签 JWT + 自动激活数据集。
 - [x] 阶段三：数据集在多用户场景下的语义 —— 已定。按 `user_id` 隔离（`schema.ts` 主 db 的 `dataset_registry.user_id` 列，`(user_id, fingerprint)` 复合唯一），每用户独立数据集空间。
-- [ ] 阶段三：CDN 嵌入模式下 GitHub Pages 的流量/带宽限制是否实际构成问题，是否需要备选 CDN —— 观察项，需 server 模式真实部署后看流量数据，无法预先关闭。
+- [x] 阶段三：CDN 嵌入模式下 GitHub Pages 的流量/带宽限制是否实际构成问题，是否需要备选 CDN —— 已有缓解决策：采用 Cloudflare 反代 GitHub Pages 方案（仓库零改动、CF 免费计划不限带宽），消除 100GB/月上限风险。执行手册见 [`guides/cloudflare-cdn-setup.md`](../guides/cloudflare-cdn-setup.md)，待实际遇到流量压力或想优化访问速度时按手册执行（DNS + CF 控制台操作，可秒级回滚）。若后续需要 CF 预览部署/回滚能力或想彻底解耦 GH Pages，手册末尾附升级到 CF Pages 直托管的判断标准与改动概要。
 - [ ] 阶段四（暂不实施，启动时再决策）：Companion 内化方案（Rust 重写 vs Node sidecar vs 前端直连）
 - [ ] 阶段四（暂不实施，启动时再决策）：是否引入 OS keychain 加密凭据
 - [ ] 阶段四（暂不实施，启动时再决策）：APP 数据与 Web 数据是否允许手动互导
