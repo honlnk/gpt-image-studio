@@ -306,6 +306,8 @@ GPT_IMAGE_STUDIO_COMPANION_CHANNEL=dev
 - 认证已从早期一次性配对码升级为持久化连接密钥（access key，存 `~/.gpt-image-studio/access-key.json`）。
 - 普通项目备份不导出 Companion 凭据。
 - 系统 keychain（macOS Keychain / Windows Credential Manager / Linux Secret Service 等操作系统级凭据加密存储）仍为后续能力，未实现。
+
+  **为什么现在可以延后**：现状「明文 JSON + 0600 + loopback 单用户」与 Claude Code Linux 版、AWS CLI、gcloud、Aider 等一线 CLI 工具同级，是 CLI 形态工具的主流安全水位。我们不具备 Netwrix 报告中点名的高危放大条件——无 Remote Control 会话（Claude Code 最大风险点）、无云同步（Cline 问题）、无多服务 token 聚合（MCP 问题）。真正需要升级到 keychain 的触发条件是：(1) Companion 进入 server 模式做多租户凭据托管；(2) desktop app 打包签名后内嵌 Companion。这两个场景进入阶段四时再决策引入，`keytar` 等跨平台库的收益届时才超过集成成本。
 - ChatGPT/Codex OAuth 仍需单独评估。
 
 ChatGPT/Codex OAuth 不作为第一版本地助手目标。它涉及 OAuth token sink、refresh token 轮换、账号额度、Codex app-server 或 Codex backend 路由等更复杂边界，需要在本地助手基础稳定后再做。
