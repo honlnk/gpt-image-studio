@@ -111,6 +111,50 @@ export interface HostActions {
  */
 let hostActions: HostActions | null = null;
 
+// ─── 跨域 origin 白名单 ───
+
+/**
+ * 宿主允许的 origin 列表（跨域嵌入用）。
+ *
+ * 默认空数组——等价于仅允许同源（PR7/PR8 demo 的行为）。
+ * 宿主跨域嵌入时通过 qiankun props.allowedOrigins 注入（见 main.ts 的 configureEmbedding）。
+ * 配置后：接收方向同源放行；发送方向 targetOrigin 取与白名单的交集，避免泄漏给无关 origin。
+ */
+let allowedOrigins: string[] = [];
+
+/**
+ * 配置嵌入态跨域白名单。由 main.ts 在 qiankun mount(props) 时按
+ * props.allowedOrigins 注入。可传空数组重置回"仅同源"。
+ */
+export function configureEmbedding(input: { allowedOrigins?: string[] }): void {
+  const origins = input.allowedOrigins ?? [];
+  allowedOrigins = origins
+    .map((o) => {
+      try {
+        return new URL(o.trim()).origin;
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean);
+}
+
+/** 判断 origin 是否被允许（同源或命中白名单）。 */
+function isOriginAllowed(origin: string): boolean {
+  return origin === window.location.origin || allowedOrigins.includes(origin);
+}
+
+/**
+ * 为子应用→宿主消息挑选最安全的 targetOrigin。
+ * - 命中白名单且唯一：用该精确 origin（最安全）
+ * - 同源：用当前 origin（demo 既有行为）
+ * - 无可匹配的安全 targetOrigin：回退 "*"（仅作向后兼容兜底，见函数注释）
+ */
+function pickTargetOrigin(): string {
+  if (allowedOrigins.length === 1) return allowedOrigins[0];
+  return window.location.origin;
+}
+
 /**
  * 注入/撤销宿主指令处理函数集合。
  *
@@ -139,7 +183,7 @@ export function __getHostActionsForTest(): HostActions | null {
 export function notifyHostConversationsChanged(): void {
   if (!window.__POWERED_BY_QIANKUN__) return;
   const msg: EmbeddedChildMessage = { type: "conversations-changed" };
-  window.postMessage(msg, window.location.origin);
+  window.postMessage(msg, pickTargetOrigin());
 }
 
 /**
@@ -152,7 +196,7 @@ export function notifyHostConversationsChanged(): void {
 export function notifyHostActiveConversationChanged(id: string): void {
   if (!window.__POWERED_BY_QIANKUN__) return;
   const msg: EmbeddedChildMessage = { type: "active-conversation-changed", id };
-  window.postMessage(msg, window.location.origin);
+  window.postMessage(msg, pickTargetOrigin());
 }
 
 // ─── 监听器注册 ───
@@ -163,9 +207,8 @@ export function notifyHostActiveConversationChanged(id: string): void {
  * 监听器内部三层守卫：
  * 1. `__POWERED_BY_QIANKUN__`——独立态忽略，避免独立运行时被其它脚本干扰。
  * 2. `event.source` 非空——postMessage 规范要求，过滤合成事件。
- * 3. `event.origin === window.location.origin`——同源校验。qiankun import-entry
- *    下子应用与宿主同源；跨源消息拒绝。若宿主跨域嵌入子应用（CDN 模式），此校验
- *    需放开为白名单——本 PR 的 demo 是同源单页场景。
+ * 3. origin 校验——同源放行；若宿主通过 `allowedOrigins` 注入了跨域白名单，则白名单内
+ *    origin 也放行。默认（未配置白名单）等价于 PR7/PR8 demo 的"仅同源"行为，向后兼容。
  *
  * 通过三层守卫后，按 msg.type 分发到 hostActions 对应 handler。
  */
@@ -173,7 +216,7 @@ export function listenHostMessages(): () => void {
   const handler = (event: MessageEvent) => {
     if (!window.__POWERED_BY_QIANKUN__) return;
     if (!event.source) return;
-    if (event.origin !== window.location.origin) return;
+    if (!isOriginAllowed(event.origin)) return;
     if (!isEmbeddedHostMessage(event.data)) return;
     if (!hostActions) return;
     const msg = event.data;
