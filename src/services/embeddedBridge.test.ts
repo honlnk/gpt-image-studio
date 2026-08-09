@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __getHostActionsForTest,
+  configureEmbedding,
   isEmbeddedChildMessage,
   listenHostMessages,
   notifyHostActiveConversationChanged,
@@ -80,6 +81,7 @@ describe("listenHostMessages 守卫", () => {
     teardown = undefined;
     window.__POWERED_BY_QIANKUN__ = originalQiankun;
     setHostActions(null);
+    configureEmbedding({ allowedOrigins: undefined });
   });
 
   it("合法的 select-conversation 调用 hostActions.select", () => {
@@ -154,6 +156,47 @@ describe("listenHostMessages 守卫", () => {
     expect(select).not.toHaveBeenCalled();
   });
 
+  it("跨 origin 但命中白名单放行（configureEmbedding 注入）", () => {
+    configureEmbedding({ allowedOrigins: ["https://admin.example.com"] });
+    const select = vi.fn();
+    setHostActions({ select, create: vi.fn(), delete: vi.fn(), rename: vi.fn(), openSettings: vi.fn() });
+    dispatchHostMessage(
+      { type: "select-conversation", id: "conv-1" },
+      "https://admin.example.com",
+    );
+    expect(select).toHaveBeenCalledWith("conv-1");
+  });
+
+  it("跨 origin 白名单外的 origin 仍拒绝", () => {
+    configureEmbedding({ allowedOrigins: ["https://admin.example.com"] });
+    const select = vi.fn();
+    setHostActions({ select, create: vi.fn(), delete: vi.fn(), rename: vi.fn(), openSettings: vi.fn() });
+    dispatchHostMessage(
+      { type: "select-conversation", id: "conv-1" },
+      "https://evil.example.com",
+    );
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("同源消息在白名单配置后仍放行（向后兼容）", () => {
+    configureEmbedding({ allowedOrigins: ["https://admin.example.com"] });
+    const select = vi.fn();
+    setHostActions({ select, create: vi.fn(), delete: vi.fn(), rename: vi.fn(), openSettings: vi.fn() });
+    dispatchHostMessage({ type: "select-conversation", id: "conv-1" });
+    expect(select).toHaveBeenCalledWith("conv-1");
+  });
+
+  it("configureEmbedding 对非法 origin 静默丢弃", () => {
+    configureEmbedding({ allowedOrigins: ["not-a-url", "https://valid.example.com"] });
+    const select = vi.fn();
+    setHostActions({ select, create: vi.fn(), delete: vi.fn(), rename: vi.fn(), openSettings: vi.fn() });
+    dispatchHostMessage(
+      { type: "select-conversation", id: "conv-1" },
+      "https://valid.example.com",
+    );
+    expect(select).toHaveBeenCalledWith("conv-1");
+  });
+
   it("select/delete/rename 缺 id 字段拒绝", () => {
     const actions: HostActions = {
       select: vi.fn(), create: vi.fn(), delete: vi.fn(), rename: vi.fn(), openSettings: vi.fn(),
@@ -205,6 +248,7 @@ describe("notifyHostConversationsChanged（子应用→宿主反向消息）", (
 
   afterEach(() => {
     window.__POWERED_BY_QIANKUN__ = originalQiankun;
+    configureEmbedding({ allowedOrigins: undefined });
   });
 
   it("嵌入态发 conversations-changed 消息到 window", () => {
@@ -226,6 +270,17 @@ describe("notifyHostConversationsChanged（子应用→宿主反向消息）", (
     notifyHostConversationsChanged();
 
     expect(calls).toHaveLength(0);
+    restore();
+  });
+
+  it("配置单一白名单 origin 时 targetOrigin 用精确 origin", () => {
+    window.__POWERED_BY_QIANKUN__ = true as unknown as undefined;
+    configureEmbedding({ allowedOrigins: ["https://admin.example.com"] });
+    const { calls, restore } = capturePostMessage();
+
+    notifyHostConversationsChanged();
+
+    expect(calls[0].origin).toBe("https://admin.example.com");
     restore();
   });
 });

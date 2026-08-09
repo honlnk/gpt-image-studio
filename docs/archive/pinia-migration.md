@@ -6,10 +6,10 @@
 
 相关文档：
 
-- [架构说明](../architecture.md)
+- [架构说明](../architecture/architecture.md)
 - [重构路线图](refactor-roadmap.md)
 - [并发生成任务](generation-jobs.md)
-- [遮罩局部编辑](../mask-editing.md)
+- [遮罩局部编辑](../architecture/mask-editing.md)
 
 ## 背景
 

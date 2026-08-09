@@ -774,3 +774,67 @@ body {
   margin: 4px 0 10px;
   line-height: 1.6;
 }
+
+/* ---- 开机自启开关 ---- */
+
+.autostart-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0;
+}
+
+.autostart-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.autostart-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.autostart-platform {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.autostart-switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 22px;
+  border: none;
+  border-radius: 999px;
+  background: #d1d5db;
+  cursor: pointer;
+  transition: background 0.15s;
+  padding: 0;
+}
+
+.autostart-switch.on {
+  background: #111827;
+}
+
+.autostart-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.autostart-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+
+.autostart-switch.on .autostart-switch-knob {
+  transform: translateX(18px);
+}

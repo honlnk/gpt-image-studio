@@ -20,7 +20,7 @@
 - 修复后写回 IndexedDB，并删除记录中的 `createdAtMs` / `updatedAtMs`。
 - UI 和排序逻辑只读取 `createdAt` / `updatedAt`，不再在显示阶段兼容 legacy 毫秒字段。
 
-IndexedDB schema 已升级到 v2，`src/services/db.ts` 会把索引从旧字段切到新字段：
+IndexedDB schema 已升级到 v2，`src/services/storage/IndexedDbStorage.ts` 会把索引从旧字段切到新字段：
 
 - `conversations.updatedAtMs` -> `conversations.updatedAt`
 - `messages.createdAtMs` -> `messages.createdAt`
@@ -63,4 +63,4 @@ IndexedDB schema 已升级到 v2，`src/services/db.ts` 会把索引从旧字段
 
 - `src/services/timeFieldMigration.ts`
 - `src/services/timeFieldMigration.test.ts`
-- `src/services/db.ts` 中旧索引迁移分支
+- `src/services/storage/IndexedDbStorage.ts` 中旧索引迁移分支

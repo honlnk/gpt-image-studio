@@ -11,7 +11,7 @@ import App from './App.vue'
 const EMBEDDED_CSS_FILE = '__EMBEDDED_CSS_FILE__'
 import { trackDirective } from './directives/track'
 import { useSettingsStore } from './stores/settingsStore'
-import { listenHostMessages } from './services/embeddedBridge'
+import { configureEmbedding, listenHostMessages } from './services/embeddedBridge'
 
 /**
  * 前端入口（阶段三 PR5：qiankun 嵌入兼容）。
@@ -65,6 +65,17 @@ interface QiankunProps {
    * 嵌入态下会话管理应由宿主提供，子应用侧边栏不再显示。见文档 §2.5。
    */
   hideSidebar?: boolean
+  /**
+   * 宿主允许的跨域 origin 白名单（跨域嵌入时必填）。
+   *
+   * 默认未配置时，postMessage 通信桥仅允许同源（PR7/PR8 demo 的行为）。
+   * 宿主跨域嵌入（子应用与宿主不同源，例如子应用部署在 studio.example.com、
+   * 宿主在 admin.example.com）时，需把宿主 origin 传入，否则双向 postMessage
+   * 会被 origin 校验拒绝。
+   *
+   * 示例：`allowedOrigins: ['https://admin.example.com']`
+   */
+  allowedOrigins?: string[]
 }
 
 function render(props: QiankunProps = {}) {
@@ -90,6 +101,9 @@ function render(props: QiankunProps = {}) {
       jwt: props.jwt ?? '',
       hideSidebar: props.hideSidebar,
     })
+    // 跨域白名单：宿主通过 props.allowedOrigins 注入，供 postMessage 通信桥做 origin 校验。
+    // 未配置时仅允许同源（向后兼容 PR7/PR8 demo 的同源场景）。
+    configureEmbedding({ allowedOrigins: props.allowedOrigins })
     // __embedded__ class：触发 style.css 嵌入态高度链 + StudioShell h-full。
     document.documentElement.classList.add(EMBEDDED_HTML_CLASS)
   }

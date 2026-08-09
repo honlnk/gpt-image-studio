@@ -25,6 +25,11 @@ import {
   startManagedProcess,
   stopManagedProcess,
 } from "./processManager.js";
+import {
+  getAutostartStatus,
+  enableAutostart,
+  disableAutostart,
+} from "./autostart/index.js";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json") as { version: string };
@@ -311,6 +316,67 @@ providerCmd
       console.log(`未找到 ID 为 ${id} 的配置。`);
     }
   }));
+
+// ==================== autostart 子命令组（开机自启）====================
+
+const autostartCmd = program
+  .command("autostart")
+  .description("管理系统开机自启（macOS launchd / Linux systemd / Windows 注册表）");
+
+autostartCmd
+  .command("status")
+  .description("查看开机自启状态")
+  .action(() => {
+    const status = getAutostartStatus();
+    const platformLabel = {
+      macos: "macOS (launchd)",
+      linux: "Linux (systemd)",
+      windows: "Windows (注册表)",
+      unsupported: "不支持",
+    }[status.platform];
+    console.log("=".repeat(50));
+    console.log("  开机自启状态");
+    console.log("=".repeat(50));
+    console.log(`平台:     ${platformLabel}`);
+    console.log(`自启:     ${status.enabled ? "✅ 已启用" : "❌ 未启用"}`);
+    if (status.platform === "linux") {
+      console.log(
+        `Linger:   ${status.linger ? "✅ 已开启（真·开机启动）" : "⚠️  未开启（仅登录启动）"}`,
+      );
+    }
+    if (status.command) {
+      console.log(`启动命令: ${status.command}`);
+    }
+    if (status.error) {
+      console.log(`提示:     ${status.error}`);
+    }
+    console.log("=".repeat(50));
+  });
+
+autostartCmd
+  .command("enable")
+  .description("启用开机自启（用户登录时触发，免提权）")
+  .action(() => {
+    const status = enableAutostart();
+    if (status.error) {
+      console.warn(`⚠️  ${status.error}`);
+    }
+    console.log(status.enabled ? "✅ 开机自启已启用" : "❌ 启用失败");
+    if (status.enabled && status.platform === "linux") {
+      console.log("   （登录即启。如需开机即启，执行：sudo loginctl enable-linger $USER）");
+    }
+  });
+
+autostartCmd
+  .command("disable")
+  .description("停用开机自启")
+  .action(() => {
+    const status = disableAutostart();
+    if (status.error) {
+      console.warn(`⚠️  ${status.error}`);
+    }
+    console.log("✅ 开机自启已停用");
+  });
 
 // ==================== status 命令 ====================
 

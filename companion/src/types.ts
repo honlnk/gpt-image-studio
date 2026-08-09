@@ -114,3 +114,18 @@ export type CompanionLogsTailResponse = {
   logFile: string | null;
   date: string;
 };
+
+// ---- 开机自启（CLI + Web 设置页共用）----
+
+export type AutostartPlatform = "macos" | "linux" | "windows" | "unsupported";
+
+export type CompanionAutostartStatusResponse = {
+  enabled: boolean;
+  platform: AutostartPlatform;
+  /** 仅 Linux：true 表示已开 linger（真·开机启动），false/undefined 表示仅登录启动。 */
+  linger?: boolean;
+  /** enable 失败原因或降级提示（如 Linux 无 sudo 无法开 linger）。 */
+  error?: string;
+  /** 当前注册的启动命令（供诊断）。 */
+  command?: string;
+};

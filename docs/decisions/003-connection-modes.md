@@ -2,11 +2,11 @@
 
 ## 状态
 
-已提议。
+已接受。`ConnectionMode` 类型已落地于 `src/types/studio.ts`，两个 `ImageClient` 实现均已运行。
 
 ## 背景
 
-当前 Web App 会直接调用用户配置的 Images API Base URL。计划中的 companion 会增加第二条传输路径：Web App 调用 `127.0.0.1` 上的本地服务，再由 companion 代理到真实 provider。
+Web App 可直接调用用户配置的 Images API Base URL。Companion 增加第二条传输路径：Web App 调用 Companion 服务，再由 Companion 代理到真实 provider。Companion 自身又分 local（`127.0.0.1` + 连接密钥）和 server（可远程监听 + JWT 多租户）两种部署形态。
 
 ## 决策
 

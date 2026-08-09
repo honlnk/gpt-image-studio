@@ -189,6 +189,29 @@
         </div>
       </section>
 
+      <!-- ③.6 开机自启 -->
+      <section id="autostart-card" class="card" hidden>
+        <h2 class="card-title">开机自启</h2>
+        <div class="autostart-row">
+          <div class="autostart-info">
+            <span class="autostart-label">登录系统时自动启动 Companion</span>
+            <span id="autostart-platform" class="autostart-platform"></span>
+          </div>
+          <button
+            id="autostart-toggle"
+            class="autostart-switch"
+            type="button"
+            role="switch"
+            aria-checked="false"
+            disabled
+          >
+            <span class="autostart-switch-knob"></span>
+          </button>
+        </div>
+        <p id="autostart-hint" class="hint-text"></p>
+        <p id="autostart-error" class="error-text" hidden></p>
+      </section>
+
       <!-- ④ 日志 -->
       <section id="logs-card" class="card" hidden>
         <h2 class="card-title">日志</h2>
