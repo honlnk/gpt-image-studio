@@ -38,12 +38,17 @@ export type EmbeddedChildMessage =
   /** 当前激活会话已变化（select/新建/删除回落/初始激活）→ 宿主更新高亮。
    *  为什么需要它：子应用切换会话用 pushState/replaceState 写 URL，二者都
    *  不触发 popstate，宿主无法靠监听地址栏感知激活变化，必须显式通知。 */
-  | { type: "active-conversation-changed"; id: string };
+  | { type: "active-conversation-changed"; id: string }
+  /** 设置弹窗已关闭 → 宿主把 URL 从 /settings 清回会话态，
+   *  否则 URL 停在 settings 后再次点击「设置」菜单（同 URL）不触发 watch、
+   *  设置弹窗无法重新打开。 */
+  | { type: "settings-closed" };
 
 /** 子应用→宿主消息的类型白名单（供宿主侧监听器做类型守卫）。 */
 const CHILD_MESSAGE_TYPES = new Set<EmbeddedChildMessage["type"]>([
   "conversations-changed",
   "active-conversation-changed",
+  "settings-closed",
 ]);
 
 /**
@@ -196,6 +201,19 @@ export function notifyHostConversationsChanged(): void {
 export function notifyHostActiveConversationChanged(id: string): void {
   if (!window.__POWERED_BY_QIANKUN__) return;
   const msg: EmbeddedChildMessage = { type: "active-conversation-changed", id };
+  window.postMessage(msg, pickTargetOrigin());
+}
+
+/**
+ * 子应用通知宿主"设置弹窗已关闭"。
+ *
+ * 仅嵌入态发送（独立态 no-op）。宿主收到后把 URL 从 /settings 清回会话态，
+ * 避免 URL 停在 settings 后再次点击「设置」菜单（同 URL）不触发 watch、
+ * 设置弹窗无法重新打开。
+ */
+export function notifyHostSettingsClosed(): void {
+  if (!window.__POWERED_BY_QIANKUN__) return;
+  const msg: EmbeddedChildMessage = { type: "settings-closed" };
   window.postMessage(msg, pickTargetOrigin());
 }
 
