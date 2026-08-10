@@ -82,7 +82,7 @@ watch(
 </script>
 
 <template>
-  <div ref="scrollContainer" class="flex-1 overflow-y-auto" @scroll="onScroll">
+  <div ref="scrollContainer" class="min-h-0 flex-1 overflow-y-auto" @scroll="onScroll">
     <ChatEmptyState
       v-if="messages.length === 0"
       @copy-text="emit('copyText', $event)"

@@ -18,6 +18,11 @@ import { DESKTOP_APP_DOWNLOAD_URL } from "../../shared/downloads";
 type ChatWorkspaceHeader = {
   activeConversation?: Conversation;
   isLibraryOpen: boolean;
+  /**
+   * 嵌入态且宿主隐藏了子应用自带侧边栏(会话列表外移到宿主菜单)。
+   * 此时 header 承担会话的删除/重命名入口,独立态走侧边栏行内按钮。
+   */
+  embeddedSidebarHidden?: boolean;
   companionStatus?: {
     show: boolean;
     online: boolean;
@@ -37,6 +42,7 @@ type ChatWorkspaceActions = {
   applyEditSelection: (sourceImageId: string, maskImageId: string) => void;
   closeAllEditors: () => void;
   copyText: (text: string) => void;
+  deleteConversation: (id: string) => void;
   generateAnother: (message: Message) => void;
   loadEarlierMessages: () => void;
   loadMessageConfig: (message: Message) => void;
@@ -46,6 +52,7 @@ type ChatWorkspaceActions = {
   previewImage: (id: string) => void;
   refreshImage: (message: Message, imageId: string) => void;
   removeAttachment: (id: string) => void;
+  renameConversation: (id: string) => void;
   retryMessage: (message: Message) => void;
   setEditModeEnabled: (value: boolean) => void;
   setLibraryOpen: (value: boolean) => void;
@@ -173,7 +180,7 @@ function imageFilesFromTransfer(
 
 <template>
   <section
-    class="relative flex min-w-0 flex-1 flex-col"
+    class="relative flex min-h-0 min-w-0 flex-1 flex-col"
     aria-label="聊天工作区"
     @dragenter.prevent="handleDragEnter"
     @dragleave.prevent="handleDragLeave"
@@ -204,6 +211,39 @@ function imageFilesFromTransfer(
         <h1 class="truncate text-base font-semibold text-gray-800">
           {{ header.activeConversation?.title || '新的对话' }}
         </h1>
+        <!-- 嵌入态隐藏侧边栏时,会话删/改入口由 header 承载(独立态走侧边栏)。
+             仅在有激活会话时显示。点击复用 actions.deleteConversation/
+             renameConversation,删除确认弹窗由 conversationsStore 单一负责。 -->
+        <template v-if="header.embeddedSidebarHidden && header.activeConversation">
+          <button
+            v-track="'conversation.rename_clicked'"
+            class="shrink-0 cursor-pointer rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            type="button"
+            aria-label="重命名会话"
+            title="重命名会话"
+            @click="actions.renameConversation(header.activeConversation!.id)"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </button>
+          <button
+            v-track="{ name: 'conversation.delete_clicked', payload: { conversationId: header.activeConversation!.id } }"
+            class="shrink-0 cursor-pointer rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
+            type="button"
+            aria-label="删除会话"
+            title="删除会话"
+            @click="actions.deleteConversation(header.activeConversation!.id)"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+        </template>
       </div>
       <div class="flex items-center gap-1">
         <span
