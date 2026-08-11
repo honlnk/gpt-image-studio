@@ -41,6 +41,7 @@ import {
 import {
   notifyHostActiveConversationChanged,
   notifyHostConversationsChanged,
+  notifyHostSettingsClosed,
   setHostActions,
 } from "../../services/embeddedBridge";
 import { useAnalyticsStore } from "../../stores/analyticsStore";
@@ -384,6 +385,9 @@ export function useStudioViewModel() {
 
   function closeSettings() {
     isSettingsOpen.value = false;
+    // 嵌入态通知宿主把 URL 从 /settings 清回会话态——否则 URL 停在 settings 后
+    // 再次点击「设置」菜单（同 URL）不触发 watch、设置弹窗无法重新打开。
+    notifyHostSettingsClosed();
   }
 
   function openBatchImageOperations() {
@@ -542,7 +546,12 @@ export function useStudioViewModel() {
     // push 去重比较 URL 当前值（非激活 id）：popstate 恢复触发的切换，浏览器
     // 已更新地址栏到目标值，此时 URL === id 不会再 push；否则按一次后退就压
     // 一条新记录、"前进"永远失效。watch 兜底也会同步，但那是 replace 不进栈。
-    if (readConversationIdFromUrl() !== id) {
+    //
+    // 嵌入态（qiankun）跳过：URL 归宿主所有——宿主用 path 参数承载会话 id
+    // （/studio/workspace/<id>），子应用写 ?c 会覆盖宿主 query（如页签合并
+    // 用的 pageKey），且 pushState/replaceState 经 single-spa 合成 popstate
+    // 会干扰宿主流路由。嵌入态的激活同步走 notifyHostActiveConversationChanged。
+    if (!window.__POWERED_BY_QIANKUN__ && readConversationIdFromUrl() !== id) {
       writeConversationIdToUrl(id, "push");
     }
   }
@@ -574,9 +583,13 @@ export function useStudioViewModel() {
   watch(
     conversations.activeConversationId,
     (id) => {
-      const urlId = readConversationIdFromUrl();
-      if (urlId !== (id || null)) {
-        writeConversationIdToUrl(id ?? "", "replace");
+      // 嵌入态（qiankun）不写地址栏：URL 归宿主（见 selectConversationWithDraft
+      // 注释），只发通知，由宿主 router.replace 同步 path 参数与菜单高亮。
+      if (!window.__POWERED_BY_QIANKUN__) {
+        const urlId = readConversationIdFromUrl();
+        if (urlId !== (id || null)) {
+          writeConversationIdToUrl(id ?? "", "replace");
+        }
       }
       notifyHostActiveConversationChanged(id ?? "");
     },
@@ -594,6 +607,10 @@ export function useStudioViewModel() {
 
   // popstate 恢复：浏览器前进/后退。读 URL，校验后切换。
   function onPopState() {
+    // 嵌入态（qiankun）跳过：前进/后退由宿主 vue-router 接管——宿主路由
+    // path 参数变化后经通信桥发 select-conversation 驱动子应用切换，
+    // 子应用再读 ?c 会与宿主 URL 方案（path 参数）双重驱动、相互干扰。
+    if (window.__POWERED_BY_QIANKUN__) return;
     const id = readConversationIdFromUrl();
     if (!id) return;
     switchToConversationIfValid(id);
@@ -780,6 +797,11 @@ export function useStudioViewModel() {
   const chatHeader = proxyRefs({
     activeConversation: conversations.activeConversation,
     isLibraryOpen,
+    // 嵌入态且宿主选择隐藏子应用侧边栏时,会话的删/改入口由 header 承载
+    // (独立态走侧边栏 ConversationSidebar 的行内按钮)。
+    embeddedSidebarHidden: computed(
+      () => settings.isEmbedded.value && settings.hideSidebarInEmbed.value,
+    ),
     companionStatus: computed(() => ({
       show: settings.connectionMode.value === "localCompanion",
       online: companionStore.companionOnline,
@@ -801,6 +823,16 @@ export function useStudioViewModel() {
     loadMessageConfig,
     openConversations: composerState.openConversations,
     openSettings: openSettingsDefault,
+    // 嵌入态隐藏侧边栏时,header 的删/改按钮复用侧边栏动作(单一弹框来源)。
+    // deleteConversation 不能直接转 sidebar.deleteConversation——后者(=drafts.
+    // deleteConversationWithDraft)不带 notifyHostConversationsChanged,嵌入态下
+    // 子应用会话列表已变但宿主菜单不刷新(被删项残留)。create 同理。这里与
+    // setHostActions.delete 对齐:删完显式通知宿主刷新。
+    deleteConversation: async (id: string) => {
+      await sidebar.deleteConversation(id);
+      notifyHostConversationsChanged();
+    },
+    renameConversation: (id: string) => sidebar.renameConversation(id),
     openFavoritePromptSettings,
     previewImage: previewImageById,
     removeAttachment: (id: string) => {

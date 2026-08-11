@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type {
   AnalyticsPromptCapture,
   ApiMode,
@@ -110,6 +111,11 @@ const activeTab = ref<SettingsTab>("general");
 const pendingBackupFile = ref<File | null>(null);
 const isRestoreConfirmOpen = ref(false);
 
+// 嵌入态下设置弹窗撑满整个宿主页面（不再被子应用容器/宿主 header/tabbar 遮挡），
+// z-index 高于宿主 header（Vben 默认 zIndex=200，offset 后 201）。
+const settings = useSettingsStore();
+const isEmbedded = computed(() => settings.isEmbedded);
+
 // 接口 tab 仅 direct 模式显示（纯直连配置）；Companion tab 仅 Companion 模式显示。
 // Companion 的 provider 凭据/存储位置等配置都在 Companion 自带管理页维护。
 const tabs = computed<{ key: SettingsTab; label: string }[]>(() => {
@@ -187,7 +193,7 @@ function forwardSavePromptWordbank(
 <template>
   <BaseModal
     :is-open="isOpen"
-    z-class="z-50"
+    :z-class="isEmbedded ? 'z-[300]' : 'z-50'"
     backdrop-class="bg-black/50 px-3"
     content-class="flex h-[min(88vh,44rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
     aria-labelledby="settingsTitle"
