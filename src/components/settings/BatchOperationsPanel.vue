@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { track } from "../../features/analytics/useAnalyticsTracker";
+import { useFeedbackStore } from "../../stores/feedbackStore";
+import { formatError } from "../../shared/errors";
 import { timestampFromCreatedAt, timestampFromUpdatedAt } from "../../shared/dateTime";
 import { imageDownloadName } from "../../shared/fileFormatters";
 import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
@@ -312,24 +314,29 @@ async function downloadSelectedImages() {
     "ui_click",
   );
 
-  const entries = await Promise.all(
-    selectedImages.value.map(async (image, index) => {
-      const response = await fetch(image.previewUrl as string);
-      const blob = await response.blob();
+  const feedback = useFeedbackStore();
+  try {
+    const entries = await Promise.all(
+      selectedImages.value.map(async (image, index) => {
+        const response = await fetch(image.previewUrl as string);
+        const blob = await response.blob();
 
-      return {
-        name: uniqueZipEntryName(imageDownloadName(image), index),
-        blob,
-      };
-    }),
-  );
-  const zipBlob = await createZipArchive(entries);
-  const downloadUrl = createObjectUrl(zipBlob);
-  const anchor = document.createElement("a");
-  anchor.href = downloadUrl;
-  anchor.download = `gpt-image-studio-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
-  anchor.click();
-  revokeObjectUrl(downloadUrl);
+        return {
+          name: uniqueZipEntryName(imageDownloadName(image), index),
+          blob,
+        };
+      }),
+    );
+    const zipBlob = await createZipArchive(entries);
+    const downloadUrl = createObjectUrl(zipBlob);
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = `gpt-image-studio-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+    anchor.click();
+    revokeObjectUrl(downloadUrl);
+  } catch (error) {
+    feedback.notifyError(`批量下载失败：${formatError(error)}`);
+  }
 }
 
 function toggledSelection(selection: Set<string>, id: string) {

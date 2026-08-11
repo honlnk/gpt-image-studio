@@ -136,6 +136,9 @@ export const useImagesStore = defineStore("images", () => {
       await refreshStorageUsage();
       feedback.notifySuccess("图片已删除。");
     } catch (error) {
+      // 回滚乐观删除：把图片塞回内存，避免「界面删了但库里还在」的撕裂态。
+      if (isAttached) attachedImages.value = [...attachedImages.value, id];
+      imageAssets.value = [image, ...imageAssets.value];
       feedback.notifyError(`删除图片失败：${formatError(error)}`);
       input.onStorageError(error);
     }
@@ -150,6 +153,9 @@ export const useImagesStore = defineStore("images", () => {
     const deletedImages = imageAssets.value.filter((image) =>
       idSet.has(image.id),
     );
+    const removedAttachments = attachedImages.value.filter((id) =>
+      idSet.has(id),
+    );
     attachedImages.value = attachedImages.value.filter((id) => !idSet.has(id));
     imageAssets.value = imageAssets.value.filter((image) => !idSet.has(image.id));
 
@@ -163,6 +169,9 @@ export const useImagesStore = defineStore("images", () => {
       await refreshStorageUsage();
       feedback.notifySuccess(`已删除 ${deletedImages.length} 张图片。`);
     } catch (error) {
+      // 回滚乐观删除，避免批量删除部分失败时的撕裂态。
+      attachedImages.value = [...attachedImages.value, ...removedAttachments];
+      imageAssets.value = [...deletedImages, ...imageAssets.value];
       feedback.notifyError(`删除图片失败：${formatError(error)}`);
       input.onStorageError(error);
     }
@@ -176,14 +185,24 @@ export const useImagesStore = defineStore("images", () => {
     if (!trimmedName) return false;
 
     const input = getContext();
+    const previousName = image.name;
+    const previousUpdatedAt = image.updatedAt;
     image.name = trimmedName;
     image.updatedAt = isoTimestamp();
     imageAssets.value = [
       image,
       ...imageAssets.value.filter((item) => item.id !== id),
     ];
-    await input.services.imageAssets.saveAsset(toPlainImageAsset(image)).catch(input.onStorageError);
-    return true;
+    try {
+      await input.services.imageAssets.saveAsset(toPlainImageAsset(image));
+      return true;
+    } catch (error) {
+      // 回滚内存：恢复原名与时间戳，维持列表头位置（重排是为了乐观更新已发生）。
+      image.name = previousName;
+      image.updatedAt = previousUpdatedAt;
+      input.onStorageError(error);
+      return false;
+    }
   }
 
   async function setImageTagColor(id: string, nextColor?: ImageAsset["tagColor"]) {
@@ -191,6 +210,7 @@ export const useImagesStore = defineStore("images", () => {
     if (!image) return false;
 
     const previousColor = image.tagColor;
+    const previousUpdatedAt = image.updatedAt;
     const input = getContext();
     image.tagColor = nextColor;
     image.updatedAt = isoTimestamp();
@@ -198,7 +218,15 @@ export const useImagesStore = defineStore("images", () => {
       image,
       ...imageAssets.value.filter((item) => item.id !== id),
     ];
-    await input.services.imageAssets.saveAsset(toPlainImageAsset(image)).catch(input.onStorageError);
+    try {
+      await input.services.imageAssets.saveAsset(toPlainImageAsset(image));
+    } catch (error) {
+      // 回滚内存：恢复原颜色与时间戳。
+      image.tagColor = previousColor;
+      image.updatedAt = previousUpdatedAt;
+      input.onStorageError(error);
+      return false;
+    }
 
     // 颜色分组事件分类：set（无→有）/ changed（有→不同）/ cleared（有→无）。
     const hadColor = Boolean(previousColor);

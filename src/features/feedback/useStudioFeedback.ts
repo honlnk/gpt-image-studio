@@ -11,7 +11,9 @@ export function useStudioFeedback() {
     cancelConfirmDialog: feedback.cancelConfirmDialog,
     dismissNotice: feedback.dismissNotice,
     notifyError: feedback.notifyError,
+    notifyInfo: feedback.notifyInfo,
     notifySuccess: feedback.notifySuccess,
+    notifyWarning: feedback.notifyWarning,
     requestConfirmation: feedback.requestConfirmation,
   };
 }

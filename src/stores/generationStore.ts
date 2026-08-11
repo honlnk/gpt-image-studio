@@ -243,6 +243,11 @@ export const useGenerationStore = defineStore("generation", () => {
         hasReferences: references.length > 0,
         hasMask: Boolean(editMaskImageId),
         size: generationParams.size,
+        promptMode: promptRequestSettings.promptMode,
+        quality: generationParams.quality,
+        outputFormat: generationParams.outputFormat,
+        background: generationParams.background,
+        resolution: generationParams.resolution,
       },
       "system",
     );
@@ -297,6 +302,10 @@ export const useGenerationStore = defineStore("generation", () => {
   }
 
   async function generateAnother(message: Message) {
+    const generationParams =
+      message.generationParams ?? input.value.currentGenerationParams();
+    const promptRequestSettings =
+      message.promptRequestSettings ?? input.value.currentPromptRequestSettings();
     track(
       "generation.requested",
       {
@@ -304,6 +313,12 @@ export const useGenerationStore = defineStore("generation", () => {
         hasReferences: message.referencedImageIds.length > 0,
         hasMask: Boolean(message.editMaskImageId),
         trigger: "generate_another",
+        size: generationParams.size,
+        promptMode: promptRequestSettings.promptMode,
+        quality: generationParams.quality,
+        outputFormat: generationParams.outputFormat,
+        background: generationParams.background,
+        resolution: generationParams.resolution,
       },
       "system",
     );
@@ -465,7 +480,14 @@ export const useGenerationStore = defineStore("generation", () => {
       if (assistantMessage) {
         saveTasks.push(enqueueMessageSave(assistantMessage));
       }
-      await Promise.all(saveTasks);
+      try {
+        await Promise.all(saveTasks);
+      } catch (storageError) {
+        // 图片已生成并在 UI 可见（内存 asset 已 push、job 已标记成功），
+        // 这里是"本地保存失败"而非"生成失败"——单独走存储错误通道，
+        // 不落入下方 catch 误标 markJobError（否则用户会看到"生成失败"但图已显示）。
+        input.value.onStorageError(storageError);
+      }
       await input.value.refreshStorageUsage();
     } catch (error) {
       const message = formatError(error);

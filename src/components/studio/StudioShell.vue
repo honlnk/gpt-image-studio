@@ -73,6 +73,7 @@ const settings = useSettingsStore();
       :analytics-enabled="studio.settingsModal.analyticsEnabled"
       :analytics-prompt-capture="studio.settingsModal.analyticsPromptCapture"
       :analytics-event-count="studio.settingsModal.analyticsEventCount"
+      :analytics-insights="studio.settingsModal.analyticsInsights"
       @close="studio.settingsModal.close"
       @delete-conversations="studio.settingsModal.deleteConversations"
       @delete-images="studio.settingsModal.deleteImages"
@@ -95,6 +96,7 @@ const settings = useSettingsStore();
       @update:analytics-prompt-capture="studio.settingsModal.setAnalyticsPromptCapture"
       @export-analytics-events="studio.settingsModal.exportAnalyticsEvents"
       @clear-analytics-events="studio.settingsModal.clearAnalyticsEvents"
+      @refresh-analytics-insights="studio.settingsModal.refreshAnalyticsInsights"
     />
 
     <ImagePreviewModal

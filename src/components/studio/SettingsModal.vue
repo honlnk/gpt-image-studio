@@ -14,8 +14,10 @@ import type {
   PromptRewriteGuardHistoryItem,
 } from "../../types/studio";
 import { readStorage, writeStorage } from "../../shared/localStorage";
+import type { AnalyticsInsights } from "../../services/analyticsAnalysis";
 import AboutPanel from "../settings/AboutPanel.vue";
 import AnalyticsPanel from "../settings/AnalyticsPanel.vue";
+import AnalyticsDashboard from "../settings/AnalyticsDashboard.vue";
 import ApiSettingsPanel from "../settings/ApiSettingsPanel.vue";
 import CompanionInfoPanel from "../settings/CompanionInfoPanel.vue";
 import BackupPanel from "../settings/BackupPanel.vue";
@@ -37,6 +39,7 @@ type SettingsTab =
   | "backup"
   | "batch"
   | "analytics"
+  | "dashboard"
   | "about";
 type BatchPanel = "images" | "conversations";
 
@@ -65,6 +68,7 @@ const props = defineProps<{
   analyticsEnabled: boolean;
   analyticsPromptCapture: AnalyticsPromptCapture;
   analyticsEventCount: number;
+  analyticsInsights: AnalyticsInsights | null;
 }>();
 
 const emit = defineEmits<{
@@ -99,6 +103,7 @@ const emit = defineEmits<{
   "update:analyticsPromptCapture": [value: AnalyticsPromptCapture];
   exportAnalyticsEvents: [];
   clearAnalyticsEvents: [];
+  refreshAnalyticsInsights: [];
 }>();
 
 const activeTab = ref<SettingsTab>("general");
@@ -121,6 +126,7 @@ const tabs = computed<{ key: SettingsTab; label: string }[]>(() => {
     { key: "backup", label: "数据备份" },
     { key: "batch", label: "批量操作" },
     { key: "analytics", label: "行为日志" },
+    { key: "dashboard", label: "数据分析" },
     { key: "about", label: "关于" },
   );
   return base;
@@ -313,6 +319,12 @@ function forwardSavePromptWordbank(
               @update:prompt-capture="emit('update:analyticsPromptCapture', $event)"
               @export-events="emit('exportAnalyticsEvents')"
               @clear-events="emit('clearAnalyticsEvents')"
+            />
+
+            <AnalyticsDashboard
+              v-else-if="activeTab === 'dashboard'"
+              :insights="analyticsInsights"
+              @refresh="emit('refreshAnalyticsInsights')"
             />
 
             <AboutPanel v-else-if="activeTab === 'about'" />

@@ -54,14 +54,11 @@
 
 详见 `docs/plans/roadmap.md` 后续候选方向。
 
-- 🔲 更细的图片库筛选（按来源、格式、时间等）
-- 🔲 继续打磨错误提示和操作反馈（单张删除、会话删除、存储失败回滚提示）
-- 🔲 Analytics V2 分析层 —— V1 采集层已全部完成，V2 预留但未开始：
-  - 基于事件计算满意度代理指标
-  - 比较不同 prompt 模式下的结果操作分布
-  - 输出可用性漏斗与关键路径转化
+> 本组三项已全部完成，详情见「已关闭」节。
 
 ---
+
+
 
 ## E. 观察项（非开发任务）
 
@@ -78,6 +75,9 @@
 - ✅ CDN 流量观察项 —— 已有缓解决策（见上文 E），状态从"悬而未决"改为"遇压力时执行"
 - ✅ keychain 延后依据 —— 已写入 `docs/companion/companion.md`
 - ✅ 开机自启（macOS launchd / Linux systemd / Windows 注册表）—— 已完成。三平台「登录即启」+ CLI `autostart enable/disable/status` 子命令 + Companion `/admin` 管理页开关。详见 `docs/companion/companion.md` 阶段五补充节
+- ✅ 更细的图片库筛选 —— 已完成。`ImageLibrary.vue` 增加搜索（图片名）、来源筛选（生成/编辑/导入三态，`classifyImageSource`）、格式筛选（动态汇总 mimeType）、排序（时间/名称/大小 + 升降序），「全部图片」范围筛选未载全时显示提示
+- ✅ 错误提示与操作反馈打磨 —— 已完成。`feedbackStore` 增加 info/warning 变体；`renameImage`/`setImageTagColor` 持久化失败回滚内存并返回布尔结果（调用方依结果提示，不再假成功）；`deleteImage`/`deleteImages` 失败回滚乐观删除；`generationStore` 把图片保存失败从「生成失败」误判中分离，走独立存储错误通道；`reportStorageError` 加节流去重 toast，让静默存储失败对用户可见但不刷屏；`BatchOperationsPanel` 批量下载加 try/catch
+- ✅ Analytics V2 分析层 —— 已完成。补 `generation.requested` 的 promptMode/quality/format/background/resolution 采集；新增 `analyticsAnalysis.ts` 纯函数层（生成漏斗、满意度代理、prompt 模式对比、时间序列、事件分布）+ 单测；新增 `AnalyticsDashboard.vue` 只读仪表盘（设置页「数据分析」tab，纯 CSS/SVG 可视化，无图表库）；`analyticsStore` 加 `refreshAnalyticsInsights`
 - ❌ File System Access API 本地目录导出 —— 已废弃，本地文件化能力改由 Companion 后端化承担
 - ❌ 后端物理嵌入宿主项目（拆 package / SpringBoot 包装 / Node 子进程混部）—— 决策 D8 否决，Companion 作为独立服务部署
 - ❌ 每用户自配 OSS（服务器模式）—— 决策 D11 否决，改为平台统一 OSS + STS

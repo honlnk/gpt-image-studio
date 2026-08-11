@@ -231,13 +231,13 @@ type GenerationParams = {
 - 已完成：提示词模式。新增四档 `PromptMode`（默认 / 安全 / 创意 / 开放），`promptBuilder.ts` 在请求前按模式注入说明与词库灵感，词库与请求逻辑分离；聊天记录保留原始 prompt，模式包装只影响发送给接口的请求文本；直连与 Companion 两种连接模式行为一致（`docs/prompt-modes.md`）。
 - 已完成：Responses API 与流式图片预览。浏览器直连模式支持 `Images API` 与 `Responses API` 切换（`apiMode`），开启流式时解析 SSE partial image 并在 `PendingGenerationCard` 展示最新中间图预览；partial image 仅存运行时内存，完成后按现有流程写入图片库；Companion 模式暂限 Images API（`docs/responses-streaming-plan.md`）。
 - 已完成：桌面端打包第一版（Tauri v2）。新增 `desktop/src-tauri` 工程骨架，原样嵌入现有 `dist/` 构建产物，不改动 `src/`；Companion 保持外部独立，桌面端经 `127.0.0.1` 连接，体验与浏览器端一致；macOS arm64 可产出 `.app` / `.dmg`（`docs/desktop-packaging.md`）。代码签名、跨平台、内嵌 Companion sidecar 后置。
-- 后置：更细的图片库筛选，例如来源、格式、时间等。
+- 已完成：更细的图片库筛选。`ImageLibrary.vue` 新增搜索（图片名）、来源筛选（生成/编辑/导入三态）、格式筛选（动态汇总 mimeType）、排序（时间/名称/大小 + 升降序）；「全部图片」范围筛选未载全时分页时显示「筛选仅作用于已载入图片」提示。
 - 已废弃：File System Access API 本地目录导出。本地文件化能力将由 Companion 后端化承担（见 `docs/evolution-roadmap.md` 阶段二），不再走浏览器 File System Access API 这条路。
 
 ### 后续候选方向
 
-1. 继续打磨错误提示和操作反馈，例如单张删除、会话删除、存储失败回滚提示。
-2. 增加更细的图片库筛选，例如来源、格式、时间等。
+1. 已完成：错误提示与操作反馈打磨。`feedbackStore` 增加 info/warning 变体；`renameImage`/`setImageTagColor`/`deleteImage` 持久化失败回滚内存并正确反馈（不再假成功/不撕裂）；`generationStore` 把图片保存失败从「生成失败」误判中分离；`reportStorageError` 加节流 toast，让静默存储失败对用户可见但不刷屏；批量下载加 try/catch。
+2. 已完成：更细的图片库筛选（来源、格式、排序等），见上文阶段五记录。
 3. 桌面端打包后续：macOS 代码签名 / notarization、Windows / Linux 跨平台构建、Tauri updater 自动更新、内嵌 Companion sidecar（需先解决 Node 二进制化 + notarization，详见 `docs/desktop-packaging.md`）。
 4. 本地 CLI Companion（`companion.md`）— 后台服务管理已完成：`start` / `stop` / `restart` / `logs`；认证已从早期一次性配对码升级为持久化连接密钥（access key）；凭据存储已支持损坏备份/恢复。系统 keychain（macOS Keychain / Windows Credential Manager 等操作系统级凭据加密）仍为后续能力，未实现。
-5. 用户行为日志系统（`analytics-event-logging-plan.md`）— V1 全部完成（V1.0 核心闭环 + V1.1 高频控件/Markdown 分片导出 + V1.2 颜色分组专项/会话级分片）。后续可在 V2 分析层（满意度代理指标、漏斗转化）继续。
+5. 用户行为日志系统（`analytics-event-logging-plan.md`）— V1 全部完成（V1.0 核心闭环 + V1.1 高频控件/Markdown 分片导出 + V1.2 颜色分组专项/会话级分片）。V2 分析层已完成：补 `generation.requested` 的 promptMode/生成参数采集；新增 `analyticsAnalysis.ts` 纯函数层（生成漏斗、满意度代理、prompt 模式对比、时间序列、事件分布）+ 单测；新增 `AnalyticsDashboard.vue` 只读仪表盘（设置页「数据分析」tab，纯 CSS/SVG 可视化）。
