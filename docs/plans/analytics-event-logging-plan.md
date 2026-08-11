@@ -401,12 +401,18 @@ analytics-export-YYYYMMDD-HHmmss.zip
 - 风险：一次性覆盖过多控件导致开发压力过高。
   - 应对：严格按 V1.0/V1.1/V1.2 迭代推进。
 
-## 13. 后续（V2）预留
+## 13. V2 分析层（已完成）
 
-V2 在不改采集层前提下，新增分析层：
+V2 在不改采集层前提下，新增只读分析层，在设置页「数据分析」tab 展示。
 
-- 基于事件计算满意度代理指标。
-- 比较不同 prompt 模式下的结果操作分布。
-- 输出可用性漏斗与关键路径转化。
+- **纯函数聚合层**（`src/services/analyticsAnalysis.ts`）：输入 `AnalyticsEvent[]`，输出纯数据。包含：
+  - `computeGenerationFunnel` — 请求/成功/失败计数 + 成功率。
+  - `computeSatisfactionProxy` — 以 `generation.succeeded` 的 imageId 为基准集合，统计后续是否被下载 / 打标 / 删除（下载率、打标率、保留率）。只计生成图片集合内的行为，排除导入图。
+  - `computePromptModeComparison` — 按 `generation.requested.payload.promptMode` 分组，通过 messageId 关联回 requested 事件反查模式，计算每组的请求/成功/成功率/满意度。
+  - `computeTimeSeries` — 按天聚合最近 14 天的请求/成功，空日期补零。
+  - `computeEventDistribution` — 事件名计数降序。
+- **补采集**：`generation.requested` payload 增加 `promptMode`、`quality`、`outputFormat`、`background`、`resolution`（`submitMessage` 与 `generateAnother` 两处 track 点）。满意度代理复用现有事件，不新增重复事件。
+- **只读仪表盘**（`src/components/settings/AnalyticsDashboard.vue`）：概览卡（总事件/会话/对话/图片数 + 时间范围）、生成漏斗横条、满意度代理指标、prompt 模式对比表格、14 天趋势柱状图（纯 CSS/SVG，不引图表库）、事件分布 Top 10。
+- **store 接线**：`analyticsStore` 新增 `analyticsInsights` ref + `refreshAnalyticsInsights()` action（打开面板时触发，全量重算，不做增量物化）。ViewModel 通过 `storeToRefs` 暴露 `analyticsInsights`（直接访问 store 属性会被解包成静态值，导致面板不更新——与 `eventCount` 同理）。
 
-V1 不做推断，只保证数据真实、完整、可分析。
+V1 不做推断，只保证数据真实、完整、可分析；V2 在此基础上做只读聚合。

@@ -29,7 +29,7 @@
 | [计划索引](plans/README.md) | 按状态（已完成 / 进行中 / 待开始）维护功能计划 |
 | [产品路线图](plans/roadmap.md) | 业务功能演进（聊天 UI、图片编辑、备份、分析、提示词模式等） |
 | [架构演进路线图](plans/evolution-roadmap.md) | 四阶段纲领，与业务 roadmap 正交。阶段一至三已完成 |
-| [用户行为日志计划](plans/analytics-event-logging-plan.md) | 本地行为日志系统方案（V1 已完成） |
+| [用户行为日志计划](plans/analytics-event-logging-plan.md) | 本地行为日志系统方案（V1 采集 + V2 分析层已完成） |
 | [提示词模式计划](plans/prompt-modes.md) | 默认 / 安全 / 创意 / 开放四档提示词模式（已落地） |
 | [Responses API 流式预览](plans/responses-streaming-plan.md) | 浏览器直连模式接入 Responses API + 流式图片预览（已落地） |
 
