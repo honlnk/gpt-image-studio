@@ -316,51 +316,29 @@
 
 <script>
 // ─── 嵌入配置（注入给子应用的 props） ───
-// config.json（gitignore，本地私有）格式见 config.example.json。
-// jwt 不再手写进配置——登录流程在浏览器内用 jwtSecret 自签（WebCrypto HMAC-SHA256）。
-let HOST_CONFIG = { companionUrl: '', jwtSecret: '', adminApiKey: '', user: null, oss: null, jwt: '', hideSidebar: true };
+// 配置由宿主服务 serve.mjs 的 /api/config 下发（非敏感）；JWT 由 /api/login 服务端签发，
+// 浏览器不持有任何 secret（与正式部署一致）。
+let HOST_CONFIG = { companionUrl: '', subappUrl: '', user: null, oss: null, jwt: '', hideSidebar: true };
 
 async function loadConfig() {
   try {
-    const res = await fetch('./config.json');
+    const res = await fetch('/api/config');
     if (res.ok) return await res.json();
   } catch (e) {}
   return {
     companionUrl: 'http://127.0.0.1:19751',
-    jwtSecret: '',
-    adminApiKey: '',
+    subappUrl: 'http://127.0.0.1:4173',
     user: { sub: 'qiankun-preview-user', displayName: 'qiankun 预览用户' },
     oss: null,
     hideSidebar: true,
   };
 }
 
-// ─── 浏览器内 JWT 自签（HS256，仅本地 demo） ───
-// 生产语义里 JWT 应由宿主后端签发；本 demo 宿主是纯静态页、没有后端，
-// 故把签发搬进浏览器。secret 与此前一样只存在于 gitignore 的 config.json，
-// 安全水位不变。
-function b64urlBytes(bytes) {
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function b64urlText(s) {
-  return b64urlBytes(new TextEncoder().encode(s));
-}
-async function signJwt(secret, payload) {
-  const header = b64urlText(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body = b64urlText(JSON.stringify(payload));
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${header}.${body}`));
-  return `${header}.${body}.${b64urlBytes(new Uint8Array(sig))}`;
-}
+// ─── JWT 签发已移至宿主服务 serve.mjs（/api/login，服务端 HS256）───
+// 浏览器不再持有 jwtSecret；登录流程直接向 /api/login 取已签好的 JWT。
 
 // ─── JWT 本地缓存：未过期则跳过登录页直接进主界面 ───
 const JWT_CACHE_KEY = 'qiankun-demo-jwt';
-const JWT_TTL_SECONDS = 30 * 24 * 3600; // 30 天
 
 function readCachedJwt() {
   try {
@@ -373,17 +351,13 @@ function readCachedJwt() {
   } catch (e) { return null; }
 }
 
-// ─── 登录流程：签 JWT → 确保数据集激活 → 返回 JWT ───
+// ─── 登录流程：向宿主服务取 JWT → 确保数据集激活 → 返回 JWT ───
 async function performLogin(msgEl) {
-  if (!HOST_CONFIG.jwtSecret) throw new Error('config.json 缺少 jwtSecret');
+  // JWT 由宿主服务 serve.mjs 在服务端签发（/api/login），浏览器不持有 secret。
   msgEl.textContent = '正在签发登录凭证...';
-  const now = Math.floor(Date.now() / 1000);
-  const jwt = await signJwt(HOST_CONFIG.jwtSecret, {
-    sub: HOST_CONFIG.user.sub,
-    display_name: HOST_CONFIG.user.displayName,
-    iat: now,
-    exp: now + JWT_TTL_SECONDS,
-  });
+  const loginRes = await fetch('/api/login', { method: 'POST' });
+  if (!loginRes.ok) throw new Error(`签发 JWT 失败：HTTP ${loginRes.status} ${await loginRes.text()}`);
+  const { jwt } = await loginRes.json();
 
   // 确保该用户有激活数据集：清库/首次登录后是 404，自动激活 OSS 数据集，
   // 不再手动 curl POST /storage/datasets/activate。
@@ -391,7 +365,7 @@ async function performLogin(msgEl) {
   const headers = { Authorization: `Bearer ${jwt}` };
   const activeRes = await fetch(`${HOST_CONFIG.companionUrl}/storage/datasets/active`, { headers });
   if (activeRes.status === 404) {
-    if (!HOST_CONFIG.oss) throw new Error('config.json 缺少 oss 配置，无法自动初始化数据集');
+    if (!HOST_CONFIG.oss) throw new Error('配置缺少 oss，无法自动初始化数据集');
     msgEl.textContent = '正在初始化 OSS 数据集...';
     const actRes = await fetch(`${HOST_CONFIG.companionUrl}/storage/datasets/activate`, {
       method: 'POST',
@@ -529,8 +503,8 @@ window.addEventListener('popstate', () => {
 });
 
 // ═══ 管理页（#/admin hash 路由） ═══
-// server 模式适配版：端点走 ADMIN_API_KEY（凭据）/ JWT（数据集）/ 公开（health）。
-// 不依赖被禁用的 /admin/api/*（commit 657c172，__local__ 视图多租户下误导）。
+// server 模式适配版：凭据走宿主代理 /api/admin/**（serve.mjs 持有 ADMIN_API_KEY）、
+// 数据集走 JWT、health 公开。不依赖被禁用的 /admin/api/*（commit 657c172，__local__ 视图多租户下误导）。
 
 function openAdminPage() { location.hash = '#/admin'; }
 function closeAdminPage() {
@@ -557,12 +531,11 @@ const adminState = {
   activeDataset: null,
 };
 
-// 带 ADMIN_API_KEY 的 fetch（凭据管理）
+// 凭据管理走宿主服务代理 /api/admin/**（serve.mjs 注入 ADMIN_API_KEY，浏览器不持有密钥）
 async function adminFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
-  headers['Authorization'] = `Bearer ${HOST_CONFIG.adminApiKey}`;
   if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`${HOST_CONFIG.companionUrl}${path}`, { ...options, headers });
+  const res = await fetch(`/api${path}`, { ...options, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
@@ -843,7 +816,7 @@ function boot(jwt) {
   qiankun.registerMicroApps([
     {
       name: 'gpt-image-studio',
-      entry: '//127.0.0.1:4173',
+      entry: HOST_CONFIG.subappUrl,
       container: '#image-studio-container',
       activeRule: location.pathname,
       props: {
