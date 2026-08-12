@@ -80,13 +80,31 @@ type ServeLikeOptions = {
   managed?: boolean;
 };
 
+/**
+ * 从环境变量解析 --allow-origin 默认值：空格/逗号分隔多个完整 origin。
+ * CLI 显式传 --allow-origin 时优先（commander 行为：显式值覆盖默认值）。
+ * 无环境变量时返回 undefined（等价于"无默认值"），调用方按 [] 兜底。
+ */
+function parseAllowOriginsEnv(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const list = value
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length ? list : undefined;
+}
+
 function addServeOptions(command: ReturnType<typeof program.command>) {
   return command
     .option("-p, --port <port>", "监听端口", DEFAULT_PORT)
     .option("-H, --host <host>", "监听地址（local 模式忽略，恒为 127.0.0.1）", process.env.COMPANION_HOST)
     .option("--deployment-mode <mode>", "部署形态：local 或 server", process.env.COMPANION_DEPLOYMENT_MODE)
     .option("--channel <channel>", "安全渠道：stable 或 dev", process.env.GPT_IMAGE_STUDIO_COMPANION_CHANNEL)
-    .option("--allow-origin <origin...>", "额外允许的完整 origin，例如 http://localhost:5173")
+    .option(
+      "--allow-origin <origin...>",
+      "额外允许的完整 origin，例如 http://localhost:5173（也可用 COMPANION_ALLOW_ORIGINS，空格/逗号分隔多个）",
+      parseAllowOriginsEnv(process.env.COMPANION_ALLOW_ORIGINS),
+    )
     .addOption(new Option("--managed", "由 start 命令托管的后台服务").hideHelp());
 }
 

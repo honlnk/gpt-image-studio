@@ -76,6 +76,10 @@ cp ~/.gpt-image-studio/oss-credentials.json ~/.gpt-image-studio/credentials.json
 docker compose --profile companion-server up -d companion-server
 ```
 
+- CORS 白名单（被嵌入的宿主 origin）也走仓库根 `.env` 的 `COMPANION_ALLOW_ORIGINS`：
+  空格/逗号分隔任意多个 origin（如 `http://127.0.0.1:5599 http://localhost:5680`），
+  想放行几个加几个，改完 `--force-recreate` 重建容器生效。companion 侧会把它切分成
+  `--allow-origin` 列表（CLI 显式传参仍可覆盖）。
 - 数据目录映射：`~/.gpt-image-studio-docker` → 容器 `/data`
 - compose 里开了 `COMPANION_OSS_LONG_TERM_AK=1` 逃生门：server 模式的 OSS 存储
   允许用 `oss-credentials.json` 里的长期 AK（**仅本地调试**，违背 D11——生产环境
