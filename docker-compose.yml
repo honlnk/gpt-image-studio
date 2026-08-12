@@ -57,11 +57,12 @@ services:
   # 需要环境变量：JWT_SECRET（与宿主共享）、ADMIN_API_KEY（平台级管理密钥）。
   companion-server:
     profiles: ["companion-server"]
-    image: ghcr.io/honlnk/gpt-image-studio-companion:latest
-    # 如需从源码构建，取消下行注释：
-    # build:
-    #   context: .
-    #   target: companion
+    # 本地从源码构建（含 COMPANION_ALLOW_ORIGINS 列表白名单支持）。
+    # 想切回官方预构建镜像：注释掉 build 段，image 改回 ghcr.io/honlnk/gpt-image-studio-companion:latest。
+    build:
+      context: .
+      target: companion
+    image: gpt-image-studio-companion:local
     container_name: gpt-image-studio-companion-server
     ports:
       - "19751:19751"
@@ -77,8 +78,21 @@ services:
       # 逃生门（仅本地调试）：server 模式 OSS 用 oss-credentials.json 长期 AK。
       # 违背 D11（生产应走宿主 STS 签发），无宿主后端的本地演示才开启。
       - COMPANION_OSS_LONG_TERM_AK=1
+      # CORS 白名单：单个列表变量，空格/逗号分隔任意多个宿主 origin（companion 侧切分）。
+      # 在仓库根 .env 里配 COMPANION_ALLOW_ORIGINS，想加几个加几个，重建容器生效。
+      - COMPANION_ALLOW_ORIGINS=${COMPANION_ALLOW_ORIGINS:-}
     restart: unless-stopped
-    command: ["node", "companion/dist/main.js", "serve", "--host", "0.0.0.0", "--port", "19751", "--deployment-mode", "server", "--allow-origin", "http://127.0.0.1:5599"]
+    # --allow-origin 不再硬编码：由 COMPANION_ALLOW_ORIGINS 提供默认（cli.ts 读取并按空格/逗号切分）。
+    command:
+      - node
+      - companion/dist/main.js
+      - serve
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "19751"
+      - --deployment-mode
+      - server
 
 volumes:
   companion-data:
