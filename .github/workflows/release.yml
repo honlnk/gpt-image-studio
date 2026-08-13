@@ -4,8 +4,12 @@
 # - publish-npm：幂等，若该版本已在 npm registry 则跳过（兼容「先手动发再推 tag」）
 # - publish-docker：构建 web / companion 双镜像，推 ghcr.io 和 docker.io 双 registry
 #
+# npm 发布：已迁移到 Trusted Publishing（OIDC，免长期 token）。
+# 前置条件：需在 npmjs.com 该包 Settings → Trusted Publisher 配置本仓库——
+#   org/user=honlnk、repo=gpt-image-studio、workflow filename=release.yml、
+#   Allowed actions 勾选 npm publish。配置后不再需要 NPM_TOKEN secret。
+#
 # 所需 secrets（仓库 Settings → Actions）：
-# - NPM_TOKEN          npm publish token（scope @honlnk）
 # - DOCKERHUB_USERNAME  Docker Hub 账号
 # - DOCKERHUB_TOKEN     Docker Hub Access Token（读写）
 # GITHUB_TOKEN 由 Actions 自动注入，用于推送 ghcr.io。
@@ -29,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # npm --provenance 需要
+      id-token: write # npm trusted publishing（OIDC）需要
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,7 +57,8 @@ jobs:
         if: steps.skip.outputs.exists != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # trusted publishing 要求 Node ≥ 22.14.0 且 npm CLI ≥ 11.5.1（Node 24 自带 npm 11.x）
+          node-version: "24"
           registry-url: https://registry.npmjs.org
 
       - name: Setup pnpm
@@ -71,9 +76,9 @@ jobs:
       - name: Publish
         if: steps.skip.outputs.exists != 'true'
         working-directory: companion
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Trusted Publishing：npm CLI 自动用 OIDC 凭证认证，并自动附带 provenance。
+        # 不要设置 NODE_AUTH_TOKEN（否则 setup-node 会注入 token、覆盖 OIDC 认证）。
+        run: npm publish --access public
 
   # ─────────────────────────────────────────────────────────────────────────
   # Job 2: 构建并推送 Docker 镜像（web + companion，ghcr + dockerhub）
