@@ -181,7 +181,8 @@ export function __getHostActionsForTest(): HostActions | null {
  * 子应用通知宿主"会话列表已变更"（PR8 §2.2/§2.4）。
  *
  * 仅嵌入态发送（独立态 no-op）。宿主收到后重新 `GET /storage/conversations` 刷新列表。
- * 发送时机：create/delete/rename 操作完成后。select 不发（不改列表内容）。
+ * 发送时机：create/delete/rename 完成、发消息触发自动标题更新后（后者在
+ * generationStore.submitMessage）。select 不发（不改列表内容）。
  *
  * qiankun JS 沙箱下子应用与宿主共享 window，postMessage 到 window 即可被宿主监听器收到。
  */

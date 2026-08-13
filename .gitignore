@@ -37,3 +37,6 @@ desktop/src-tauri/WixTools/
 
 # qiankun 宿主示例的本地配置（含 JWT，用 config.example.json 复制生成）
 examples/qiankun-host/config.json
+
+# docker-compose 本地密钥（JWT_SECRET / ADMIN_API_KEY），切勿提交
+.env

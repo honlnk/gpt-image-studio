@@ -1,6 +1,6 @@
 # GPT Image Studio
 
-[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen)](https://github.com/honlnk/gpt-image-studio/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-brightgreen)](https://github.com/honlnk/gpt-image-studio/releases)
 [![npm](https://img.shields.io/npm/v/@honlnk/image-studio-companion?label=companion%20npm)](https://www.npmjs.com/package/@honlnk/image-studio-companion)
 [![Deploy](https://github.com/honlnk/gpt-image-studio/actions/workflows/deploy.yml/badge.svg)](https://github.com/honlnk/gpt-image-studio/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

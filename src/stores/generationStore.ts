@@ -4,6 +4,7 @@ import { computed, ref, watch } from "vue";
 import { track } from "../features/analytics/useAnalyticsTracker";
 import type { GenerationJob } from "../features/generation/generationJobTypes";
 import type { ImageClient } from "../features/generation/imageClients/imageClient";
+import { notifyHostConversationsChanged } from "../services/embeddedBridge";
 import { normalizeImageCount } from "../services/generationParams";
 import type { ImageAssetServices } from "../services/imageAssets";
 import type { MessageServices } from "../services/messages";
@@ -219,6 +220,13 @@ export const useGenerationStore = defineStore("generation", () => {
         ? input.value.persistConversation(updatedConversation)
         : Promise.resolve(),
     ]).catch(input.value.onStorageError);
+    // 自动标题生效（会话未被手动重命名）→ 列表内容变了，补发宿主通知。
+    // 嵌入态下子应用侧边栏隐藏（hideSidebar），标题展示完全依赖宿主重新拉列表；
+    // 独立态 notifyHostConversationsChanged 是 no-op，无副作用。
+    // 同时覆盖「发消息隐式建会话」场景——新会话标题同样来自本条输入。
+    if (updatedConversation && !updatedConversation.isTitleManuallySet) {
+      notifyHostConversationsChanged();
+    }
     const createdJobs = createJobs(
       {
         assistantMessageId: assistantMessage.id,
