@@ -423,6 +423,8 @@ export function useStudioViewModel() {
     // - create/delete 完成后发 conversations-changed（列表内容变了，宿主刷新）；
     // - rename 只负责打开 RenameDialog，真正的通知在 confirmRenameConversation
     //   确认后发出——此处发的话宿主刷新看到的还是旧标题；
+    // - 发消息触发自动标题更新（未手动重命名的会话）也会改列表内容，通知在
+    //   generationStore.submitMessage 落库后补发；
     // - select 不发 conversations-changed（列表内容没变）；激活态变化由下方
     //   watch 统一发 active-conversation-changed（pushState 不触发 popstate，
     //   宿主无法靠监听地址栏感知，必须显式通知）。

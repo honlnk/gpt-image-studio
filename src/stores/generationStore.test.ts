@@ -4,6 +4,7 @@ import { computed, ref } from "vue";
 import { useGenerationStore } from "./generationStore";
 import { createImageAssetServices } from "../services/imageAssets";
 import { createMessageServices } from "../services/messages";
+import { notifyHostConversationsChanged } from "../services/embeddedBridge";
 import {
   createSpyStorage,
   type SpyStorage,
@@ -16,6 +17,12 @@ import type {
   PromptRequestSettings,
 } from "../types/studio";
 import type { ImageClient } from "../features/generation/imageClients/imageClient";
+
+// submitMessage 的宿主通知走真实 embeddedBridge 也会在非嵌入态 no-op，
+// 这里 mock 掉以便直接断言「是否发出了通知」这一行为本身。
+vi.mock("../services/embeddedBridge", () => ({
+  notifyHostConversationsChanged: vi.fn(),
+}));
 
 // generationStore 通过 context 注入依赖。这里构造一份最小可用 fixture，
 // 只让 submitMessage 的前置拦截路径能跑通；其余依赖按需 spy/resolve。
@@ -66,6 +73,8 @@ type ContextOverrides = {
   supportsEdit?: boolean;
   attachedImages?: string[];
   composerText?: string;
+  /** updateConversationSummary 的返回值（自动标题写入了哪个会话） */
+  summaryResult?: Conversation | null;
 };
 
 function buildContext(overrides: ContextOverrides = {}) {
@@ -124,7 +133,9 @@ function buildContext(overrides: ContextOverrides = {}) {
     conversationExists: () => true,
     persistConversation: vi.fn().mockResolvedValue(undefined),
     refreshStorageUsage: vi.fn().mockResolvedValue(undefined),
-    updateConversationSummary: vi.fn().mockReturnValue(null),
+    updateConversationSummary: vi
+      .fn()
+      .mockReturnValue(overrides.summaryResult ?? null),
   });
   return { store, imageClient, notifyUnsupportedEdit, messages };
 }
@@ -190,5 +201,47 @@ describe("generationStore submitMessage 图生图前置拦截", () => {
 
     expect(notifyUnsupportedEdit).not.toHaveBeenCalled();
     expect(imageClient.generate).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitMessage 自动标题的宿主通知", () => {
+  beforeEach(() => {
+    vi.mocked(notifyHostConversationsChanged).mockClear();
+  });
+
+  it("会话未被手动重命名（自动标题生效）→ 发 conversations-changed 通知", async () => {
+    const { store } = buildContext({
+      attachedImages: [],
+      composerText: "一只戴着草帽的柯基",
+      summaryResult: { ...makeConversation(), isTitleManuallySet: false },
+    });
+
+    await store.submitMessage();
+
+    expect(notifyHostConversationsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("会话已手动重命名（标题定死）→ 不发通知", async () => {
+    const { store } = buildContext({
+      attachedImages: [],
+      composerText: "一只戴着草帽的柯基",
+      summaryResult: { ...makeConversation(), isTitleManuallySet: true },
+    });
+
+    await store.submitMessage();
+
+    expect(notifyHostConversationsChanged).not.toHaveBeenCalled();
+  });
+
+  it("updateConversationSummary 未命中会话（返回 null）→ 不发通知", async () => {
+    const { store } = buildContext({
+      attachedImages: [],
+      composerText: "一只戴着草帽的柯基",
+      summaryResult: null,
+    });
+
+    await store.submitMessage();
+
+    expect(notifyHostConversationsChanged).not.toHaveBeenCalled();
   });
 });
