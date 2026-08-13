@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useComposerStore } from "../../stores/composerStore";
 import { useConversationsStore } from "../../stores/conversationsStore";
 import { useImagesStore } from "../../stores/imagesStore";
+import { timestampFromCreatedAt } from "../../shared/dateTime";
 import type { ImageAsset } from "../../types/studio";
 import ImageDetailsPanel from "../image-library/ImageDetailsPanel.vue";
 import ImageGrid from "../image-library/ImageGrid.vue";
+import {
+  type ImageSourceClass,
+  classifyImageSource,
+  SOURCE_CLASS_LABELS,
+} from "../image-library/imageLibraryFormatters";
 import {
   IMAGE_TAG_COLORS,
   imageTagDotColor,
 } from "../image-library/imageTagColors";
 import StorageUsagePanel from "../image-library/StorageUsagePanel.vue";
+
+type SortKey = "time" | "name" | "size";
+type SortDirection = "asc" | "desc";
 
 const emit = defineEmits<{
   openBatchOperations: [];
@@ -23,6 +33,11 @@ const conversations = useConversationsStore();
 const images = useImagesStore();
 const activeFilter = ref<"current" | "all">("current");
 const activeColorFilter = ref<"all" | ImageAsset["tagColor"]>("all");
+const searchText = ref("");
+const sourceFilter = ref<"all" | ImageSourceClass>("all");
+const formatFilter = ref<"all" | string>("all");
+const sortKey = ref<SortKey>("time");
+const sortDirection = ref<SortDirection>("desc");
 const selectedImageId = ref("");
 const libraryImages = computed(() =>
   images.imageAssets.filter((image) => !image.isTransientMask),
@@ -38,12 +53,97 @@ const scopeImages = computed(() =>
     ? currentConversationImages.value
     : libraryImages.value,
 );
-const filteredImages = computed(() => {
-  if (activeColorFilter.value === "all") return scopeImages.value;
-  return scopeImages.value.filter(
-    (image) => image.tagColor === activeColorFilter.value,
-  );
+
+// 已载入图片里出现过的格式（mimeType），供格式筛选下拉动态汇总。
+// 用 Map 保留插入顺序，便于下拉稳定排序。
+const availableFormats = computed(() => {
+  const seen = new Map<string, string>();
+  for (const image of scopeImages.value) {
+    const mime = image.mimeType;
+    if (mime && !seen.has(mime)) {
+      seen.set(mime, mime.replace("image/", "").toUpperCase());
+    }
+  }
+  return Array.from(seen, ([value, label]) => ({ value, label }));
 });
+
+const trimmedSearch = computed(() => searchText.value.trim().toLowerCase());
+
+function compareText(a: string, b: string) {
+  return a.localeCompare(b, "zh-Hans", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function compareImages(a: ImageAsset, b: ImageAsset) {
+  const direction = sortDirection.value === "asc" ? 1 : -1;
+  let result = 0;
+  if (sortKey.value === "name") {
+    result = compareText(a.name, b.name);
+  } else if (sortKey.value === "size") {
+    result = (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0);
+  } else {
+    result = timestampFromCreatedAt(a) - timestampFromCreatedAt(b);
+  }
+  return result * direction || compareText(a.name, b.name);
+}
+
+const filteredImages = computed(() => {
+  let result = scopeImages.value;
+  if (trimmedSearch.value) {
+    const needle = trimmedSearch.value;
+    result = result.filter((image) =>
+      image.name.toLowerCase().includes(needle),
+    );
+  }
+  if (sourceFilter.value !== "all") {
+    result = result.filter(
+      (image) => classifyImageSource(image) === sourceFilter.value,
+    );
+  }
+  if (formatFilter.value !== "all") {
+    result = result.filter((image) => image.mimeType === formatFilter.value);
+  }
+  if (activeColorFilter.value !== "all") {
+    result = result.filter(
+      (image) => image.tagColor === activeColorFilter.value,
+    );
+  }
+  // 默认（time/desc）时存储层已按 createdAt DESC 返回，避免无谓拷贝；
+  // 仅在非默认排序时排序。
+  if (
+    sortKey.value !== "time" ||
+    sortDirection.value !== "desc" ||
+    trimmedSearch.value ||
+    sourceFilter.value !== "all" ||
+    formatFilter.value !== "all" ||
+    activeColorFilter.value !== "all"
+  ) {
+    result = [...result].sort(compareImages);
+  }
+  return result;
+});
+
+// 是否有非默认筛选/排序激活（用于决定是否提示「仅作用于已载入」）。
+const hasActiveFilter = computed(
+  () =>
+    trimmedSearch.value !== "" ||
+    sourceFilter.value !== "all" ||
+    formatFilter.value !== "all" ||
+    activeColorFilter.value !== "all" ||
+    sortKey.value !== "time" ||
+    sortDirection.value !== "desc",
+);
+
+// 「全部图片」范围是分页加载的；有筛选激活且还有未载入分页时，筛选结果可能不全。
+const isScopeIncomplete = computed(
+  () =>
+    activeFilter.value === "all" &&
+    hasActiveFilter.value &&
+    Boolean(images.assetsNextCursor),
+);
+
 const selectedImage = computed(() => {
   if (!selectedImageId.value) return null;
   return (
@@ -127,6 +227,58 @@ function isAttached(id: string) {
 
 function toggleColorFilter(nextColor: ImageAsset["tagColor"] | "all") {
   activeColorFilter.value = nextColor;
+}
+
+function toggleSortDirection() {
+  sortDirection.value = sortDirection.value === "asc" ? "desc" : "asc";
+}
+
+function onSortKeyChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value as SortKey;
+  if (value !== sortKey.value) {
+    sortKey.value = value;
+    track("library.sort_changed", {
+      target: "images",
+      key: value,
+      direction: sortDirection.value,
+    });
+  }
+}
+
+function onSourceFilterChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value as
+    | "all"
+    | ImageSourceClass;
+  sourceFilter.value = value;
+  track("library.filter_by_source", { source: value });
+}
+
+function onFormatFilterChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value;
+  formatFilter.value = value;
+  track("library.filter_by_format", { format: value });
+}
+
+function onSearchInput() {
+  const length = searchText.value.trim().length;
+  if (length > 0) {
+    track("library.search_used", { target: "library", length });
+  }
+}
+
+// 切换范围时重置格式筛选——新范围的可用格式集合可能不同，避免选中一个
+// 在新范围里不存在的格式导致列表恒空。
+watch(activeFilter, () => {
+  formatFilter.value = "all";
+});
+
+function resetFilters() {
+  searchText.value = "";
+  sourceFilter.value = "all";
+  formatFilter.value = "all";
+  activeColorFilter.value = "all";
+  sortKey.value = "time";
+  sortDirection.value = "desc";
 }
 
 // 头部计数（server 模式分页 PR-d）：窗口是分页加载的，length 只是"已加载"，
@@ -266,9 +418,119 @@ function setImageTagColor(
           @click="toggleColorFilter(color)"
         />
       </div>
+
+      <div class="mt-2 flex items-center gap-1.5 rounded-lg border border-gray-200 px-2 py-1.5">
+        <svg
+          class="h-3.5 w-3.5 shrink-0 text-gray-400"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            fill-rule="evenodd"
+            d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z"
+            clip-rule="evenodd"
+          />
+        </svg>
+        <input
+          v-model="searchText"
+          class="min-w-0 flex-1 bg-transparent text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none"
+          placeholder="搜索图片名"
+          type="search"
+          @input="onSearchInput"
+        />
+        <button
+          v-if="searchText"
+          aria-label="清除搜索"
+          class="shrink-0 cursor-pointer rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          type="button"
+          @click="searchText = ''"
+        >
+          <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path
+              d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22z"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div class="mt-2 grid grid-cols-3 gap-1.5">
+        <select
+          :value="sourceFilter"
+          aria-label="按来源筛选"
+          class="min-w-0 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
+          @change="onSourceFilterChange"
+        >
+          <option value="all">全部来源</option>
+          <option v-for="(label, key) in SOURCE_CLASS_LABELS" :key="key" :value="key">
+            {{ label }}
+          </option>
+        </select>
+        <select
+          :value="formatFilter"
+          aria-label="按格式筛选"
+          class="min-w-0 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
+          :disabled="availableFormats.length === 0"
+          @change="onFormatFilterChange"
+        >
+          <option value="all">全部格式</option>
+          <option v-for="fmt in availableFormats" :key="fmt.value" :value="fmt.value">
+            {{ fmt.label }}
+          </option>
+        </select>
+        <div class="flex min-w-0 items-center gap-0.5">
+          <select
+            :value="sortKey"
+            aria-label="排序方式"
+            class="min-w-0 flex-1 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
+            @change="onSortKeyChange"
+          >
+            <option value="time">时间</option>
+            <option value="name">名称</option>
+            <option value="size">大小</option>
+          </select>
+          <button
+            :aria-label="sortDirection === 'asc' ? '升序' : '降序'"
+            class="shrink-0 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-gray-600 hover:bg-gray-50"
+            type="button"
+            @click="toggleSortDirection"
+          >
+            <svg
+              class="h-3.5 w-3.5 transition-transform"
+              :class="sortDirection === 'asc' ? '' : 'rotate-180'"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M10 3a.75.75 0 0 1 .75.75v10.638l3.96-4.158a.75.75 0 1 1 1.08 1.04l-5.25 5.5a.75.75 0 0 1-1.08 0l-5.25-5.5a.75.75 0 1 1 1.08-1.04l3.96 4.158V3.75A.75.75 0 0 1 10 3Z"
+                clip-rule="evenodd"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <button
+        v-if="hasActiveFilter"
+        class="mt-1.5 cursor-pointer self-start text-xs text-gray-400 hover:text-gray-600"
+        type="button"
+        @click="resetFilters"
+      >
+        清除筛选/排序
+      </button>
     </div>
 
     <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <p
+        v-if="isScopeIncomplete"
+        class="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-700"
+      >
+        筛选仅作用于已载入图片（{{ filteredImages.length }}/{{
+          libraryImages.length
+        }} 条），向下滚动加载更多
+      </p>
       <ImageGrid
         :active-filter="activeFilter"
         :attached-image-ids="images.attachedImages"

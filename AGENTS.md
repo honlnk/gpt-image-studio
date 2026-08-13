@@ -86,6 +86,7 @@ All IndexedDB access goes through the `StudioStorage` abstraction (`src/services
 | `promptWordbanks.ts` | Prompt mode wordbank helpers |
 | `analyticsEvents.ts` | Local analytics event persistence |
 | `analyticsExport.ts` | Analytics ZIP/JSONL/Markdown export |
+| `analyticsAnalysis.ts` | Analytics V2 read-only analysis: generation funnel, satisfaction proxy, prompt-mode comparison, time series, event distribution (pure functions) |
 | `imageMetadata.ts` | Read image dimensions via `createImageBitmap` / `HTMLImageElement` |
 | `storageUsage.ts` | Estimate IndexedDB usage via `navigator.storage.estimate()` |
 | `backups.ts` | Full project export/import as ZIP |
@@ -117,10 +118,10 @@ Companion-facing browser types live in `src/types/companion.ts`; server-side Com
 ### Key Patterns
 
 - **Image storage**: Metadata (`imageAssets` store) and binary data (`imageBlobs` store) are separated. `ImageAsset.blobKey` links them. `previewUrl` (`URL.createObjectURL`) is memory-only — created during hydration, stripped before persist via `toPlainImageAsset`.
-- **Generation job flow**: `generationStore` manages the full lifecycle: create user + assistant messages → persist → dispatch to `ImageClient.generate` or `ImageClient.edit` based on whether reference images are attached → on success create `ImageAsset` + blob → on failure mark assistant message as `error`.
+- **Generation job flow**: `generationStore` manages the full lifecycle: create user + assistant messages → persist → dispatch to `ImageClient.generate` or `ImageClient.edit` based on whether reference images are attached → on success create `ImageAsset` + blob → on generation failure mark assistant message as `error`. Image-persistence failure (blob/asset save) is handled separately via `onStorageError` and does NOT mark the job as failed (the image is already visible in memory).
 - **Conversation write queue**: A promise chain serializes conversation writes to prevent race conditions from rapid sequential operations.
 - **Prompt modes**: `promptBuilder.ts` wraps prompts only at request time. Chat history should keep the user's raw prompt, not the expanded provider prompt.
-- **Analytics tracking**: Prefer module-level tracker helpers and `v-track` for UI events. Do not put analytics events into backup exports.
+- **Analytics tracking**: Prefer module-level tracker helpers and `v-track` for UI events. Do not put analytics events into backup exports. V2 analysis layer (`analyticsAnalysis.ts`) is pure-function aggregation over V1 events, surfaced via the read-only `AnalyticsDashboard.vue` (settings → 数据分析 tab); open the tab to trigger `analyticsStore.refreshAnalyticsInsights`.
 - **Parameter editors**: Collapsible inline editors in ChatWorkspace using `grid-template-rows` CSS transition for animation. Scoped `<style>` is only used for this animation.
 
 ### Styling
@@ -147,13 +148,16 @@ See `docs/plans/roadmap.md` for the full business roadmap. Current status:
 - Done: Settings refactor with batch operations (`docs/archive/settings-batch-operations-plan.md`)
 - Done: Generation jobs (`src/stores/generationStore.ts`), per-conversation drafts (`src/services/conversationDrafts.ts`), mask editing (`docs/architecture/mask-editing.md`)
 - Done: Local analytics V1.0-V1.2 (`src/stores/analyticsStore.ts`, `src/services/analyticsEvents.ts`, `src/services/analyticsExport.ts`); analytics is local-only and excluded from backups
+- Done: Analytics V2 analysis layer — `analyticsAnalysis.ts` pure-function aggregation (generation funnel, satisfaction proxy, prompt-mode comparison, time series, event distribution) + `AnalyticsDashboard.vue` read-only dashboard (settings → 数据分析 tab); supplemented `generation.requested` payload with promptMode/quality/format/background/resolution
 - Done: Prompt modes (`src/services/promptBuilder.ts`, `docs/plans/prompt-modes.md`)
 - Done: Responses API streaming image previews for browser direct mode (`docs/plans/responses-streaming-plan.md`)
 - Done: Local CLI Companion background service management (`start`/`stop`/`restart`/`logs`) with persistent connection key auth (`status`/`reset-key`); system keychain is deferred
 - Done: Companion provider translation layer with OpenAI-compatible, GLM, Doubao/Seedream, Qwen-Image, Wan, Grok, Gemini, Gemini-OpenAI, and DeepInfra providers (`docs/companion/companion-providers-plan.md`, `docs/companion/companion-doubao-plan.md`)
 - Done: Companion server deployment mode with JWT multi-tenancy, storage routes, and OSS STS (`docs/archive/evolution/phase3-overview.md`, `docs/guides/deployment-guide.md`)
 - Done: Tauri v2 desktop packaging first version (`desktop/src-tauri`, `docs/guides/desktop-packaging.md`)
-- Upcoming: finer image-library filters, desktop signing/notarization/cross-platform builds/updater, optional Companion sidecar, analytics V2 analysis layer
+- Done: Finer image-library filters — `ImageLibrary.vue` adds search, source filter (generated/edited/imported via `classifyImageSource`), format filter, sort (time/name/size + asc/desc); client-side filter with "partial load" hint for paginated "all" scope
+- Done: Error feedback polish — `feedbackStore` adds info/warning variants; `renameImage`/`setImageTagColor`/`deleteImage` rollback on persist failure; `generationStore` separates image-save failure from generation failure; `reportStorageError` adds throttled toast; `settingsModal.images` filters transient masks
+- Upcoming: desktop signing/notarization/cross-platform builds/updater, optional Companion sidecar
 
 ## Conventions
 

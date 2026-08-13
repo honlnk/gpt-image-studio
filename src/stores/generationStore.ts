@@ -4,6 +4,7 @@ import { computed, ref, watch } from "vue";
 import { track } from "../features/analytics/useAnalyticsTracker";
 import type { GenerationJob } from "../features/generation/generationJobTypes";
 import type { ImageClient } from "../features/generation/imageClients/imageClient";
+import { notifyHostConversationsChanged } from "../services/embeddedBridge";
 import { normalizeImageCount } from "../services/generationParams";
 import type { ImageAssetServices } from "../services/imageAssets";
 import type { MessageServices } from "../services/messages";
@@ -219,6 +220,13 @@ export const useGenerationStore = defineStore("generation", () => {
         ? input.value.persistConversation(updatedConversation)
         : Promise.resolve(),
     ]).catch(input.value.onStorageError);
+    // 自动标题生效（会话未被手动重命名）→ 列表内容变了，补发宿主通知。
+    // 嵌入态下子应用侧边栏隐藏（hideSidebar），标题展示完全依赖宿主重新拉列表；
+    // 独立态 notifyHostConversationsChanged 是 no-op，无副作用。
+    // 同时覆盖「发消息隐式建会话」场景——新会话标题同样来自本条输入。
+    if (updatedConversation && !updatedConversation.isTitleManuallySet) {
+      notifyHostConversationsChanged();
+    }
     const createdJobs = createJobs(
       {
         assistantMessageId: assistantMessage.id,
@@ -243,6 +251,11 @@ export const useGenerationStore = defineStore("generation", () => {
         hasReferences: references.length > 0,
         hasMask: Boolean(editMaskImageId),
         size: generationParams.size,
+        promptMode: promptRequestSettings.promptMode,
+        quality: generationParams.quality,
+        outputFormat: generationParams.outputFormat,
+        background: generationParams.background,
+        resolution: generationParams.resolution,
       },
       "system",
     );
@@ -297,6 +310,10 @@ export const useGenerationStore = defineStore("generation", () => {
   }
 
   async function generateAnother(message: Message) {
+    const generationParams =
+      message.generationParams ?? input.value.currentGenerationParams();
+    const promptRequestSettings =
+      message.promptRequestSettings ?? input.value.currentPromptRequestSettings();
     track(
       "generation.requested",
       {
@@ -304,6 +321,12 @@ export const useGenerationStore = defineStore("generation", () => {
         hasReferences: message.referencedImageIds.length > 0,
         hasMask: Boolean(message.editMaskImageId),
         trigger: "generate_another",
+        size: generationParams.size,
+        promptMode: promptRequestSettings.promptMode,
+        quality: generationParams.quality,
+        outputFormat: generationParams.outputFormat,
+        background: generationParams.background,
+        resolution: generationParams.resolution,
       },
       "system",
     );
@@ -465,7 +488,14 @@ export const useGenerationStore = defineStore("generation", () => {
       if (assistantMessage) {
         saveTasks.push(enqueueMessageSave(assistantMessage));
       }
-      await Promise.all(saveTasks);
+      try {
+        await Promise.all(saveTasks);
+      } catch (storageError) {
+        // 图片已生成并在 UI 可见（内存 asset 已 push、job 已标记成功），
+        // 这里是"本地保存失败"而非"生成失败"——单独走存储错误通道，
+        // 不落入下方 catch 误标 markJobError（否则用户会看到"生成失败"但图已显示）。
+        input.value.onStorageError(storageError);
+      }
       await input.value.refreshStorageUsage();
     } catch (error) {
       const message = formatError(error);

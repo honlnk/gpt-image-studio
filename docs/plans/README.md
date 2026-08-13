@@ -8,7 +8,7 @@
 
 | 文档 | 状态 | 说明 |
 | :--- | :--- | :--- |
-| [用户行为日志计划](analytics-event-logging-plan.md) | V1 已完成 | V1.0 核心事件 + V1.1 高频控件 + V1.2 颜色分组专项全部落地 |
+| [用户行为日志计划](analytics-event-logging-plan.md) | V1 + V2 已完成 | V1.0 核心事件 + V1.1 高频控件 + V1.2 颜色分组专项 + V2 分析层（纯函数聚合 + 只读仪表盘）全部落地 |
 | [提示词模式计划](prompt-modes.md) | 已落地 | 默认 / 安全 / 创意 / 开放四档 PromptMode，`promptBuilder.ts` 请求前包装 |
 | [Responses API 流式预览](responses-streaming-plan.md) | 已落地 | 浏览器直连模式 Images API ↔ Responses API 切换 + SSE partial image 预览 |
 

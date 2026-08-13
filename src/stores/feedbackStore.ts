@@ -1,9 +1,11 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 
+export type StudioNoticeType = "success" | "error" | "info" | "warning";
+
 export type StudioNotice = {
   id: number;
-  type: "success" | "error";
+  type: StudioNoticeType;
   message: string;
 };
 
@@ -61,7 +63,15 @@ export const useFeedbackStore = defineStore("feedback", () => {
     setNotice("error", message);
   }
 
-  function setNotice(type: StudioNotice["type"], message: string) {
+  function notifyInfo(message: string) {
+    setNotice("info", message);
+  }
+
+  function notifyWarning(message: string) {
+    setNotice("warning", message);
+  }
+
+  function setNotice(type: StudioNoticeType, message: string) {
     if (noticeTimer) {
       clearTimeout(noticeTimer);
     }
@@ -73,7 +83,19 @@ export const useFeedbackStore = defineStore("feedback", () => {
     noticeTimer = setTimeout(() => {
       notice.value = null;
       noticeTimer = null;
-    }, type === "error" ? 7000 : 3500);
+    }, noticeDuration(type));
+  }
+
+  function noticeDuration(type: StudioNoticeType) {
+    switch (type) {
+      case "error":
+        return 7000;
+      case "warning":
+      case "info":
+        return 4500;
+      default:
+        return 3500;
+    }
   }
 
   return {
@@ -83,7 +105,9 @@ export const useFeedbackStore = defineStore("feedback", () => {
     dismissNotice,
     notice,
     notifyError,
+    notifyInfo,
     notifySuccess,
+    notifyWarning,
     requestConfirmation,
   };
 });

@@ -10,6 +10,10 @@ import {
   createAnalyticsEventServices,
   type AnalyticsEventServices,
 } from "../services/analyticsEvents";
+import {
+  computeInsights,
+  type AnalyticsInsights,
+} from "../services/analyticsAnalysis";
 import { createAnalyticsExportArchive } from "../services/analyticsExport";
 import { resolveStorage } from "../services/storage/resolveStorage";
 import { createObjectUrl, revokeObjectUrl } from "../shared/objectUrls";
@@ -42,6 +46,8 @@ const defaultServices: AnalyticsStoreServices = {
 
 export const useAnalyticsStore = defineStore("analytics", () => {
   const eventCount = ref(0);
+  // V2 分析洞察：打开数据分析面板时刷新，null 表示尚未计算/无数据。
+  const analyticsInsights = ref<AnalyticsInsights | null>(null);
   const sessionId = getOrCreateSessionId();
   let services: AnalyticsStoreServices = defaultServices;
 
@@ -104,13 +110,26 @@ export const useAnalyticsStore = defineStore("analytics", () => {
   async function clearEvents() {
     await requireServices().analyticsEvents.clear();
     eventCount.value = 0;
+    analyticsInsights.value = null;
+  }
+
+  /** V2：拉取全量事件并重算分析洞察，供数据分析面板使用。 */
+  async function refreshAnalyticsInsights() {
+    try {
+      const events = await requireServices().analyticsEvents.list();
+      analyticsInsights.value = computeInsights(events);
+    } catch {
+      analyticsInsights.value = null;
+    }
   }
 
   return {
     eventCount,
+    analyticsInsights,
     configure,
     setContext,
     refreshEventCount,
+    refreshAnalyticsInsights,
     exportEvents,
     clearEvents,
   };

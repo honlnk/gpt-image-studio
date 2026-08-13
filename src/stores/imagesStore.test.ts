@@ -11,6 +11,7 @@ import {
 import { InMemoryStorage } from "../services/storage/InMemoryStorage";
 import { STORE_NAMES } from "../services/storage";
 import { createStorageUsageServices } from "../services/storageUsage";
+import { useFeedbackStore } from "./feedbackStore";
 import type { ImageAsset } from "../types/studio";
 
 // imagesStore 的预览懒加载（PR9）：hydrate 只装配 metadata，blob 走
@@ -400,5 +401,103 @@ describe("imagesStore 分页加载（PR-c）", () => {
     expect(store.storageUsage?.projectBytes).toBe(150);
     // 不得触碰存储后端的聚合接口（那是模块级默认实例的路径）
     expect(storage.estimateStoredBytes).not.toHaveBeenCalled();
+  });
+});
+
+describe("imagesStore 写入失败回滚（D2）", () => {
+  function setupForMutations() {
+    const storage = createSpyStorage();
+    const store = useImagesStore();
+    const activeConversationId = ref("conv-1");
+    const onStorageError = vi.fn();
+    store.configureImagesStore({
+      services: {
+        imageAssets: createImageAssetServices(storage),
+        storageUsage: createStorageUsageServices(storage),
+      },
+      activeConversationId,
+      messages: ref([]),
+      onStorageError,
+    });
+    return { store, storage, onStorageError };
+  }
+
+  /** 让 feedback.requestConfirmation 直接返回 true（跳过确认弹窗）。 */
+  function autoConfirm() {
+    const feedback = useFeedbackStore();
+    vi.spyOn(feedback, "requestConfirmation").mockResolvedValue(true);
+    return feedback;
+  }
+
+  it("renameImage 持久化成功返回 true 且更新内存", async () => {
+    const { store } = setupForMutations();
+    store.imageAssets = [makeAsset("img-1")];
+
+    const result = await store.renameImage("img-1", "新名字");
+
+    expect(result).toBe(true);
+    expect(store.imageById("img-1")?.name).toBe("新名字");
+  });
+
+  it("renameImage 持久化失败回滚内存原名并返回 false", async () => {
+    const { store, storage, onStorageError } = setupForMutations();
+    store.imageAssets = [makeAsset("img-1")];
+    storage.put.mockRejectedValueOnce(new Error("quota"));
+
+    const result = await store.renameImage("img-1", "新名字");
+
+    expect(result).toBe(false);
+    expect(store.imageById("img-1")?.name).toBe("img-1"); // 原名恢复
+    expect(onStorageError).toHaveBeenCalledTimes(1);
+  });
+
+  it("setImageTagColor 持久化失败回滚内存原颜色并返回 false", async () => {
+    const { store, storage, onStorageError } = setupForMutations();
+    store.imageAssets = [{ ...makeAsset("img-1"), tagColor: "red" }];
+    storage.put.mockRejectedValueOnce(new Error("quota"));
+
+    const result = await store.setImageTagColor("img-1", "blue");
+
+    expect(result).toBe(false);
+    expect(store.imageById("img-1")?.tagColor).toBe("red"); // 原颜色恢复
+    expect(onStorageError).toHaveBeenCalledTimes(1);
+  });
+
+  it("setImageTagColor 持久化成功返回 true 且记录事件", async () => {
+    const { store } = setupForMutations();
+    store.imageAssets = [makeAsset("img-1")];
+
+    const result = await store.setImageTagColor("img-1", "blue");
+
+    expect(result).toBe(true);
+    expect(store.imageById("img-1")?.tagColor).toBe("blue");
+  });
+
+  it("deleteImage 持久化失败时把图片塞回内存（回滚乐观删除）", async () => {
+    const { store, storage, onStorageError } = setupForMutations();
+    autoConfirm();
+    store.imageAssets = [makeAsset("img-1")];
+    storage.delete.mockRejectedValueOnce(new Error("io"));
+
+    await store.deleteImage("img-1");
+
+    expect(store.imageById("img-1")).toBeDefined(); // 回滚回来了
+    expect(onStorageError).toHaveBeenCalledTimes(1);
+  });
+
+  it("deleteImages 批量持久化失败时回滚全部已乐观删除的图片", async () => {
+    const { store, storage, onStorageError } = setupForMutations();
+    store.imageAssets = [
+      makeAsset("img-1"),
+      { ...makeAsset("img-2"), conversationId: "conv-1" },
+    ];
+    storage.delete.mockRejectedValue(new Error("io"));
+
+    await store.deleteImages(["img-1", "img-2"]);
+
+    expect(store.imageById("img-1")).toBeDefined();
+    expect(store.imageById("img-2")).toBeDefined();
+    expect(store.imageAssets).toHaveLength(2);
+    expect(onStorageError).toHaveBeenCalled();
   });
 });

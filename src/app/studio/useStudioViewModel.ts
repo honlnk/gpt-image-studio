@@ -4,6 +4,7 @@ import { useStudioBackup, useStudioRestore } from "../../features/backup";
 import { useStudioConversations } from "../../features/conversations";
 import { useStudioDrafts } from "../../features/drafts/useStudioDrafts";
 import { useStudioFeedback } from "../../features/feedback";
+import { useFeedbackStore } from "../../stores/feedbackStore";
 import {
   createDirectImagesClient,
   createLocalCompanionImagesClient,
@@ -140,7 +141,8 @@ export function useStudioViewModel() {
   });
   const feedback = useStudioFeedback();
   const analytics = useAnalyticsStore();
-  const { eventCount: analyticsEventCount } = storeToRefs(analytics);
+  const { eventCount: analyticsEventCount, analyticsInsights: analyticsInsightsRef } =
+    storeToRefs(analytics);
   // Companion 连接 + 管理状态：共享 Pinia 单例 store，工作台和 /companion 管理页共用。
   // 探活/配对/凭证/日志全收拢在这里，不重复实例化、不重复轮询。
   const companionStore = useCompanionStore();
@@ -423,6 +425,8 @@ export function useStudioViewModel() {
     // - create/delete 完成后发 conversations-changed（列表内容变了，宿主刷新）；
     // - rename 只负责打开 RenameDialog，真正的通知在 confirmRenameConversation
     //   确认后发出——此处发的话宿主刷新看到的还是旧标题；
+    // - 发消息触发自动标题更新（未手动重命名的会话）也会改列表内容，通知在
+    //   generationStore.submitMessage 落库后补发；
     // - select 不发 conversations-changed（列表内容没变）；激活态变化由下方
     //   watch 统一发 active-conversation-changed（pushState 不触发 popstate，
     //   宿主无法靠监听地址栏感知，必须显式通知）。
@@ -673,10 +677,14 @@ export function useStudioViewModel() {
 
     cancelRenameImage();
     if (nextName === previousName) return;
-    await images.renameImage(imageId, nextName);
+    const saved = await images.renameImage(imageId, nextName);
     analytics.setContext({ imageId });
     track("image.renamed", { imageId }, "system");
-    feedback.notifySuccess("图片已重命名。");
+    if (saved) {
+      feedback.notifySuccess("图片已重命名。");
+    } else {
+      feedback.notifyError("重命名失败，本地保存出错，请重试。");
+    }
   }
 
   function persistSettingsChange() {
@@ -901,7 +909,9 @@ export function useStudioViewModel() {
     deleteConversations: deleteConversationsWithDraft,
     deleteImages: images.deleteImages,
     exportBackup: backup.exportBackup,
-    images: images.imageAssets,
+    images: computed(() =>
+      images.imageAssets.value.filter((image) => !image.isTransientMask),
+    ),
     importBackup: backup.importBackup,
     initialBatchPanel: settingsInitialBatchPanel,
     initialTab: settingsInitialTab,
@@ -925,6 +935,8 @@ export function useStudioViewModel() {
     analyticsEnabled: settings.analyticsEnabled,
     analyticsPromptCapture: settings.analyticsPromptCapture,
     analyticsEventCount,
+    analyticsInsights: analyticsInsightsRef,
+    refreshAnalyticsInsights: analytics.refreshAnalyticsInsights,
     setAnalyticsEnabled,
     setAnalyticsPromptCapture,
     exportAnalyticsEvents,
@@ -980,6 +992,22 @@ export function useStudioViewModel() {
   };
 }
 
+// 存储错误节流：高频的草案/预览写入失败不应刷屏。相同错误消息在窗口内只弹一次。
+const STORAGE_ERROR_THROTTLE_MS = 5000;
+const storageErrorLastShown = new Map<string, number>();
+
 function reportStorageError(error: unknown) {
   console.error("Failed to access local studio storage.", error);
+  const message = error instanceof Error ? error.message : String(error);
+  const now = Date.now();
+  const lastShown = storageErrorLastShown.get(message) ?? 0;
+  if (now - lastShown < STORAGE_ERROR_THROTTLE_MS) return;
+  storageErrorLastShown.set(message, now);
+  try {
+    useFeedbackStore().notifyWarning(
+      "本地保存失败，部分更改可能未持久化（详情见控制台）。",
+    );
+  } catch {
+    // 反馈 store 不可用时静默降级（如初始化阶段），已有 console.error 兜底。
+  }
 }
