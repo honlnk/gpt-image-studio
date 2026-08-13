@@ -43,13 +43,26 @@ docker pull ghcr.io/honlnk/gpt-image-studio-companion:1.1.0
 docker pull honlnk/gpt-image-studio-companion:1.1.0
 ```
 
+## 发布前置：npm Trusted Publisher（OIDC）
+
+npm 发布已迁移到 **Trusted Publishing**（OIDC 免 token），**不再需要 `NPM_TOKEN` secret**。
+发布前需先在 npmjs.com 为该包配置 trusted publisher：
+
+`@honlnk/image-studio-companion` → Settings → Trusted Publisher → GitHub Actions：
+
+- Organization or user：`honlnk`
+- Repository：`gpt-image-studio`
+- Workflow filename：`release.yml`（只填文件名，含 `.yml`，不带路径）
+- Allowed actions：勾选 `npm publish`
+
+配置后，推 `companion-v*` tag 即由 GitHub Actions 用 OIDC 凭证直接发布 npm 包（自动附带 provenance），无需任何长期 token，也不受账号 2FA 影响。
+
 ## 所需 Secrets
 
 仓库 Settings → Secrets and variables → Actions：
 
 | Secret | 用途 | 获取方式 |
 |--------|------|----------|
-| `NPM_TOKEN` | npm publish | npmjs.com → Access Tokens → 新建 publish token |
 | `DOCKERHUB_USERNAME` | Docker Hub 登录 | Docker Hub 账号名（`honlnk`） |
 | `DOCKERHUB_TOKEN` | Docker Hub 推送 | Docker Hub → Account Settings → Security → New Access Token |
 
