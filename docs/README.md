@@ -56,6 +56,7 @@ Companion 子系统文档（本地 CLI 伴侣的设计、Provider 适配层、�
 | [桌面端打包](guides/desktop-packaging.md) | Tauri v2 集成、构建命令和后续路线 |
 | [Cloudflare CDN 加速](guides/cloudflare-cdn-setup.md) | CF 反代 GitHub Pages 消除流量上限（仓库零改动，待执行） |
 | [阶段一测试清单](guides/phase1-test-checklist.md) | 翻译层骨架 + 能力驱动 UI 的手动验证步骤 |
+| [SEO 策略与可搜索性改进](guides/seo-strategy.md) | 公网可搜索性诊断、竞品分析、技术方案选型、关键词策略、外链与分发计划 |
 
 ## Decisions
 
