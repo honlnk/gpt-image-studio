@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
+import type { DesktopCompanionConfig } from "../services/desktopCompanion";
 import {
   isSizeRatio,
   MIN_IMAGE_COUNT,
@@ -152,6 +153,11 @@ export const useSettingsStore = defineStore("settings", () => {
   const connectionMode = ref<ConnectionMode>(readConnectionModeMirror());
   // 阶段三 PR5：qiankun 嵌入态标记。true 时连接配置由宿主注入，禁用持久化与设置面板编辑。
   const isEmbedded = ref(false);
+  // 阶段四 B 首期：桌面内置 Companion 态。Tauri sidecar 健康时由 main.ts 在
+  // app.mount 前注入：连接信息不持久化、模式锁定 localCompanion。与 qiankun 的
+  // isEmbedded 分开——桌面态保留完整 UI（侧边栏、管理页入口都在），仅锁连接配置。
+  const desktopCompanion = ref<DesktopCompanionConfig | null>(null);
+  const isDesktopCompanion = computed(() => desktopCompanion.value !== null);
   // 阶段三 PR7：嵌入态是否隐藏子应用自带侧边栏（默认 true，会话管理交宿主）。见文档 §2.5。
   const hideSidebarInEmbed = ref(true);
   const apiMode = ref<ApiMode>("images");
@@ -644,19 +650,21 @@ export const useSettingsStore = defineStore("settings", () => {
   // 需要先拿到 accessKey，而 accessKey 又在 config 里，直接 401 卡死。
   // ref 初始值同步读 localStorage（上方声明），变化时写回镜像。
   // 阶段三 PR5：嵌入态（isEmbedded）跳过持久化——连接配置由宿主注入，不写回本地。
+  // 阶段四 B：桌面内置态同理跳过——注入值不落盘，避免污染同源浏览器侧的配置
+  // （dev 模式下 devUrl 与浏览器 dev 共享 localStorage origin）。
   watch(companionUrl, (v) => {
-    if (isEmbedded.value) return;
+    if (isEmbedded.value || desktopCompanion.value) return;
     writeStorage(SETTINGS_STORAGE_KEYS.companionUrl, v);
   });
   watch(companionAccessKey, (v) => {
-    if (isEmbedded.value) return;
+    if (isEmbedded.value || desktopCompanion.value) return;
     writeStorage(SETTINGS_STORAGE_KEYS.companionAccessKey, v);
   });
   // connectionMode 镜像写回 localStorage：resolveStorage 在每次启动（含切换后的 reload）
   // setup 时同步读它装配后端。hydrate 不会改它（applySettings 不回写，见上方注释），
-  // 故无需 isHydrated 守卫；嵌入态由宿主固定，跳过持久化（同 companionUrl/accessKey）。
+  // 故无需 isHydrated 守卫；嵌入态/桌面内置态连接模式固定，跳过持久化。
   watch(connectionMode, (v) => {
-    if (isEmbedded.value) return;
+    if (isEmbedded.value || desktopCompanion.value) return;
     writeStorage(SETTINGS_STORAGE_KEYS.connectionMode, v);
   });
 
@@ -684,6 +692,23 @@ export const useSettingsStore = defineStore("settings", () => {
     connectionMode.value = "localCompanion";
     isEmbedded.value = true;
     hideSidebarInEmbed.value = input.hideSidebar ?? true;
+  }
+
+  /**
+   * 阶段四 B 首期：应用桌面内置 Companion 配置（Tauri 壳注入）。
+   *
+   * 与 qiankun applyEmbeddedConfig 的差异：桌面态保留完整 UI（不隐藏侧边栏、
+   * 管理页入口保留），仅锁连接——模式固定 localCompanion（对齐路线图阶段四
+   * 「APP 强制内置 provider 路径」的定位），连接信息不持久化。
+   *
+   * 必须在 useStudioViewModel 装配（resolveStorage 读 connectionMode.value）之前
+   * 调用，即 main.ts 的 render() 内、app.mount 之前。
+   */
+  function applyDesktopCompanionConfig(input: DesktopCompanionConfig) {
+    desktopCompanion.value = { ...input };
+    companionUrl.value = input.companionUrl;
+    companionAccessKey.value = input.accessKey;
+    connectionMode.value = "localCompanion";
   }
   // Companion 模式只支持 Images API。切到 companion 时若残留 responses，
   // 强制校正为 images，避免发出注定抛「仅支持 Images API」的请求。
@@ -713,7 +738,9 @@ export const useSettingsStore = defineStore("settings", () => {
     connectionMode,
     isEmbedded,
     hideSidebarInEmbed,
+    isDesktopCompanion,
     applyEmbeddedConfig,
+    applyDesktopCompanionConfig,
     applySettings,
     applyImageCount,
     applyImageCountMode,

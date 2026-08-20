@@ -25,9 +25,10 @@ const MODE_LABELS: Record<ConnectionMode, string> = {
  * 切换连接模式前先弹确认框：
  * 1) 说明数据隔离语义（切回可找回），对标 Companion 管理页切换存储位置的确认；
  * 2) reload 不可撤销，避免用户误点后页面猝不及防刷新。
+ * 嵌入态 / 桌面内置态禁用切换（连接由宿主 / sidecar 固定）。
  */
 async function handleSwitchMode(mode: ConnectionMode) {
-  if (settings.isEmbedded) return;
+  if (settings.isEmbedded || settings.isDesktopCompanion) return;
   const current = props.connectionMode;
   if (mode === current) return;
   const confirmed = await feedback.requestConfirmation({
@@ -58,6 +59,18 @@ async function handleSwitchMode(mode: ConnectionMode) {
         </p>
       </div>
 
+      <!-- 桌面内置态提示：sidecar 随应用启动，连接自动建立 -->
+      <div
+        v-if="settings.isDesktopCompanion"
+        class="rounded-lg border border-green-200 bg-green-50 p-4 space-y-1"
+      >
+        <p class="text-sm font-medium text-green-800">🖥️ 桌面内置服务</p>
+        <p class="text-xs leading-relaxed text-green-700">
+          内置 Companion 服务随桌面应用自动启动并完成连接，数据与 npm CLI 版共享
+          （~/.gpt-image-studio）。provider 凭据在管理页维护，无需手动配置连接。
+        </p>
+      </div>
+
       <div>
         <p class="mb-2 block text-sm font-medium text-gray-700">连接模式</p>
         <div class="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
@@ -68,10 +81,10 @@ async function handleSwitchMode(mode: ConnectionMode) {
               connectionMode === 'direct'
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-500 hover:text-gray-800',
-              settings.isEmbedded ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+              settings.isEmbedded || settings.isDesktopCompanion ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
             ]"
             type="button"
-            :disabled="settings.isEmbedded"
+            :disabled="settings.isEmbedded || settings.isDesktopCompanion"
             @click="handleSwitchMode('direct')"
           >
             浏览器直连
@@ -83,10 +96,10 @@ async function handleSwitchMode(mode: ConnectionMode) {
               connectionMode === 'localCompanion'
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-500 hover:text-gray-800',
-              settings.isEmbedded ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+              settings.isEmbedded || settings.isDesktopCompanion ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
             ]"
             type="button"
-            :disabled="settings.isEmbedded"
+            :disabled="settings.isEmbedded || settings.isDesktopCompanion"
             @click="handleSwitchMode('localCompanion')"
           >
             本地 Companion

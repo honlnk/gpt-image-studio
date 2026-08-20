@@ -12,6 +12,10 @@ const EMBEDDED_CSS_FILE = '__EMBEDDED_CSS_FILE__'
 import { trackDirective } from './directives/track'
 import { useSettingsStore } from './stores/settingsStore'
 import { configureEmbedding, listenHostMessages } from './services/embeddedBridge'
+import {
+  getDesktopCompanionConfig,
+  initDesktopCompanion,
+} from './services/desktopCompanion'
 
 /**
  * 前端入口（阶段三 PR5：qiankun 嵌入兼容）。
@@ -108,6 +112,15 @@ function render(props: QiankunProps = {}) {
     document.documentElement.classList.add(EMBEDDED_HTML_CLASS)
   }
 
+  // 桌面态（Tauri）：应用内置 Companion 配置（独立态分支在 render 前已完成
+  // initDesktopCompanion 拉取）。时机约束与 qiankun 分支相同——必须在
+  // app.mount（useStudioViewModel 装配 storage）之前。
+  const desktopCompanionConfig = getDesktopCompanionConfig()
+  if (desktopCompanionConfig) {
+    const settings = useSettingsStore(piniaInstance)
+    settings.applyDesktopCompanionConfig(desktopCompanionConfig)
+  }
+
   // 嵌入态：注入子应用 CSS。qiankun 会把 entry HTML 的 <link rel=stylesheet> 内联成
   // <style> 塞进挂载容器，但下方 app.mount 会清空容器 innerHTML 把它销毁，
   // 这里手动注入（见 injectEmbeddedCss）。
@@ -173,8 +186,11 @@ function injectEmbeddedCss(container: HTMLElement | string) {
 }
 
 // ─── 独立态：直接渲染 ───
+// 桌面 Tauri 运行时先拉取内置 Companion 连接信息（Rust sidecar 的握手结果），
+// 再 render——applyDesktopCompanionConfig 必须发生在 app.mount 前（见 render 内
+// 注释）。非 Tauri 环境此调用是 no-op，行为与原先完全一致。
 if (!window.__POWERED_BY_QIANKUN__) {
-  render({})
+  void initDesktopCompanion().finally(() => render({}))
 }
 
 // ─── 嵌入态：导出 qiankun 生命周期 ───

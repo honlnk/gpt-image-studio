@@ -54,6 +54,7 @@ const SIDECAR_STARTUP_TIMEOUT: Duration = Duration::from_secs(15);
 const INFO_WAIT_TIMEOUT: Duration = Duration::from_secs(8);
 
 #[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DesktopCompanionInfo {
     available: bool,
     companion_url: String,

@@ -2,12 +2,17 @@
 import { computed, ref } from "vue";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useCompanionStore } from "../../stores/companionStore";
+import { openExternalUrl } from "../../services/desktopCompanion";
 
 /**
  * Companion 基本信息面板（仅 Companion 模式显示）。
  *
  * 只放 web 端必需的连接信息：在线状态、连接密钥、管理页入口。
  * 所有 Companion 配置（provider 凭据、存储位置、日志）都在 Companion 自带管理页维护。
+ *
+ * 桌面内置态（isDesktopCompanion）：sidecar 随应用启动并自动连接，
+ * 密钥粘贴卡替换为内置服务状态卡；管理页入口保留（桌面凭据管理的唯一入口），
+ * 点击经 opener 在系统浏览器打开（webview 内 window.open 被 Tauri 拦截）。
  */
 
 const settings = useSettingsStore();
@@ -24,6 +29,11 @@ const accessKeyInput = ref("");
 function connectCompanion() {
   void companion.connectWithKey(accessKeyInput.value);
   accessKeyInput.value = "";
+}
+
+// 桌面内置态：管理页在系统浏览器打开（Tauri opener）。
+function openAdminExternally() {
+  void openExternalUrl(companionAdminUrl.value).catch(() => {});
 }
 
 // v0.6 升级提示：默认收起，点击文本按钮才展开。
@@ -45,9 +55,29 @@ const upgradeHintVisible = ref(false);
         </p>
       </div>
 
+      <!-- 桌面内置态：sidecar 随应用启动自动连接，密钥粘贴卡替换为状态卡 -->
+      <div
+        v-if="settings.isDesktopCompanion"
+        class="rounded-lg border border-green-200 bg-green-50 p-4 space-y-2"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-green-800">内置 Companion 服务</span>
+          <span
+            class="text-xs"
+            :class="companion.companionOnline ? 'text-green-600' : 'text-amber-600'"
+          >
+            {{ companion.companionOnline ? "运行中" : "启动中 / 离线" }}
+          </span>
+        </div>
+        <p class="text-xs leading-relaxed text-green-700">
+          服务随桌面应用自动启动并完成连接，与 npm CLI 版共享数据（~/.gpt-image-studio）。
+          无需粘贴连接密钥。
+        </p>
+      </div>
+
       <!-- 连接密钥：Web 端向 Companion 证明身份的 Bearer 密钥（权威存储 localStorage） -->
       <div
-        v-if="!settings.isEmbedded"
+        v-if="!settings.isEmbedded && !settings.isDesktopCompanion"
         class="rounded-lg border border-gray-200 p-4 space-y-3"
       >
         <div class="flex items-center justify-between">
@@ -100,7 +130,8 @@ const upgradeHintVisible = ref(false);
         </p>
       </div>
 
-      <!-- Companion 管理页入口：server/嵌入态下管理页已禁用（多租户管理面在宿主），不显示 -->
+      <!-- Companion 管理页入口：server/嵌入态下管理页已禁用（多租户管理面在宿主），不显示。
+           桌面内置态保留（provider 凭据管理的唯一入口），经 opener 系统浏览器打开。 -->
       <div
         v-if="!settings.isEmbedded"
         class="flex items-center justify-between rounded-lg border border-gray-200 p-3"
@@ -108,7 +139,16 @@ const upgradeHintVisible = ref(false);
         <div class="text-xs text-gray-500">
           provider 凭据、存储位置、日志由 Companion 自带管理页维护
         </div>
+        <button
+          v-if="settings.isDesktopCompanion"
+          class="shrink-0 cursor-pointer rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-700"
+          type="button"
+          @click="openAdminExternally"
+        >
+          打开管理页 →
+        </button>
         <a
+          v-else
           :href="companionAdminUrl"
           target="_blank"
           rel="noopener noreferrer"
