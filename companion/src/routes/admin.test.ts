@@ -122,3 +122,30 @@ describe("/admin/api/datasets", () => {
     await app.close();
   });
 });
+
+describe("resolveAdminDir", () => {
+  afterEach(() => {
+    delete process.env.COMPANION_ADMIN_DIR;
+  });
+
+  it("默认回到包布局的 admin 目录（dist/routes → ../admin）", async () => {
+    const { resolveAdminDir } = await import("./admin.js");
+    const dir = resolveAdminDir();
+    expect(dir.endsWith("admin")).toBe(true);
+    // 不是相对路径拼出来的当前目录 admin
+    expect(dir.split("src")[0].length).toBeGreaterThan(0);
+  });
+
+  it("COMPANION_ADMIN_DIR 覆盖时解析为绝对路径（供 sidecar 资源目录使用）", async () => {
+    process.env.COMPANION_ADMIN_DIR = "relative/resources/admin";
+    const { resolveAdminDir } = await import("./admin.js");
+    const { resolve } = await import("node:path");
+    expect(resolveAdminDir()).toBe(resolve("relative/resources/admin"));
+  });
+
+  it("空白的 COMPANION_ADMIN_DIR 被忽略", async () => {
+    process.env.COMPANION_ADMIN_DIR = "   ";
+    const { resolveAdminDir } = await import("./admin.js");
+    expect(resolveAdminDir().endsWith("admin")).toBe(true);
+  });
+});

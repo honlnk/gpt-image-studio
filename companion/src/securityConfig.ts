@@ -25,6 +25,9 @@ export function resolveChannel(value: string | undefined): CompanionChannel {
   return value === "dev" ? "dev" : "stable";
 }
 
+/** 除 http/https 外额外放行的 scheme：Tauri v2 macOS webview 的页面 origin。 */
+const EXTRA_ORIGIN_SCHEMES = ["tauri:"];
+
 export function normalizeOrigin(origin: string): string {
   const trimmed = origin.trim();
   if (!trimmed || trimmed === "*") {
@@ -38,17 +41,27 @@ export function normalizeOrigin(origin: string): string {
     throw new Error(`Origin 格式无效：${origin}`);
   }
 
-  if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error(`Origin 只支持 http 或 https：${origin}`);
-  }
-  if (url.pathname !== "/" || url.search || url.hash) {
-    throw new Error(`Origin 不能包含路径、查询或 hash：${origin}`);
+  const isHttp = ["http:", "https:"].includes(url.protocol);
+  if (!isHttp && !EXTRA_ORIGIN_SCHEMES.includes(url.protocol)) {
+    throw new Error(`Origin 只支持 http、https 或 ${EXTRA_ORIGIN_SCHEMES.join("/")}：${origin}`);
   }
   if (url.username || url.password) {
     throw new Error(`Origin 不能包含用户名或密码：${origin}`);
   }
 
-  return url.origin;
+  if (isHttp) {
+    if (url.pathname !== "/" || url.search || url.hash) {
+      throw new Error(`Origin 不能包含路径、查询或 hash：${origin}`);
+    }
+    return url.origin;
+  }
+
+  // 非特殊 scheme（如 tauri:）的 url.origin 序列化为 "null"（opaque origin），
+  // 需手动拼 scheme://host。Tauri webview 发出的 Origin 头形如 tauri://localhost。
+  if (url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
+    throw new Error(`Origin 不能包含路径、查询或 hash：${origin}`);
+  }
+  return `${url.protocol}//${url.host}`;
 }
 
 export function parseAllowOrigins(values: string[] = []): string[] {

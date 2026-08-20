@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
 import { existsSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
 import { Option, program } from "commander";
+import { COMPANION_VERSION } from "./version.js";
 import type { CompanionHealthResponse } from "./types.js";
 import type { CredentialEntry, CredentialInput } from "./credentials.js";
 import {
@@ -31,9 +31,6 @@ import {
   disableAutostart,
 } from "./autostart/index.js";
 
-const require = createRequire(import.meta.url);
-const packageJson = require("../package.json") as { version: string };
-const COMPANION_VERSION = packageJson.version;
 const DEFAULT_PORT = "19750";
 
 /**

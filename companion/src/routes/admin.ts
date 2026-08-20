@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import fastifyStatic from "@fastify/static";
 import { loopbackGuard } from "../middleware/loopback.js";
@@ -48,7 +48,15 @@ type AdminRoutesOptions = {
 // admin 资源目录解析：dev（tsx 跑 src/routes/admin.ts）和 prod（dist/routes/admin.js）
 // 都通过 import.meta.url 定位，回到同级的 ../admin/。
 // 编译产物布局：dist/routes/admin.js + dist/admin/*（build 脚本 cp -r src/admin dist/admin）。
-const ADMIN_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "admin");
+// 单文件二进制形态（Tauri sidecar）里 import.meta.url 失效，父进程通过
+// COMPANION_ADMIN_DIR 指向随 app 分发的资源目录。
+export function resolveAdminDir(): string {
+  const override = process.env.COMPANION_ADMIN_DIR;
+  if (override && override.trim()) return resolve(override.trim());
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "admin");
+}
+
+const ADMIN_DIR = resolveAdminDir();
 
 export async function adminRoutes(app: FastifyInstance, opts?: AdminRoutesOptions) {
   // 1) loopback 守卫：保护 /admin 命名空间下所有路由（API + 静态资源）。
