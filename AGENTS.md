@@ -61,7 +61,7 @@ src/components/
 
 ### Desktop Shell
 
-The desktop app lives under `desktop/src-tauri` and is a Tauri v2 shell that embeds the existing Vite `dist/` output. Keep the browser/Web app behavior as the source of truth. The desktop shell currently connects to the external Companion over `127.0.0.1`; do not assume Companion is bundled as a sidecar yet.
+The desktop app lives under `desktop/src-tauri` and is a Tauri v2 shell that embeds the existing Vite `dist/` output. Keep the browser/Web app behavior as the source of truth. The Companion is bundled as a sidecar (阶段四 · 方案 B 首期): `companion/scripts/build-sidecar.mjs` compiles it with `bun build --compile` into `binaries/companion-<triple>`, the Rust shell (`lib.rs`) spawns/reuses/kills it (`COMPANION_READY` stdout handshake, shared `~/.gpt-image-studio` data dir, ephemeral-port retry), and the webview auto-connects via `desktop_companion_info` (see `src/services/desktopCompanion.ts`). Note: better-sqlite3's V8-bound addon cannot load under Bun, so `companion/src/storage/sqliteDriver.ts` picks better-sqlite3 (Node) or bun:sqlite (compiled binary) at runtime. `pnpm dev:desktop`/`build:desktop` rebuild the sidecar first — rebuilding is manual after companion source changes during a dev session.
 
 ### Embed Examples (`examples/`)
 
@@ -157,7 +157,7 @@ See `docs/plans/roadmap.md` for the full business roadmap. Current status:
 - Done: Tauri v2 desktop packaging first version (`desktop/src-tauri`, `docs/guides/desktop-packaging.md`)
 - Done: Finer image-library filters — `ImageLibrary.vue` adds search, source filter (generated/edited/imported via `classifyImageSource`), format filter, sort (time/name/size + asc/desc); client-side filter with "partial load" hint for paginated "all" scope
 - Done: Error feedback polish — `feedbackStore` adds info/warning variants; `renameImage`/`setImageTagColor`/`deleteImage` rollback on persist failure; `generationStore` separates image-save failure from generation failure; `reportStorageError` adds throttled toast; `settingsModal.images` filters transient masks
-- Upcoming: desktop signing/notarization/cross-platform builds/updater, optional Companion sidecar
+- Upcoming: desktop signing/notarization/cross-platform builds/updater (Companion sidecar embedding is done)
 
 ## Conventions
 

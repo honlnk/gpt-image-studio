@@ -16,13 +16,13 @@
 
 ## A. 桌面端深化
 
-第一版（macOS arm64，未签名）已完成。以下均为 ⏸️，详见 `docs/guides/desktop-packaging.md`。
+macOS arm64（未签名）+ **内置 Companion sidecar（2026-08 完成，见下）**。以下均为 ⏸️，详见 `docs/guides/desktop-packaging.md`。
 
-- 🔲 macOS 代码签名 + notarization（需 Apple Developer 账号）
-- 🔲 Windows / Linux 跨平台构建（第一版只验证了 macOS arm64）
+- ✅ 内嵌 Companion 为 sidecar —— 已完成（阶段四 · 方案 B 首期）。Bun `build --compile` 单文件二进制 + `sqliteDriver.ts` 运行时适配（Node=better-sqlite3 / Bun=bun:sqlite，绕过 V8 addon 在 JSC 无法加载的限制）；Tauri 壳管理生命周期（复用 19750 已有实例 / spawn + COMPANION_READY 握手 / 临时端口重试 / 退出清理）；webview 自动连接、模式锁定、回落 standalone。原两个阻塞项的实际情况：Node 二进制化由 Bun 解决；macOS notarization 对 sidecar 的已知问题（tauri#11992）在未签名期不构成阻塞，做签名时再处理。
+- 🔲 macOS 代码签名 + notarization（需 Apple Developer 账号；签名时需处理 sidecar 二进制的 notarization）
+- 🔲 Windows / Linux 跨平台构建（只验证了 macOS arm64；build-sidecar.mjs 已预留 SIDECAR_TRIPLE）
 - 🔲 Tauri updater 自动更新
 - 🔲 CI 自动构建 + 发布 dmg（需签名凭据）
-- 🔲 内嵌 Companion 为 sidecar —— 需先解决 Node 二进制化（Node SEA/pkg）+ macOS notarization 对 sidecar 的已知问题（[tauri#11992](https://github.com/tauri-apps/tauri/issues/11992)）
 
 ---
 
