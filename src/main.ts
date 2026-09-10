@@ -1,4 +1,4 @@
-import { createApp, createSSRApp, type App as VueApp } from 'vue'
+import { createApp, type App as VueApp } from 'vue'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
@@ -80,13 +80,14 @@ interface QiankunProps {
 
 function render(props: QiankunProps = {}) {
   // 独立态生产构建：dist/index.html 含构建期预渲染的首屏 HTML（vite-ssg，
-  // 见 src/entry-ssg.ts），用 createSSRApp + hydration 挂载接管现有 DOM，避免
-  // 清空重绘的闪烁；dev（模板 #app 为空）与 qiankun 嵌入态（挂载目标是宿主容器）
-  // 没有可接管的预渲染内容，维持普通 createApp 挂载。
+  // 见 src/entry-ssg.ts）。这里始终用普通 createApp（不用 createSSRApp 的
+  // hydration），因为 IndexedDB 是异步的，首次渲染时数据还没恢复，hydration
+  // 必然 mismatch，Vue 会清空 DOM 并重建，导致白屏。预渲染内容仅用于
+  // SEO（爬虫看到完整 HTML），浏览器里由客户端渲染接管。
   const prerendered =
     !window.__POWERED_BY_QIANKUN__ &&
     !!document.querySelector('#app')?.firstElementChild
-  app = prerendered ? createSSRApp(App) : createApp(App)
+  app = createApp(App)
   piniaInstance = createPinia()
   // 显式设为活跃 pinia：ViewModel 内 useSettingsStore()/useConversationsStore() 不传
   // pinia 参数时走活跃实例，必须与此处一致，否则 main.ts 写入的 isEmbedded 等配置
@@ -123,7 +124,25 @@ function render(props: QiankunProps = {}) {
   }
 
   const mountTarget = props.container ?? '#app'
-  app.mount(mountTarget, prerendered)
+  // 预渲染内容处理策略：
+  // 1. 检测到预渲染标记时，先用 CSS 隐藏 body（避免白屏闪烁）
+  // 2. 用普通 createApp 挂载（不用 createSSRApp 的 hydration，因为
+  //    IndexedDB 是异步的，首次渲染时数据还没恢复，hydration 必然 mismatch，
+  //    Vue 会清空 DOM 并重建，导致白屏）
+  // 3. 挂载完成后淡入显示
+  if (prerendered) {
+    document.documentElement.style.setProperty('opacity', '0')
+    document.documentElement.style.setProperty('transition', 'opacity 0.2s ease-in')
+  }
+  app.mount(mountTarget, false)
+  if (prerendered) {
+    // 挂载完成后淡入
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.documentElement.style.setProperty('opacity', '1')
+      })
+    })
+  }
 
   // 嵌入态：注册宿主消息监听（postMessage 通道，见 embeddedBridge.ts）。
   // 必须在 mount 之后——监听器触发的切换依赖 conversationSwitcher，而它由
