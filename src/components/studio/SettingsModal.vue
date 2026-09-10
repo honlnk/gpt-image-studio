@@ -57,6 +57,12 @@ const props = defineProps<{
   streamImages: boolean;
   streamPartialImages: 0 | 1 | 2 | 3;
   model: string;
+  modelOptions: ReadonlyArray<{ value: string; label: string }>;
+  modelsProbe: {
+    status: "idle" | "loading" | "ok" | "error";
+    modelIds: string[];
+    message: string;
+  };
   promptMode: PromptMode;
   promptWordbanks: PromptWordbanks;
   favoritePrompts: FavoritePrompt[];
@@ -88,6 +94,7 @@ const emit = defineEmits<{
   "update:streamImages": [value: boolean];
   "update:streamPartialImages": [value: 0 | 1 | 2 | 3];
   "update:model": [value: string];
+  probeModels: [];
   "update:promptMode": [value: PromptMode];
   savePromptWordbank: [section: PromptWordbankSectionKey, terms: string[]];
   restoreDefaultPromptWordbank: [section: PromptWordbankSectionKey];
@@ -267,6 +274,8 @@ function forwardSavePromptWordbank(
               :api-mode="apiMode"
               :api-key="apiKey"
               :model="model"
+              :model-options="modelOptions"
+              :models-probe="modelsProbe"
               :stream-images="streamImages"
               :stream-partial-images="streamPartialImages"
               @update:api-base-url="emit('update:apiBaseUrl', $event)"
@@ -274,6 +283,7 @@ function forwardSavePromptWordbank(
               @update:api-mode="emit('update:apiMode', $event)"
               @update:api-key="emit('update:apiKey', $event)"
               @update:model="emit('update:model', $event)"
+              @probe-models="emit('probeModels')"
               @update:stream-images="emit('update:streamImages', $event)"
               @update:stream-partial-images="emit('update:streamPartialImages', $event)"
             />

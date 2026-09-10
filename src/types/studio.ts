@@ -132,6 +132,8 @@ export type AppSettings = {
   streamImages: boolean;
   streamPartialImages: 0 | 1 | 2 | 3;
   model: string;
+  /** 直连模式下用户选择的模型（DIRECT_IMAGE_MODEL_OPTIONS 之一）；companion 模式不用。 */
+  directModel?: string;
   promptMode: PromptMode;
   promptWordbanks: PromptWordbanks;
   promptRewriteGuardEnabled: boolean;

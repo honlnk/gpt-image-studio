@@ -25,6 +25,7 @@ const fullSettings: AppSettings = {
   streamImages: false,
   streamPartialImages: 1,
   model: "gpt-image-2",
+  directModel: "gpt-image-2.5-flare",
   promptMode: "default",
   promptWordbanks: defaultPromptWordbanks,
   promptRewriteGuardEnabled: true,
@@ -117,12 +118,15 @@ describe("settings service", () => {
       value: {
         ...fullSettings,
         model: "custom-model",
+        directModel: "custom-model",
       },
     });
 
     const result = await loadSettings();
 
     expect(result?.model).toBe("gpt-image-2");
+    // 直连模型只接受 DIRECT_IMAGE_MODEL_OPTIONS 内的值，非法值回退 gpt-image-2。
+    expect(result?.directModel).toBe("gpt-image-2");
   });
 
   it("saves settings record", async () => {

@@ -2,6 +2,7 @@
 import { computed, ref, onUnmounted } from "vue";
 import type { ApiMode } from "../../types/studio";
 import { FIXED_IMAGE_MODEL } from "../../shared/models";
+import DropdownSelect from "../ui/DropdownSelect.vue";
 import { copyText as copyTextToClipboard } from "../../shared/clipboard";
 
 /**
@@ -17,6 +18,12 @@ const props = defineProps<{
   apiMode: ApiMode;
   apiKey: string;
   model: string;
+  modelOptions: ReadonlyArray<{ value: string; label: string }>;
+  modelsProbe: {
+    status: "idle" | "loading" | "ok" | "error";
+    modelIds: string[];
+    message: string;
+  };
   streamImages: boolean;
   streamPartialImages: 0 | 1 | 2 | 3;
 }>();
@@ -27,6 +34,7 @@ const emit = defineEmits<{
   "update:apiMode": [value: ApiMode];
   "update:apiKey": [value: string];
   "update:model": [value: string];
+  probeModels: [];
   "update:streamImages": [value: boolean];
   "update:streamPartialImages": [value: 0 | 1 | 2 | 3];
 }>();
@@ -49,6 +57,13 @@ const apiBaseUrlHint = computed(() =>
 );
 const apiSuffixLabel = computed(() =>
   props.apiMode === "responses" ? "/v1" : "/v1/images",
+);
+const probeBusy = computed(() => props.modelsProbe.status === "loading");
+/** 2.5 两档中实际匹配到的数量（探测成功时用于提示）。 */
+const matchedNewModelCount = computed(() =>
+  props.modelsProbe.status === "ok"
+    ? props.modelOptions.filter((o) => o.value !== FIXED_IMAGE_MODEL).length
+    : 0,
 );
 
 function normalizeApiBaseUrlInput(value: string) {
@@ -188,7 +203,7 @@ onUnmounted(() => {
           </button>
           <button
             v-if="apiKeyVisible"
-            class="flex h-10 shrink-0 cursor-pointer items-center justify-center border-l border-gray-200 px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:text-gray-300"
+            class="flex h-10 shrink-0 cursor-pointer items-center border-l border-gray-200 px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:text-gray-300"
             type="button"
             :disabled="!apiKey"
             :aria-label="apiKeyCopyStatus === 'copied' ? 'API key 已复制' : '复制 API key'"
@@ -197,34 +212,38 @@ onUnmounted(() => {
           >
             {{ apiKeyCopyStatus === "copied" ? "已复制" : "复制" }}
           </button>
+          <button
+            class="flex h-10 shrink-0 cursor-pointer items-center border-l border-gray-200 px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:text-gray-300"
+            type="button"
+            :disabled="!apiKey || probeBusy"
+            :title="'请求接口模型列表，验证 API key 是否有效'"
+            @click="emit('probeModels')"
+          >
+            {{ probeBusy ? "测试中…" : "测试" }}
+          </button>
         </div>
+        <p
+          v-if="probeBusy || modelsProbe.status === 'ok' || modelsProbe.status === 'error'"
+          class="mt-1.5 text-xs"
+          :class="
+            modelsProbe.status === 'ok'
+              ? 'text-emerald-600'
+              : modelsProbe.status === 'error'
+                ? 'text-red-500'
+                : 'text-gray-500'
+          "
+        >
+          <template v-if="probeBusy">正在连接接口验证 API key…</template>
+          <template v-else-if="modelsProbe.status === 'ok'">
+            连接成功，API key 有效（接口返回 {{ modelsProbe.modelIds.length }} 个模型）。
+          </template>
+          <template v-else>{{ modelsProbe.message }}</template>
+        </p>
         <p
           v-if="apiKeyCopyStatus === 'failed'"
           class="mt-1.5 text-xs text-red-500"
         >
           复制失败，请手动选择复制。
-        </p>
-      </div>
-
-      <div>
-        <label
-          class="mb-1 block text-sm font-medium text-gray-700"
-          for="apiModel"
-        >
-          模型
-        </label>
-        <input
-          id="apiModel"
-          :value="model"
-          class="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500 outline-none"
-          :placeholder="FIXED_IMAGE_MODEL"
-          disabled
-          readonly
-          spellcheck="false"
-          type="text"
-        />
-        <p class="mt-1.5 text-xs text-gray-500">
-          当前阶段固定使用 <span class="font-mono">{{ FIXED_IMAGE_MODEL }}</span>，先不开放自定义模型输入。
         </p>
       </div>
 
@@ -285,6 +304,49 @@ onUnmounted(() => {
           <template v-else>
             已按完整 API Base URL 处理，不会自动补路径。
           </template>
+        </p>
+      </div>
+
+      <div>
+        <label
+          class="mb-1 block text-sm font-medium text-gray-700"
+          for="apiModel"
+        >
+          模型
+        </label>
+        <DropdownSelect
+          id="apiModel"
+          :options="modelOptions"
+          :model-value="
+            modelOptions.some((o) => o.value === model)
+              ? model
+              : FIXED_IMAGE_MODEL
+          "
+          @update:model-value="emit('update:model', $event)"
+        />
+        <p class="mt-1.5 text-xs text-gray-500">
+          <template v-if="probeBusy">正在获取模型列表…</template>
+          <template v-else-if="modelsProbe.status === 'ok' && matchedNewModelCount === 0">
+            接口模型列表中未发现 GPT Image 2.5，已仅显示旧版选项。
+          </template>
+          <template v-else-if="modelsProbe.status === 'ok'">
+            已按接口返回的模型列表过滤可用模型。
+          </template>
+          <template v-else-if="modelsProbe.status === 'error'">
+            模型列表获取失败：{{ modelsProbe.message }}（当前显示全部选项）。
+          </template>
+          <template v-else>
+            GPT Image 2.5（2026-09 发布）：Flare 更快、Sunburst 精度更高；
+            中转站未跟进新模型时请选择旧版 <span class="font-mono">gpt-image-2</span>。
+          </template>
+          <button
+            class="ml-1 cursor-pointer text-gray-700 underline underline-offset-2 hover:text-gray-900 disabled:cursor-not-allowed disabled:text-gray-300"
+            type="button"
+            :disabled="probeBusy"
+            @click="emit('probeModels')"
+          >
+            {{ modelsProbe.status === "idle" ? "检测可用性" : "重新检测" }}
+          </button>
         </p>
       </div>
 
