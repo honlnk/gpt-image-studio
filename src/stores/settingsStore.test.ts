@@ -541,4 +541,53 @@ describe("settingsStore companion 凭据 localStorage 镜像", () => {
     expect(store[URL_KEY]).toBeUndefined();
     expect(store[ACCESS_KEY]).toBeUndefined();
   });
+
+  it("桌面内置态（applyDesktopCompanionConfig）不写 companion 凭据镜像", async () => {
+    const s = useSettingsStore();
+    s.applyDesktopCompanionConfig({
+      companionUrl: "http://127.0.0.1:19750",
+      accessKey: "sidecar-key",
+    });
+    await nextTick();
+    expect(store[URL_KEY]).toBeUndefined();
+    expect(store[ACCESS_KEY]).toBeUndefined();
+  });
+});
+
+describe("settingsStore 桌面内置 Companion 态（阶段四 B 首期）", () => {
+  it("applyDesktopCompanionConfig 注入连接信息并强制 localCompanion", () => {
+    const s = useSettingsStore();
+    s.applyDesktopCompanionConfig({
+      companionUrl: "http://127.0.0.1:54321",
+      accessKey: "desktop-key",
+    });
+    expect(s.isDesktopCompanion).toBe(true);
+    expect(s.connectionMode).toBe("localCompanion");
+    expect(s.companionUrl).toBe("http://127.0.0.1:54321");
+    expect(s.companionAccessKey).toBe("desktop-key");
+    expect(s.companionConnected).toBe(true);
+    // 与 qiankun 嵌入态标志独立——桌面态保留完整 UI
+    expect(s.isEmbedded).toBe(false);
+  });
+
+  it("桌面内置态不持久化 connectionMode 镜像", async () => {
+    const s = useSettingsStore();
+    s.applyDesktopCompanionConfig({
+      companionUrl: "http://127.0.0.1:19750",
+      accessKey: "k",
+    });
+    await nextTick();
+    expect(store["gpt-image-studio:connection-mode"]).toBeUndefined();
+  });
+
+  it("桌面内置态下残留的 responses apiMode 被校正为 images", async () => {
+    const s = useSettingsStore();
+    s.apiMode = "responses";
+    s.applyDesktopCompanionConfig({
+      companionUrl: "http://127.0.0.1:19750",
+      accessKey: "k",
+    });
+    await nextTick();
+    expect(s.apiMode).toBe("images");
+  });
 });

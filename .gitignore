@@ -31,6 +31,9 @@ desktop/src-tauri/target/
 desktop/src-tauri/gen/
 desktop/src-tauri/app-icon.png
 desktop/src-tauri/WixTools/
+# Companion sidecar 构建产物（companion/scripts/build-sidecar.mjs 生成）
+desktop/src-tauri/binaries/
+desktop/src-tauri/resources/companion-admin/
 
 # ZCode agent workspace (plans only)
 .zcode/plans/

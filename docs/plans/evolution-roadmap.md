@@ -63,7 +63,7 @@ Companion 自带       （行为不变）          + 文件/OSS 图片       qia
 | **一** | 在前端引入 `StudioStorage` 抽象层 | 前端 service/store 重构 | 大（一次性） |
 | **二** | Companion 从代理升级为真实数据后端（本机单用户） | Companion 后端新增存储路由 + 数据集管理 | 零（只换实现） |
 | **三** | Companion 服务化（服务器多用户）+ 前端 qiankun 嵌入 | 多租户层 + 完整 SSO + 前端打包 + Docker 化 | 零（加多租户层，不改业务 schema） |
-| **四** | Tauri APP 内置 Companion 能力 + 本地 SQLite（**暂不实施，保留设计**） | Tauri 壳 + Rust 侧存储 | 零 |
+| **四** | Tauri APP 内置 Companion 能力 + 本地 SQLite（**方案 B sidecar 首期已落地**，其余暂不实施） | Tauri 壳 + Rust 侧存储 | 零 |
 
 **核心原则**：阶段一是地基，**阶段二、三、四在前端业务层都应是"换实现不改接口"**。如果某个阶段被迫改动 store/service 的业务代码，说明阶段一的抽象设计有缺陷，需要回头补。
 
@@ -1164,7 +1164,9 @@ Companion 收到后，把该 user_id（或 jti）加入**内存级吊销黑名�
 
 ## 九、阶段四：APP 化（可独立安装）
 
-> **当前状态（2026-07）**：阶段四距离落地尚远，**暂时不进入实施**。本节保留下方已构思的完整设计作为长期愿景和决策锚点，等阶段一、二、三推进到合适程度后再启动。阶段一已预留 `NativeStorage` 接口骨架，确保未来 APP 模式有接入位置。
+> **当前状态（2026-08）**：阶段四整体仍标注「暂不实施」，但**方案 B（Node sidecar）的首期已提前落地**（桌面端深化的一部分）——Companion 经 `bun build --compile` 编译为单文件二进制，作为 Tauri sidecar 内嵌桌面 app，自动启动/连接，与 npm CLI 版共享 `~/.gpt-image-studio` 数据目录。落地内容与范围边界见 `docs/guides/desktop-packaging.md`。关键技术决策：better-sqlite3 的 addon 依赖 V8 API 无法在 Bun（JavaScriptCore）运行时加载，引入 `companion/src/storage/sqliteDriver.ts` 运行时适配层（Node=better-sqlite3 / Bun=bun:sqlite）。
+>
+> **首期未包含的阶段四内容**（仍为暂不实施，启动时再决策）：NativeStorage（IndexedDB→本地文件存储）、多 provider 前端管理 UI（凭据管理仍走 admin 页）、OS keychain、APP/Web 数据互导、Companion 内化方案 A/C 评估。下方完整设计保留作为后续演进的决策锚点；阶段一已预留 `NativeStorage` 接口骨架。
 
 ### 目标
 

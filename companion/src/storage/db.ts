@@ -13,10 +13,10 @@
  * 测试隔离：通过 GPT_IMAGE_STUDIO_CONFIG_DIR 环境变量覆盖数据目录（与 credentials.ts 一致），
  * 用 closeMasterDb() 关闭连接后清理临时目录。
  */
-import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { openSqliteDatabase, type SqliteDatabase } from "./sqliteDriver.js";
 import {
   MASTER_DB_DDL,
   MASTER_DB_MIGRATION_V2,
@@ -35,7 +35,7 @@ export const DATASETS_DIR = join(CONFIG_DIR, "datasets");
 /** local 模式的虚拟用户 id（阶段二已有数据集全部归到此用户，零迁移成本）。 */
 export const LOCAL_USER_ID = "__local__";
 
-let masterDb: Database.Database | null = null;
+let masterDb: SqliteDatabase | null = null;
 
 /**
  * 打开主 db（单例，进程内缓存）。
@@ -45,11 +45,11 @@ let masterDb: Database.Database | null = null;
  *
  * 迁移：旧库（v1）通过 migrateMasterDb 升级到 v2（加 users 表 + user_id 列）。
  */
-export function openMasterDb(): Database.Database {
+export function openMasterDb(): SqliteDatabase {
   if (masterDb) return masterDb;
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   mkdirSync(DATASETS_DIR, { recursive: true, mode: 0o700 });
-  const db = new Database(join(CONFIG_DIR, "studio.db"), { fileMustExist: false });
+  const db = openSqliteDatabase(join(CONFIG_DIR, "studio.db"));
   db.pragma("journal_mode = WAL");
   const currentVersion = db.pragma("user_version", { simple: true }) as number;
 
@@ -73,7 +73,7 @@ export function openMasterDb(): Database.Database {
  * v2 引入 users 表 + dataset_registry.user_id 列 + (user_id, fingerprint) 复合唯一索引。
  * ALTER TABLE ADD COLUMN 幂等处理：列已存在时 better-sqlite3 抛 "duplicate column name"，catch 忽略。
  */
-function migrateMasterDb(db: Database.Database, fromVersion: number): void {
+function migrateMasterDb(db: SqliteDatabase, fromVersion: number): void {
   if (fromVersion >= 2) return; // 已是 v2+，无需迁移
 
   // v1 → v2
@@ -141,8 +141,9 @@ export function listUsers(): UserRecord[] {
 // ─── dataset_registry CRUD（阶段三 PR2：加 userId 维度） ───
 
 /**
- * 插入一条数据集记录。fingerprint 冲突时 better-sqlite3 抛 SqliteError。
+ * 插入一条数据集记录。fingerprint 冲突时底层 SQLite 抛唯一约束错误。
  * record 需含 user_id（local 模式为 '__local__'）。
+ * 位置参数而非命名参数：bun:sqlite 的命名参数对象键必须带前缀，跨驱动统一用位置参数。
  */
 export function insertDataset(record: DatasetRecord): void {
   const db = openMasterDb();
@@ -150,10 +151,20 @@ export function insertDataset(record: DatasetRecord): void {
     INSERT INTO dataset_registry
       (id, user_id, label, storage_kind, storage_config, fingerprint, db_path,
        image_store_kind, created_at, activated_at, is_active)
-    VALUES
-      (@id, @user_id, @label, @storage_kind, @storage_config, @fingerprint, @db_path,
-       @image_store_kind, @created_at, @activated_at, @is_active)
-  `).run(record);
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    record.id,
+    record.user_id,
+    record.label,
+    record.storage_kind,
+    record.storage_config,
+    record.fingerprint,
+    record.db_path,
+    record.image_store_kind,
+    record.created_at,
+    record.activated_at,
+    record.is_active,
+  );
 }
 
 /**

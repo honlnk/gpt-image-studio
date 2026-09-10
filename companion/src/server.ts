@@ -1,7 +1,8 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { createRequire } from "node:module";
+import type { AddressInfo } from "node:net";
 import type { CompanionHealthResponse } from "./types.js";
+import { COMPANION_VERSION } from "./version.js";
 import { loadOrCreateAccessKey } from "./accessKey.js";
 import { authRoutes } from "./routes/auth.js";
 import { imagesRoutes } from "./routes/images.js";
@@ -18,9 +19,18 @@ import type { CompanionSecurityConfig } from "./securityConfig.js";
 import { isOriginAllowed } from "./securityConfig.js";
 import type { DeploymentConfig } from "./deploymentConfig.js";
 
-const require = createRequire(import.meta.url);
-const packageJson = require("../package.json") as { version: string };
-const COMPANION_VERSION = packageJson.version;
+/**
+ * 从 listen 后的 server address 取实际监听端口。
+ * `--port 0`（由父进程分配临时端口）时 opts.port 与实际端口不同，日志和
+ * COMPANION_READY 握手行必须报告实际值。非 TCP address（理论上不会出现）回退入参。
+ */
+export function resolveActualPort(
+  address: string | AddressInfo | null,
+  fallbackPort: number,
+): number {
+  if (typeof address === "object" && address !== null) return address.port;
+  return fallbackPort;
+}
 
 export async function startServer(opts: {
   port: number;
@@ -115,6 +125,11 @@ export async function startServer(opts: {
   });
 
   await app.listen({ host: opts.host, port: opts.port });
+  const actualPort = resolveActualPort(app.server.address(), opts.port);
+  // 机器可读的就绪握手行：父进程（Tauri sidecar 管理）扫描 stdout 中以
+  // COMPANION_READY 开头的行，解析 JSON 拿实际端口（--port 0 时与入参不同）。
+  // 必须先于人类可读日志输出，且保持单行 JSON，避免与日志交错解析出错。
+  console.log(`COMPANION_READY ${JSON.stringify({ port: actualPort })}`);
   // 启动时保证有一个可用的默认数据集（local 模式的虚拟用户 '__local__'）。
   // server 模式下每个用户首次访问时由 storage 路由懒创建各自的默认数据集。
   try {
@@ -123,7 +138,7 @@ export async function startServer(opts: {
   } catch (err) {
     console.warn("默认数据集初始化失败，Companion 存储模式需手动激活:", err);
   }
-  console.log(`Companion 服务已启动: http://${opts.host}:${opts.port}`);
+  console.log(`Companion 服务已启动: http://${opts.host}:${actualPort}`);
   console.log(`版本: v${COMPANION_VERSION}`);
   console.log(`部署形态: ${opts.deployment.mode}`);
   if (opts.deployment.mode === "server") {
@@ -149,7 +164,7 @@ export async function startServer(opts: {
   // server 模式管理页已禁用（不注册 adminRoutes），不再打印入口
   if (opts.deployment.mode !== "server") {
     const adminDisplayHost = opts.host === "0.0.0.0" ? "127.0.0.1" : opts.host;
-    console.log(`  管理页：http://${adminDisplayHost}:${opts.port}/admin`);
+    console.log(`  管理页：http://${adminDisplayHost}:${actualPort}/admin`);
   }
   console.log("=".repeat(60));
 }
