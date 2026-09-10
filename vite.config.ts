@@ -1,11 +1,16 @@
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
-import { defineConfig, type Plugin, type Rollup } from 'vite'
-import { copyFileSync, existsSync } from 'node:fs'
+import { defineConfig, type Plugin, type Rollup, type UserConfig } from 'vite'
+import type { ViteSSGOptions } from 'vite-ssg'
+import { copyFileSync, existsSync, rmSync } from 'node:fs'
+
+// vite 的 UserConfig 没有声明 vite-ssg 的 ssgOptions 字段（vite-ssg 未做模块增强），
+// 用交叉类型补上，保持 defineConfig 的类型检查。
+type UserConfigWithSSG = UserConfig & { ssgOptions?: Partial<ViteSSGOptions> }
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }): UserConfigWithSSG => ({
   // 用 '/' 而非 './'：/companion 独立页面需要绝对资源路径，否则 /companion 下
   // ./assets/... 会解析成 /companion/assets/... 导致 404。
   // 自定义域名 image.honlnk.com 在根路径，不再需要相对 base 兼容 GH Pages repo 子路径。
@@ -20,6 +25,18 @@ export default defineConfig(({ mode }) => ({
     // silently moving to 8889+ if 8888 is briefly busy, which would make the
     // desktop webview load a stale/empty page.
     strictPort: true,
+  },
+  // vite-ssg 构建期预渲染（SEO 方案 B，见 docs/guides/seo-strategy.md §3.4）：
+  // `pnpm build`（vite-ssg build）先照常做客户端构建（入口 index.html → main.ts，
+  // 产物与 vite build 一致），再以 entry-ssg.ts 为 SSR 入口在 Node 里 renderToString，
+  // 把首屏 HTML 注入 dist/index.html 的 #app。SSR 入口与浏览器入口解耦，
+  // qiankun 嵌入态逻辑不进 Node。onFinished 清理 ssrManifest 等中间产物。
+  ssgOptions: {
+    entry: 'src/entry-ssg.ts',
+    onFinished() {
+      rmSync('dist/.vite', { recursive: true, force: true })
+      rmSync('dist/ssr-manifest.json', { force: true })
+    },
   },
   plugins: [
     vue(),
