@@ -70,6 +70,8 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
     applySizeResolution: settings.applySizeResolution,
     currentGenerationParams: settings.currentGenerationParams,
     currentSettings: settings.currentSettings,
+    setDirectModel: settings.setDirectModel,
+    probeDirectModels: settings.probeDirectModels,
     deletePromptRewriteGuardHistoryItem:
       settings.deletePromptRewriteGuardHistoryItem,
     addFavoritePrompt: settings.addFavoritePrompt,

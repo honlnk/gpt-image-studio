@@ -8,7 +8,7 @@ import {
 } from "./promptRewriteGuard";
 import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
-import { FIXED_IMAGE_MODEL } from "../shared/models";
+import { FIXED_IMAGE_MODEL, normalizeDirectImageModel } from "../shared/models";
 import type {
   ApiMode,
   ApiBaseUrlMode,
@@ -118,6 +118,7 @@ type StoredAppSettings = Omit<
   favoritePrompts?: unknown;
   promptMode?: PromptMode;
   promptWordbanks?: unknown;
+  directModel?: string;
   analyticsEnabled?: boolean;
   analyticsPromptCapture?: AnalyticsPromptCapture;
   defaults: StoredGenerationParams;
@@ -137,6 +138,7 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
       settings.streamPartialImages,
     ),
     model: FIXED_IMAGE_MODEL,
+    directModel: normalizeDirectImageModel(settings.directModel),
     promptMode: normalizePromptMode(settings.promptMode),
     promptWordbanks: normalizePromptWordbanks(settings.promptWordbanks),
     promptRewriteGuardEnabled: settings.promptRewriteGuardEnabled ?? true,

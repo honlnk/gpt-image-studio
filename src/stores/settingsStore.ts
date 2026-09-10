@@ -31,6 +31,7 @@ import {
   createSettingsServices,
   type SettingsServices,
 } from "../services/settings";
+import { probeDirectApiModels } from "../services/imagesApi/models";
 import { resolveStorage } from "../services/storage/resolveStorage";
 import {
   MAX_PROMPT_REWRITE_GUARD_HISTORY,
@@ -47,7 +48,12 @@ import {
 import { isoTimestamp } from "../shared/dateTime";
 import { readStorage, writeStorage } from "../shared/localStorage";
 import { COMPANION_DEFAULT_URL } from "../shared/constants";
-import { FIXED_IMAGE_MODEL } from "../shared/models";
+import {
+  DIRECT_IMAGE_MODEL_OPTIONS,
+  FIXED_IMAGE_MODEL,
+  normalizeDirectImageModel,
+  type DirectImageModel,
+} from "../shared/models";
 import type {
   CompanionAuthStatus,
   CompanionProviderCapability,
@@ -156,6 +162,16 @@ export const useSettingsStore = defineStore("settings", () => {
   const hideSidebarInEmbed = ref(true);
   const apiMode = ref<ApiMode>("images");
   const model = ref(FIXED_IMAGE_MODEL);
+  // 直连模式下用户选择的模型（请求用 model.value；companion 模式下 model 由 /auth/status 覆盖，
+  // directModel 独立记忆，切回直连时恢复，避免被 companion 的 provider 模型冲掉）。
+  const directModel = ref<DirectImageModel>(FIXED_IMAGE_MODEL);
+  // /models 探测结果（会话内存态，不持久化——模型列表有时效，落库会过期）。
+  // status==="ok" 时 directModelOptions 按返回的 id 列表过滤 2.5 两档；其余状态显示全部。
+  const directModelsProbe = ref<{
+    status: "idle" | "loading" | "ok" | "error";
+    modelIds: string[];
+    message: string;
+  }>({ status: "idle", modelIds: [], message: "" });
   const apiKey = ref(readStorage(SETTINGS_STORAGE_KEYS.apiKey, ""));
   const apiBaseUrl = ref(readStorage(SETTINGS_STORAGE_KEYS.apiBaseUrl, ""));
   const apiBaseUrlMode = ref<AppSettings["apiBaseUrlMode"]>("origin");
@@ -443,11 +459,72 @@ export const useSettingsStore = defineStore("settings", () => {
     if (isSizeRatio(ratio)) applyRatioDimensions(ratio, sizeResolution.value);
   }
 
-  /** 切回浏览器直连时恢复完整的 OpenAI 默认状态，包括固定模型。 */
+  /** 切回浏览器直连时恢复完整的 OpenAI 默认状态；模型恢复用户上次选择的直连模型。 */
   function applyDirectProviderInfo() {
     resetProviderUiDefaults();
-    model.value = FIXED_IMAGE_MODEL;
+    model.value = directModel.value;
   }
+
+  /** 设置直连模型（设置面板下拉）。companion 模式下只记忆不生效，model 仍由 /auth/status 管理。 */
+  function setDirectModel(value: string) {
+    directModel.value = normalizeDirectImageModel(value);
+    if (connectionMode.value === "direct") {
+      model.value = directModel.value;
+    }
+  }
+
+  /**
+   * 模型下拉可见选项：gpt-image-2 恒在（兜底，保证下拉非空）；
+   * 2.5 两档仅在探测成功且接口模型列表包含时显示。探测未做/失败时显示全部
+   * ——没有 /models 端点的中转不应因此失去 2.5 选项。
+   */
+  const directModelOptions = computed<
+    ReadonlyArray<{ value: string; label: string }>
+  >(() => {
+    if (directModelsProbe.value.status !== "ok") {
+      return DIRECT_IMAGE_MODEL_OPTIONS;
+    }
+    const ids = directModelsProbe.value.modelIds;
+    return DIRECT_IMAGE_MODEL_OPTIONS.filter(
+      (option) =>
+        option.value === FIXED_IMAGE_MODEL || ids.includes(option.value),
+    );
+  });
+
+  /** 触发 /models 探测（API key 测试按钮与模型列表过滤共用）。 */
+  async function probeDirectModels() {
+    if (directModelsProbe.value.status === "loading") return;
+    directModelsProbe.value = { status: "loading", modelIds: [], message: "" };
+
+    const result = await probeDirectApiModels({
+      apiBaseUrl: apiBaseUrl.value,
+      apiBaseUrlMode: apiBaseUrlMode.value,
+      apiKey: apiKey.value,
+    });
+
+    if (result.ok) {
+      directModelsProbe.value = {
+        status: "ok",
+        modelIds: result.modelIds,
+        message: "",
+      };
+      return;
+    }
+    directModelsProbe.value = {
+      status: "error",
+      modelIds: [],
+      message:
+        result.kind === "invalidKey"
+          ? `API key 无效：${result.message}`
+          : `连接失败：${result.message}`,
+    };
+  }
+
+  // 探测过滤后当前选中的模型不再可见时，回退到 gpt-image-2，避免下拉值悬空。
+  watch(directModelOptions, (options) => {
+    if (options.some((option) => option.value === directModel.value)) return;
+    setDirectModel(FIXED_IMAGE_MODEL);
+  });
 
   function applySettings(settings: AppSettings) {
     const defaults = normalizeGenerationParams(settings.defaults);
@@ -462,8 +539,9 @@ export const useSettingsStore = defineStore("settings", () => {
     streamImages.value = settings.streamImages;
     streamPartialImages.value = settings.streamPartialImages;
     // localCompanion 先恢复上次模型，随后由 /auth/status 覆盖；direct 在函数末尾
-    // 通过 applyDirectProviderInfo 强制恢复 FIXED_IMAGE_MODEL。
+    // 通过 applyDirectProviderInfo 恢复用户上次选择的直连模型。
     model.value = settings.model || FIXED_IMAGE_MODEL;
+    directModel.value = normalizeDirectImageModel(settings.directModel);
     promptMode.value = settings.promptMode;
     promptWordbanks.value = normalizePromptWordbanks(settings.promptWordbanks);
     promptRewriteGuardEnabled.value = settings.promptRewriteGuardEnabled;
@@ -509,6 +587,7 @@ export const useSettingsStore = defineStore("settings", () => {
       streamImages: streamImages.value,
       streamPartialImages: streamPartialImages.value,
       model: model.value,
+      directModel: directModel.value,
       promptMode: promptMode.value,
       promptWordbanks: clonePromptWordbanks(promptWordbanks.value),
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
@@ -742,6 +821,11 @@ export const useSettingsStore = defineStore("settings", () => {
     maxCustomDimension,
     sizeStep,
     model,
+    directModel,
+    setDirectModel,
+    directModelOptions,
+    directModelsProbe,
+    probeDirectModels,
     outputFormat,
     streamImages,
     streamPartialImages,

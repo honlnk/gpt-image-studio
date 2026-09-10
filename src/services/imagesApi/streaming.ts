@@ -135,7 +135,9 @@ export async function parseImagesApiStreamResponse(
 
   const item = completedItems.find((entry) => entry.b64_json);
   if (!item?.b64_json) {
-    throw new Error("流式接口未返回最终图片数据。");
+    throw new Error(
+      `流式接口未返回最终图片数据，服务商返回的数据可能不标准。${NON_STANDARD_RESPONSE_HINT}`,
+    );
   }
 
   return {
@@ -214,13 +216,29 @@ function normalizeImageApiPayload(value: unknown): ImageApiResponse {
   return { data: [] };
 }
 
+/**
+ * 浏览器直连模式解析不到 base64 时的统一行动建议。
+ *
+ * 直连解析失败多为中转返回了非标准载荷（典型是返回图片链接而非 base64，
+ * 浏览器跨域下载不了链接图片）；Companion 和桌面应用在服务端下载，不受此限制。
+ */
+const NON_STANDARD_RESPONSE_HINT =
+  "建议切换到 Companion 模式，或直接下载桌面应用。";
+
 /** 从 Images API 载荷里抽出最终图片结果（data[0].b64_json）。 */
 export function extractImageResult(payload: ImageApiResponse): ImageApiResult {
   const item = payload.data?.[0];
   const imageData = item?.b64_json;
 
   if (!imageData) {
-    throw new Error("响应中没有 data[0].b64_json。");
+    if (item?.url) {
+      throw new Error(
+        `服务商返回的是图片链接（data[0].url）而非 base64 数据，浏览器直连模式无法下载链接图片。${NON_STANDARD_RESPONSE_HINT}`,
+      );
+    }
+    throw new Error(
+      `服务商返回的数据不标准：响应中没有 data[0].b64_json。${NON_STANDARD_RESPONSE_HINT}`,
+    );
   }
 
   return {
@@ -235,7 +253,9 @@ export function extractResponsesImageResult(payload: ResponsesApiResponse): Imag
   const imageData = getResponsesImageResultBase64(item?.result);
 
   if (!imageData) {
-    throw new Error("响应中没有 image_generation_call 结果。");
+    throw new Error(
+      `服务商返回的数据不标准：响应中没有 image_generation_call 结果。${NON_STANDARD_RESPONSE_HINT}`,
+    );
   }
 
   return {
@@ -251,7 +271,16 @@ export function extractResponsesImageResult(payload: ResponsesApiResponse): Imag
  * 被流式与非流式解析共用，故放在 streaming.ts 而非 responses.ts。
  */
 export function getResponsesImageResultBase64(result: unknown): string {
-  if (typeof result === "string" && result.trim()) return result;
+  if (typeof result === "string" && result.trim()) {
+    // base64 不可能包含 "://"；形如 http(s) 链接说明中转把 result 换成了图片地址，
+    // 直连模式下载不了，与其当 base64 存成坏图，不如抛出带行动建议的明确报错。
+    if (/^https?:\/\//i.test(result.trim())) {
+      throw new Error(
+        `服务商返回的是图片链接而非 base64 数据，浏览器直连模式无法下载链接图片。${NON_STANDARD_RESPONSE_HINT}`,
+      );
+    }
+    return result;
+  }
   if (Array.isArray(result)) {
     for (const item of result) {
       const b64: string = getResponsesImageResultBase64(item);
