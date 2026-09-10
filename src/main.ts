@@ -124,22 +124,26 @@ function render(props: QiankunProps = {}) {
   }
 
   const mountTarget = props.container ?? '#app'
-  // 预渲染首屏的入场动画：挂载前把 #app 置于「透明 + 轻微下沉 + 微模糊」，
-  // 挂载重建 DOM 后上浮淡入，掩盖重建瞬间。作用在 #app 而非 documentElement——
-  // 页面背景不动，只有内容入场。
-  // 动画结束必须清理内联样式：transform/filter 会为 position:fixed 后代
-  // （移动端侧边栏）创建新的包含块。prefers-reduced-motion 用户跳过动画。
+  // 启动画面（#app-splash）：index.html 内置的纯 HTML 覆盖层，页面解析即呈现
+  //（不依赖 JS bundle），盖住其下预渲染的空工作台。JS 就绪后 splash 淡出
+  //（内容轻微上浮），#app 同步上浮 + 去模糊入场——品牌画面到工作区只有一次
+  // 平滑交接，避免「工作台闪现 → 消失 → 再淡入」的断裂感。
+  // qiankun 嵌入态宿主不加载 index.html（无 splash 元素），行为同前。
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const appEl = prerendered ? document.querySelector<HTMLElement>('#app') : null
-  const animateEntrance =
-    appEl !== null &&
-    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const animateEntrance = appEl !== null && !reduceMotion
   if (animateEntrance && appEl) {
     appEl.style.cssText = 'opacity:0;transform:translateY(10px);filter:blur(4px)'
   }
   app.mount(mountTarget, false)
-  if (animateEntrance && appEl) {
+
+  // #app 入场：初始隐藏态 → 上浮淡入。动画结束必须清理内联样式——
+  // transform/filter 会为 position:fixed 后代（移动端侧边栏）创建新的包含块；
+  // transitionend + setTimeout 双保险（后台标签页 transitionend 可能不触发）。
+  const playAppEntrance = () => {
+    if (!animateEntrance || !appEl) return
     appEl.style.transition =
-      'opacity .5s cubic-bezier(.22,1,.36,1), transform .5s cubic-bezier(.22,1,.36,1), filter .5s cubic-bezier(.22,1,.36,1)'
+      'opacity .55s cubic-bezier(.22,1,.36,1), transform .55s cubic-bezier(.22,1,.36,1), filter .55s cubic-bezier(.22,1,.36,1)'
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         appEl.style.opacity = '1'
@@ -151,8 +155,32 @@ function render(props: QiankunProps = {}) {
       appEl.style.cssText = ''
     }
     appEl.addEventListener('transitionend', cleanup, { once: true })
-    // 兜底：后台标签页里 transitionend 可能不触发
-    setTimeout(cleanup, 900)
+    setTimeout(cleanup, 1000)
+  }
+
+  const splash = document.getElementById('app-splash')
+  if (!splash) {
+    playAppEntrance()
+  } else {
+    // splash 最短展示时长，避免秒开时一闪而过；performance.now() ≈ 自页面开始
+    // 加载至今（即 splash 已展示的时长）。dev 下刷新频繁，不设下限。
+    const SPLASH_MIN_MS = import.meta.env.DEV ? 0 : 700
+    const dismissDelay = Math.max(0, SPLASH_MIN_MS - performance.now())
+    setTimeout(() => {
+      playAppEntrance()
+      if (reduceMotion) {
+        splash.remove()
+        return
+      }
+      const inner = splash.firstElementChild as HTMLElement | null
+      splash.style.transition = 'opacity .45s cubic-bezier(.22,1,.36,1)'
+      splash.style.opacity = '0'
+      if (inner) {
+        inner.style.transition = 'transform .45s cubic-bezier(.22,1,.36,1)'
+        inner.style.transform = 'translateY(-10px)'
+      }
+      setTimeout(() => splash.remove(), 500)
+    }, dismissDelay)
   }
 
   // 嵌入态：注册宿主消息监听（postMessage 通道，见 embeddedBridge.ts）。
