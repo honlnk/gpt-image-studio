@@ -72,6 +72,18 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+      - name: Notify Bing via IndexNow
+        if: steps.deployment.outputs.page_url != ''
+        run: |
+          curl -s -X POST "https://api.indexnow.org/IndexNow" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "host": "image.honlnk.com",
+              "key": "gpt-image-studio-indexnow-b15468a5",
+              "keyLocation": "https://image.honlnk.com/gpt-image-studio-indexnow-b15468a5.txt",
+              "urlList": ["https://image.honlnk.com/"]
+            }' || true
+
   pr-preview:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

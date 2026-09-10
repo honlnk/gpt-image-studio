@@ -4,6 +4,29 @@
   "version": "0.0.0",
   "type": "module",
   "packageManager": "pnpm@10.21.0",
+  "description": "Local-first AI image creation workbench. Chat-based interface for OpenAI-compatible Images API with mask editing, prompt modes, and multi-provider support.",
+  "keywords": [
+    "ai-image-generation",
+    "openai",
+    "gpt-image",
+    "image-generation",
+    "text-to-image",
+    "image-editing",
+    "vue",
+    "vue3",
+    "typescript",
+    "local-first",
+    "self-hosted",
+    "ai-art",
+    "open-source",
+    "tauri",
+    "docker"
+  ],
+  "homepage": "https://image.honlnk.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/honlnk/gpt-image-studio.git"
+  },
   "scripts": {
     "dev": "vite",
     "dev:companion": "pnpm --filter @honlnk/image-studio-companion dev",
@@ -13,7 +36,7 @@
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit",
     "typecheck:companion": "pnpm --filter @honlnk/image-studio-companion typecheck",
-    "build": "vite build",
+    "build": "vite-ssg build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -32,6 +55,7 @@
     "typescript": "^6.0.3",
     "vite": "^8.0.10",
     "vite-plugin-vue-devtools": "^8.1.1",
+    "vite-ssg": "^28.3.0",
     "vitest": "^4.1.5",
     "vue-tsc": "^3.2.7"
   }

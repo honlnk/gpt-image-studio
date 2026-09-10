@@ -1,4 +1,4 @@
-import { createApp, type App as VueApp } from 'vue'
+import { createApp, createSSRApp, type App as VueApp } from 'vue'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
@@ -79,7 +79,14 @@ interface QiankunProps {
 }
 
 function render(props: QiankunProps = {}) {
-  app = createApp(App)
+  // 独立态生产构建：dist/index.html 含构建期预渲染的首屏 HTML（vite-ssg，
+  // 见 src/entry-ssg.ts），用 createSSRApp + hydration 挂载接管现有 DOM，避免
+  // 清空重绘的闪烁；dev（模板 #app 为空）与 qiankun 嵌入态（挂载目标是宿主容器）
+  // 没有可接管的预渲染内容，维持普通 createApp 挂载。
+  const prerendered =
+    !window.__POWERED_BY_QIANKUN__ &&
+    !!document.querySelector('#app')?.firstElementChild
+  app = prerendered ? createSSRApp(App) : createApp(App)
   piniaInstance = createPinia()
   // 显式设为活跃 pinia：ViewModel 内 useSettingsStore()/useConversationsStore() 不传
   // pinia 参数时走活跃实例，必须与此处一致，否则 main.ts 写入的 isEmbedded 等配置
@@ -116,7 +123,7 @@ function render(props: QiankunProps = {}) {
   }
 
   const mountTarget = props.container ?? '#app'
-  app.mount(mountTarget)
+  app.mount(mountTarget, prerendered)
 
   // 嵌入态：注册宿主消息监听（postMessage 通道，见 embeddedBridge.ts）。
   // 必须在 mount 之后——监听器触发的切换依赖 conversationSwitcher，而它由

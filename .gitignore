@@ -40,3 +40,6 @@ examples/qiankun-host/config.json
 
 # docker-compose 本地密钥（JWT_SECRET / ADMIN_API_KEY），切勿提交
 .env
+
+# vite-ssg 构建期临时目录（构建中断可能残留）
+.vite-ssg-temp/

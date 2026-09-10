@@ -4,7 +4,132 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GPT Image Studio</title>
+
+    <!-- Primary Meta Tags -->
+    <title>GPT Image Studio - 本地优先的 AI 图片创作工作台 | Local-first AI Image Workbench</title>
+    <meta name="title" content="GPT Image Studio - 本地优先的 AI 图片创作工作台" />
+    <meta name="description" content="本地优先的 AI 图片创作工作台。通过聊天式界面调用 OpenAI 兼容 Images API，生成和编辑图片。数据本地存储，无需后端。Local-first AI image creation workbench with chat-based interface for OpenAI-compatible Images API." />
+    <meta name="keywords" content="AI图片生成,AI绘图,文生图,图生图,图片编辑,AI image generation,GPT image,OpenAI Images API,text-to-image,image editing,local-first,self-hosted,open source,Vue 3,TypeScript,IndexedDB,Tauri,Docker" />
+    <meta name="author" content="honlnk" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://image.honlnk.com/" />
+    <meta property="og:title" content="GPT Image Studio - 本地优先的 AI 图片创作工作台" />
+    <meta property="og:description" content="通过聊天式界面调用 OpenAI 兼容 Images API，生成和编辑图片。数据本地存储，无需后端即可使用。支持遮罩局部编辑、多 Provider 适配、桌面端和 Docker 自部署。" />
+    <meta property="og:image" content="https://image.honlnk.com/og-image.png" />
+    <meta property="og:site_name" content="GPT Image Studio" />
+    <meta property="og:locale" content="zh_CN" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://image.honlnk.com/" />
+    <meta name="twitter:title" content="GPT Image Studio - 本地优先的 AI 图片创作工作台" />
+    <meta name="twitter:description" content="Local-first AI image creation workbench. Chat-based interface for OpenAI-compatible Images API. All data stored locally." />
+    <meta name="twitter:image" content="https://image.honlnk.com/og-image.png" />
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://image.honlnk.com/" />
+
+    <!-- JSON-LD: WebApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "GPT Image Studio",
+      "alternateName": "GPT Image Studio 本地优先的 AI 图片创作工作台",
+      "applicationCategory": "DesignApplication",
+      "operatingSystem": "Web Browser, macOS, Windows, Linux",
+      "url": "https://image.honlnk.com/",
+      "description": "Local-first AI image creation workbench. Generate and edit images with OpenAI-compatible APIs, all data stored locally in your browser via IndexedDB.",
+      "softwareVersion": "1.1.0",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "featureList": [
+        "AI image generation (text-to-image)",
+        "Image editing with reference images (image-to-image)",
+        "Mask-based local editing with brush, eraser, rectangle, circle tools",
+        "Local-first IndexedDB storage — data never leaves your browser",
+        "Multi-provider support: OpenAI, GLM, Doubao, Qwen, Wan, Grok, Gemini, DeepInfra",
+        "Prompt modes: default, safe, creative, open",
+        "Responses API streaming image previews",
+        "Desktop app via Tauri v2",
+        "Docker self-deployment with JWT multi-tenancy",
+        "qiankun micro-frontend embedding support"
+      ],
+      "screenshot": "https://image.honlnk.com/og-image.png",
+      "author": {
+        "@type": "Organization",
+        "name": "honlnk",
+        "url": "https://github.com/honlnk"
+      }
+    }
+    </script>
+
+    <!-- JSON-LD: FAQPage -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "GPT Image Studio 是什么？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "GPT Image Studio 是一个本地优先的 AI 图片创作工作台，通过聊天式界面调用 OpenAI 兼容 Images API 生成和编辑图片。支持文生图、图生图、遮罩局部编辑，所有数据保存在浏览器本地。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "数据存储在哪里？是否安全？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "浏览器直连模式下，所有数据（聊天记录、图片、设置）保存在浏览器 IndexedDB 中，不上传到任何服务器。Companion 模式下数据保存在本机 SQLite 中。API key 不写入备份导出文件。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "需要后端服务吗？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "不需要。浏览器直连模式完全在浏览器中运行，无需后端。如需保护 API 凭据或多人共用，可选接入本地 Companion 服务或部署为服务器模式。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "支持哪些 AI 图像生成模型？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "浏览器直连模式支持任何 OpenAI 兼容 Images API。Companion 模式支持 9 个 Provider：OpenAI、GLM（智谱）、豆包/火山方舟 Seedream、Qwen-Image（通义万相）、Wan、Grok、Gemini、Gemini-OpenAI 和 DeepInfra。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use GPT Image Studio offline?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The web app requires an internet connection to call image generation APIs, but all your data (conversations, images, settings) is stored locally in your browser. The desktop app (Tauri) can work with local Companion for a fully self-contained experience."
+          }
+        }
+      ]
+    }
+    </script>
+
+    <!-- JSON-LD: Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "honlnk",
+      "url": "https://github.com/honlnk",
+      "logo": "https://image.honlnk.com/logo.svg"
+    }
+    </script>
   </head>
   <body>
     <div id="app"></div>
