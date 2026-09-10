@@ -15,6 +15,8 @@ export type PartialImageEvent = {
 export type ImageApiResponse = {
   data?: Array<{
     b64_json?: string;
+    /** 部分中转站无视 response_format=b64_json，只返回有时效的图片链接；直连模式无法下载。 */
+    url?: string;
     revised_prompt?: string;
   }>;
   error?: {
