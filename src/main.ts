@@ -124,24 +124,35 @@ function render(props: QiankunProps = {}) {
   }
 
   const mountTarget = props.container ?? '#app'
-  // 预渲染内容处理策略：
-  // 1. 检测到预渲染标记时，先用 CSS 隐藏 body（避免白屏闪烁）
-  // 2. 用普通 createApp 挂载（不用 createSSRApp 的 hydration，因为
-  //    IndexedDB 是异步的，首次渲染时数据还没恢复，hydration 必然 mismatch，
-  //    Vue 会清空 DOM 并重建，导致白屏）
-  // 3. 挂载完成后淡入显示
-  if (prerendered) {
-    document.documentElement.style.setProperty('opacity', '0')
-    document.documentElement.style.setProperty('transition', 'opacity 0.2s ease-in')
+  // 预渲染首屏的入场动画：挂载前把 #app 置于「透明 + 轻微下沉 + 微模糊」，
+  // 挂载重建 DOM 后上浮淡入，掩盖重建瞬间。作用在 #app 而非 documentElement——
+  // 页面背景不动，只有内容入场。
+  // 动画结束必须清理内联样式：transform/filter 会为 position:fixed 后代
+  // （移动端侧边栏）创建新的包含块。prefers-reduced-motion 用户跳过动画。
+  const appEl = prerendered ? document.querySelector<HTMLElement>('#app') : null
+  const animateEntrance =
+    appEl !== null &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (animateEntrance && appEl) {
+    appEl.style.cssText = 'opacity:0;transform:translateY(10px);filter:blur(4px)'
   }
   app.mount(mountTarget, false)
-  if (prerendered) {
-    // 挂载完成后淡入
+  if (animateEntrance && appEl) {
+    appEl.style.transition =
+      'opacity .5s cubic-bezier(.22,1,.36,1), transform .5s cubic-bezier(.22,1,.36,1), filter .5s cubic-bezier(.22,1,.36,1)'
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        document.documentElement.style.setProperty('opacity', '1')
+        appEl.style.opacity = '1'
+        appEl.style.transform = 'translateY(0)'
+        appEl.style.filter = 'blur(0)'
       })
     })
+    const cleanup = () => {
+      appEl.style.cssText = ''
+    }
+    appEl.addEventListener('transitionend', cleanup, { once: true })
+    // 兜底：后台标签页里 transitionend 可能不触发
+    setTimeout(cleanup, 900)
   }
 
   // 嵌入态：注册宿主消息监听（postMessage 通道，见 embeddedBridge.ts）。
