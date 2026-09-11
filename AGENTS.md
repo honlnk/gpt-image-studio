@@ -130,7 +130,7 @@ Tailwind CSS v4 via `@tailwindcss/vite` plugin (no config file). Single CSS entr
 
 ### API Integration
 
-OpenAI-compatible Images API. Generation: `POST {apiBaseUrl}/generations` (JSON). Editing: `POST {apiBaseUrl}/edits` (multipart/form-data with `image[]` array). Response expects `{ data: [{ b64_json }] }`. Browser direct mode also supports Responses API streaming previews when `apiMode` is configured for it; Companion mode stays on the Images API compatibility surface.
+OpenAI-compatible Images API. Generation: `POST {apiBaseUrl}/generations` (JSON). Editing: `POST {apiBaseUrl}/edits` (multipart/form-data with `image[]` array). Response prefers `{ data: [{ b64_json }] }`; when a provider only returns `data[0].url` (or a URL string in Responses API results), the image is downloaded and converted to base64 — in-browser for direct mode (`imagesApi/imageUrlDownload.ts`, subject to the CDN's CORS policy) and server-side for Companion mode (`providers/urlToB64.ts`, HTTPS-only with public-address policy). Browser direct mode also supports Responses API streaming previews when `apiMode` is configured for it; Companion mode stays on the Images API compatibility surface.
 
 Custom size validation for the generic Web UI remains conservative: 16-3840px, multiples of 16, aspect ratio ≤ 3:1, total pixels 655,360-8,294,400. Provider-specific constraints should be modeled as capabilities, especially for Companion providers that expose different resolution tiers or pixel minimums.
 
