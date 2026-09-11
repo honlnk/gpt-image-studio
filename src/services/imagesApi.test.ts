@@ -417,6 +417,206 @@ describe("images API requests", () => {
   });
 });
 
+describe("provider URL responses (direct mode downloads)", () => {
+  // PNG 签名 + 填充字节，足够 magic bytes 嗅探判定格式。
+  const pngBytes = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+  ]);
+  const pngBase64 = btoa(String.fromCharCode(...pngBytes));
+
+  function imageResponse(bytes: Uint8Array<ArrayBuffer>, contentType = "image/png") {
+    return new Response(new Blob([bytes]), {
+      status: 200,
+      headers: { "Content-Type": contentType },
+    });
+  }
+
+  it("downloads data[0].url images for generation when b64_json is missing", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [{ url: "https://cdn.example.test/image.png", revised_prompt: "url rewrite" }],
+        }),
+      )
+      .mockResolvedValueOnce(imageResponse(pngBytes));
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "画一张图",
+        params: generationParams,
+      }),
+    ).resolves.toEqual({
+      b64Json: pngBase64,
+      mimeType: "image/png",
+      revisedPrompt: "url rewrite",
+    });
+
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://cdn.example.test/image.png");
+  });
+
+  it("downloads data[0].url images for edits when b64_json is missing", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({ data: [{ url: "https://cdn.example.test/edited.png" }] }),
+      )
+      .mockResolvedValueOnce(imageResponse(pngBytes));
+
+    await expect(
+      editImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "改一下图",
+        params: generationParams,
+        images: [
+          {
+            blob: new Blob(["image"], { type: "image/png" }),
+            name: "image.png",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      b64Json: pngBase64,
+      mimeType: "image/png",
+      revisedPrompt: undefined,
+    });
+  });
+
+  it("downloads url results from the Responses API", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          output: [
+            {
+              type: "image_generation_call",
+              result: "https://cdn.example.test/responses.png",
+              revised_prompt: "responses rewrite",
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(imageResponse(pngBytes));
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test",
+        apiBaseUrlMode: "origin",
+        apiMode: "responses",
+        apiKey: "sk-test",
+        model: "gpt-5.5",
+        prompt: "画一张图",
+        params: generationParams,
+      }),
+    ).resolves.toEqual({
+      b64Json: pngBase64,
+      mimeType: "image/png",
+      revisedPrompt: "responses rewrite",
+    });
+  });
+
+  it("downloads url-only completed events from Images API streaming responses", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        eventStreamResponse([
+          {
+            type: "image_generation.partial_image",
+            b64_json: "partial-image",
+            partial_image_index: 0,
+          },
+          {
+            type: "image_generation.completed",
+            url: "https://cdn.example.test/final.png",
+            revised_prompt: "stream url rewrite",
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(imageResponse(pngBytes));
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "画一张图",
+        streamImages: true,
+        streamPartialImages: 1,
+        params: generationParams,
+      }),
+    ).resolves.toEqual({
+      b64Json: pngBase64,
+      mimeType: "image/png",
+      revisedPrompt: "stream url rewrite",
+    });
+  });
+
+  it("keeps the fallback hint when the URL download is blocked by CORS", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({ data: [{ url: "https://cdn.example.test/image.png" }] }),
+      )
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "画一张图",
+        params: generationParams,
+      }),
+    ).rejects.toThrow("建议切换到 Companion 模式");
+  });
+
+  it("rejects image URLs with unsupported protocols", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ data: [{ url: "ftp://cdn.example.test/image.png" }] }),
+    );
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "画一张图",
+        params: generationParams,
+      }),
+    ).rejects.toThrow("仅允许 http/https");
+  });
+
+  it("rejects downloaded payloads without an image signature", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({ data: [{ url: "https://cdn.example.test/not-image" }] }),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>not an image</html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
+      );
+
+    await expect(
+      generateImage({
+        apiBaseUrl: "https://api.example.test/v1/images",
+        apiBaseUrlMode: "full",
+        apiKey: "sk-test",
+        model: "gpt-image-2",
+        prompt: "画一张图",
+        params: generationParams,
+      }),
+    ).rejects.toThrow("不是有效的 PNG/JPEG/WebP");
+  });
+});
+
 describe("getCustomSizeError", () => {
   it("requires integer dimensions", () => {
     expect(getCustomSizeError(1024.5, 1024, OPENAI_CONSTRAINTS)).toBe("自定义尺寸的宽高必须是整数。");
