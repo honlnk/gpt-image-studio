@@ -6,6 +6,7 @@ import type { TimeFieldMigrationServices } from "../../services/timeFieldMigrati
 import { readStorage } from "../../shared/localStorage";
 import { formatError } from "../../shared/errors";
 import { readConversationIdFromUrl } from "../../services/conversationUrl";
+import { isDesktopCompanionActive } from "../../services/desktopCompanion";
 import type { AppSettings, Conversation, ImageAsset } from "../../types/studio";
 import type { Ref } from "vue";
 
@@ -222,7 +223,9 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
     };
 
     // 嵌入态连接配置由宿主注入，不做任何迁移（同 settingsStore 的持久化跳过）。
-    if (input.isEmbedded.value) return;
+    // 桌面内置态同理——镜像里的 url/key 可能属于浏览器侧配对的外部 Companion，
+    // 同步会覆盖 sidecar 注入的连接（dev 模式下两者共享 localStorage origin）。
+    if (input.isEmbedded.value || isDesktopCompanionActive()) return;
 
     // 1) companionUrl：镜像优先。备份导入会写镜像，这里同步到内存 ref。
     const mirrorUrl = readStorage(LEGACY_KEYS.companionUrl, "");

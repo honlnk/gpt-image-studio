@@ -30,8 +30,9 @@
   "scripts": {
     "dev": "vite",
     "dev:companion": "pnpm --filter @honlnk/image-studio-companion dev",
-    "dev:desktop": "tauri dev",
-    "build:desktop": "tauri build",
+    "build:sidecar": "pnpm --filter @honlnk/image-studio-companion build:sidecar",
+    "dev:desktop": "pnpm build:sidecar && tauri dev",
+    "build:desktop": "pnpm build:sidecar && tauri build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit",
@@ -40,6 +41,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
     "pinia": "^3.0.4",
     "qrcode": "^1.5.4",
     "vue": "^3.5.32"

@@ -27,11 +27,33 @@ describe("companion security config", () => {
     expect(() => normalizeOrigin("http://localhost:5173/path")).toThrow();
   });
 
+  it("normalizes the Tauri webview origin (macOS custom scheme)", () => {
+    // tauri://localhost 的 url.origin 序列化为 "null"，必须手动拼 scheme://host
+    expect(normalizeOrigin("tauri://localhost")).toBe("tauri://localhost");
+    expect(normalizeOrigin("tauri://localhost:4300")).toBe("tauri://localhost:4300");
+    expect(() => normalizeOrigin("tauri://localhost/path")).toThrow();
+    expect(() => normalizeOrigin("tauri://localhost/?q=1")).toThrow();
+    // 其他非 http(s)/tauri scheme 仍然拒绝
+    expect(() => normalizeOrigin("file://localhost")).toThrow();
+    expect(() => normalizeOrigin("ws://localhost:4300")).toThrow();
+  });
+
   it("checks request origins against the allow list", () => {
     const allowedOrigins = ["https://image.honlnk.com"];
 
     expect(isOriginAllowed(undefined, allowedOrigins)).toBe(true);
     expect(isOriginAllowed("https://image.honlnk.com", allowedOrigins)).toBe(true);
     expect(isOriginAllowed("http://localhost:8888", allowedOrigins)).toBe(false);
+  });
+
+  it("admits the Tauri origin into the allow list for desktop embedding", () => {
+    const config = createSecurityConfig({
+      allowOrigins: ["tauri://localhost", "http://tauri.localhost"],
+    });
+
+    expect(config.allowedOrigins).toContain("tauri://localhost");
+    expect(config.allowedOrigins).toContain("http://tauri.localhost");
+    expect(isOriginAllowed("tauri://localhost", config.allowedOrigins)).toBe(true);
+    expect(isOriginAllowed("http://tauri.localhost", config.allowedOrigins)).toBe(true);
   });
 });

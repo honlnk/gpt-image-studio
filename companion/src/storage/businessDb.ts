@@ -16,7 +16,7 @@
  * 本模块只按 dbPath 操作具体业务 db。路由层调用时会先查 active dataset 拿到 dbPath，
  * 再传给本模块的函数。
  */
-import Database from "better-sqlite3";
+import { openSqliteDatabase, type SqliteDatabase } from "./sqliteDriver.js";
 import {
   BUSINESS_DB_DDL,
   BUSINESS_DB_INDEXES,
@@ -31,7 +31,7 @@ import type { BusinessTable } from "./schema.js";
 import { StorageStoreError } from "./errors.js";
 
 /** dbPath → Database 连接缓存。 */
-const dbCache = new Map<string, Database.Database>();
+const dbCache = new Map<string, SqliteDatabase>();
 
 /**
  * 打开某数据集的业务 db（按 dbPath 缓存）。
@@ -40,10 +40,10 @@ const dbCache = new Map<string, Database.Database>();
  * 索引必须在迁移之后建：v1 旧库要先 ALTER 出派生列，CREATE INDEX 才不报错。
  * 后续调用返回缓存连接。WAL 模式提升读并发。
  */
-export function openBusinessDb(dbPath: string): Database.Database {
+export function openBusinessDb(dbPath: string): SqliteDatabase {
   const cached = dbCache.get(dbPath);
   if (cached) return cached;
-  const db = new Database(dbPath, { fileMustExist: false });
+  const db = openSqliteDatabase(dbPath);
   db.pragma("journal_mode = WAL");
   db.exec(BUSINESS_DB_DDL);
   const currentVersion = db.pragma("user_version", { simple: true }) as number;
@@ -63,7 +63,7 @@ export function openBusinessDb(dbPath: string): Database.Database {
  * 2. UPDATE 回填存量行（幂等，新库空表是 no-op）。
  * 索引不在此处理：openBusinessDb 在迁移后统一执行 BUSINESS_DB_INDEXES。
  */
-function migrateBusinessDb(db: Database.Database, fromVersion: number): void {
+function migrateBusinessDb(db: SqliteDatabase, fromVersion: number): void {
   if (fromVersion < 2) {
     const migrate = db.transaction(() => {
       for (const stmt of BUSINESS_DB_MIGRATION_V2_COLUMNS) {

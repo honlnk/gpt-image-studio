@@ -25,7 +25,8 @@ const appKey = ref(0);
 watch(
   () => settings.connectionMode,
   async (next, prev) => {
-    if (settings.isEmbedded || next === prev) return;
+    // 桌面内置态连接模式锁定，与嵌入态同样跳过重建。
+    if (settings.isEmbedded || settings.isDesktopCompanion || next === prev) return;
     // 切换前先持久化，确保重建后 resolveStorage / hydrate 能读到新模式。
     // saveCurrentSettings 写 IndexedDB settings 表（Promise），需 await 落盘。
     try {

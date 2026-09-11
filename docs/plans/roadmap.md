@@ -238,6 +238,6 @@ type GenerationParams = {
 
 1. 已完成：错误提示与操作反馈打磨。`feedbackStore` 增加 info/warning 变体；`renameImage`/`setImageTagColor`/`deleteImage` 持久化失败回滚内存并正确反馈（不再假成功/不撕裂）；`generationStore` 把图片保存失败从「生成失败」误判中分离；`reportStorageError` 加节流 toast，让静默存储失败对用户可见但不刷屏；批量下载加 try/catch。
 2. 已完成：更细的图片库筛选（来源、格式、排序等），见上文阶段五记录。
-3. 桌面端打包后续：macOS 代码签名 / notarization、Windows / Linux 跨平台构建、Tauri updater 自动更新、内嵌 Companion sidecar（需先解决 Node 二进制化 + notarization，详见 `docs/desktop-packaging.md`）。
+3. 桌面端打包后续：内嵌 Companion sidecar 已完成（阶段四 · 方案 B 首期，Bun 单文件二进制 + bun:sqlite 运行时适配，见 `docs/guides/desktop-packaging.md`）；剩余后置：macOS 代码签名 / notarization（含 sidecar notarization 处理）、Windows / Linux 跨平台构建、Tauri updater 自动更新。
 4. 本地 CLI Companion（`companion.md`）— 后台服务管理已完成：`start` / `stop` / `restart` / `logs`；认证已从早期一次性配对码升级为持久化连接密钥（access key）；凭据存储已支持损坏备份/恢复。系统 keychain（macOS Keychain / Windows Credential Manager 等操作系统级凭据加密）仍为后续能力，未实现。
 5. 用户行为日志系统（`analytics-event-logging-plan.md`）— V1 全部完成（V1.0 核心闭环 + V1.1 高频控件/Markdown 分片导出 + V1.2 颜色分组专项/会话级分片）。V2 分析层已完成：补 `generation.requested` 的 promptMode/生成参数采集；新增 `analyticsAnalysis.ts` 纯函数层（生成漏斗、满意度代理、prompt 模式对比、时间序列、事件分布）+ 单测；新增 `AnalyticsDashboard.vue` 只读仪表盘（设置页「数据分析」tab，纯 CSS/SVG 可视化）。

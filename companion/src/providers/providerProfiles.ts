@@ -2,11 +2,13 @@
  * Provider profile 数据的薄加载层。
  *
  * 实际数据在 profiles/ 子目录下，每个 provider 一个独立 JSON 文件
- * （文件名即 provider id，如 openai.json / glm.json）。新增 provider 的静态数据只需
- * 在该目录加一个 JSON 文件，无需改动本文件——加载时自动扫描汇总。
+ * （文件名即 provider id，如 openai.json / glm.json）。新增 provider 时在该目录
+ * 加一个 JSON 文件，并在下方 RAW_PROFILES 登记一条静态 import——静态化是为了
+ * 兼容单文件二进制形态（bun build --compile 的 Tauri sidecar）：二进制内
+ * import.meta.url 不指向真实文件系统，运行时 readdirSync 扫描目录不可行。
  *
  * 本文件负责：
- *   1. 扫描 profiles/ 目录下所有 *.json；
+ *   1. 汇总 profiles/ 目录下所有 *.json（静态 import，见 RAW_PROFILES）；
  *   2. 运行时形状校验（JSON 写错字段名/类型时立即抛错，弥补 JSON 无编译期类型检查）；
  *   3. 导出类型化的访问函数。
  *
@@ -15,9 +17,6 @@
  * - 「结构或算法的不同」→ 留代码（各 adapter 的 normalizeXxxSize / buildBody / parseResponse）。
  */
 
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import type {
   ProviderAdapterConfig,
   ProviderCapability,
@@ -25,6 +24,15 @@ import type {
   ResolutionOption,
   SizeConstraints,
 } from "./types.js";
+import deepinfra from "./profiles/deepinfra.json" with { type: "json" };
+import doubao from "./profiles/doubao.json" with { type: "json" };
+import gemini from "./profiles/gemini.json" with { type: "json" };
+import geminiOpenai from "./profiles/gemini-openai.json" with { type: "json" };
+import glm from "./profiles/glm.json" with { type: "json" };
+import grok from "./profiles/grok.json" with { type: "json" };
+import openai from "./profiles/openai.json" with { type: "json" };
+import qwen from "./profiles/qwen.json" with { type: "json" };
+import wan from "./profiles/wan.json" with { type: "json" };
 
 /** 按 model 切换的能力数据变体。用于 Wan 这类"同一 provider 不同 model 能力不同"的情况。 */
 export type ProfileVariant = {
@@ -70,21 +78,26 @@ export type ProviderProfile = {
 /** JSON 的原始形状（未校验）。 */
 type RawProfile = Record<string, unknown>;
 
-const PROFILES_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "profiles",
-);
+/** 静态登记的全部 profile 原始数据（key 即 provider id）。新增 provider 时在此登记。 */
+const RAW_PROFILES: Record<string, RawProfile> = {
+  deepinfra,
+  doubao,
+  gemini,
+  "gemini-openai": geminiOpenai,
+  glm,
+  grok,
+  openai,
+  qwen,
+  wan,
+};
 
 /**
- * 扫描 profiles/ 目录，加载并校验所有 *.json，返回类型化的 profile 表。
- * 文件名（去掉 .json）即 provider id。校验失败立即抛错（启动期暴露，不留到运行时）。
+ * 汇总静态登记的 profile 数据并逐个校验，返回类型化的 profile 表。
+ * 校验失败立即抛错（启动期暴露，不留到运行时）。
  */
 function loadConfig(): Record<string, ProviderProfile> {
-  const files = readdirSync(PROFILES_DIR).filter((f) => f.endsWith(".json"));
   const result: Record<string, ProviderProfile> = {};
-  for (const file of files) {
-    const providerId = file.slice(0, -".json".length);
-    const raw = JSON.parse(readFileSync(join(PROFILES_DIR, file), "utf8")) as RawProfile;
+  for (const [providerId, raw] of Object.entries(RAW_PROFILES)) {
     result[providerId] = validateProfile(providerId, raw);
   }
   return result;
@@ -333,7 +346,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
-/** 全部 provider 的 profile 数据（启动时扫描加载并校验一次）。 */
+/** 全部 provider 的 profile 数据（启动时加载并校验一次）。 */
 export const PROVIDER_PROFILES: Record<string, ProviderProfile> =
   loadConfig();
 
