@@ -4,6 +4,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import { defineConfig, type Plugin, type Rollup, type UserConfig } from 'vite'
 import type { ViteSSGOptions } from 'vite-ssg'
 import { copyFileSync, existsSync, rmSync } from 'node:fs'
+import { renderDownloadTemplate } from './src/pages/download/ssgTemplate'
 
 // vite 的 UserConfig 没有声明 vite-ssg 的 ssgOptions 字段（vite-ssg 未做模块增强），
 // 用交叉类型补上，保持 defineConfig 的类型检查。
@@ -31,8 +32,21 @@ export default defineConfig(({ mode }): UserConfigWithSSG => ({
   // 产物与 vite build 一致），再以 entry-ssg.ts 为 SSR 入口在 Node 里 renderToString，
   // 把首屏 HTML 注入 dist/index.html 的 #app。SSR 入口与浏览器入口解耦，
   // qiankun 嵌入态逻辑不进 Node。onFinished 清理 ssrManifest 等中间产物。
+  //
+  // 多路由（无 vue-router）：includedRoutes 声明要预渲染的路径列表，vite-ssg
+  // 对每个路径调一次 entry-ssg.ts 的 createApp(route)，按嵌套目录产出
+  // dist/<route>/index.html。/download 是下载营销页（docs/plans/download-page-plan.md），
+  // 其模板在 onBeforePageRender 里改写 title/canonical/OG/JSON-LD 并剔除 splash——
+  // 否则所有路由都会带首页的 SEO 元信息。
   ssgOptions: {
     entry: 'src/entry-ssg.ts',
+    includedRoutes: () => ['/', '/download'],
+    // nested：产出 dist/download/index.html，GitHub Pages 对 /download 和 /download/
+    // 都能直接服务（flat 的 download.html 只覆盖前者，带尾斜杠会落进 404 fallback）。
+    dirStyle: 'nested',
+    onBeforePageRender(route, indexHTML) {
+      return route === '/download' ? renderDownloadTemplate(indexHTML) : indexHTML
+    },
     onFinished() {
       rmSync('dist/.vite', { recursive: true, force: true })
       rmSync('dist/ssr-manifest.json', { force: true })

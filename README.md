@@ -66,6 +66,8 @@ JWT_SECRET=xxx ADMIN_API_KEY=xxx docker compose --profile companion-server up -d
 
 ### 方式四：桌面端
 
+下载安装包（含 macOS 安装指引）：**[image.honlnk.com/download](https://image.honlnk.com/download)**
+
 ```bash
 pnpm dev:desktop      # 开发模式
 pnpm build:desktop    # 构建 .app / .dmg（macOS，需 Rust）

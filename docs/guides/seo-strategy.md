@@ -581,6 +581,11 @@ Landing page（SEO 优化，静态 HTML）
 | 14 | 提交 awesome lists PR（3-5 个） | GitHub 内被动发现 |
 | 15 | 知乎 / 掘金发 1-2 篇技术文章 | 中文渠道冷启动 |
 
+> 实施记录（2026-09-11）：#10 已完成——vite-ssg 预渲染落地，并扩展为无路由多页机制
+> （`includedRoutes` + `entry-ssg.ts` 按路由分发 + `onBeforePageRender` 路由级 meta/JSON-LD）。
+> 同批上线 `/download` 下载页（SoftwareApplication/FAQPage 结构化数据、sitemap、IndexNow），
+> 见 `docs/plans/download-page-plan.md`。
+
 ### P2：1-2 个月（内容建设）
 
 | # | 行动 | 效果 |

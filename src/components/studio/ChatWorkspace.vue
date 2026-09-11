@@ -13,8 +13,9 @@ import ChatComposer from "../chat/ChatComposer.vue";
 import EditMaskModal from "../chat/EditMaskModal.vue";
 import MessageList from "../chat/MessageList.vue";
 import QqGroupModal from "../ui/QqGroupModal.vue";
-import { DESKTOP_APP_DOWNLOAD_URL } from "../../shared/downloads";
+import { DOWNLOAD_PAGE_URL } from "../../shared/downloads";
 import { openExternalUrl } from "../../services/desktopCompanion";
+import { isTauriRuntime } from "../../services/storage";
 
 type ChatWorkspaceHeader = {
   activeConversation?: Conversation;
@@ -70,6 +71,9 @@ const { selectingEditImageId: selectingImageId } = storeToRefs(composerState);
 const generation = useGenerationStore();
 const images = useImagesStore();
 const settings = useSettingsStore();
+// 桌面应用内隐藏「下载桌面版」入口（已在桌面端，再下载无意义；/download 路由在
+// webview 内导航也会把应用本身跳走）。
+const showDesktopDownloadEntry = !isTauriRuntime();
 const isDragActive = ref(false);
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 const showQqModal = ref(false);
@@ -283,10 +287,12 @@ function imageFilesFromTransfer(
           </span>
         </button>
         <a
-          :href="DESKTOP_APP_DOWNLOAD_URL"
-          download
+          v-if="showDesktopDownloadEntry"
+          :href="DOWNLOAD_PAGE_URL"
+          target="_blank"
+          rel="noopener"
           class="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-          title="下载 macOS 桌面版（Apple Silicon，约 2 MB）"
+          title="下载桌面版（macOS / Windows / Linux）"
         >
           <svg
             class="h-4 w-4"

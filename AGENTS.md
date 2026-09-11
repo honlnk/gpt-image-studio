@@ -25,6 +25,8 @@ No linter or formatter is configured. Vitest is configured for service-level tes
 
 Local-first AI image creation workbench. Vue 3 + Composition API (`<script setup>`), no router. Only runtime dependency beyond Vue is Pinia for state management. ZIP creation/reading, base64 conversion, image dimension reading, storage usage estimation, and analytics export are project-owned code rather than large app-level helper libraries.
 
+Multi-page without a router: `pnpm build` (vite-ssg) prerenders two routes — `/` (the studio) and `/download` (the desktop download marketing page, `src/pages/download/`). `ssgOptions.includedRoutes` declares the list, `src/entry-ssg.ts` picks the root component per route, `onBeforePageRender` rewrites per-route meta/JSON-LD and strips the splash (`src/pages/download/ssgTemplate.ts`), and `src/main.ts` dispatches on `location.pathname` (download page mounts without Pinia/IndexedDB bootstrap).
+
 See `docs/README.md` for the maintained documentation map and `docs/architecture/architecture.md` for the current architecture direction.
 
 ### State Management

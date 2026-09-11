@@ -1,6 +1,10 @@
 # 下载页面（image.honlnk.com/download）实施计划
 
-> 状态：**草案，待审阅**（2026-09-11 起草）。
+> 状态：**已完成（2026-09-11）**。实施与本文档一致，两处偏差记录：
+> ① vite-ssg 28 的默认 `dirStyle` 是 flat（`dist/download.html`），实际改用 `nested`
+> 产出 `dist/download/index.html`，/download 与 /download/ 都能被 GitHub Pages 直接服务；
+> ② 复制命令按钮在部分 webview 里 `navigator.clipboard` 不可用，补了
+> textarea + execCommand 降级链路（成功才显示「已复制」）。
 > 衔接文档：[desktop-distribution-plan.md](./desktop-distribution-plan.md)（免签名分发总方案）。本计划对应其 §3.2「浏览器直接下载的文档缓解」的产品化落地，并为其 §4.2 安装脚本预留页面位置。
 > 参考页面：https://mdopener.honlnk.com/ （同作者项目的单页下载站，本页在其骨架上扩展）。
 
