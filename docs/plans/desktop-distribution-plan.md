@@ -85,6 +85,8 @@ README「桌面端」小节 + 每个 Release 的发布说明里，写清两步�
 
 ### 4.1 CI 自动构建（其余一切的前置）
 
+> ✅ **已落地（2026-09-11）**：细化设计见 [desktop-ci-cd-plan.md](./desktop-ci-cd-plan.md)，workflow 为 `.github/workflows/desktop-release.yml`（tag `desktop-v*` 触发三平台构建 + prerelease 发布；`workflow_dispatch` 只构建不发布）。与细化设计的一处偏差：构建/上传用 `pnpm tauri build` + `gh` CLI 而非 tauri-action（决策记录见细化设计 §九）。首次真实发布与 `desktop-v0.2.0` 合并验证。
+
 现在桌面版是本地手动构建的；安装脚本要有稳定的下载源，必须先有 CI 把产物发布到 GitHub Releases。
 
 - GitHub Actions 三平台 matrix：`macos-latest` / `windows-latest` / `ubuntu-latest`；

@@ -1,0 +1,188 @@
+# Desktop Release: 打 desktop-v* tag 时构建三平台安装包并发布 GitHub Release（prerelease）
+#
+# 触发：
+# - git push tag desktop-vX.Y.Z  → 校验版本 → 建 prerelease → 三平台构建 → 上传资产
+# - workflow_dispatch            → 只构建 + 上传 workflow artifact（验证用，不碰 Release）
+#
+# 设计文档：docs/plans/desktop-ci-cd-plan.md（免签名路线——无签名凭据，GITHUB_TOKEN 即可）
+#
+# 资产命名契约（下载页 releaseClient 与安装脚本按此解析）：
+#   GPT-Image-Studio_<ver>_aarch64.dmg      macOS (Apple Silicon)
+#   GPT-Image-Studio_<ver>_x64-setup.exe    Windows (NSIS)
+#   GPT-Image-Studio_<ver>_amd64.AppImage   Linux
+#   GPT-Image-Studio_<ver>_amd64.deb        Linux (Debian/Ubuntu)
+
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # 创建 Release 与上传资产
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1: 质量门禁 + 版本一致性校验 + 创建 prerelease（Release 只建一次，避免 matrix 竞态）
+  # ─────────────────────────────────────────────────────────────────────────
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 与 deploy.yml 一致的门禁：类型检查 + 全量测试不过，不发版
+      - name: Typecheck & test
+        run: pnpm typecheck && pnpm test
+
+      - name: Resolve version
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#desktop-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(jq -r .version desktop/src-tauri/tauri.conf.json)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify version matches tag (push only)
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.version }}"
+          CONF=$(jq -r .version desktop/src-tauri/tauri.conf.json)
+          CARGO=$(grep -m1 '^version' desktop/src-tauri/Cargo.toml | sed -E 's/^version = "([^"]+)".*/\1/')
+          echo "tag=$TAG tauri.conf.json=$CONF Cargo.toml=$CARGO"
+          if [ "$TAG" != "$CONF" ] || [ "$TAG" != "$CARGO" ]; then
+            echo "::error::版本号不一致：tag=$TAG，tauri.conf.json=$CONF，Cargo.toml=$CARGO。请先同步三处版本号。"
+            exit 1
+          fi
+
+      - name: Render release notes
+        run: |
+          sed "s/{{VERSION}}/${{ steps.ver.outputs.version }}/g" .github/release-notes-desktop.md > /tmp/release-notes.md
+
+      - name: Create prerelease (idempotent)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::notice::Release $GITHUB_REF_NAME 已存在，复用（资产将覆盖上传）"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --prerelease \
+              --title "GPT Image Studio 桌面端 v${{ steps.ver.outputs.version }}" \
+              --notes-file /tmp/release-notes.md
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: 三平台矩阵构建（各自原生编译 sidecar，无交叉编译）
+  # ─────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.name }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest, bundles: dmg }
+          - { name: Windows, os: windows-latest, bundles: nsis }
+          - { name: Linux, os: ubuntu-latest, bundles: "appimage,deb" }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          shared-key: ${{ matrix.os }}
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build companion sidecar
+        run: pnpm build:sidecar
+
+      # beforeBuildCommand（tauri.conf.json 已配置 pnpm run build）会自动产出 dist/
+      - name: Build desktop bundles
+        run: pnpm exec tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Collect & rename artifacts
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          BUNDLE=desktop/src-tauri/target/release/bundle
+          OUT=release-assets
+          mkdir -p "$OUT"
+          case "${{ runner.os }}" in
+            macOS)
+              mv "$BUNDLE"/dmg/*_aarch64.dmg "$OUT/GPT-Image-Studio_${VERSION}_aarch64.dmg"
+              ;;
+            Windows)
+              mv "$BUNDLE"/nsis/*-setup.exe "$OUT/GPT-Image-Studio_${VERSION}_x64-setup.exe"
+              ;;
+            Linux)
+              mv "$BUNDLE"/appimage/*.AppImage "$OUT/GPT-Image-Studio_${VERSION}_amd64.AppImage"
+              mv "$BUNDLE"/deb/*.deb "$OUT/GPT-Image-Studio_${VERSION}_amd64.deb"
+              ;;
+          esac
+          ls -la "$OUT"
+
+      - name: Upload to release (tag push)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
+
+      - name: Upload as workflow artifact (manual run)
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.name }}
+          path: release-assets/*
+          retention-days: 7
