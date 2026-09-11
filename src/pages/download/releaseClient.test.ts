@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FALLBACK_RELEASE } from "../../shared/downloads";
 import {
   classifyAssets,
   detectPlatform,
@@ -128,5 +129,19 @@ describe("formatAssetSize", () => {
   it("returns empty string for zero/invalid sizes", () => {
     expect(formatAssetSize(0)).toBe("");
     expect(formatAssetSize(Number.NaN)).toBe("");
+  });
+});
+
+describe("FALLBACK_RELEASE 自洽性", () => {
+  // 手动更新兜底版本时 URL/tag/name/version 容易改漏（曾出现 tag 已升 0.2.1
+  // 而 URL 文件名还是 0.2.0 的 404 状态），这里把一致性钉死。
+  it("asset URLs match tag, name and version", () => {
+    for (const asset of Object.values(FALLBACK_RELEASE.assets)) {
+      expect(asset).toBeDefined();
+      expect(asset!.url).toContain(`/download/${FALLBACK_RELEASE.tag}/`);
+      expect(asset!.url.endsWith(`/${asset!.name}`)).toBe(true);
+      expect(asset!.name).toContain(`_${FALLBACK_RELEASE.version}_`);
+      expect(asset!.sizeBytes).toBeGreaterThan(0);
+    }
   });
 });
