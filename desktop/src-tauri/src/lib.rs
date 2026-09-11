@@ -267,6 +267,33 @@ fn open_external_url(url: String) -> Result<(), String> {
     tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// 在应用内子窗口打开 Companion 管理页（替代系统浏览器外开）。
+///
+/// - 窗口 label 固定：重复调用聚焦已有窗口，不会开出一堆管理页；
+/// - URL 限定 loopback：命令本身不受 capabilities 约束（Rust 侧），但入口参数来自
+///   webview，显式校验避免成为任意网页打开器；
+/// - 管理页由 sidecar 以 bundle 内资源（resources/companion-admin）serve，端口是动态
+///   协商的，完整 URL 由前端按当前连接信息传入。
+#[tauri::command]
+fn open_admin_window(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    const LABEL: &str = "companion-admin";
+    if !url.starts_with("http://127.0.0.1:") && !url.starts_with("http://localhost:") {
+        return Err(format!("管理页 URL 必须是 loopback 地址，收到: {url}"));
+    }
+    if let Some(win) = app.get_webview_window(LABEL) {
+        win.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    let parsed: tauri::Url = url.parse().map_err(|e| format!("URL 解析失败: {e}"))?;
+    tauri::WebviewWindowBuilder::new(&app, LABEL, tauri::WebviewUrl::External(parsed))
+        .title("Companion 管理页")
+        .inner_size(1000.0, 720.0)
+        .min_inner_size(720.0, 480.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -278,7 +305,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             desktop_companion_info,
-            open_external_url
+            open_external_url,
+            open_admin_window
         ])
         .setup(|app| {
             let handle = app.handle().clone();

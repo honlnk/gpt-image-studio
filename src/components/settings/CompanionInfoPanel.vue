@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useCompanionStore } from "../../stores/companionStore";
-import { openExternalUrl } from "../../services/desktopCompanion";
+import { openAdminWindow } from "../../services/desktopCompanion";
 
 /**
  * Companion 基本信息面板（仅 Companion 模式显示）。
@@ -12,7 +12,7 @@ import { openExternalUrl } from "../../services/desktopCompanion";
  *
  * 桌面内置态（isDesktopCompanion）：sidecar 随应用启动并自动连接，
  * 密钥粘贴卡替换为内置服务状态卡；管理页入口保留（桌面凭据管理的唯一入口），
- * 点击经 opener 在系统浏览器打开（webview 内 window.open 被 Tauri 拦截）。
+ * 点击经 open_admin_window 在应用内开原生子窗口。
  */
 
 const settings = useSettingsStore();
@@ -31,9 +31,9 @@ function connectCompanion() {
   accessKeyInput.value = "";
 }
 
-// 桌面内置态：管理页在系统浏览器打开（Tauri opener）。
+// 桌面内置态：管理页在应用内子窗口打开（open_admin_window 命令）。
 function openAdminExternally() {
-  void openExternalUrl(companionAdminUrl.value).catch(() => {});
+  void openAdminWindow(companionAdminUrl.value).catch(() => {});
 }
 
 // v0.6 升级提示：默认收起，点击文本按钮才展开。
