@@ -42,7 +42,8 @@ function replaceMetaContent(html: string, selector: string, content: string, lab
 }
 
 export function renderDownloadTemplate(indexHTML: string): string {
-  let html = indexHTML;
+  // Windows CI 检出默认 autocrlf=true，模板会是 CRLF——统一成 LF 再匹配
+  let html = indexHTML.replace(/\r\n/g, "\n");
 
   // ── title / 基础 meta ──
   html = replaceOnce(html, /<title>[\s\S]*?<\/title>/, `<title>${DOWNLOAD_PAGE.title}</title>`, "title");
