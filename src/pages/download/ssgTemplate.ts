@@ -87,9 +87,18 @@ export function renderDownloadTemplate(indexHTML: string): string {
 
   // ── 剔除 splash（样式块 + 标记块），锚点是 index.html 里两处独有注释 ──
   // splash 标记块的后随元素在源模板里是入口 <script>，但 Vite 构建会把入口脚本
-  // 提升到 <head>，届时后随元素是 </body>——两种结构都兼容。
-  html = replaceOnce(html, /[ \t]*<!-- 启动画面关键样式[\s\S]*?<\/style>\n/, "", "splash style");
-  html = replaceOnce(html, /[ \t]*<!-- 启动画面：[\s\S]*?<\/div>\n(?=[ \t]*(?:<script|<\/body>))/, "", "splash markup");
+  // 提升到 <head>，届时后随元素是 </body>——两种结构都兼容；尾部空白用 \s*
+  // 兜底（Windows 构建产物里 </div> 与 </body> 之间可能没有换行）。
+  html = replaceOnce(html, /[ \t]*<!-- 启动画面关键样式[\s\S]*?<\/style>\s*/, "", "splash style");
+  // 失配时带上 </body> 前的原文样本——各平台构建产物结构有差异，日志里直接可见
+  const splashMarkup = /[ \t]*<!-- 启动画面：[\s\S]*?<\/div>\s*(?=<script|<\/body>)/;
+  if (!splashMarkup.test(html)) {
+    const bodyEnd = html.lastIndexOf("</body>");
+    const sample = (bodyEnd === -1 ? html.slice(-500) : html.slice(Math.max(0, bodyEnd - 500), bodyEnd + 20))
+      .replace(/\n/g, "\\n");
+    throw new Error(`[download-ssg] 模板改写失败：未命中「splash markup」。body 尾部样本：${sample}`);
+  }
+  html = html.replace(splashMarkup, "");
   if (html.includes("app-splash")) {
     throw new Error("[download-ssg] 模板改写失败：splash 标记未剔除干净");
   }

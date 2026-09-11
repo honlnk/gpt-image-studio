@@ -55,4 +55,17 @@ describe("renderDownloadTemplate", () => {
     expect(crlfOut).not.toContain("app-splash");
     expect(crlfOut).toContain('"SoftwareApplication"');
   });
+
+  // Windows 构建产物里 splash </div> 与 </body> 之间可能没有换行（CI 实测），
+  // 源模板里入口 <script> 也可能被 Vite 提升到 <head>——结构变体都要能剔除干净。
+  it("strips splash across structural variants of the built template", () => {
+    const scriptTag = '    <script type="module" src="/src/main.ts"></script>';
+    expect(indexHtml).toContain(scriptTag);
+
+    const hoistedScript = indexHtml.replace(`${scriptTag}\n`, ""); // 脚本提升到 head，body 尾部只剩 </div>\n</body>
+    expect(renderDownloadTemplate(hoistedScript)).not.toContain("app-splash");
+
+    const glued = indexHtml.replace(`</div>\n${scriptTag}`, "</div></body>"); // </div> 后直接 </body>
+    expect(renderDownloadTemplate(glued)).not.toContain("app-splash");
+  });
 });
