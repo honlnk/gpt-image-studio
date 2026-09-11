@@ -12,7 +12,8 @@
  *   时才会 require），pnpm 布局下本就不可解析，标记 external 与 npm 版行为一致。
  * - 版本号通过 --define 注入 COMPANION_BUILD_VERSION（二进制内 createRequire 读不到
  *   真实的 package.json）。
- * - 跨平台（将来）：Windows 产物需带 .exe 后缀并交叉编译，当前只构建宿主平台。
+ * - Windows triple 的产物名带 .exe 后缀（Tauri externalBin 约定）；跨平台交叉编译
+ *   用 SIDECAR_TRIPLE 显式指定目标。
  */
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
@@ -50,13 +51,16 @@ function hostTriple() {
 
 requireBun();
 const triple = hostTriple();
+// Tauri externalBin 约定：Windows 产物必须带 .exe 后缀（如 companion-x86_64-pc-windows-msvc.exe）
+const exeSuffix = triple.includes("windows") ? ".exe" : "";
 const binariesDir = join(repoRoot, "desktop", "src-tauri", "binaries");
-const target = join(binariesDir, `companion-${triple}`);
+const target = join(binariesDir, `companion-${triple}${exeSuffix}`);
 const staging = join(binariesDir, `.sidecar-staging-${process.pid}`);
 
 mkdirSync(binariesDir, { recursive: true });
 rmSync(target, { force: true });
 rmSync(staging, { force: true });
+rmSync(staging + ".exe", { force: true });
 
 execFileSync(
   "bun",
@@ -74,11 +78,17 @@ execFileSync(
   { stdio: "inherit", cwd: companionRoot },
 );
 
-if (!existsSync(staging)) {
-  console.error(`❌ bun build 未产出二进制（期望 ${staging}）`);
+// bun 面向 Windows 目标时可能自动给输出补 .exe 后缀，两种产物名都兼容
+const staged = existsSync(staging)
+  ? staging
+  : existsSync(staging + ".exe")
+    ? staging + ".exe"
+    : null;
+if (!staged) {
+  console.error(`❌ bun build 未产出二进制（期望 ${staging}${exeSuffix}）`);
   process.exit(1);
 }
-renameSync(staging, target);
+renameSync(staged, target);
 
 // admin 管理页资源 → Tauri resources（sidecar 通过 COMPANION_ADMIN_DIR 指向这里）
 const adminSrc = join(companionRoot, "src", "admin");

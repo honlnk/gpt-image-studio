@@ -254,8 +254,28 @@ function injectEmbeddedCss(container: HTMLElement | string) {
 // 桌面 Tauri 运行时先拉取内置 Companion 连接信息（Rust sidecar 的握手结果），
 // 再 render——applyDesktopCompanionConfig 必须发生在 app.mount 前（见 render 内
 // 注释）。非 Tauri 环境此调用是 no-op，行为与原先完全一致。
+//
+// /download 是预渲染的静态营销页（vite-ssg includedRoutes + entry-ssg 分发，
+// 见 docs/plans/download-page-plan.md）：不走工作室的 pinia/IndexedDB 启动链，
+// 只挂载一个轻量组件补上运行时交互（GitHub API 解析最新版本、复制命令）。
+// splash 标记已在 SSG 模板改写时剔除（ssgTemplate.ts），这里无需处理 splash。
+// 下载页组件经动态 import 代码分割，主页路径的加载不受影响。
+function isDownloadPagePath(pathname: string): boolean {
+  return pathname === '/download' || pathname === '/download/'
+}
+
+async function mountDownloadPage() {
+  const { default: DownloadPage } = await import('./pages/download/DownloadPage.vue')
+  app = createApp(DownloadPage)
+  app.mount('#app', false)
+}
+
 if (!window.__POWERED_BY_QIANKUN__) {
-  void initDesktopCompanion().finally(() => render({}))
+  if (isDownloadPagePath(window.location.pathname)) {
+    void mountDownloadPage()
+  } else {
+    void initDesktopCompanion().finally(() => render({}))
+  }
 }
 
 // ─── 嵌入态：导出 qiankun 生命周期 ───

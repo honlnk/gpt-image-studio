@@ -46,3 +46,6 @@ examples/qiankun-host/config.json
 
 # vite-ssg 构建期临时目录（构建中断可能残留）
 .vite-ssg-temp/
+
+# bun build --compile 的本地缓存（sidecar 构建产物）
+*.bun-build

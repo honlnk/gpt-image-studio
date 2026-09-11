@@ -25,6 +25,8 @@ No linter or formatter is configured. Vitest is configured for service-level tes
 
 Local-first AI image creation workbench. Vue 3 + Composition API (`<script setup>`), no router. Only runtime dependency beyond Vue is Pinia for state management. ZIP creation/reading, base64 conversion, image dimension reading, storage usage estimation, and analytics export are project-owned code rather than large app-level helper libraries.
 
+Multi-page without a router: `pnpm build` (vite-ssg) prerenders two routes — `/` (the studio) and `/download` (the desktop download marketing page, `src/pages/download/`). `ssgOptions.includedRoutes` declares the list, `src/entry-ssg.ts` picks the root component per route, `onBeforePageRender` rewrites per-route meta/JSON-LD and strips the splash (`src/pages/download/ssgTemplate.ts`), and `src/main.ts` dispatches on `location.pathname` (download page mounts without Pinia/IndexedDB bootstrap).
+
 See `docs/README.md` for the maintained documentation map and `docs/architecture/architecture.md` for the current architecture direction.
 
 ### State Management
@@ -61,7 +63,7 @@ src/components/
 
 ### Desktop Shell
 
-The desktop app lives under `desktop/src-tauri` and is a Tauri v2 shell that embeds the existing Vite `dist/` output. Keep the browser/Web app behavior as the source of truth. The Companion is bundled as a sidecar (阶段四 · 方案 B 首期): `companion/scripts/build-sidecar.mjs` compiles it with `bun build --compile` into `binaries/companion-<triple>`, the Rust shell (`lib.rs`) spawns/reuses/kills it (`COMPANION_READY` stdout handshake, shared `~/.gpt-image-studio` data dir, ephemeral-port retry), and the webview auto-connects via `desktop_companion_info` (see `src/services/desktopCompanion.ts`). Note: better-sqlite3's V8-bound addon cannot load under Bun, so `companion/src/storage/sqliteDriver.ts` picks better-sqlite3 (Node) or bun:sqlite (compiled binary) at runtime. `pnpm dev:desktop`/`build:desktop` rebuild the sidecar first — rebuilding is manual after companion source changes during a dev session.
+The desktop app lives under `desktop/src-tauri` and is a Tauri v2 shell that embeds the existing Vite `dist/` output. Keep the browser/Web app behavior as the source of truth. The Companion is bundled as a sidecar (阶段四 · 方案 B 首期): `companion/scripts/build-sidecar.mjs` compiles it with `bun build --compile` into `binaries/companion-<triple>`, the Rust shell (`lib.rs`) spawns/reuses/kills it (`COMPANION_READY` stdout handshake, shared `~/.gpt-image-studio` data dir, ephemeral-port retry), and the webview auto-connects via `desktop_companion_info` (see `src/services/desktopCompanion.ts`). Note: better-sqlite3's V8-bound addon cannot load under Bun, so `companion/src/storage/sqliteDriver.ts` picks better-sqlite3 (Node) or bun:sqlite (compiled binary) at runtime. `pnpm dev:desktop`/`build:desktop` rebuild the sidecar first — rebuilding is manual after companion source changes during a dev session. Releases are CI-driven: pushing a `desktop-vX.Y.Z` tag runs `.github/workflows/desktop-release.yml` (three-platform matrix, fixed asset names, prerelease on GitHub Releases); the tag must match the version in `desktop/src-tauri/tauri.conf.json` and `Cargo.toml`.
 
 ### Embed Examples (`examples/`)
 

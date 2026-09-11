@@ -81,7 +81,7 @@ jobs:
               "host": "image.honlnk.com",
               "key": "gpt-image-studio-indexnow-b15468a5",
               "keyLocation": "https://image.honlnk.com/gpt-image-studio-indexnow-b15468a5.txt",
-              "urlList": ["https://image.honlnk.com/"]
+              "urlList": ["https://image.honlnk.com/", "https://image.honlnk.com/download"]
             }' || true
 
   pr-preview:
