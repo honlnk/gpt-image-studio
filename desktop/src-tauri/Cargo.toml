@@ -1,6 +1,6 @@
 [package]
 name = "gpt-image-studio"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local-first AI image creation workbench"
 authors = ["honlnk"]
 edition = "2021"
