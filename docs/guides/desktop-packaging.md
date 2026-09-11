@@ -121,7 +121,7 @@ Tauri 的默认 CSP 比 GitHub Pages 严格。`tauri.conf.json` 的 `app.securit
 
 ### 权限最小化
 
-`capabilities/default.json` 只授予 `core:default`（核心 window 权限），不开放 shell / filesystem / http 插件给 webview。**sidecar 由 Rust 侧经 `tauri-plugin-shell` spawn（lib.rs），不经过 IPC，因此无需向 webview 授予 shell 权限**；webview 只通过自定义命令 `desktop_companion_info`（拉连接信息）和 `open_external_url`（opener 开外链）与壳交互。
+`capabilities/default.json` 只授予 `core:default`（核心 window 权限），不开放 shell / filesystem / http 插件给 webview。**sidecar 由 Rust 侧经 `tauri-plugin-shell` spawn（lib.rs），不经过 IPC，因此无需向 webview 授予 shell 权限**；webview 只通过自定义命令与壳交互：`desktop_companion_info`（拉连接信息）、`open_admin_window`（管理页开应用内原生子窗口，label 固定重复点击聚焦，URL 限 loopback）和 `open_external_url`（opener 开外链）。
 
 ### Sidecar 装配（tauri.conf.json + lib.rs）
 

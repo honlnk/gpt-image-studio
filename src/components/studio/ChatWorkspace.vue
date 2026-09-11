@@ -14,7 +14,7 @@ import EditMaskModal from "../chat/EditMaskModal.vue";
 import MessageList from "../chat/MessageList.vue";
 import QqGroupModal from "../ui/QqGroupModal.vue";
 import { DOWNLOAD_PAGE_URL } from "../../shared/downloads";
-import { openExternalUrl } from "../../services/desktopCompanion";
+import { openAdminWindow } from "../../services/desktopCompanion";
 import { isTauriRuntime } from "../../services/storage";
 
 type ChatWorkspaceHeader = {
@@ -83,12 +83,12 @@ const showQqModal = ref(false);
  * 阶段零之后，provider 凭据管理迁移到 Companion 自己的 /admin 页面，
  * Web 项目不再承载凭据管理 UI（边界正本清源，见 docs/evolution-roadmap.md 第四章）。
  * server/嵌入态下 Companion 管理页已禁用（多租户管理面在宿主），不跳转。
- * 桌面 Tauri 运行时经 opener 在系统浏览器打开（webview 内 window.open 被拦截）。
+ * 桌面 Tauri 运行时在应用内开原生子窗口（open_admin_window 命令）。
  */
 function openCompanionAdmin() {
   if (settings.isEmbedded) return
   const base = settings.companionUrl.replace(/\/$/, "");
-  void openExternalUrl(`${base}/admin`).catch(() => {});
+  void openAdminWindow(`${base}/admin`).catch(() => {});
 }
 let dragDepth = 0;
 

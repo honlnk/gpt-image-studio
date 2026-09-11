@@ -7,8 +7,9 @@ import { isTauriRuntime } from "../services/storage/resolveStorage";
  * desktop/src-tauri/src/lib.rs），前端只做两件事：
  * 1. 启动时通过 `desktop_companion_info` 命令拉取连接信息（有界等待），
  *    成功则由 main.ts 在 app.mount 前应用（同 qiankun applyEmbeddedConfig 的时机）；
- * 2. 外链打开（管理页等）走 `open_external_url` 命令——webview 内 window.open
- *    不可靠，Tauri v2 默认拦截新窗口请求。
+ * 2. 管理页打开走 `open_admin_window` 命令——在应用内开原生子窗口（label 固定、
+ *    重复调用聚焦）；其他外链仍走 `open_external_url`（系统浏览器）。
+ *    （webview 内 window.open 被 Tauri v2 默认拦截，不可靠。）
  *
  * 拉取失败 / available=false 时模块状态保持 null，应用回落 standalone 行为
  * （可手动配对外部 Companion），桌面端不因 sidecar 故障卡死。
@@ -87,4 +88,17 @@ export async function openExternalUrl(url: string): Promise<void> {
   }
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke("open_external_url", { url });
+}
+
+/**
+ * 打开 Companion 管理页。Tauri 运行时在应用内开原生子窗口（重复调用聚焦已有窗口）；
+ * 普通浏览器退回新标签页。
+ */
+export async function openAdminWindow(url: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("open_admin_window", { url });
 }
