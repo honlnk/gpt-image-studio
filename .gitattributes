@@ -1,0 +1,6 @@
+# 统一 LF 检出：Windows CI（autocrlf）与本地跨平台协作下避免 CRLF 导致的
+# 构建差异（曾导致 /download SSG 模板改写在 Windows 构建时失配）。
+* text=auto eol=lf
+
+# vendored 第三方产物不做行尾转换，避免无谓 diff
+examples/qiankun-host/vendor/** -text
