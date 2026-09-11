@@ -10,7 +10,8 @@
 
 export const DOWNLOAD_PAGE = {
   path: "/download",
-  url: "https://image.honlnk.com/download",
+  // canonical/OG 用带尾斜杠的最终 URL（GH Pages 对无斜杠目录 URL 返回 301）
+  url: "https://image.honlnk.com/download/",
   title: "下载 GPT Image Studio 桌面版 - macOS / Windows / Linux",
   description:
     "免费开源的本地优先 AI 图片创作工作台桌面版：内嵌 Companion 服务开箱即连，无需安装 Node。提供 macOS（Apple Silicon）/ Windows / Linux 安装包，附 macOS 未签名放行教程。",

@@ -43,19 +43,34 @@ export type DesktopReleaseInfo = {
 };
 
 /**
- * 兜底 release（当前线上唯一版本，2026-06 手动发布，早于内嵌 sidecar）。
- * 资产名是 GitHub 网页上传时点号化后的历史命名，属正常情况——
- * releaseClient 的模式匹配对点/空格/连字符三种命名风格都兼容。
+ * 兜底 release（desktop-v0.2.0，CI 首发：首个内嵌 Companion sidecar 的版本）。
+ * 资产命名遵循 desktop-release.yml 头部契约；releaseClient 的模式匹配对
+ * 点/空格/连字符三种历史命名风格都兼容。
  */
 export const FALLBACK_RELEASE: DesktopReleaseInfo = {
-  version: "0.1.0",
-  tag: "desktop-v0.1.0",
-  publishedAt: "2026-06-19T16:06:29Z",
+  version: "0.2.0",
+  tag: "desktop-v0.2.0",
+  publishedAt: "2026-09-11T17:24:23Z",
   assets: {
     macArm64: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.1.0/GPT.Image.Studio_0.1.0_aarch64.dmg",
-      name: "GPT.Image.Studio_0.1.0_aarch64.dmg",
-      sizeBytes: 1972875,
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.0/GPT-Image-Studio_0.2.0_aarch64.dmg",
+      name: "GPT-Image-Studio_0.2.0_aarch64.dmg",
+      sizeBytes: 29279556,
+    },
+    windowsX64: {
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.0/GPT-Image-Studio_0.2.0_x64-setup.exe",
+      name: "GPT-Image-Studio_0.2.0_x64-setup.exe",
+      sizeBytes: 32994423,
+    },
+    linuxAppImage: {
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.0/GPT-Image-Studio_0.2.0_amd64.AppImage",
+      name: "GPT-Image-Studio_0.2.0_amd64.AppImage",
+      sizeBytes: 112888312,
+    },
+    linuxDeb: {
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.0/GPT-Image-Studio_0.2.0_amd64.deb",
+      name: "GPT-Image-Studio_0.2.0_amd64.deb",
+      sizeBytes: 40977026,
     },
   },
 };
