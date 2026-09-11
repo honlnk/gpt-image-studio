@@ -47,4 +47,12 @@ describe("renderDownloadTemplate", () => {
       /download-ssg/,
     );
   });
+
+  it("tolerates CRLF line endings (Windows CI checkout with autocrlf)", () => {
+    const crlfHtml = indexHtml.replace(/\r?\n/g, "\r\n");
+    const crlfOut = renderDownloadTemplate(crlfHtml);
+    expect(crlfOut).toContain(`<title>${DOWNLOAD_PAGE.title}</title>`);
+    expect(crlfOut).not.toContain("app-splash");
+    expect(crlfOut).toContain('"SoftwareApplication"');
+  });
 });
