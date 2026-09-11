@@ -53,22 +53,22 @@ export const FALLBACK_RELEASE: DesktopReleaseInfo = {
   publishedAt: "2026-09-11T18:24:03Z",
   assets: {
     macArm64: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.1/GPT-Image-Studio_0.2.0_aarch64.dmg",
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.1/GPT-Image-Studio_0.2.1_aarch64.dmg",
       name: "GPT-Image-Studio_0.2.1_aarch64.dmg",
       sizeBytes: 29282820,
     },
     windowsX64: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.1/GPT-Image-Studio_0.2.0_x64-setup.exe",
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.1/GPT-Image-Studio_0.2.1_x64-setup.exe",
       name: "GPT-Image-Studio_0.2.1_x64-setup.exe",
       sizeBytes: 32991667,
     },
     linuxAppImage: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.1/GPT-Image-Studio_0.2.0_amd64.AppImage",
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.1/GPT-Image-Studio_0.2.1_amd64.AppImage",
       name: "GPT-Image-Studio_0.2.1_amd64.AppImage",
       sizeBytes: 112888312,
     },
     linuxDeb: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.1/GPT-Image-Studio_0.2.0_amd64.deb",
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.2.1/GPT-Image-Studio_0.2.1_amd64.deb",
       name: "GPT-Image-Studio_0.2.1_amd64.deb",
       sizeBytes: 40980356,
     },
