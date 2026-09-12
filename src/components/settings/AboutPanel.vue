@@ -7,8 +7,33 @@ import {
   QQ_GROUP_NUMBER,
   QQ_GROUP_QR_URL,
 } from "../../shared/community";
+import { openExternalUrl } from "../../services/desktopCompanion";
+import {
+  checkDesktopUpdate,
+  getDesktopAppVersion,
+  type DesktopUpdateStatus,
+} from "../../services/desktopUpdate";
+import { isTauriRuntime } from "../../services/storage/resolveStorage";
 
 const { stars: starCount, failed: starFailed } = useRepoStars();
+
+/** 检查更新仅桌面端可用（Web 版随部署持续更新，无此诉求）。 */
+const isDesktop = isTauriRuntime();
+const currentVersion = ref<string | null>(null);
+const updateChecking = ref(false);
+const updateStatus = ref<DesktopUpdateStatus | null>(null);
+
+async function runUpdateCheck() {
+  if (updateChecking.value) return;
+  updateChecking.value = true;
+  try {
+    const result = await checkDesktopUpdate();
+    updateStatus.value = result;
+    if (result.kind !== "error") currentVersion.value = result.currentVersion;
+  } finally {
+    updateChecking.value = false;
+  }
+}
 
 /** 前端实时生成的高分辨率二维码，比原图缩略图更易扫描。 */
 const qrDataUrl = ref<string>(QQ_GROUP_QR_URL);
@@ -23,6 +48,9 @@ onMounted(async () => {
   } catch {
     // 生成失败时回退到原图
     qrDataUrl.value = QQ_GROUP_QR_URL;
+  }
+  if (isDesktop) {
+    currentVersion.value = await getDesktopAppVersion();
   }
 });
 
@@ -120,6 +148,53 @@ const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
             />
           </svg>
         </a>
+      </div>
+
+      <div
+        v-if="isDesktop"
+        class="mt-4 rounded-lg border border-gray-200 px-3 py-2.5"
+      >
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-gray-600">桌面版</span>
+          <span class="text-sm font-semibold text-gray-900">
+            {{ currentVersion ? `v${currentVersion}` : "…" }}
+          </span>
+          <button
+            type="button"
+            class="ml-auto cursor-pointer rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50"
+            :disabled="updateChecking"
+            @click="runUpdateCheck"
+          >
+            {{ updateChecking ? "检查中…" : "检查更新" }}
+          </button>
+        </div>
+        <p
+          v-if="updateStatus?.kind === 'up-to-date'"
+          class="mt-1.5 text-xs text-green-600"
+        >
+          已是最新版本
+        </p>
+        <div
+          v-else-if="updateStatus?.kind === 'update-available'"
+          class="mt-1.5 flex items-center gap-2 text-xs"
+        >
+          <span class="text-amber-600">
+            发现新版本 v{{ updateStatus.latestVersion }}
+          </span>
+          <button
+            type="button"
+            class="cursor-pointer font-medium text-blue-600 hover:text-blue-800"
+            @click="openExternalUrl(updateStatus.releaseUrl)"
+          >
+            前往下载 →
+          </button>
+        </div>
+        <p
+          v-else-if="updateStatus?.kind === 'error'"
+          class="mt-1.5 text-xs text-gray-400"
+        >
+          检查失败，请检查网络后重试
+        </p>
       </div>
 
       <div class="mt-4 flex flex-wrap gap-1.5">

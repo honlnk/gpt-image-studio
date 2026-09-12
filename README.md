@@ -66,11 +66,25 @@ JWT_SECRET=xxx ADMIN_API_KEY=xxx docker compose --profile companion-server up -d
 
 ### 方式四：桌面端
 
-下载安装包（含 macOS 安装指引）：**[image.honlnk.com/download](https://image.honlnk.com/download)**
+下载安装包（含各平台图文安装指引）：**[image.honlnk.com/download](https://image.honlnk.com/download)**
+
+**macOS（Apple Silicon）推荐一行命令安装**——终端下载不触发 Gatekeeper，全程零警告：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/honlnk/gpt-image-studio/main/scripts/install-desktop.sh | sh
+```
+
+浏览器直接下载的用户，首次打开需放行一次（安装包未做平台签名/公证，属开源免签名软件的正常提示，详见下载页说明）：
+
+- **macOS**：系统设置 → 隐私与安全性 → 下拉点「仍要打开」；或终端执行 `xattr -cr /Applications/GPT\ Image\ Studio.app`
+- **Windows**：SmartScreen 蓝色提示点「更多信息 → 仍要运行」
+- **Linux**：AppImage 加执行权限即可运行，无安全拦截
+
+开发构建（需 [Rust](docs/guides/desktop-packaging.md#前置依赖)）：
 
 ```bash
 pnpm dev:desktop      # 开发模式
-pnpm build:desktop    # 构建 .app / .dmg（macOS，需 Rust）
+pnpm build:desktop    # 构建 .app / .dmg（macOS）
 ```
 
 详见 [桌面端打包方案](docs/guides/desktop-packaging.md)。
