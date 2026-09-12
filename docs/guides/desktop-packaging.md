@@ -181,7 +181,7 @@ pnpm tauri icon desktop/src-tauri/app-icon.png -o desktop/src-tauri/icons
 
 - **macOS 代码签名 / notarization**：需要 Apple Developer 账号。当前决策走**免签名路线**（`docs/plans/desktop-distribution-plan.md`）：`pnpm build:desktop` 产出未签名 app，首次打开需在「系统设置 → 隐私与安全性」里手动允许。若将来做签名，需注意 sidecar 二进制的 notarization 已知问题（[tauri#11992](https://github.com/tauri-apps/tauri/issues/11992)）。
 - **Windows / Linux 跨平台构建**：CI 矩阵已就绪（`.github/workflows/desktop-release.yml`，含 Linux webkit2gtk 依赖与 Windows `.exe` 后缀处理），待首次发布实际验证。
-- **自动更新（Tauri updater）**：未签名的 macOS 不可用 updater；轻量替代方案「检查更新」见分发方案 §4.5。
+- **自动更新（Tauri updater）**：未签名的 macOS 不可用 updater；轻量替代「检查更新」已落地（设置 → 关于，`src/services/desktopUpdate.ts`，分发方案 §4.5）。
 - **多 provider 前端管理 UI**：凭据管理仍走 admin 页（阶段四后续项）。
 - **NativeStorage（APP 本地文件存储替代 IndexedDB）**：阶段四后续项，接口骨架已预留。
 
@@ -190,9 +190,9 @@ pnpm tauri icon desktop/src-tauri/app-icon.png -o desktop/src-tauri/icons
 按免签名分发方案（`docs/plans/desktop-distribution-plan.md` §四）的依赖顺序：
 
 1. ~~CI 自动构建~~ —— 已完成（`desktop-release.yml`，tag `desktop-v*` 触发；细化设计见 `docs/plans/desktop-ci-cd-plan.md`）。
-2. 安装脚本 `scripts/install-desktop.sh`（macOS 主力分发方式；下载页已预留位置）。
-3. 下载页 `image.honlnk.com/download`（计划见 `docs/plans/download-page-plan.md`）。
+2. ~~安装脚本 `scripts/install-desktop.sh`~~ —— 已完成（2026-09-12，macOS 主力分发方式；下载页已预留位置）。
+3. ~~下载页 `image.honlnk.com/download`~~ —— 已完成（计划见 `docs/plans/download-page-plan.md`）。
 4. SignPath Foundation 免费签名（触发式：Windows 用户对 SmartScreen 投诉时申请）。
-5. 应用内「检查更新」（对比 GitHub releases 与当前版本，`openExternalUrl` 引导）。
+5. ~~应用内「检查更新」~~ —— 已完成（2026-09-12，`src/services/desktopUpdate.ts` + 设置 → 关于面板，对比 GitHub Releases 与当前版本，`openExternalUrl` 引导）。真·Tauri updater 仍需签名后评估。
 6. 评估是否需要把 IndexedDB 迁移到 Tauri 的文件系统存储（目前 IndexedDB 在 WKWebView 下持久化正常，暂无必要）。
 7. 多 provider 前端管理 UI / keychain 凭据加密（阶段四启动时再决策）。

@@ -1,26 +1,30 @@
 <script setup lang="ts">
 /**
- * macOS 安装教学区：未签名应用的 Gatekeeper 放行指引。
- * 文案与分发方案 §3.2 一致（docs/plans/desktop-distribution-plan.md）；
- * 安装脚本（curl|sh）区块在 §4.2 完成后补充到本区顶部作为「推荐方式」。
+ * macOS 安装教学区。
+ * 顶部是推荐方式：curl|sh 一行命令安装（命令行下载不写隔离标记，
+ * Gatekeeper 零警告，见分发方案 §3.1）；下方为浏览器手动下载的
+ * Gatekeeper 放行指引（文案与分发方案 §3.2 一致）。
  */
 import { ref } from "vue";
 
+const INSTALL_COMMAND =
+  "curl -fsSL https://raw.githubusercontent.com/honlnk/gpt-image-studio/main/scripts/install-desktop.sh | sh";
 const XATTR_COMMAND = "xattr -cr /Applications/GPT\\ Image\\ Studio.app";
 
-const copied = ref(false);
+/** 当前显示「已复制」反馈的命令 key；空串表示无。 */
+const copiedKey = ref("");
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
-async function copyCommand() {
+async function copyCommand(key: string, text: string) {
   let ok = false;
   try {
-    await navigator.clipboard.writeText(XATTR_COMMAND);
+    await navigator.clipboard.writeText(text);
     ok = true;
   } catch {
     // clipboard API 不可用/被拒（部分 webview、权限策略）时退化到
     // 隐藏 textarea + execCommand 的老路径
     const textarea = document.createElement("textarea");
-    textarea.value = XATTR_COMMAND;
+    textarea.value = text;
     textarea.style.position = "fixed";
     textarea.style.opacity = "0";
     document.body.appendChild(textarea);
@@ -34,14 +38,42 @@ async function copyCommand() {
   }
   // 两条通道都失败才静默——命令文本就在页面上，用户可手选复制
   if (!ok) return;
-  copied.value = true;
+  copiedKey.value = key;
   clearTimeout(copiedTimer);
-  copiedTimer = setTimeout(() => (copied.value = false), 2000);
+  copiedTimer = setTimeout(() => (copiedKey.value = ""), 2000);
 }
 </script>
 
 <template>
   <h2 class="text-2xl font-bold tracking-tight">macOS 安装指引</h2>
+
+  <!-- 推荐方式：一行命令安装（curl 下载不带隔离属性，全程不触发 Gatekeeper） -->
+  <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
+    <div class="flex items-center gap-2">
+      <span class="rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">推荐方式</span>
+      <div class="font-medium">终端一行命令安装，全程零警告</div>
+    </div>
+    <p class="mt-2 text-sm leading-relaxed text-gray-600">
+      命令行下载的文件不会被 macOS 标记隔离，Gatekeeper 不会拦截——复制下面这行到「终端」执行，
+      自动完成下载、安装到「应用程序」，装完直接打开，无需下面的手动放行步骤：
+    </p>
+    <div class="mt-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-950 px-4 py-3">
+      <code class="min-w-0 flex-1 overflow-x-auto font-mono text-[13px] whitespace-nowrap text-emerald-300">{{ INSTALL_COMMAND }}</code>
+      <button
+        type="button"
+        class="shrink-0 cursor-pointer rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-700"
+        @click="copyCommand('install', INSTALL_COMMAND)"
+      >
+        {{ copiedKey === "install" ? "已复制 ✓" : "复制" }}
+      </button>
+    </div>
+    <p class="mt-2 text-xs text-gray-400">
+      脚本内容公开可审计：<a href="https://github.com/honlnk/gpt-image-studio/blob/main/scripts/install-desktop.sh" target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-gray-600">scripts/install-desktop.sh</a>
+    </p>
+  </div>
+
+  <!-- 手动方式：浏览器下载 dmg 后的 Gatekeeper 放行指引 -->
+  <p class="mt-10 text-sm font-semibold text-gray-900">手动安装（浏览器下载）</p>
   <p class="mt-2 text-sm leading-relaxed text-gray-500">
     安装包没有购买 Apple 开发者签名（$99/年，对本项目没有性价比），首次打开会被
     Gatekeeper 拦一次。这是<strong class="font-medium text-gray-700">开源未签名软件的正常提示，不是病毒</strong>——
@@ -83,9 +115,9 @@ async function copyCommand() {
           <button
             type="button"
             class="shrink-0 cursor-pointer rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-700"
-            @click="copyCommand"
+            @click="copyCommand('xattr', XATTR_COMMAND)"
           >
-            {{ copied ? "已复制 ✓" : "复制" }}
+            {{ copiedKey === "xattr" ? "已复制 ✓" : "复制" }}
           </button>
         </div>
       </div>

@@ -20,9 +20,12 @@ macOS arm64（未签名）+ **内置 Companion sidecar（2026-08 完成，见下
 
 - ✅ 内嵌 Companion 为 sidecar —— 已完成（阶段四 · 方案 B 首期）。Bun `build --compile` 单文件二进制 + `sqliteDriver.ts` 运行时适配（Node=better-sqlite3 / Bun=bun:sqlite，绕过 V8 addon 在 JSC 无法加载的限制）；Tauri 壳管理生命周期（复用 19750 已有实例 / spawn + COMPANION_READY 握手 / 临时端口重试 / 退出清理）；webview 自动连接、模式锁定、回落 standalone。原两个阻塞项的实际情况：Node 二进制化由 Bun 解决；macOS notarization 对 sidecar 的已知问题（tauri#11992）在未签名期不构成阻塞，做签名时再处理。
 - 🔲 macOS 代码签名 + notarization（需 Apple Developer 账号；当前走免签名路线，见 `docs/plans/desktop-distribution-plan.md`；签名时需处理 sidecar 二进制的 notarization）
-- 🔲 Windows / Linux 跨平台构建（CI 矩阵已就绪：`.github/workflows/desktop-release.yml`，待首次发布实际验证；build-sidecar.mjs 的 Windows `.exe` 后缀已处理）
-- 🔲 Tauri updater 自动更新（未签名 macOS 不可用 updater；轻量替代「检查更新」见分发方案 §4.5）
+- 🔲 Windows / Linux 跨平台构建（CI 矩阵已就绪：`.github/workflows/desktop-release.yml`，desktop-v0.2.x 已实际验证；build-sidecar.mjs 的 Windows `.exe` 后缀已处理）
+- 🔲 Tauri updater 自动更新（未签名 macOS 不可用 updater；轻量替代「检查更新」已落地——见下）
 - ✅ CI 自动构建 + 发布 —— 已完成（免签名路线，无需签名凭据）：tag `desktop-v*` 触发三平台构建 + prerelease 发布，细化设计见 `docs/plans/desktop-ci-cd-plan.md`（2026-09-11）
+- ✅ macOS 安装脚本 —— 已完成（分发方案 §4.2）：`scripts/install-desktop.sh`，curl 下载不写隔离标记实现零警告安装；架构检测（仅 arm64）、Releases 列表 API 解析最新版本（prerelease 兼容）、DMG 挂载复制、已有旧版先删再装、防御性 `xattr -cr`
+- ✅ README + Release 说明模板 —— 已完成（分发方案 §4.3）：`.github/release-notes-desktop.md`（CI `sed` 替换版本号）；README「方式四：桌面端」补一行命令安装入口与各平台放行说明
+- ✅ 应用内「检查更新」—— 已完成（分发方案 §4.5 轻量替代）：`src/services/desktopUpdate.ts`（对比 Releases 列表 API 与当前版本，失败明确报错不回落兜底常量）+ 设置 → 关于面板的桌面端专属卡片（有新版时 `openExternalUrl` 打开 Release 页）；capability 增加 `core:app:allow-version`
 
 ---
 

@@ -100,9 +100,13 @@ README「桌面端」小节 + 每个 Release 的发布说明里，写清两步�
 
 ### 4.2 安装脚本 `scripts/install-desktop.sh`（依赖 4.1）
 
+> ✅ **已落地（2026-09-12）**：按 3.1 职责清单实现。两处与早期设想的偏差：① 版本解析走 Releases **列表** API 而非 `/releases/latest`（桌面版是 prerelease，后者取不到，与下载页 releaseClient 同理）；② 旧版替换前先 `osascript` 尝试退出运行中的 app。已通过真实 Release 资产验证版本解析与下载链接有效性；发布前仍建议在新机器/已有旧版两种场景各跑一遍。
+
 按 3.1 的职责清单实现。发布前用真实 Release 资产完整跑一遍（新机器、已有旧版两种情况）。
 
 ### 4.3 README + Release 说明模板（不依赖 CI，可立即做）
+
+> ✅ **已落地（2026-09-12）**：`.github/release-notes-desktop.md`（CI `sed` 替换 `{{VERSION}}`，随 desktop-release.yml 注入）；README「方式四：桌面端」补了一行命令安装入口（curl\|sh）与 macOS / Windows / Linux 三平台放行说明。
 
 按 3.2 写好两平台文案；Release notes 做成可复用模板（放 `.github/` 或文档里）。
 
@@ -111,6 +115,8 @@ README「桌面端」小节 + 每个 Release 的发布说明里，写清两步�
 触发条件：Windows 用户对 SmartScreen 提示反馈较多。通过后把签名步骤接进 4.1 的 Windows job。
 
 ### 4.5 （后置）应用内「检查更新」
+
+> ✅ **已落地（2026-09-12）**：`src/services/desktopUpdate.ts` + 设置 → 关于面板的桌面端专属卡片（仅 Tauri 运行时渲染）。版本号经 `getVersion()`（`@tauri-apps/api/app`）读取，capability 增加 `core:app:allow-version`；有新版时 `openExternalUrl` 打开对应 Release 页。与下载页的差异：API 失败**不**回落 FALLBACK_RELEASE（对硬编码旧版本比较会误报「已是最新」），明确报错让用户重试。
 
 macOS 未签名**做不了 Tauri updater 静默自动更新**（updater 要求已签名 app）。替代轻方案：设置里加「检查更新」，对比 GitHub `releases/latest` 与当前版本，有新版则提示并打开 Release 页（复用已有的 `openExternalUrl`）。Windows/Linux 将来如果做了签名可再评估真 updater。
 

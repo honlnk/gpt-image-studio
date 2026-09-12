@@ -159,7 +159,8 @@ See `docs/plans/roadmap.md` for the full business roadmap. Current status:
 - Done: Tauri v2 desktop packaging first version (`desktop/src-tauri`, `docs/guides/desktop-packaging.md`)
 - Done: Finer image-library filters — `ImageLibrary.vue` adds search, source filter (generated/edited/imported via `classifyImageSource`), format filter, sort (time/name/size + asc/desc); client-side filter with "partial load" hint for paginated "all" scope
 - Done: Error feedback polish — `feedbackStore` adds info/warning variants; `renameImage`/`setImageTagColor`/`deleteImage` rollback on persist failure; `generationStore` separates image-save failure from generation failure; `reportStorageError` adds throttled toast; `settingsModal.images` filters transient masks
-- Upcoming: desktop signing/notarization/cross-platform builds/updater (Companion sidecar embedding is done)
+- Done: Desktop distribution wrap-up — `scripts/install-desktop.sh` (macOS curl|sh zero-warning install), README/Release-notes template (`.github/release-notes-desktop.md`), in-app lightweight 检查更新 (`src/services/desktopUpdate.ts`, settings → About panel, desktop-only)
+- Upcoming: desktop signing/notarization, real Tauri updater (needs signing), companion keychain
 
 ## Conventions
 
