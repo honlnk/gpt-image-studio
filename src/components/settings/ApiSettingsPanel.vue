@@ -48,6 +48,11 @@ const apiModeOptions: Array<{ value: ApiMode; label: string; description: string
   { value: "responses", label: "Responses API", description: "通过 /v1/responses 调用 image_generation 工具。" },
 ];
 const partialImageOptions = [0, 1, 2, 3] as const;
+// DropdownSelect 以字符串值工作，这里把数值选项拍平成 {value,label}。
+const partialImageSelectOptions = partialImageOptions.map((count) => ({
+  value: String(count),
+  label: String(count),
+}));
 const apiBaseUrlHint = computed(() =>
   props.apiBaseUrlMode === "full"
     ? props.apiMode === "responses"
@@ -378,22 +383,15 @@ onUnmounted(() => {
           >
             中间图数量
           </label>
-          <select
+          <DropdownSelect
             id="streamPartialImages"
-            :value="streamPartialImages"
-            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
             :disabled="!streamImages"
-            @change="
-              emit(
-                'update:streamPartialImages',
-                Number(($event.target as HTMLSelectElement).value) as 0 | 1 | 2 | 3,
-              )
+            :model-value="String(streamPartialImages)"
+            :options="partialImageSelectOptions"
+            @update:model-value="
+              emit('update:streamPartialImages', Number($event) as 0 | 1 | 2 | 3)
             "
-          >
-            <option v-for="count in partialImageOptions" :key="count" :value="count">
-              {{ count }}
-            </option>
-          </select>
+          />
           <p class="mt-1.5 text-xs text-gray-500">
             建议保留默认值 1。设置为 0 时仍可开启流式，但不会请求中间图。
           </p>

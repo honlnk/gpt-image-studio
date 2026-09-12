@@ -18,6 +18,7 @@ import {
   imageTagDotColor,
 } from "../image-library/imageTagColors";
 import StorageUsagePanel from "../image-library/StorageUsagePanel.vue";
+import DropdownSelect from "../ui/DropdownSelect.vue";
 
 type SortKey = "time" | "name" | "size";
 type SortDirection = "asc" | "desc";
@@ -66,6 +67,24 @@ const availableFormats = computed(() => {
   }
   return Array.from(seen, ([value, label]) => ({ value, label }));
 });
+
+// 三个筛选下拉的选项（自绘 DropdownSelect 需要 {value,label} 数组）。
+const sourceOptions = [
+  { value: "all", label: "全部来源" },
+  ...Object.entries(SOURCE_CLASS_LABELS).map(([value, label]) => ({
+    value,
+    label,
+  })),
+];
+const formatOptions = computed(() => [
+  { value: "all", label: "全部格式" },
+  ...availableFormats.value,
+]);
+const SORT_OPTIONS: ReadonlyArray<{ value: SortKey; label: string }> = [
+  { value: "time", label: "时间" },
+  { value: "name", label: "名称" },
+  { value: "size", label: "大小" },
+];
 
 const trimmedSearch = computed(() => searchText.value.trim().toLowerCase());
 
@@ -233,10 +252,9 @@ function toggleSortDirection() {
   sortDirection.value = sortDirection.value === "asc" ? "desc" : "asc";
 }
 
-function onSortKeyChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value as SortKey;
+function onSortKeyChange(value: string) {
   if (value !== sortKey.value) {
-    sortKey.value = value;
+    sortKey.value = value as SortKey;
     track("library.sort_changed", {
       target: "images",
       key: value,
@@ -245,16 +263,12 @@ function onSortKeyChange(event: Event) {
   }
 }
 
-function onSourceFilterChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value as
-    | "all"
-    | ImageSourceClass;
-  sourceFilter.value = value;
+function onSourceFilterChange(value: string) {
+  sourceFilter.value = value as "all" | ImageSourceClass;
   track("library.filter_by_source", { source: value });
 }
 
-function onFormatFilterChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value;
+function onFormatFilterChange(value: string) {
   formatFilter.value = value;
   track("library.filter_by_format", { format: value });
 }
@@ -455,40 +469,30 @@ function setImageTagColor(
       </div>
 
       <div class="mt-2 grid grid-cols-3 gap-1.5">
-        <select
-          :value="sourceFilter"
+        <DropdownSelect
           aria-label="按来源筛选"
-          class="min-w-0 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
-          @change="onSourceFilterChange"
-        >
-          <option value="all">全部来源</option>
-          <option v-for="(label, key) in SOURCE_CLASS_LABELS" :key="key" :value="key">
-            {{ label }}
-          </option>
-        </select>
-        <select
-          :value="formatFilter"
+          :model-value="sourceFilter"
+          :options="sourceOptions"
+          size="sm"
+          @update:model-value="onSourceFilterChange"
+        />
+        <DropdownSelect
           aria-label="按格式筛选"
-          class="min-w-0 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
           :disabled="availableFormats.length === 0"
-          @change="onFormatFilterChange"
-        >
-          <option value="all">全部格式</option>
-          <option v-for="fmt in availableFormats" :key="fmt.value" :value="fmt.value">
-            {{ fmt.label }}
-          </option>
-        </select>
+          :model-value="formatFilter"
+          :options="formatOptions"
+          size="sm"
+          @update:model-value="onFormatFilterChange"
+        />
         <div class="flex min-w-0 items-center gap-0.5">
-          <select
-            :value="sortKey"
+          <DropdownSelect
             aria-label="排序方式"
-            class="min-w-0 flex-1 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
-            @change="onSortKeyChange"
-          >
-            <option value="time">时间</option>
-            <option value="name">名称</option>
-            <option value="size">大小</option>
-          </select>
+            class="min-w-0 flex-1"
+            :model-value="sortKey"
+            :options="SORT_OPTIONS"
+            size="sm"
+            @update:model-value="onSortKeyChange"
+          />
           <button
             :aria-label="sortDirection === 'asc' ? '升序' : '降序'"
             class="shrink-0 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-gray-600 hover:bg-gray-50"

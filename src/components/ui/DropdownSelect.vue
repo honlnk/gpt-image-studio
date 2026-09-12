@@ -9,12 +9,18 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
  * 方向键移动高亮、Enter 选中。浮层挂在 .relative 容器内，供普通表单
  * （非固定定位的弹窗内容）复用。
  */
-const props = defineProps<{
-  options: ReadonlyArray<{ value: string; label: string }>;
-  modelValue: string;
-  id?: string;
-  disabled?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    options: ReadonlyArray<{ value: string; label: string }>;
+    modelValue: string;
+    id?: string;
+    ariaLabel?: string;
+    disabled?: boolean;
+    /** md：表单场景（设置页）；sm：工具条紧凑场景（图片库筛选）。 */
+    size?: "md" | "sm";
+  }>(),
+  { size: "md" },
+);
 
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -96,8 +102,14 @@ onBeforeUnmount(() => {
     <button
       :id="id"
       :aria-expanded="open"
+      :aria-label="ariaLabel"
       aria-haspopup="listbox"
-      class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-900 outline-none focus:border-gray-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+      class="flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 border bg-white text-left outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+      :class="
+        size === 'sm'
+          ? 'rounded-md border-gray-200 px-1.5 py-1 text-xs text-gray-700 focus:border-gray-400'
+          : 'rounded-lg border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500'
+      "
       :disabled="disabled"
       type="button"
       @click="toggle"
@@ -105,8 +117,8 @@ onBeforeUnmount(() => {
       <span class="truncate">{{ selectedLabel }}</span>
       <svg
         aria-hidden="true"
-        class="h-4 w-4 shrink-0 text-gray-400 transition-transform"
-        :class="open ? 'rotate-180' : ''"
+        class="shrink-0 text-gray-400 transition-transform"
+        :class="[size === 'sm' ? 'h-3 w-3' : 'h-4 w-4', open ? 'rotate-180' : '']"
         fill="none"
         stroke="currentColor"
         stroke-linecap="round"
@@ -121,7 +133,8 @@ onBeforeUnmount(() => {
     <ul
       v-if="open"
       :aria-labelledby="id"
-      class="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+      class="absolute left-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+      :class="size === 'sm' ? 'w-max min-w-full' : 'right-0'"
       role="listbox"
     >
       <li
@@ -131,8 +144,9 @@ onBeforeUnmount(() => {
         role="option"
       >
         <button
-          class="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-gray-50"
+          class="flex w-full cursor-pointer items-center justify-between gap-2 text-left transition-colors hover:bg-gray-50"
           :class="[
+            size === 'sm' ? 'px-2 py-1.5 text-xs' : 'px-3 py-2 text-sm',
             activeIndex === index ? 'bg-gray-50' : '',
             option.value === modelValue
               ? 'font-medium text-gray-900'
@@ -146,7 +160,8 @@ onBeforeUnmount(() => {
           <svg
             v-if="option.value === modelValue"
             aria-hidden="true"
-            class="h-4 w-4 shrink-0 text-gray-900"
+            class="shrink-0 text-gray-900"
+            :class="size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'"
             fill="none"
             stroke="currentColor"
             stroke-linecap="round"
