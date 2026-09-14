@@ -274,8 +274,12 @@ fn open_external_url(url: String) -> Result<(), String> {
 ///   webview，显式校验避免成为任意网页打开器；
 /// - 管理页由 sidecar 以 bundle 内资源（resources/companion-admin）serve，端口是动态
 ///   协商的，完整 URL 由前端按当前连接信息传入。
+// Keep this command async: creating a WebviewWindow in a synchronous command
+// deadlocks WebView2 initialization on Windows. Tauri runs async commands on
+// its runtime worker threads, leaving the UI event loop free to create the window.
+// https://docs.rs/tauri/latest/tauri/webview/struct.WebviewWindowBuilder.html#method.new
 #[tauri::command]
-fn open_admin_window(app: tauri::AppHandle, url: String) -> Result<(), String> {
+async fn open_admin_window(app: tauri::AppHandle, url: String) -> Result<(), String> {
     const LABEL: &str = "companion-admin";
     if !url.starts_with("http://127.0.0.1:") && !url.starts_with("http://localhost:") {
         return Err(format!("管理页 URL 必须是 loopback 地址，收到: {url}"));
