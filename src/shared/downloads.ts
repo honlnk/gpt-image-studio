@@ -43,34 +43,34 @@ export type DesktopReleaseInfo = {
 };
 
 /**
- * 兜底 release（desktop-v0.3.0：应用内检查更新 + macOS 安装脚本发布）。
+ * 兜底 release（desktop-v0.3.2：Windows 管理页子窗口死锁修复）。
  * 资产命名遵循 desktop-release.yml 头部契约；releaseClient 的模式匹配对
  * 点/空格/连字符三种历史命名风格都兼容。
  */
 export const FALLBACK_RELEASE: DesktopReleaseInfo = {
-  version: "0.3.0",
-  tag: "desktop-v0.3.0",
-  publishedAt: "2026-09-12T17:27:53Z",
+  version: "0.3.2",
+  tag: "desktop-v0.3.2",
+  publishedAt: "2026-09-14T07:08:13Z",
   assets: {
     macArm64: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.3.0/GPT-Image-Studio_0.3.0_aarch64.dmg",
-      name: "GPT-Image-Studio_0.3.0_aarch64.dmg",
-      sizeBytes: 29284227,
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.3.2/GPT-Image-Studio_0.3.2_aarch64.dmg",
+      name: "GPT-Image-Studio_0.3.2_aarch64.dmg",
+      sizeBytes: 29284414,
     },
     windowsX64: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.3.0/GPT-Image-Studio_0.3.0_x64-setup.exe",
-      name: "GPT-Image-Studio_0.3.0_x64-setup.exe",
-      sizeBytes: 32995498,
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.3.2/GPT-Image-Studio_0.3.2_x64-setup.exe",
+      name: "GPT-Image-Studio_0.3.2_x64-setup.exe",
+      sizeBytes: 32995523,
     },
     linuxAppImage: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.3.0/GPT-Image-Studio_0.3.0_amd64.AppImage",
-      name: "GPT-Image-Studio_0.3.0_amd64.AppImage",
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.3.2/GPT-Image-Studio_0.3.2_amd64.AppImage",
+      name: "GPT-Image-Studio_0.3.2_amd64.AppImage",
       sizeBytes: 112892408,
     },
     linuxDeb: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.3.0/GPT-Image-Studio_0.3.0_amd64.deb",
-      name: "GPT-Image-Studio_0.3.0_amd64.deb",
-      sizeBytes: 40981970,
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.3.2/GPT-Image-Studio_0.3.2_amd64.deb",
+      name: "GPT-Image-Studio_0.3.2_amd64.deb",
+      sizeBytes: 40981990,
     },
   },
 };
