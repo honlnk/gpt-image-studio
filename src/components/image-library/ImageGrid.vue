@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, toRef } from "vue";
+import { useI18n } from "vue-i18n";
 import { useNow } from "../../composables/useNow";
 import { useVirtualList } from "../../composables/useVirtualList";
 import type { ImageAsset } from "../../types/studio";
@@ -22,6 +23,8 @@ const emit = defineEmits<{
 }>();
 
 const now = useNow();
+
+const { t } = useI18n();
 
 // 虚拟滚动容器 ref（PR-e：图片库固定高度窗口化，仅渲染可见区 + overscan）。
 // toRef 把 props.images 转成 ref，保持 items 变化时区间重算。
@@ -52,7 +55,11 @@ function isAttached(imageId: string, attachedImageIds: string[]) {
       v-if="!images.length"
       class="flex h-full min-h-55 items-center justify-center rounded-xl border border-dashed border-gray-200 px-6 text-center text-sm text-gray-400"
     >
-      {{ activeFilter === "current" ? "当前会话还没有图片" : "图片库还是空的" }}
+      {{
+        activeFilter === "current"
+          ? $t("library.grid.emptyCurrent")
+          : $t("library.grid.emptyLibrary")
+      }}
     </div>
 
     <!-- 虚拟滚动：外层占位撑总高，内层 translateY 偏移到可见区起点 -->
@@ -76,7 +83,7 @@ function isAttached(imageId: string, attachedImageIds: string[]) {
       v-if="loadingMore"
       class="py-2 text-center text-xs text-gray-400"
     >
-      加载更多图片…
+      {{ $t("library.grid.loadingMore") }}
     </div>
   </div>
 </template>

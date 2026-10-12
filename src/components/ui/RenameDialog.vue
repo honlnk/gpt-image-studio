@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import BaseModal from "./BaseModal.vue";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   isOpen: boolean;
@@ -65,7 +68,7 @@ function confirm() {
         type="button"
         @click="emit('cancel')"
       >
-        取消
+        {{ $t("common.cancel") }}
       </button>
       <button
         class="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition-colors enabled:cursor-pointer enabled:hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"

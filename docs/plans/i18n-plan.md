@@ -232,6 +232,21 @@ flowchart TD
 
 ## 施工日志
 
+### 2026-10-12 · 阶段 2c · 图库 + ui 基础组件文案抽取 · ✅ 门禁通过
+
+**验收结论**
+
+- `pnpm typecheck` / `pnpm test` 全绿（1439 tests）；CJK 基线 49 → 39（image-library 5 + ui 5 清零，App.vue 仅注释中文无需转换）。
+- 词库：`library` 域 28 → 57 键（card/details/grid/storage/formatters）；`common` 域 11 → 14 键（confirmInput.typeToConfirm、toast.closeNotice、qqGroup.qrCodeAlt）。
+- ui 基础组件 props 全是必填透传（无中文默认值），实际硬编码极少：ConfirmDialog/RenameDialog 仅复用 `common.cancel`，零新键。
+- `imageLibraryFormatters.ts` 的 `SOURCE_CLASS_LABELS` 值改为 i18n key 字符串（导出名保留，studio/ImageLibrary.vue 只用其 key 集合不受影响），`sourceLabel()` 每次调用经模块级 t() 解析。
+- 测试断言迁移（收尾门禁项提前消化 1 个文件）：`imageLibraryFormatters.test.ts` 4 处中文断言改为 `t("...")` key 断言（locale 无关）。
+
+**偏差记录**
+
+1. 「关闭提示」aria 未收敛到 `common.close`（语义多「提示」二字），建 `common.toast.closeNotice`。
+2. 卡片/详情面板「下载」复用 `library.preview.download`，未在子命名空间重复建键。
+
 ### 2026-10-12 · 阶段 2b · chat + studio 组件文案抽取 · ✅ 门禁通过
 
 **验收结论**

@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { ImageAsset } from "../../types/studio";
 import {
   formatFileSize,
@@ -8,10 +9,14 @@ import {
 /** 图片来源分类：在三态细分（生成/编辑/导入）下用于筛选与展示。 */
 export type ImageSourceClass = "generated" | "edited" | "imported";
 
+/**
+ * 来源分类 → i18n key 映射（值是词条 key，渲染处用 t() 取文案；
+ * 非渲染逻辑只依赖 key 集合，保持常量结构稳定）。
+ */
 export const SOURCE_CLASS_LABELS: Record<ImageSourceClass, string> = {
-  generated: "生成图",
-  edited: "编辑图",
-  imported: "导入图",
+  generated: "library.shell.sourceGenerated",
+  edited: "library.shell.sourceEdited",
+  imported: "library.shell.sourceImported",
 };
 
 /**
@@ -28,11 +33,11 @@ export function classifyImageSource(image: ImageAsset): ImageSourceClass {
 }
 
 export function sourceLabel(image: ImageAsset) {
-  return SOURCE_CLASS_LABELS[classifyImageSource(image)];
+  return t(SOURCE_CLASS_LABELS[classifyImageSource(image)]);
 }
 
 export function imageFormat(image: ImageAsset) {
-  return image.mimeType?.replace("image/", "").toUpperCase() ?? "未知";
+  return image.mimeType?.replace("image/", "").toUpperCase() ?? t("library.formatters.unknown");
 }
 
 export function imageExtension(image: ImageAsset) {
@@ -45,7 +50,7 @@ export function imageDownloadName(image: ImageAsset) {
 
 export function imageSize(image: ImageAsset) {
   if (image.width && image.height) return `${image.width} x ${image.height}`;
-  return "未记录";
+  return t("library.formatters.notRecorded");
 }
 
 export function fileSize(image: ImageAsset) {

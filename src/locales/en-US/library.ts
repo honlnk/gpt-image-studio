@@ -32,6 +32,45 @@ const library: ZhLibrary = {
     "download": "Download",
     "resetView": "Reset view",
     "reset": "Reset"
+  },
+  "card": {
+    "previewFailedRetry": "Failed to load, click to retry",
+    "view": "Click to view",
+    "attach": "Reference",
+    "attached": "Referenced"
+  },
+  "details": {
+    "rename": "Rename",
+    "tagColor": "Tag color",
+    "markTagColor": "Mark as {color}",
+    "format": "Format",
+    "size": "Size",
+    "file": "File",
+    "status": "Status",
+    "attached": "Added as reference",
+    "notAttached": "Not referenced",
+    "originalPrompt": "Original prompt",
+    "revisedPrompt": "API revised prompt",
+    "notReturned": "Not returned"
+  },
+  "grid": {
+    "emptyCurrent": "No images in this conversation yet",
+    "emptyLibrary": "Your image library is empty",
+    "loadingMore": "Loading more images…"
+  },
+  "storage": {
+    "usage": "Storage usage",
+    "companionHint": "Images {imageBytes}, text and indexes {metadataBytes}. Data is stored on the Companion server; the limit depends on the server disk or OSS usage.",
+    "local": "Local storage",
+    "localHint": "Estimated from the current browser and device state; available space may change.",
+    "imageData": "Image data",
+    "textAndIndex": "Text and indexes",
+    "images": "Images",
+    "noQuota": "No quota provided by the browser"
+  },
+  "formatters": {
+    "unknown": "Unknown",
+    "notRecorded": "Not recorded"
   }
 };
 

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import BaseModal from "./BaseModal.vue";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   isOpen: boolean;
@@ -52,7 +55,9 @@ function confirm() {
     </div>
 
     <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
-      <p class="text-xs text-gray-500">请输入以下文字确认：</p>
+      <p class="text-xs text-gray-500">
+        {{ $t("common.confirmInput.typeToConfirm") }}
+      </p>
       <p class="mt-1 select-all text-sm font-medium text-gray-900">
         {{ confirmText }}
       </p>
@@ -72,7 +77,7 @@ function confirm() {
         type="button"
         @click="emit('cancel')"
       >
-        取消
+        {{ $t("common.cancel") }}
       </button>
       <button
         class="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors enabled:cursor-pointer enabled:hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"

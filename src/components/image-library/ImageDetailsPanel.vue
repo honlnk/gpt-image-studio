@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { useNow } from "../../composables/useNow";
 import { formatRelativeTime } from "../../shared/dateTime";
 import type { ImageAsset } from "../../types/studio";
@@ -26,6 +27,9 @@ const emit = defineEmits<{
 }>();
 
 const now = useNow();
+
+const { t } = useI18n();
+
 const createdAtLabel = computed(() =>
   formatRelativeTime(props.image.createdAt, now.value),
 );
@@ -58,14 +62,14 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
           :download="imageDownloadName(image)"
           :href="image.previewUrl"
         >
-          下载
+          {{ $t("library.preview.download") }}
         </a>
         <button
           class="cursor-pointer rounded-lg px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-100"
           type="button"
           @click="emit('renameImage', image.id)"
         >
-          重命名
+          {{ $t("library.details.rename") }}
         </button>
         <button
           v-track="{ name: 'image.deleted', payload: { imageId: image.id, location: 'details' } }"
@@ -73,7 +77,7 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
           type="button"
           @click="emit('deleteImage', image.id)"
         >
-          删除
+          {{ $t("common.delete") }}
         </button>
         <button
           class="cursor-pointer rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
@@ -90,11 +94,11 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
     </div>
 
     <div class="mb-3 flex items-center gap-2">
-      <span class="text-xs text-gray-400">分类颜色</span>
+      <span class="text-xs text-gray-400">{{ $t("library.details.tagColor") }}</span>
       <button
         v-for="color in IMAGE_TAG_COLORS"
         :key="color"
-        :aria-label="`标记为${color}`"
+        :aria-label="$t('library.details.markTagColor', { color })"
         :class="[
           'h-3 w-3 cursor-pointer rounded-full border transition-transform hover:scale-105',
           image.tagColor === color
@@ -109,30 +113,36 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
 
     <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
       <div>
-        <dt class="text-gray-400">格式</dt>
+        <dt class="text-gray-400">{{ $t("library.details.format") }}</dt>
         <dd class="mt-0.5 text-gray-700">
           {{ imageFormat(image) }}
         </dd>
       </div>
       <div>
-        <dt class="text-gray-400">尺寸</dt>
+        <dt class="text-gray-400">{{ $t("library.details.size") }}</dt>
         <dd class="mt-0.5 text-gray-700">{{ imageSize(image) }}</dd>
       </div>
       <div>
-        <dt class="text-gray-400">文件</dt>
+        <dt class="text-gray-400">{{ $t("library.details.file") }}</dt>
         <dd class="mt-0.5 text-gray-700">{{ fileSize(image) }}</dd>
       </div>
       <div>
-        <dt class="text-gray-400">状态</dt>
+        <dt class="text-gray-400">{{ $t("library.details.status") }}</dt>
         <dd class="mt-0.5 text-gray-700">
-          {{ isAttached ? "已加入引用" : "未引用" }}
+          {{
+            isAttached
+              ? $t("library.details.attached")
+              : $t("library.details.notAttached")
+          }}
         </dd>
       </div>
     </dl>
 
     <div class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
       <div class="min-w-0">
-        <div class="text-xs text-gray-400">原始 Prompt</div>
+        <div class="text-xs text-gray-400">
+          {{ $t("library.details.originalPrompt") }}
+        </div>
         <Tooltip
           :text="image.prompt"
           :delay="500"
@@ -147,7 +157,9 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
         </Tooltip>
       </div>
       <div class="min-w-0">
-        <div class="text-xs text-gray-400">API 改写 Prompt</div>
+        <div class="text-xs text-gray-400">
+          {{ $t("library.details.revisedPrompt") }}
+        </div>
         <Tooltip
           v-if="image.revisedPrompt"
           :text="image.revisedPrompt"
@@ -162,7 +174,7 @@ function toggleTagColor(nextColor: ImageAsset["tagColor"]) {
           </p>
         </Tooltip>
         <p v-else class="mt-1 text-xs leading-relaxed text-gray-400">
-          未返回
+          {{ $t("library.details.notReturned") }}
         </p>
       </div>
     </div>

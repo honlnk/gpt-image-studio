@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import BaseModal from "./BaseModal.vue";
+
+const { t } = useI18n();
 
 type ConfirmDialogState = {
   title: string;
@@ -42,7 +45,7 @@ const emit = defineEmits<{
         type="button"
         @click="emit('cancel')"
       >
-        取消
+        {{ $t("common.cancel") }}
       </button>
       <button
         class="cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors"

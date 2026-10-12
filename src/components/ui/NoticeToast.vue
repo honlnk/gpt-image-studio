@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import type { StudioNoticeType } from "../../stores/feedbackStore";
+
+const { t } = useI18n();
 
 type NoticeToastState = {
   type: StudioNoticeType;
@@ -108,7 +111,7 @@ const VARIANT_STYLES: Record<
       </p>
       <button
         class="cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-        aria-label="关闭提示"
+        :aria-label="$t('common.toast.closeNotice')"
         type="button"
         @click="emit('close')"
       >

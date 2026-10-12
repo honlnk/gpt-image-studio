@@ -31,5 +31,44 @@ export default {
     "download": "下载",
     "resetView": "重置视图",
     "reset": "重置"
+  },
+  "card": {
+    "previewFailedRetry": "加载失败，点击重试",
+    "view": "点击查看",
+    "attach": "引用",
+    "attached": "已引用"
+  },
+  "details": {
+    "rename": "重命名",
+    "tagColor": "分类颜色",
+    "markTagColor": "标记为{color}",
+    "format": "格式",
+    "size": "尺寸",
+    "file": "文件",
+    "status": "状态",
+    "attached": "已加入引用",
+    "notAttached": "未引用",
+    "originalPrompt": "原始 Prompt",
+    "revisedPrompt": "API 改写 Prompt",
+    "notReturned": "未返回"
+  },
+  "grid": {
+    "emptyCurrent": "当前会话还没有图片",
+    "emptyLibrary": "图片库还是空的",
+    "loadingMore": "加载更多图片…"
+  },
+  "storage": {
+    "usage": "存储用量",
+    "companionHint": "图片 {imageBytes}，文本与索引 {metadataBytes}。数据存储在 Companion 服务端，上限取决于服务器磁盘或 OSS 用量。",
+    "local": "本地存储",
+    "localHint": "根据当前浏览器和设备状态估算，可用空间可能会变化。",
+    "imageData": "图片数据",
+    "textAndIndex": "文本与索引",
+    "images": "图片",
+    "noQuota": "浏览器未提供上限"
+  },
+  "formatters": {
+    "unknown": "未知",
+    "notRecorded": "未记录"
   }
 };
