@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type {
   AnalyticsPromptCapture,
@@ -114,6 +115,8 @@ const emit = defineEmits<{
   refreshAnalyticsInsights: [];
 }>();
 
+const { t } = useI18n();
+
 const activeTab = ref<SettingsTab>("general");
 const pendingBackupFile = ref<File | null>(null);
 const isRestoreConfirmOpen = ref(false);
@@ -126,21 +129,23 @@ const isEmbedded = computed(() => settings.isEmbedded);
 // 接口 tab 仅 direct 模式显示（纯直连配置）；Companion tab 仅 Companion 模式显示。
 // Companion 的 provider 凭据/存储位置等配置都在 Companion 自带管理页维护。
 const tabs = computed<{ key: SettingsTab; label: string }[]>(() => {
-  const base: { key: SettingsTab; label: string }[] = [{ key: "general", label: "通用" }];
+  const base: { key: SettingsTab; label: string }[] = [
+    { key: "general", label: t("settings.tabs.general") },
+  ];
   if (props.connectionMode === "localCompanion") {
-    base.push({ key: "companion", label: "Companion" });
+    base.push({ key: "companion", label: t("settings.tabs.companion") });
   } else {
-    base.push({ key: "api", label: "接口" });
+    base.push({ key: "api", label: t("settings.tabs.api") });
   }
   base.push(
-    { key: "promptMode", label: "提示词模式" },
-    { key: "favoritePrompts", label: "常用提示词" },
-    { key: "prompt", label: "提示词保护" },
-    { key: "backup", label: "数据备份" },
-    { key: "batch", label: "批量操作" },
-    { key: "analytics", label: "行为日志" },
-    { key: "dashboard", label: "数据分析" },
-    { key: "about", label: "关于" },
+    { key: "promptMode", label: t("settings.tabs.promptMode") },
+    { key: "favoritePrompts", label: t("settings.tabs.favoritePrompts") },
+    { key: "prompt", label: t("settings.tabs.prompt") },
+    { key: "backup", label: t("settings.tabs.backup") },
+    { key: "batch", label: t("settings.tabs.batch") },
+    { key: "analytics", label: t("settings.tabs.analytics") },
+    { key: "dashboard", label: t("settings.tabs.dashboard") },
+    { key: "about", label: t("settings.tabs.about") },
   );
   return base;
 });
@@ -211,12 +216,12 @@ function forwardSavePromptWordbank(
         >
           <div>
             <h2 id="settingsTitle" class="text-lg font-semibold text-gray-900">
-              设置
+              {{ $t("settings.modal.title") }}
             </h2>
           </div>
           <button
             class="cursor-pointer rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-            aria-label="关闭设置"
+            :aria-label="$t('settings.modal.closeAria')"
             type="button"
             @click="emit('close')"
           >
@@ -236,7 +241,7 @@ function forwardSavePromptWordbank(
         <div class="flex min-h-0 flex-1 flex-col md:flex-row">
           <nav
             class="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-200 bg-gray-50 p-2 md:w-44 md:flex-col md:border-r md:border-b-0"
-            aria-label="设置分类"
+            :aria-label="$t('settings.modal.navAria')"
           >
             <button
               v-for="tab in tabs"
@@ -365,17 +370,17 @@ function forwardSavePromptWordbank(
             type="button"
             @click="emit('close')"
           >
-            关闭
+            {{ $t("common.close") }}
           </button>
         </div>
   </BaseModal>
 
   <ConfirmInputModal
-    confirm-label="恢复备份"
-    confirm-text="我确认恢复备份并覆盖当前数据"
-    description="恢复备份会覆盖当前浏览器里的所有会话、消息和图片。API key 不会从备份中恢复。"
+    :confirm-label="$t('settings.backup.restoreConfirmLabel')"
+    :confirm-text="$t('settings.backup.restoreConfirmText')"
+    :description="$t('settings.backup.restoreConfirmDescription')"
     :is-open="isRestoreConfirmOpen"
-    title="恢复备份"
+    :title="$t('settings.backup.restoreConfirmTitle')"
     @cancel="cancelConfirm"
     @confirm="confirmPendingAction"
   />

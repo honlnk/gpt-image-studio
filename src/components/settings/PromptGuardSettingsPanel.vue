@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { PROMPT_REWRITE_GUARD_PREFIX } from "../../services/promptRewriteGuard";
 import { copyText as copyTextToClipboard } from "../../shared/clipboard";
 import type { PromptRewriteGuardHistoryItem } from "../../types/studio";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   enabled: boolean;
@@ -63,7 +66,7 @@ async function copyHistory(item: PromptRewriteGuardHistoryItem) {
 
 function formatHistoryTime(dateString: string) {
   const timestamp = Date.parse(dateString);
-  if (!Number.isFinite(timestamp)) return "未知时间";
+  if (!Number.isFinite(timestamp)) return t("settings.promptGuard.unknownTime");
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
     month: "2-digit",
@@ -81,18 +84,20 @@ function isDefaultHistoryItem(item: PromptRewriteGuardHistoryItem) {
 <template>
   <section aria-labelledby="promptGuardSettingsTitle">
     <h3 id="promptGuardSettingsTitle" class="text-base font-semibold text-gray-900">
-      提示词保护
+      {{ $t("settings.promptGuard.title") }}
     </h3>
     <p class="mt-1 text-sm leading-relaxed text-gray-500">
-      当前设置只会影响发送给图片接口的请求文本，不会改写聊天记录里的原始提示词。
+      {{ $t("settings.promptGuard.description") }}
     </p>
 
     <div class="mt-4 space-y-4">
       <div class="flex items-start justify-between gap-4 rounded-lg border border-gray-200 px-3 py-2.5">
         <div>
-          <div class="text-sm font-medium text-gray-700">启用提示词防改写</div>
+          <div class="text-sm font-medium text-gray-700">
+            {{ $t("settings.promptGuard.enableTitle") }}
+          </div>
           <p class="mt-1 text-xs leading-relaxed text-gray-500">
-            开启后，请求会在用户提示词前追加下面的前置指令。
+            {{ $t("settings.promptGuard.enableDescription") }}
           </p>
         </div>
         <button
@@ -117,14 +122,14 @@ function isDefaultHistoryItem(item: PromptRewriteGuardHistoryItem) {
       <div>
         <div class="mb-2 flex items-center justify-between gap-3">
           <label class="text-sm font-medium text-gray-700" for="promptGuardText">
-            当前前置指令
+            {{ $t("settings.promptGuard.currentPrefixLabel") }}
           </label>
           <button
             class="cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
             type="button"
             @click="restoreDefault"
           >
-            恢复默认
+            {{ $t("settings.promptGuard.restoreDefault") }}
           </button>
         </div>
         <textarea
@@ -135,7 +140,7 @@ function isDefaultHistoryItem(item: PromptRewriteGuardHistoryItem) {
         />
         <div class="mt-2 flex items-center justify-between gap-3">
           <p class="text-xs text-gray-500">
-            文本为空时会自动使用默认英文指令。
+            {{ $t("settings.promptGuard.emptyTextHint") }}
           </p>
           <button
             class="cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
@@ -143,21 +148,25 @@ function isDefaultHistoryItem(item: PromptRewriteGuardHistoryItem) {
             :disabled="!hasChanges"
             @click="saveDraft"
           >
-            保存为当前版本
+            {{ $t("settings.promptGuard.saveVersion") }}
           </button>
         </div>
       </div>
 
       <div>
         <div class="mb-2 flex items-center justify-between">
-          <h4 class="text-sm font-medium text-gray-700">历史版本</h4>
-          <span class="text-xs text-gray-400">{{ history.length }} 条</span>
+          <h4 class="text-sm font-medium text-gray-700">
+            {{ $t("settings.promptGuard.historyTitle") }}
+          </h4>
+          <span class="text-xs text-gray-400">
+            {{ $t("settings.promptGuard.historyCount", { count: history.length }) }}
+          </span>
         </div>
         <div
           v-if="!sortedHistory.length"
           class="rounded-lg border border-dashed border-gray-200 px-4 py-5 text-center text-sm text-gray-400"
         >
-          还没有保存过历史版本
+          {{ $t("settings.promptGuard.historyEmpty") }}
         </div>
         <div v-else class="space-y-2">
           <article
@@ -167,7 +176,7 @@ function isDefaultHistoryItem(item: PromptRewriteGuardHistoryItem) {
           >
             <div class="mb-1.5 flex items-center justify-between gap-3">
               <span v-if="isDefaultHistoryItem(item)" class="text-xs text-gray-400">
-                默认版本
+                {{ $t("settings.promptGuard.defaultVersion") }}
               </span>
               <time v-else class="text-xs text-gray-400">
                 {{ formatHistoryTime(item.createdAt) }}
@@ -178,21 +187,21 @@ function isDefaultHistoryItem(item: PromptRewriteGuardHistoryItem) {
                   type="button"
                   @click="restoreHistory(item.id)"
                 >
-                  恢复
+                  {{ $t("settings.promptGuard.restore") }}
                 </button>
                 <button
                   class="cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
                   type="button"
                   @click="copyHistory(item)"
                 >
-                  {{ copiedId === item.id ? "已复制" : "复制" }}
+                  {{ copiedId === item.id ? $t("settings.promptGuard.copied") : $t("common.copy") }}
                 </button>
                 <button
                   class="cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
                   type="button"
                   @click="emit('deleteHistory', item.id)"
                 >
-                  删除
+                  {{ $t("common.delete") }}
                 </button>
               </div>
             </div>

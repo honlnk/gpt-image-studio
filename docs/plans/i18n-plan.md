@@ -232,6 +232,22 @@ flowchart TD
 
 ## 施工日志
 
+### 2026-10-12 · 阶段 2a · settings 面板文案抽取 · ✅ 门禁通过
+
+**验收结论**
+
+- `pnpm typecheck` / `pnpm test` 全绿（1439 tests）；CJK 基线 80 → 67，settings 域 14 文件清零（13 面板 + SettingsModal；GeneralSettingsPanel 试点已随阶段 0 提交）。
+- 词库：`settings` 命名空间 zh/en 各 271 键（本次净增 236，含补录的 `about.authorName`），en 侧继续由 `typeof import("../zh-CN/settings")` 深层同构约束。
+- 合并方式：4 个施工 agent 各自把词表草稿写到 `scripts/i18n-pending/batch-*.json`（避免词库文件冲突），一次性脚本合并回两份 settings 词库并校验（zh/en key 集合一致、无跨草稿冲突、14 个组件共 274 处 key 引用全部可解析），完成后草稿目录删除。
+- 面板覆盖：backup / about / analytics / api / companion / batch / batchImages / batchConversations / promptMode / promptGuard / favoritePrompts / dashboard 十二个子命名空间 + modal 壳（tabs、aria、恢复确认框）。
+
+**偏差记录**
+
+1. **批次 B agent 超时**（ApiSettingsPanel / CompanionInfoPanel / BatchOperationsPanel）：组件转换已完成但草稿未落盘，由主线从 `git diff` 删除侧恢复原文、手工补写 batch-b 草稿并收尾 BatchOperationsPanel 剩余 4 处后照常合并。
+2. **带样式标记的整句**（删除警告、模型 2.5 提示、密钥查看提示）：不引入 `<i18n-t>`，拆为 before/bold/after 或 before/after 多 key 拼接，与既有 DOM 结构零改动。
+3. **AboutPanel 作者名「鸿影」**：agent 初版按专有名词保留硬编码，被 CJK 门禁拦截后改抽 `settings.about.authorName`（en "Hongying"）——门禁按字符扫描不认「专有名词」豁免。
+4. AnalyticsPanel 事件计数行（数字带加粗 span）同样拆 `eventCountLabel` + `eventCountUnit`（en Unit 为空串）；面板入口「恢复备份」按钮与 SettingsModal 确认框同文案但分 key（`backup.restoreButton` vs `backup.restoreConfirmLabel`），按「tab 与面板 title 分 key」既有惯例。
+
 ### 2026-10-12 · 阶段 1 · errors.ts 结构化重构 · ✅ 门禁通过
 
 **验收结论**
