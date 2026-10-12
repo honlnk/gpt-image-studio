@@ -1,3 +1,4 @@
+import { ApiClientError } from "../../../shared/apiErrorCodes";
 import { applyPromptRewriteGuard } from "../../../services/imagesApi";
 import { buildImagePrompt } from "../../../services/promptBuilder";
 import type { PromptMode, PromptWordbanks } from "../../../types/studio";
@@ -16,7 +17,7 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
   function headers() {
     const key = config.getAccessKey();
     if (!key) {
-      throw new Error("尚未连接 Companion，请先在设置中输入连接密钥。");
+      throw new ApiClientError("companion-not-paired", "尚未连接 Companion，请先在设置中输入连接密钥。");
     }
     return { Authorization: `Bearer ${key}` };
   }

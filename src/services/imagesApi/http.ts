@@ -1,4 +1,5 @@
 import type { ApiMode } from "../../types/studio";
+import { ApiClientError } from "../../shared/apiErrorCodes";
 import type { ImageApiResponse } from "./types.js";
 
 /** 把用户配置的 apiBaseUrl 规整成完整的 API 端点前缀。 */
@@ -48,6 +49,11 @@ export async function parseImageResponse(response: Response) {
     const statusMessage = `请求失败：HTTP ${response.status}`;
     const detail = payload.error?.message;
     const message = detail ? `${statusMessage}：${detail}` : statusMessage;
+    // 401/403 是配置类错误（key 无效/无权限），带 code 让
+    // isApiConfigurationError 走结构化判定而非文本匹配。
+    if (response.status === 401 || response.status === 403) {
+      throw new ApiClientError("api-auth", message);
+    }
     throw new Error(message);
   }
 
@@ -77,6 +83,18 @@ export async function getApiErrorMessage(response: Response) {
   } catch {
     return `请求失败：HTTP ${response.status}`;
   }
+}
+
+/**
+ * 把非 2xx 响应转成待抛出的错误：401/403 带 api-auth code
+ * （结构化配置类错误判定），其余保持普通 Error。
+ */
+export async function apiErrorFromResponse(response: Response) {
+  const message = await getApiErrorMessage(response);
+  if (response.status === 401 || response.status === 403) {
+    return new ApiClientError("api-auth", message);
+  }
+  return new Error(message);
 }
 
 /**

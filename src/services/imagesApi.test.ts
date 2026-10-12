@@ -395,7 +395,7 @@ describe("images API requests", () => {
   });
 
   it("keeps the HTTP status in API error messages", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       jsonResponse(
         {
           error: { message: "Invalid bearer token" },
@@ -404,7 +404,7 @@ describe("images API requests", () => {
       ),
     );
 
-    await expect(
+    const request = () =>
       generateImage({
         apiBaseUrl: "https://api.example.test/v1/images",
         apiBaseUrlMode: "full",
@@ -412,8 +412,15 @@ describe("images API requests", () => {
         model: "gpt-image-2",
         prompt: "画一张图",
         params: generationParams,
-      }),
-    ).rejects.toThrow("请求失败：HTTP 401：Invalid bearer token");
+      });
+    await expect(request()).rejects.toThrow(
+      "请求失败：HTTP 401：Invalid bearer token",
+    );
+    // i18n 阶段 1：401/403 抛 ApiClientError(api-auth)，分类不再依赖消息文本。
+    await expect(request()).rejects.toMatchObject({
+      name: "ApiClientError",
+      code: "api-auth",
+    });
   });
 });
 

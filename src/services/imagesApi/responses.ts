@@ -7,6 +7,7 @@ import {
 } from "../sizeConstraints";
 import {
   buildApiEndpoint,
+  apiErrorFromResponse,
   getApiErrorMessage,
   isEventStreamResponse,
   normalizeStreamPartialImages,
@@ -83,7 +84,7 @@ export async function generateImageViaResponses(
   }
 
   if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response));
+    throw await apiErrorFromResponse(response);
   }
 
   if (input.streamImages && isEventStreamResponse(response)) {
@@ -136,7 +137,7 @@ export async function editImageViaResponses(
   }
 
   if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response));
+    throw await apiErrorFromResponse(response);
   }
 
   if (input.streamImages && isEventStreamResponse(response)) {

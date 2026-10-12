@@ -1,3 +1,4 @@
+import { ApiClientError } from "../../shared/apiErrorCodes";
 import { computed, onMounted, onUnmounted, proxyRefs, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
@@ -246,7 +247,7 @@ export function useStudioViewModel() {
         settings.connectionMode.value === "localCompanion" &&
         settings.apiMode.value !== "images"
       ) {
-        throw new Error("本地 Companion 当前仅支持 Images API。");
+        throw new ApiClientError("companion-images-only", "本地 Companion 当前仅支持 Images API。");
       }
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.generate(input)
@@ -262,7 +263,7 @@ export function useStudioViewModel() {
         settings.connectionMode.value === "localCompanion" &&
         settings.apiMode.value !== "images"
       ) {
-        throw new Error("本地 Companion 当前仅支持 Images API。");
+        throw new ApiClientError("companion-images-only", "本地 Companion 当前仅支持 Images API。");
       }
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.edit(input)

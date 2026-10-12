@@ -232,6 +232,20 @@ flowchart TD
 
 ## 施工日志
 
+### 2026-10-12 · 阶段 1 · errors.ts 结构化重构 · ✅ 门禁通过
+
+**验收结论**
+
+- `pnpm typecheck` / `pnpm test` 全绿（1439 tests）。
+- 新增 `src/shared/apiErrorCodes.ts`：`ApiClientError` + 5 个 code（api-key-missing / base-url-missing / companion-not-paired / companion-images-only / api-auth）。
+- 自有抛错点全部挂 code：directImagesClient ×4、useStudioViewModel ×2（companion-images-only）、localCompanionImagesClient ×1；HTTP 401/403 在 `parseImageResponse` / `apiErrorFromResponse`（client.ts、responses.ts 三处调用点）统一抛 `api-auth`。
+- `isApiConfigurationError` 改为「instanceof ApiClientError 优先 + 服务端英文鉴权文案兜底」，**已删除全部中文文本 pattern**；英文兜底保留（provider detail 文案不受我们控制）。
+- 测试：errors.test.ts 重写为 code 断言（覆盖原三条中文 pattern 对应场景的等价用例）+ imagesApi.test.ts 401 路径断言 ApiClientError 形状。
+
+**偏差记录**
+
+- 错误**消息文案**仍是中文字面量，按计划留待阶段 2d 随 services 动态消息一起接 `t('errors.api.<code>')`。
+
 ### 2026-10-12 · 阶段 0 · i18n 基建 · ✅ 门禁通过
 
 **验收结论**
