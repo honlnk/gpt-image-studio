@@ -1,13 +1,13 @@
 import { ApiClientError, isApiClientError, type ApiErrorCode } from "./apiErrorCodes";
+import { t } from "../i18n";
 
 export { ApiClientError, isApiClientError } from "./apiErrorCodes";
 export type { ApiErrorCode } from "./apiErrorCodes";
 
-const DEFAULT_SYNTAX_ERROR_MESSAGE = "图片接口返回了无法解析的响应。";
-
 export function formatError(
   error: unknown,
-  syntaxErrorMessage = DEFAULT_SYNTAX_ERROR_MESSAGE,
+  // 默认值在调用时求值（非模块顶层缓存），切语言后生效。
+  syntaxErrorMessage = t("errors.api.syntaxFallback"),
 ) {
   if (error instanceof SyntaxError) {
     return syntaxErrorMessage;

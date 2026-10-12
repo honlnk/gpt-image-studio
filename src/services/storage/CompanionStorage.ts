@@ -17,6 +17,7 @@
  *   400     → SERIALIZATION_ERROR
  *   其它    → UNKNOWN
  */
+import { t } from "../../i18n";
 import {
   StorageError,
   type ListPageOptions,
@@ -208,21 +209,30 @@ export class CompanionStorage implements StudioStorage {
     if (res.status === 401 || res.status === 403) {
       throw new StorageError(
         "BACKEND_UNAVAILABLE",
-        `Companion 鉴权失败 (${res.status})，请检查连接密钥或 Companion 是否在线`,
+        t("errors.storage.companionAuthFailed", { status: res.status }),
       );
     }
     if (res.status === 404) {
       if (opts.allow404) return res;
       // 非 get/load/delete 的 404 视为后端路由缺失
-      throw new StorageError("BACKEND_UNAVAILABLE", `Companion 路由不存在: ${path}`);
+      throw new StorageError(
+        "BACKEND_UNAVAILABLE",
+        t("errors.storage.companionRouteNotFound", { path }),
+      );
     }
     if (res.status === 400) {
       const body = await safeReadError(res);
-      throw new StorageError("SERIALIZATION_ERROR", `Companion 拒绝请求 (400): ${body}`);
+      throw new StorageError(
+        "SERIALIZATION_ERROR",
+        t("errors.storage.companionBadRequest", { body }),
+      );
     }
     if (!res.ok) {
       const body = await safeReadError(res);
-      throw new StorageError("UNKNOWN", `Companion 请求失败 (${res.status}): ${body}`);
+      throw new StorageError(
+        "UNKNOWN",
+        t("errors.storage.companionRequestFailed", { status: res.status, body }),
+      );
     }
     return res;
   }

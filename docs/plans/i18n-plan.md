@@ -232,6 +232,24 @@ flowchart TD
 
 ## 施工日志
 
+### 2026-10-12 · 阶段 2d · 动态消息层抽取 + 测试断言迁移 · ✅ 门禁通过
+
+**验收结论**
+
+- `pnpm typecheck` / `pnpm test` 全绿（1439 tests）；CJK 基线 39 → 8，剩余 8 个全部为后续阶段范围（`promptBuilder.ts` → 阶段 3，`pages/download/*` 7 个 → 阶段 5）。阶段 2 范围内 CJK 清零达成。
+- 31 个 stores/services/features/viewModel 文件接入模块级 `t()`（31 文件 191 处 key 引用全部可解析）。词库最终规模：common 34 / settings 330 / chat 147 / library 69 / generation 39 / errors 34 / companion 8。
+- errors 域落地 `errors.api.<语义>` 键（含契约四键 apiKeyMissing/baseUrlMissing/companionNotPaired/companionImagesOnly），ApiClientError 抛点消息全部词库化。
+- 测试断言迁移（收尾门禁项）：12 个测试文件 55 处中文 UI 断言 → 40 处 `t()` 键断言（locale 无关）+ 15 处 en-US 片段断言（插值/部分匹配场景）。
+
+**偏差记录**
+
+1. **持久化文案随 locale 落库（两处，超出原「message.content」预估）**：`conversation.summary` 会写入 generation 模式标签（`generation.mode.*`）；`generation.failed` analytics 事件的 `errorMessage` 字段取 formatError 结果，同样带 locale。均符合「新数据按 locale」拍板，但影响面比计划表述更宽，特此记录。
+2. **networkRetry 的 isNetworkError 文本匹配**：原靠中文前缀 includes 匹配「服务器主动断开」，现改为 `includes(t("errors.network.serverDisconnectedMarker"))`（marker 键两语言取值均为对应文案子串，已验证）。极端时序（抛错与重试判定之间切语言）会失配；彻底解法是给该错误挂结构化 code，留作后续技术债。
+3. **`DIRECT_MODE_FALLBACK_HINT` 形态变更**：imageUrlDownload 的模块顶层字符串常量改为同名函数（切语言响应），仅 streaming.ts 一个消费点同步。
+4. **console 日志英文化**（developer-facing，不走词库）：desktopCompanion.ts 2 处 console.warn + 1 处内部 Error、imagesStore 1 处内部 throw。
+5. settingsStore 选项 label 无需函数化：quality/background 选项本就定义在 store setup 体内，改 computed 即响应；模块顶层常量（SIZE_RATIO/RESOLUTION/format）label 均 locale 中立，未动。
+6. 词库存在少量同文案不同域的重复键（如 companion.modeLabel vs settings.general.mode*、common.loadedToComposer vs chat.messageActions.loadToComposer），按「域自包含」取舍保留，未做跨域收敛。
+
 ### 2026-10-12 · 阶段 2c · 图库 + ui 基础组件文案抽取 · ✅ 门禁通过
 
 **验收结论**

@@ -4,6 +4,7 @@ import { computed, ref, watch } from "vue";
 import { track } from "../features/analytics/useAnalyticsTracker";
 import type { GenerationJob } from "../features/generation/generationJobTypes";
 import type { ImageClient } from "../features/generation/imageClients/imageClient";
+import { t } from "../i18n";
 import { notifyHostConversationsChanged } from "../services/embeddedBridge";
 import { normalizeImageCount } from "../services/generationParams";
 import type { ImageAssetServices } from "../services/imageAssets";
@@ -106,10 +107,10 @@ export const useGenerationStore = defineStore("generation", () => {
   const imageModeLabel = computed(() =>
     input.value.activeEditMaskImageId.value &&
     input.value.activeEditSourceImageId.value
-      ? "局部编辑"
+      ? t("generation.mode.maskEdit")
       : input.value.attachedImages.value.length
-        ? "引用图片编辑"
-        : "文字生成图片",
+        ? t("generation.mode.referenceEdit")
+        : t("generation.mode.textToImage"),
   );
   const canSend = computed(
     () =>
@@ -153,7 +154,8 @@ export const useGenerationStore = defineStore("generation", () => {
     const now = Date.now();
     const createdAt = isoTimestamp(now);
     const text =
-      input.value.composerText.value.trim() || "基于引用图片继续编辑。";
+      input.value.composerText.value.trim() ||
+      t("generation.continueWithReferenceDefault");
     const conversation =
       input.value.activeConversation.value ??
       (await input.value.createConversationRecord({
@@ -695,21 +697,28 @@ export const useGenerationStore = defineStore("generation", () => {
       );
       assistantMessage.errorMessage =
         failedCount > 0
-          ? `${failedCount} 张生成失败，其余仍在继续。`
+          ? t("generation.partialFailure.pending", { count: failedCount })
           : undefined;
     } else if (hasGeneratedImages) {
       assistantMessage.status = "success";
       assistantMessage.content = job.referencedImageIds.length
-        ? resultCountLabel("已基于引用图生成", assistantMessage.resultImageIds.length)
-        : resultCountLabel("已生成", assistantMessage.resultImageIds.length);
+        ? resultCountLabel(
+            t("generation.result.prefixFromReference"),
+            assistantMessage.resultImageIds.length,
+          )
+        : resultCountLabel(
+            t("generation.result.prefixGenerated"),
+            assistantMessage.resultImageIds.length,
+          );
       assistantMessage.errorMessage =
         failedCount > 0
-          ? `${failedCount} 张生成失败，已保留成功结果。`
+          ? t("generation.partialFailure.kept", { count: failedCount })
           : undefined;
     } else {
       assistantMessage.status = "error";
-      assistantMessage.content = "生成中断，请重试。";
-      assistantMessage.errorMessage = update.errorMessage ?? "生成失败，请重试。";
+      assistantMessage.content = t("generation.interrupted");
+      assistantMessage.errorMessage =
+        update.errorMessage ?? t("generation.failed");
     }
 
     if (pendingCount === 0) {

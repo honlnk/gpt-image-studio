@@ -2,6 +2,7 @@ import {
   normalizeGenerationParams,
   type StoredGenerationParams,
 } from "./generationParams";
+import { t } from "../i18n";
 import type { Message } from "../types/studio";
 import { timestampFromCreatedAt } from "../shared/dateTime";
 import { STORE_NAMES, type ListPageOptions, type ListPageResult, type StudioStorage } from "./storage";
@@ -80,8 +81,8 @@ export function normalizeInterruptedMessages(messages: Message[]): {
     return {
       ...message,
       status: "error",
-      content: "生成中断，请重试。",
-      errorMessage: "页面刷新或会话中断后，未完成的生成任务不会继续运行。",
+      content: t("chat.message.interruptedContent"),
+      errorMessage: t("chat.message.interruptedErrorMessage"),
     } satisfies Message;
   });
   const changed = normalized.filter(

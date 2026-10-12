@@ -70,5 +70,17 @@ export default {
   "formatters": {
     "unknown": "未知",
     "notRecorded": "未记录"
-  }
+  },
+  "deleteTitle": "删除图片",
+  "deleteConfirmHint": "这张图片正在被聊天记录或当前输入引用，删除后聊天记录中会保留无法显示的占位。确定删除吗？",
+  "deleteConfirmSimple": "确定从图片库中删除这张图片吗？",
+  "deleteSuccess": "图片已删除。",
+  "deleteFailed": "删除图片失败：{error}",
+  "deleteCountSuccess": "已删除 {count} 张图片。",
+  "importSuccess": "已导入 {count} 张图片并加入引用。",
+  "importFailed": "导入图片失败：{error}",
+  "importedNameFallback": "导入图片-{timestamp}",
+  "importedPrompt": "用户导入的参考图",
+  "maskAssetName": "{name}-编辑区域",
+  "maskPrompt": "局部编辑遮罩"
 };

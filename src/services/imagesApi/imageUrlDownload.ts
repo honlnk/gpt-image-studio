@@ -1,3 +1,5 @@
+import { t } from "../../i18n";
+
 /**
  * 浏览器直连模式：下载服务商返回的图片 URL，并转成 base64 结果。
  *
@@ -13,9 +15,10 @@
  *   防止把 HTML/脚本等内容当图片存入库。
  */
 
-/** 直连模式解析/下载失败时的统一行动建议。 */
-export const DIRECT_MODE_FALLBACK_HINT =
-  "建议切换到 Companion 模式（服务端下载图片，不受浏览器跨域限制），或直接下载桌面应用。";
+/** 直连模式解析/下载失败时的统一行动建议（导出名保留，t 在调用时求值以跟随语言切换）。 */
+export function DIRECT_MODE_FALLBACK_HINT() {
+  return t("errors.api.directModeFallbackHint");
+}
 
 /** 单张图片允许下载的最大字节数（与 Companion urlToB64 的上限一致）。 */
 const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
@@ -38,13 +41,19 @@ export async function downloadImageUrlAsBase64(
     });
   } catch (error) {
     throw new Error(
-      `下载图片链接失败（可能是浏览器跨域限制）：${errorMessage(error)}。${DIRECT_MODE_FALLBACK_HINT}`,
+      t("errors.download.fetchFailed", {
+        message: errorMessage(error),
+        hint: DIRECT_MODE_FALLBACK_HINT(),
+      }),
     );
   }
 
   if (!response.ok) {
     throw new Error(
-      `下载图片链接失败：HTTP ${response.status}。${DIRECT_MODE_FALLBACK_HINT}`,
+      t("errors.download.httpFailed", {
+        status: response.status,
+        hint: DIRECT_MODE_FALLBACK_HINT(),
+      }),
     );
   }
 
@@ -52,7 +61,7 @@ export async function downloadImageUrlAsBase64(
   const mimeType = sniffImageMimeType(bytes);
   if (!mimeType) {
     throw new Error(
-      `下载的链接内容不是有效的 PNG/JPEG/WebP 图片。${DIRECT_MODE_FALLBACK_HINT}`,
+      t("errors.download.invalidContent", { hint: DIRECT_MODE_FALLBACK_HINT() }),
     );
   }
 
@@ -65,13 +74,13 @@ function parseImageUrl(url: string): URL {
     parsed = new URL(url);
   } catch {
     throw new Error(
-      `服务商返回的图片链接格式无效。${DIRECT_MODE_FALLBACK_HINT}`,
+      t("errors.download.invalidUrl", { hint: DIRECT_MODE_FALLBACK_HINT() }),
     );
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error(
-      `服务商返回的图片链接协议不受支持（仅允许 http/https）。${DIRECT_MODE_FALLBACK_HINT}`,
+      t("errors.download.unsupportedProtocol", { hint: DIRECT_MODE_FALLBACK_HINT() }),
     );
   }
 
@@ -85,7 +94,10 @@ async function readBoundedBody(response: Response): Promise<Uint8Array> {
     contentLength > MAX_IMAGE_BYTES
   ) {
     throw new Error(
-      `图片响应超过大小上限 ${Math.ceil(MAX_IMAGE_BYTES / (1024 * 1024))} MiB。${DIRECT_MODE_FALLBACK_HINT}`,
+      t("errors.download.tooLarge", {
+        limit: Math.ceil(MAX_IMAGE_BYTES / (1024 * 1024)),
+        hint: DIRECT_MODE_FALLBACK_HINT(),
+      }),
     );
   }
 
@@ -93,7 +105,10 @@ async function readBoundedBody(response: Response): Promise<Uint8Array> {
     const buffer = await response.arrayBuffer();
     if (buffer.byteLength > MAX_IMAGE_BYTES) {
       throw new Error(
-        `图片响应超过大小上限 ${Math.ceil(MAX_IMAGE_BYTES / (1024 * 1024))} MiB。${DIRECT_MODE_FALLBACK_HINT}`,
+        t("errors.download.tooLarge", {
+          limit: Math.ceil(MAX_IMAGE_BYTES / (1024 * 1024)),
+          hint: DIRECT_MODE_FALLBACK_HINT(),
+        }),
       );
     }
     return new Uint8Array(buffer);
@@ -109,7 +124,10 @@ async function readBoundedBody(response: Response): Promise<Uint8Array> {
     if (totalBytes > MAX_IMAGE_BYTES) {
       await reader.cancel().catch(() => {});
       throw new Error(
-        `图片响应超过大小上限 ${Math.ceil(MAX_IMAGE_BYTES / (1024 * 1024))} MiB。${DIRECT_MODE_FALLBACK_HINT}`,
+        t("errors.download.tooLarge", {
+          limit: Math.ceil(MAX_IMAGE_BYTES / (1024 * 1024)),
+          hint: DIRECT_MODE_FALLBACK_HINT(),
+        }),
       );
     }
     chunks.push(value);

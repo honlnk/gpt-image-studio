@@ -301,7 +301,7 @@ describe("settingsStore capability-driven UI", () => {
     s.imageWidth = 3840;
     s.imageHeight = 3840;
     // 3840 超 GLM 的 max=2048
-    expect(s.customSizeError).toContain("512 到 2048");
+    expect(s.customSizeError).toContain("between 512 and 2048");
 
     // 合法值无报错
     s.imageWidth = 1280;
@@ -362,7 +362,7 @@ describe("settingsStore capability-driven UI", () => {
     s.applySizePreset("custom");
     s.imageWidth = 1024;
     s.imageHeight = 1024;
-    expect(s.customSizeError).toContain("总像素");
+    expect(s.customSizeError).toContain("total pixel count");
   });
 
   it("Qwen 2K uses the same targetPixels sizing as other providers", () => {

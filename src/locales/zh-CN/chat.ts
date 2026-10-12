@@ -4,7 +4,9 @@ export default {
     "loadingEarlier": "加载更早的消息…"
   },
   "message": {
-    "you": "你"
+    "you": "你",
+    "interruptedContent": "生成中断，请重试。",
+    "interruptedErrorMessage": "页面刷新或会话中断后，未完成的生成任务不会继续运行。"
   },
   "emptyState": {
     "heading": "开始你的第一张图片",
@@ -85,7 +87,19 @@ export default {
     "countPreset": "选择",
     "countPlaceholder": "数量",
     "countUnit": "张",
-    "countHint": "理论无上限，但请量力而行；一次太多可能影响本机和API供应商的服务器。"
+    "countHint": "理论无上限，但请量力而行；一次太多可能影响本机和API供应商的服务器。",
+    "qualityAuto": "自动",
+    "qualityHigh": "高",
+    "qualityMedium": "中",
+    "qualityLow": "低",
+    "backgroundAuto": "自动",
+    "backgroundOpaque": "不透明",
+    "backgroundTransparent": "透明",
+    "backgroundTransparentUnsupported": "{model} 当前不支持透明背景，请选择自动或不透明背景。",
+    "customSizeInteger": "自定义尺寸的宽高必须是整数。",
+    "customSizeRange": "自定义尺寸的宽高必须是 {min} 到 {max} 之间的 {step} 的倍数。",
+    "customSizePixels": "自定义尺寸的总像素必须在 {min} 到 {max} 之间。",
+    "customSizeAspectRatio": "自定义尺寸的长边与短边比例不能超过 {ratio}:1。"
   },
   "parameterBar": {
     "model": "模型",
@@ -156,6 +170,13 @@ export default {
     "renameConversation": "重命名会话",
     "rename": "重命名",
     "deleteConversation": "删除会话",
-    "loadingMore": "加载更多会话…"
+    "loadingMore": "加载更多会话…",
+    "deleteConfirmDescription": "确定删除会话“{title}”吗？聊天记录会被移除，图片库中的图片会保留。",
+    "deleteSuccess": "会话已删除。",
+    "deleteFailed": "删除会话失败：{error}",
+    "deleteCountSuccess": "已删除 {count} 个对话。",
+    "deleteCountFailed": "删除对话失败：{error}",
+    "defaultConversationTitle": "新的图片创作",
+    "defaultConversationSummary": "尚未开始"
   }
 };

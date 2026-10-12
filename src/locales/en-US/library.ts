@@ -71,7 +71,19 @@ const library: ZhLibrary = {
   "formatters": {
     "unknown": "Unknown",
     "notRecorded": "Not recorded"
-  }
+  },
+  "deleteTitle": "Delete image",
+  "deleteConfirmHint": "This image is referenced by chat history or the current composer. Deleting it will leave placeholders that cannot be displayed in the chat history. Delete it anyway?",
+  "deleteConfirmSimple": "Are you sure you want to delete this image from the library?",
+  "deleteSuccess": "Image deleted.",
+  "deleteFailed": "Failed to delete image: {error}",
+  "deleteCountSuccess": "Deleted {count} images.",
+  "importSuccess": "Imported {count} images and attached them as references.",
+  "importFailed": "Failed to import images: {error}",
+  "importedNameFallback": "Imported image-{timestamp}",
+  "importedPrompt": "User-imported reference image",
+  "maskAssetName": "{name}-edit area",
+  "maskPrompt": "Partial edit mask"
 };
 
 export default library;

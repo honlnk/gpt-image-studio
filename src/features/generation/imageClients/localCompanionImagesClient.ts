@@ -1,4 +1,5 @@
 import { ApiClientError } from "../../../shared/apiErrorCodes";
+import { t } from "../../../i18n";
 import { applyPromptRewriteGuard } from "../../../services/imagesApi";
 import { buildImagePrompt } from "../../../services/promptBuilder";
 import type { PromptMode, PromptWordbanks } from "../../../types/studio";
@@ -17,7 +18,10 @@ export function createLocalCompanionImagesClient(config: CompanionClientConfig):
   function headers() {
     const key = config.getAccessKey();
     if (!key) {
-      throw new ApiClientError("companion-not-paired", "尚未连接 Companion，请先在设置中输入连接密钥。");
+      throw new ApiClientError(
+        "companion-not-paired",
+        t("errors.api.companionNotPaired"),
+      );
     }
     return { Authorization: `Bearer ${key}` };
   }
@@ -122,17 +126,22 @@ async function extractB64Json(response: Response): Promise<ImageClientResult> {
   const payload = text ? JSON.parse(text) : {};
 
   if (!response.ok) {
-    const statusMessage = `请求失败：HTTP ${response.status}`;
+    const statusMessage = t("generation.companion.httpError", {
+      status: response.status,
+    });
     const detail = payload.error?.message || payload.error;
     const message = detail
-      ? `${statusMessage}：${typeof detail === "string" ? detail : JSON.stringify(detail)}`
+      ? t("generation.companion.httpErrorWithDetail", {
+          status: response.status,
+          detail: typeof detail === "string" ? detail : JSON.stringify(detail),
+        })
       : statusMessage;
     throw new Error(typeof message === "string" ? message : JSON.stringify(message));
   }
 
   const imageData = payload.data?.[0]?.b64_json;
   if (!imageData) {
-    throw new Error("响应中没有 data[0].b64_json。");
+    throw new Error(t("generation.companion.missingImageData"));
   }
   const item = payload.data?.[0];
   return {

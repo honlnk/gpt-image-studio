@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { ImageAsset, GenerationParams } from "../types/studio";
 import { imageExtension } from "../shared/fileFormatters";
 
@@ -31,18 +32,22 @@ export function outputFormatToMimeType(outputFormat: GenerationParams["outputFor
 
 /** 生成完成后的结果计数文案（"已生成 N 张图片。"）。 */
 export function resultCountLabel(prefix: string, count: number) {
-  return count > 1 ? `${prefix} ${count} 张图片。` : `${prefix}一张图片。`;
+  return count > 1
+    ? t("generation.result.countPlural", { prefix, count })
+    : t("generation.result.countSingular", { prefix });
 }
 
 /** 任务进行中的文案（区分生成 vs 编辑 + 单张 vs 多张）。 */
 export function pendingGenerationLabel(isEdit: boolean, count: number) {
   if (isEdit) {
     return count > 1
-      ? `正在基于引用图片生成 ${count} 张编辑结果。`
-      : "正在基于引用图片生成编辑结果。";
+      ? t("generation.pending.editPlural", { count })
+      : t("generation.pending.editSingular");
   }
 
-  return count > 1 ? `正在生成 ${count} 张图片。` : "正在生成图片。";
+  return count > 1
+    ? t("generation.pending.textPlural", { count })
+    : t("generation.pending.textSingular");
 }
 
 /** "继续生成 / 重新生成"场景的文案。 */
@@ -52,14 +57,16 @@ export function continuedGenerationLabel(
   count: number,
 ) {
   if (isEdit) {
-    if (isReplacing) return "正在重新生成编辑结果。";
+    if (isReplacing) return t("generation.regenerating.editResult");
     return count > 1
-      ? `正在继续生成 ${count} 张编辑结果。`
-      : "正在继续生成编辑结果。";
+      ? t("generation.continued.editPlural", { count })
+      : t("generation.continued.editSingular");
   }
 
-  if (isReplacing) return "正在重新生成图片。";
-  return count > 1 ? `正在继续生成 ${count} 张图片。` : "正在继续生成图片。";
+  if (isReplacing) return t("generation.regenerating.image");
+  return count > 1
+    ? t("generation.continued.textPlural", { count })
+    : t("generation.continued.textSingular");
 }
 
 /** 部分 job 完成时的混合文案（"已生成 N 张，还有 M 张正在生成。"）。 */
@@ -69,7 +76,14 @@ export function pendingResultLabel(
   pendingCount: number,
 ) {
   const generatedPart =
-    generatedCount > 0 ? `已生成 ${generatedCount} 张，` : "";
-  const noun = isEdit ? "编辑结果" : "图片";
-  return `${generatedPart}还有 ${pendingCount} 张${noun}正在生成。`;
+    generatedCount > 0
+      ? t("generation.pendingResult.generatedPart", { count: generatedCount })
+      : "";
+  const noun = isEdit
+    ? t("generation.pendingResult.nounEditResult", pendingCount)
+    : t("generation.pendingResult.nounImage", pendingCount);
+  return `${generatedPart}${t("generation.pendingResult.remaining", {
+    count: pendingCount,
+    noun,
+  })}`;
 }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { t } from "../i18n";
 import {
   PROMPT_REWRITE_GUARD_PREFIX,
   editImage,
@@ -414,7 +415,10 @@ describe("images API requests", () => {
         params: generationParams,
       });
     await expect(request()).rejects.toThrow(
-      "请求失败：HTTP 401：Invalid bearer token",
+      t("errors.api.httpErrorDetail", {
+        status: 401,
+        message: "Invalid bearer token",
+      }),
     );
     // i18n 阶段 1：401/403 抛 ApiClientError(api-auth)，分类不再依赖消息文本。
     await expect(request()).rejects.toMatchObject({
@@ -579,7 +583,7 @@ describe("provider URL responses (direct mode downloads)", () => {
         prompt: "画一张图",
         params: generationParams,
       }),
-    ).rejects.toThrow("建议切换到 Companion 模式");
+    ).rejects.toThrow("Consider switching to Companion mode");
   });
 
   it("rejects image URLs with unsupported protocols", async () => {
@@ -596,7 +600,7 @@ describe("provider URL responses (direct mode downloads)", () => {
         prompt: "画一张图",
         params: generationParams,
       }),
-    ).rejects.toThrow("仅允许 http/https");
+    ).rejects.toThrow("only http/https are allowed");
   });
 
   it("rejects downloaded payloads without an image signature", async () => {
@@ -620,39 +624,44 @@ describe("provider URL responses (direct mode downloads)", () => {
         prompt: "画一张图",
         params: generationParams,
       }),
-    ).rejects.toThrow("不是有效的 PNG/JPEG/WebP");
+    ).rejects.toThrow("not a valid PNG/JPEG/WebP");
   });
 });
 
 describe("getCustomSizeError", () => {
   it("requires integer dimensions", () => {
-    expect(getCustomSizeError(1024.5, 1024, OPENAI_CONSTRAINTS)).toBe("自定义尺寸的宽高必须是整数。");
-    expect(getCustomSizeError(Number.NaN, 1024, OPENAI_CONSTRAINTS)).toBe("自定义尺寸的宽高必须是整数。");
+    expect(getCustomSizeError(1024.5, 1024, OPENAI_CONSTRAINTS)).toBe(
+      t("chat.editor.customSizeInteger"),
+    );
+    expect(getCustomSizeError(Number.NaN, 1024, OPENAI_CONSTRAINTS)).toBe(
+      t("chat.editor.customSizeInteger"),
+    );
   });
 
   it("requires dimensions between 16 and 3840 in 16px increments (OpenAI)", () => {
-    expect(getCustomSizeError(15, 1024, OPENAI_CONSTRAINTS)).toBe(
-      "自定义尺寸的宽高必须是 16 到 3840 之间的 16 的倍数。",
-    );
-    expect(getCustomSizeError(3856, 1024, OPENAI_CONSTRAINTS)).toBe(
-      "自定义尺寸的宽高必须是 16 到 3840 之间的 16 的倍数。",
-    );
-    expect(getCustomSizeError(1025, 1024, OPENAI_CONSTRAINTS)).toBe(
-      "自定义尺寸的宽高必须是 16 到 3840 之间的 16 的倍数。",
-    );
+    const expected = t("chat.editor.customSizeRange", {
+      min: 16,
+      max: 3840,
+      step: 16,
+    });
+    expect(getCustomSizeError(15, 1024, OPENAI_CONSTRAINTS)).toBe(expected);
+    expect(getCustomSizeError(3856, 1024, OPENAI_CONSTRAINTS)).toBe(expected);
+    expect(getCustomSizeError(1025, 1024, OPENAI_CONSTRAINTS)).toBe(expected);
   });
 
   it("requires total pixels within the supported range (OpenAI)", () => {
-    expect(getCustomSizeError(256, 256, OPENAI_CONSTRAINTS)).toBe(
-      "自定义尺寸的总像素必须在 655,360 到 8,294,400 之间。",
-    );
-    expect(getCustomSizeError(3840, 3840, OPENAI_CONSTRAINTS)).toBe(
-      "自定义尺寸的总像素必须在 655,360 到 8,294,400 之间。",
-    );
+    const expected = t("chat.editor.customSizePixels", {
+      min: (655360).toLocaleString(),
+      max: (8294400).toLocaleString(),
+    });
+    expect(getCustomSizeError(256, 256, OPENAI_CONSTRAINTS)).toBe(expected);
+    expect(getCustomSizeError(3840, 3840, OPENAI_CONSTRAINTS)).toBe(expected);
   });
 
   it("rejects dimensions with an aspect ratio greater than 3:1 (OpenAI)", () => {
-    expect(getCustomSizeError(2048, 512, OPENAI_CONSTRAINTS)).toBe("自定义尺寸的长边与短边比例不能超过 3:1。");
+    expect(getCustomSizeError(2048, 512, OPENAI_CONSTRAINTS)).toBe(
+      t("chat.editor.customSizeAspectRatio", { ratio: 3 }),
+    );
   });
 
   it("allows valid dimensions (OpenAI)", () => {
@@ -662,16 +671,15 @@ describe("getCustomSizeError", () => {
   });
 
   it("enforces GLM constraints: 512-2048, step 32", () => {
-    expect(getCustomSizeError(256, 1024, GLM_CONSTRAINTS)).toBe(
-      "自定义尺寸的宽高必须是 512 到 2048 之间的 32 的倍数。",
-    );
-    expect(getCustomSizeError(4096, 1024, GLM_CONSTRAINTS)).toBe(
-      "自定义尺寸的宽高必须是 512 到 2048 之间的 32 的倍数。",
-    );
+    const expected = t("chat.editor.customSizeRange", {
+      min: 512,
+      max: 2048,
+      step: 32,
+    });
+    expect(getCustomSizeError(256, 1024, GLM_CONSTRAINTS)).toBe(expected);
+    expect(getCustomSizeError(4096, 1024, GLM_CONSTRAINTS)).toBe(expected);
     // 1000 不是 32 倍数（1000 / 32 = 31.25）
-    expect(getCustomSizeError(1000, 1000, GLM_CONSTRAINTS)).toBe(
-      "自定义尺寸的宽高必须是 512 到 2048 之间的 32 的倍数。",
-    );
+    expect(getCustomSizeError(1000, 1000, GLM_CONSTRAINTS)).toBe(expected);
   });
 
   it("GLM has no aspect ratio limit (maxAspectRatio=null)", () => {
@@ -702,7 +710,7 @@ describe("getCustomSizeError", () => {
       defaultSize: "2048x2048",
     };
     // 1024x1024 = 1048576 < minPixels 3686400 → 报总像素下限错
-    expect(getCustomSizeError(1024, 1024, DOUBAO_CONSTRAINTS)).toContain("总像素");
+    expect(getCustomSizeError(1024, 1024, DOUBAO_CONSTRAINTS)).toContain("total pixel count");
     // 1920x1920 = 3686400 刚好等于下限 → 合法
     expect(getCustomSizeError(1920, 1920, DOUBAO_CONSTRAINTS)).toBe("");
     // 2048x2048 = 4194304 在范围内 → 合法

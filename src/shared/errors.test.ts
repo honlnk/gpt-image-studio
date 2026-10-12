@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "../i18n";
 import { ApiClientError, isApiClientError } from "./apiErrorCodes";
 import { formatError, isApiConfigurationError } from "./errors";
 
@@ -42,7 +43,7 @@ describe("isApiConfigurationError（结构化判定，i18n 阶段 1）", () => {
 
   it("formatError：SyntaxError 走默认解析失败文案", () => {
     expect(formatError(new SyntaxError("x"))).toBe(
-      "图片接口返回了无法解析的响应。",
+      t("errors.api.syntaxFallback"),
     );
     expect(formatError(new Error("boom"))).toBe("boom");
     expect(formatError("plain string")).toBe("plain string");

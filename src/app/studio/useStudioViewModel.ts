@@ -1,4 +1,5 @@
 import { ApiClientError } from "../../shared/apiErrorCodes";
+import { t } from "../../i18n";
 import { computed, onMounted, onUnmounted, proxyRefs, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useStudioBackup, useStudioRestore } from "../../features/backup";
@@ -247,7 +248,10 @@ export function useStudioViewModel() {
         settings.connectionMode.value === "localCompanion" &&
         settings.apiMode.value !== "images"
       ) {
-        throw new ApiClientError("companion-images-only", "本地 Companion 当前仅支持 Images API。");
+        throw new ApiClientError(
+          "companion-images-only",
+          t("errors.api.companionImagesOnly"),
+        );
       }
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.generate(input)
@@ -263,7 +267,10 @@ export function useStudioViewModel() {
         settings.connectionMode.value === "localCompanion" &&
         settings.apiMode.value !== "images"
       ) {
-        throw new ApiClientError("companion-images-only", "本地 Companion 当前仅支持 Images API。");
+        throw new ApiClientError(
+          "companion-images-only",
+          t("errors.api.companionImagesOnly"),
+        );
       }
       const fn = () => settings.connectionMode.value === "localCompanion"
         ? localCompanionImagesClient.edit(input)
@@ -297,9 +304,7 @@ export function useStudioViewModel() {
     },
     supportsEdit: computed(() => settings.providerCapability.value.edit),
     notifyUnsupportedEdit: () =>
-      feedback.notifyError(
-        "当前模型不支持图生图编辑，请移除参考图，或切换到支持图片编辑的模型。",
-      ),
+      feedback.notifyError(t("common.unsupportedEdit")),
     onApiConfigurationError: openApiSettingsFromGenerationError,
     onStorageError: reportStorageError,
     conversationExists: (id: string) =>
@@ -413,7 +418,7 @@ export function useStudioViewModel() {
     settingsInitialTab.value = "api";
     settingsInitialBatchPanel.value = "images";
     openSettings();
-    feedback.notifyError("图片接口认证失败，请检查 API key 和接口地址。");
+    feedback.notifyError(t("common.apiAuthFailed"));
   }
 
   onMounted(() => {
@@ -490,9 +495,10 @@ export function useStudioViewModel() {
         const switched = sessionStorage.getItem(CONNECTION_MODE_SWITCHED_KEY);
         if (switched) {
           sessionStorage.removeItem(CONNECTION_MODE_SWITCHED_KEY);
-          const modeLabel =
-            switched === "localCompanion" ? "本地 Companion" : "浏览器直连";
-          feedback.notifySuccess(`已切换到「${modeLabel}」模式。`);
+          const modeLabel = switched === "localCompanion"
+            ? t("companion.modeLabel.localCompanion")
+            : t("companion.modeLabel.direct");
+          feedback.notifySuccess(t("companion.modeSwitched", { mode: modeLabel }));
         }
       } catch {
         // sessionStorage 不可用时静默降级。
@@ -516,9 +522,9 @@ export function useStudioViewModel() {
   async function copyText(text: string) {
     try {
       await copyTextToClipboard(text);
-      feedback.notifySuccess("文本已复制。");
+      feedback.notifySuccess(t("common.copySuccess"));
     } catch (error) {
-      feedback.notifyError("复制失败，请手动选择文本复制。");
+      feedback.notifyError(t("common.copyFailed"));
       reportStorageError(error);
     }
   }
@@ -536,7 +542,7 @@ export function useStudioViewModel() {
     }
 
     void drafts.saveDraftForCurrentConversation().catch(reportStorageError);
-    feedback.notifySuccess("已加载到输入面板。");
+    feedback.notifySuccess(t("common.loadedToComposer"));
   }
 
   // selectConversationWithDraft 在 drafts 之上包一层 analytics 埋点：
@@ -650,7 +656,7 @@ export function useStudioViewModel() {
     notifyHostConversationsChanged();
     analytics.setContext({ conversationId });
     track("conversation.renamed", { conversationId }, "system");
-    feedback.notifySuccess("会话已重命名。");
+    feedback.notifySuccess(t("common.conversationRenamed"));
   }
 
   function requestRenameImage(id: string) {
@@ -682,9 +688,9 @@ export function useStudioViewModel() {
     analytics.setContext({ imageId });
     track("image.renamed", { imageId }, "system");
     if (saved) {
-      feedback.notifySuccess("图片已重命名。");
+      feedback.notifySuccess(t("common.imageRenamed"));
     } else {
-      feedback.notifyError("重命名失败，本地保存出错，请重试。");
+      feedback.notifyError(t("common.renameFailed"));
     }
   }
 
@@ -719,16 +725,16 @@ export function useStudioViewModel() {
     try {
       await analytics.exportEvents();
       track("backup.export_succeeded", { kind: "analytics" }, "system");
-      feedback.notifySuccess("行为日志已开始下载。");
+      feedback.notifySuccess(t("settings.analytics.exportStarted"));
     } catch {
       track("backup.export_failed", { kind: "analytics" }, "system");
-      feedback.notifyError("导出行为日志失败。");
+      feedback.notifyError(t("settings.analytics.exportFailed"));
     }
   }
 
   async function clearAnalyticsEvents() {
     await analytics.clearEvents();
-    feedback.notifySuccess("行为日志已清空。");
+    feedback.notifySuccess(t("settings.analytics.cleared"));
   }
 
   function savePromptWordbank(section: PromptWordbankSectionKey, terms: string[]) {
@@ -968,20 +974,20 @@ export function useStudioViewModel() {
   const renameModal = proxyRefs({
     cancel: cancelRenameConversation,
     confirm: confirmRenameConversation,
-    confirmLabel: "保存名称",
-    description: "重命名后，会话标题不会再被新消息自动覆盖。",
+    confirmLabel: computed(() => t("common.saveName")),
+    description: computed(() => t("common.renameConversation.description")),
     initialValue: computed(() => renameDialog.value.initialTitle),
     isOpen: computed(() => renameDialog.value.isOpen),
-    title: "重命名会话",
+    title: computed(() => t("common.renameConversation.title")),
   });
   const renameImageModal = proxyRefs({
     cancel: cancelRenameImage,
     confirm: confirmRenameImage,
-    confirmLabel: "保存名称",
-    description: "修改后会同步用于图片库展示和下载文件名。",
+    confirmLabel: computed(() => t("common.saveName")),
+    description: computed(() => t("common.renameImage.description")),
     initialValue: computed(() => renameImageDialog.value.initialName),
     isOpen: computed(() => renameImageDialog.value.isOpen),
-    title: "重命名图片",
+    title: computed(() => t("common.renameImage.title")),
   });
 
   return {
@@ -1009,9 +1015,7 @@ function reportStorageError(error: unknown) {
   if (now - lastShown < STORAGE_ERROR_THROTTLE_MS) return;
   storageErrorLastShown.set(message, now);
   try {
-    useFeedbackStore().notifyWarning(
-      "本地保存失败，部分更改可能未持久化（详情见控制台）。",
-    );
+    useFeedbackStore().notifyWarning(t("common.storageWriteFailed"));
   } catch {
     // 反馈 store 不可用时静默降级（如初始化阶段），已有 console.error 兜底。
   }

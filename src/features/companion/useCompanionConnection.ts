@@ -1,5 +1,6 @@
 import { ref, watch } from "vue";
 import type { Ref } from "vue";
+import { t } from "../../i18n";
 import {
   checkCompanionHealth,
   getCompanionAuthStatus,
@@ -74,8 +75,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
     applyProviderInfoForActiveMode(null);
     if (authResult.invalidToken) {
       input.onClearAccessKey();
-      connectError.value =
-        "Companion 拒绝了当前密钥（可能已通过 reset-key 重置），已清除浏览器里的旧密钥。";
+      connectError.value = t("companion.keyRejected");
     }
   }
 
@@ -87,7 +87,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
     connectError.value = "";
     const trimmed = key.trim();
     if (!trimmed) {
-      connectError.value = "请输入连接密钥。";
+      connectError.value = t("companion.keyRequired");
       return;
     }
 
@@ -101,7 +101,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
 
       if (!health) {
         input.onClearAccessKey();
-        connectError.value = "无法连接 Companion 服务，请确认它正在运行。";
+        connectError.value = t("companion.serviceUnreachable");
         return;
       }
 
@@ -111,7 +111,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
       );
       if (!status) {
         input.onClearAccessKey();
-        connectError.value = "连接密钥无效，请核对后重试。";
+        connectError.value = t("companion.keyInvalid");
         return;
       }
 
@@ -119,7 +119,7 @@ export function useCompanionConnection(input: UseCompanionConnectionInput) {
       applyProviderInfoForActiveMode(status);
     } catch {
       input.onClearAccessKey();
-      connectError.value = "连接失败，请确认 Companion 在线且密钥正确。";
+      connectError.value = t("companion.connectFailed");
     } finally {
       connecting.value = false;
     }

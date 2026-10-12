@@ -5,7 +5,9 @@ const chat: ZhChat = {
     "loadingEarlier": "Loading earlier messages…"
   },
   "message": {
-    "you": "You"
+    "you": "You",
+    "interruptedContent": "Generation interrupted. Please retry.",
+    "interruptedErrorMessage": "Generation tasks left unfinished by a page refresh or conversation switch will not resume."
   },
   "emptyState": {
     "heading": "Start your first image",
@@ -86,7 +88,19 @@ const chat: ZhChat = {
     "countPreset": "Preset",
     "countPlaceholder": "Count",
     "countUnit": "images",
-    "countHint": "No hard limit in theory, but pace yourself — too many at once may strain your machine and the API provider's servers."
+    "countHint": "No hard limit in theory, but pace yourself — too many at once may strain your machine and the API provider's servers.",
+    "qualityAuto": "Auto",
+    "qualityHigh": "High",
+    "qualityMedium": "Medium",
+    "qualityLow": "Low",
+    "backgroundAuto": "Auto",
+    "backgroundOpaque": "Opaque",
+    "backgroundTransparent": "Transparent",
+    "backgroundTransparentUnsupported": "{model} does not currently support a transparent background. Please choose Auto or Opaque.",
+    "customSizeInteger": "Custom size width and height must be integers.",
+    "customSizeRange": "Custom size width and height must be multiples of {step} between {min} and {max}.",
+    "customSizePixels": "The total pixel count of a custom size must be between {min} and {max}.",
+    "customSizeAspectRatio": "The long-to-short side ratio of a custom size cannot exceed {ratio}:1."
   },
   "parameterBar": {
     "model": "Model",
@@ -157,7 +171,14 @@ const chat: ZhChat = {
     "renameConversation": "Rename conversation",
     "rename": "Rename",
     "deleteConversation": "Delete conversation",
-    "loadingMore": "Loading more conversations…"
+    "loadingMore": "Loading more conversations…",
+    "deleteConfirmDescription": "Are you sure you want to delete \"{title}\"? Chat history will be removed, but images in the library will be kept.",
+    "deleteSuccess": "Conversation deleted.",
+    "deleteFailed": "Failed to delete conversation: {error}",
+    "deleteCountSuccess": "Deleted {count} conversations.",
+    "deleteCountFailed": "Failed to delete conversations: {error}",
+    "defaultConversationTitle": "New Image Creation",
+    "defaultConversationSummary": "Not started yet"
   }
 };
 

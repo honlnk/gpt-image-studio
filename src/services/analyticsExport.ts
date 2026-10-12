@@ -1,4 +1,5 @@
 import type { AnalyticsEvent, Conversation } from "../types/studio";
+import { t } from "../i18n";
 import { listAnalyticsEvents } from "./analyticsEvents";
 import { listConversations } from "./conversations";
 import { createZipArchive } from "./zipArchive";
@@ -196,7 +197,7 @@ function shardEventsByConversation(
   const shards: ConversationShard[] = [];
   for (const [conversationId, groupEvents] of grouped) {
     const conversation = conversationById.get(conversationId);
-    const title = conversation?.title ?? "(已删除会话)";
+    const title = conversation?.title ?? t("settings.analytics.report.deletedConversation");
     const parts = splitBySizeAndCount([groupEvents]);
     parts.forEach((partEvents, index) => {
       const part = index + 1;
@@ -249,27 +250,27 @@ function splitBySizeAndCount(groups: AnalyticsEvent[][]): AnalyticsEvent[][] {
 
 function buildReadme(manifest: AnalyticsManifest): string {
   return [
-    "# 行为日志导出",
+    `# ${t("settings.analytics.report.readmeTitle")}`,
     "",
-    "本导出包为本地优先的行为日志快照，不包含远程上报。",
+    t("settings.analytics.report.readmeIntro"),
     "",
-    "## 文件结构",
+    `## ${t("settings.analytics.report.fileStructureTitle")}`,
     "",
-    "- `manifest.json` — 导出范围、版本、分片索引与校验信息。",
-    "- `events/raw/events.jsonl` — 完整原始事件流（唯一事实源）。",
-    "- `reports/summary.md` — 总览统计、颜色分组行为与分片导航。",
-    `- \`reports/timeline/*.md\` — 时间线分片明细（共 ${manifest.shards.length} 片）。`,
-    `- \`reports/conversations/*.md\` — 会话级分片明细（共 ${manifest.conversationShards?.length ?? 0} 片）。`,
+    `- \`manifest.json\` — ${t("settings.analytics.report.manifestEntry")}`,
+    `- \`events/raw/events.jsonl\` — ${t("settings.analytics.report.eventsEntry")}`,
+    `- \`reports/summary.md\` — ${t("settings.analytics.report.summaryEntry")}`,
+    `- \`reports/timeline/*.md\` — ${t("settings.analytics.report.timelineEntry", { count: manifest.shards.length })}`,
+    `- \`reports/conversations/*.md\` — ${t("settings.analytics.report.conversationsEntry", { count: manifest.conversationShards?.length ?? 0 })}`,
     "",
-    "## 元信息",
+    `## ${t("settings.analytics.report.metaTitle")}`,
     "",
-    `- 导出时间：${manifest.exportedAt}`,
-    `- 事件总数：${manifest.eventCount}`,
-    `- 时间范围：${manifest.timeRange.start} ~ ${manifest.timeRange.end}`,
-    `- 时间线分片数：${manifest.shards.length}`,
-    `- 会话级分片数：${manifest.conversationShards?.length ?? 0}`,
+    `- ${t("settings.analytics.report.exportedAt", { value: manifest.exportedAt })}`,
+    `- ${t("settings.analytics.report.eventTotal", { count: manifest.eventCount })}`,
+    `- ${t("settings.analytics.report.timeRange", { start: manifest.timeRange.start, end: manifest.timeRange.end })}`,
+    `- ${t("settings.analytics.report.timelineShardCount", { count: manifest.shards.length })}`,
+    `- ${t("settings.analytics.report.conversationShardCount", { count: manifest.conversationShards?.length ?? 0 })}`,
     "",
-    "> JSON 与 Markdown 基于同一批事件生成，统计口径一致。",
+    `> ${t("settings.analytics.report.consistencyNote")}`,
     "",
   ].join("\n");
 }
@@ -300,14 +301,23 @@ function buildSummary(
   const shardNav = shards
     .map(
       (shard) =>
-        `- [${shard.meta.name}](${shard.meta.name}) — part ${shard.meta.part}/${shard.meta.totalParts}，${shard.meta.eventCount} 条，${shard.meta.timeRange.start} ~ ${shard.meta.timeRange.end}`,
+        `- [${shard.meta.name}](${shard.meta.name}) — ${t("settings.analytics.report.timelineNavEntry", {
+          part: shard.meta.part,
+          total: shard.meta.totalParts,
+          count: shard.meta.eventCount,
+          start: shard.meta.timeRange.start,
+          end: shard.meta.timeRange.end,
+        })}`,
     )
     .join("\n");
 
   const conversationNav = conversationShards
     .map(
       (shard) =>
-        `- [${shard.meta.name}](${shard.meta.name}) — ${shard.title}，${shard.meta.eventCount} 条`,
+        `- [${shard.meta.name}](${shard.meta.name}) — ${t("settings.analytics.report.conversationNavEntry", {
+          title: shard.title,
+          count: shard.meta.eventCount,
+        })}`,
     )
     .join("\n");
 
@@ -322,30 +332,30 @@ function buildSummary(
     `conversation_shard_count: ${conversationShards.length}`,
     "---",
     "",
-    "# 行为日志总览",
+    `# ${t("settings.analytics.report.summaryTitle")}`,
     "",
-    "## 概况",
+    `## ${t("settings.analytics.report.overviewTitle")}`,
     "",
-    `- 事件总数：${manifest.eventCount}`,
-    `- 会话（session）数：${sessionCount}`,
-    `- 对话（conversation）数：${conversationCount}`,
-    `- 时间范围：${manifest.timeRange.start} ~ ${manifest.timeRange.end}`,
+    `- ${t("settings.analytics.report.eventTotal", { count: manifest.eventCount })}`,
+    `- ${t("settings.analytics.report.sessionCount", { count: sessionCount })}`,
+    `- ${t("settings.analytics.report.conversationCount", { count: conversationCount })}`,
+    `- ${t("settings.analytics.report.timeRange", { start: manifest.timeRange.start, end: manifest.timeRange.end })}`,
     "",
-    "## 事件分布",
+    `## ${t("settings.analytics.report.eventDistributionTitle")}`,
     "",
-    "| 事件名 | 次数 |",
+    `| ${t("settings.analytics.report.colEventName")} | ${t("settings.analytics.report.colCount")} |`,
     "| --- | --- |",
-    topEvents || "| (无) | 0 |",
+    topEvents || `| ${t("settings.analytics.report.emptyCell")} | 0 |`,
     "",
     buildColorSection(events),
     "",
-    "## 时间线分片导航",
+    `## ${t("settings.analytics.report.timelineNavTitle")}`,
     "",
-    shardNav || "(无分片)",
+    shardNav || t("settings.analytics.report.noShards"),
     "",
-    "## 会话级分片导航",
+    `## ${t("settings.analytics.report.conversationNavTitle")}`,
     "",
-    conversationNav || "(无会话级分片)",
+    conversationNav || t("settings.analytics.report.noConversationShards"),
     "",
   ].join("\n");
 }
@@ -359,9 +369,9 @@ function buildColorSection(events: AnalyticsEvent[]): string {
   );
   if (!colorTagEvents.length) {
     return [
-      "## 颜色分组行为",
+      `## ${t("settings.analytics.report.colorSectionTitle")}`,
       "",
-      "暂无颜色分组相关事件。",
+      t("settings.analytics.report.noColorEvents"),
       "",
     ].join("\n");
   }
@@ -389,19 +399,19 @@ function buildColorSection(events: AnalyticsEvent[]): string {
     .join("\n");
 
   return [
-    "## 颜色分组行为",
+    `## ${t("settings.analytics.report.colorSectionTitle")}`,
     "",
-    "### 操作分布",
+    `### ${t("settings.analytics.report.actionDistributionTitle")}`,
     "",
-    "| 事件 | 次数 |",
+    `| ${t("settings.analytics.report.colEvent")} | ${t("settings.analytics.report.colCount")} |`,
     "| --- | --- |",
     actionRows,
     "",
-    "### 涉及颜色分布",
+    `### ${t("settings.analytics.report.colorDistributionTitle")}`,
     "",
-    "| 颜色 | 次数 |",
+    `| ${t("settings.analytics.report.colColor")} | ${t("settings.analytics.report.colCount")} |`,
     "| --- | --- |",
-    colorRows || "| (无) | 0 |",
+    colorRows || `| ${t("settings.analytics.report.emptyCell")} | 0 |`,
     "",
   ].join("\n");
 }
@@ -447,9 +457,13 @@ function buildTimelineShard(shard: Shard): string {
     `total_parts: ${meta.totalParts}`,
     "---",
     "",
-    `# 时间线明细（part ${meta.part}/${meta.totalParts}）`,
+    `# ${t("settings.analytics.report.timelineShardTitle", { part: meta.part, total: meta.totalParts })}`,
     "",
-    `覆盖范围：${meta.timeRange.start} ~ ${meta.timeRange.end}，共 ${meta.eventCount} 条事件。`,
+    t("settings.analytics.report.timelineShardCoverage", {
+      start: meta.timeRange.start,
+      end: meta.timeRange.end,
+      count: meta.eventCount,
+    }),
     "",
     ...lines,
     "",
@@ -473,11 +487,11 @@ function buildConversationShard(shard: ConversationShard): string {
     `total_parts: ${meta.totalParts}`,
     "---",
     "",
-    `# 会话明细：${title}`,
+    `# ${t("settings.analytics.report.conversationShardTitle", { title })}`,
     "",
-    `- 会话 ID：\`${conversationId}\``,
-    `- 时间范围：${meta.timeRange.start} ~ ${meta.timeRange.end}`,
-    `- 事件数：${meta.eventCount}`,
+    `- ${t("settings.analytics.report.conversationIdLabel", { id: `\`${conversationId}\`` })}`,
+    `- ${t("settings.analytics.report.timeRange", { start: meta.timeRange.start, end: meta.timeRange.end })}`,
+    `- ${t("settings.analytics.report.eventCountLabel", { count: meta.eventCount })}`,
     "",
     ...lines,
     "",

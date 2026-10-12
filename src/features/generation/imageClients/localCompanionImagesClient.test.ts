@@ -109,7 +109,7 @@ describe("localCompanionImagesClient.generate — mimeType reading", () => {
         },
         promptRequestSettings: PROMPT_REQUEST_SETTINGS,
       }),
-    ).rejects.toThrow(/没有 data\[0\]/);
+    ).rejects.toThrow(/missing data\[0\]/);
   });
 
   it("surfaces upstream error message on non-2xx", async () => {

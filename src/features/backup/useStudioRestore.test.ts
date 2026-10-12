@@ -205,7 +205,7 @@ describe("useStudioRestore 按需加载编排（PR-c）", () => {
     await restore.restoreFromStorage();
 
     expect(input.notifyError).toHaveBeenCalledWith(
-      expect.stringContaining("读取本地数据失败"),
+      expect.stringContaining("Failed to read local data"),
     );
     expect(input.onStorageError).toHaveBeenCalled();
     expect(input.isHydrated.value).toBe(true);

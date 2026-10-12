@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export function isoTimestamp(timestampMs = Date.now()) {
   return new Date(timestampMs).toISOString();
 }
@@ -16,17 +18,17 @@ export function formatRelativeTime(dateString?: string, nowMs = Date.now()) {
 }
 
 function formatRelativeTimestamp(timestamp: number, nowMs = Date.now()) {
-  if (!timestamp) return "未知时间";
+  if (!timestamp) return t("common.time.unknown");
 
   const diffSeconds = Math.max(0, Math.floor((nowMs - timestamp) / 1000));
 
-  if (diffSeconds < 30) return "刚刚";
-  if (diffSeconds < 60) return "一分钟内";
+  if (diffSeconds < 30) return t("common.time.justNow");
+  if (diffSeconds < 60) return t("common.time.withinAMinute");
   if (diffSeconds < 60 * 60) {
-    return `${Math.floor(diffSeconds / 60)} 分钟前`;
+    return t("common.time.minutesAgo", { n: Math.floor(diffSeconds / 60) });
   }
   if (diffSeconds < 24 * 60 * 60) {
-    return `${Math.floor(diffSeconds / 60 / 60)} 小时前`;
+    return t("common.time.hoursAgo", { n: Math.floor(diffSeconds / 60 / 60) });
   }
 
   return new Intl.DateTimeFormat("zh-CN", {

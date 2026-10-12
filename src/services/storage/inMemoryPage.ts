@@ -10,6 +10,7 @@
  * (排序值, 主键) 双字段游标、排序字段缺失（null）排最后且不可翻页、
  * total 是过滤后总条数（不受 before/limit 影响）。
  */
+import { t } from "../../i18n";
 import {
   CONVERSATION_FILTERABLE_STORES,
   STORE_KEY_PATHS,
@@ -31,10 +32,10 @@ export function pageRecordsInMemory<T>(
 ): ListPageResult<T> {
   const sortField = STORE_SORT_FIELDS[store];
   if (!sortField) {
-    throw new Error(`store "${store}" 不支持分页查询`);
+    throw new Error(t("errors.storage.memoryStoreNotPageable", { store }));
   }
   if (opts.conversationId !== undefined && !CONVERSATION_FILTERABLE_STORES.includes(store)) {
-    throw new Error(`store "${store}" 不支持 conversationId 过滤`);
+    throw new Error(t("errors.storage.memoryStoreNotConversationFilterable", { store }));
   }
   const keyPath = STORE_KEY_PATHS[store];
   const sortValueOf = (r: Record<string, unknown>): string | null => {

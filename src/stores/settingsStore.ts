@@ -5,6 +5,7 @@ import {
   normalizeLanguageSetting,
   resolveLocale,
   setAppLocale,
+  t,
 } from "../i18n";
 import type { DesktopCompanionConfig } from "../services/desktopCompanion";
 import {
@@ -252,17 +253,18 @@ export const useSettingsStore = defineStore("settings", () => {
   const maxCustomPixels = ref(DEFAULT_MAX_CUSTOM_PIXELS);
   const minCustomPixels = ref(DEFAULT_MIN_CUSTOM_PIXELS);
   const maxAspectRatio = ref<number | null>(DEFAULT_MAX_ASPECT_RATIO);
-  const qualityOptions = [
-    { value: "auto", label: "自动" },
-    { value: "high", label: "高" },
-    { value: "medium", label: "中" },
-    { value: "low", label: "低" },
-  ] as const;
-  // 全量选项（capability 过滤的数据源）
+  // label 在 getter 内按需 t()（追踪 i18n locale ref），语言切换时自动重算。
+  const qualityOptions = computed(() => [
+    { value: "auto", label: t("chat.editor.qualityAuto") },
+    { value: "high", label: t("chat.editor.qualityHigh") },
+    { value: "medium", label: t("chat.editor.qualityMedium") },
+    { value: "low", label: t("chat.editor.qualityLow") },
+  ]);
+  // 全量选项（capability 过滤的数据源）；label 在下方 computed 内按需 t()。
   const allBackgroundOptions = [
-    { value: "auto", label: "自动" },
-    { value: "opaque", label: "不透明" },
-    { value: "transparent", label: "透明" },
+    { value: "auto", labelKey: "chat.editor.backgroundAuto" },
+    { value: "opaque", labelKey: "chat.editor.backgroundOpaque" },
+    { value: "transparent", labelKey: "chat.editor.backgroundTransparent" },
   ] as const;
   const allFormatOptions = [
     { value: "png", label: "PNG" },
@@ -271,9 +273,11 @@ export const useSettingsStore = defineStore("settings", () => {
   ] as const;
   // 按 capability 过滤后的可见选项。provider 不支持的值不会出现。
   const backgroundOptions = computed(() =>
-    allBackgroundOptions.filter((o) =>
-      providerCapability.value.backgrounds.includes(o.value),
-    ),
+    allBackgroundOptions
+      .filter((o) =>
+        providerCapability.value.backgrounds.includes(o.value),
+      )
+      .map((o) => ({ value: o.value, label: t(o.labelKey) })),
   );
   const formatOptions = computed(() =>
     allFormatOptions.filter((o) =>
@@ -283,7 +287,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const backgroundTagVisible = computed(() => backgroundOptions.value.length > 1);
   const formatTagVisible = computed(() => formatOptions.value.length > 1);
   const sizeLabel = computed(() => {
-    if (activeSizePreset.value === "auto") return "自动";
+    if (activeSizePreset.value === "auto") return t("chat.editor.sizeAuto");
     if (activeSizePreset.value === "custom")
       return `${imageWidth.value} x ${imageHeight.value}`;
     return `${imageWidth.value} x ${imageHeight.value}`;
@@ -309,7 +313,7 @@ export const useSettingsStore = defineStore("settings", () => {
   });
   const qualityLabel = computed(
     () =>
-      qualityOptions.find((o) => o.value === quality.value)?.label ??
+      qualityOptions.value.find((o) => o.value === quality.value)?.label ??
       quality.value,
   );
   const backgroundLabel = computed(
@@ -533,8 +537,8 @@ export const useSettingsStore = defineStore("settings", () => {
       modelIds: [],
       message:
         result.kind === "invalidKey"
-          ? `API key 无效：${result.message}`
-          : `连接失败：${result.message}`,
+          ? t("settings.api.probeInvalidKey", { message: result.message })
+          : t("settings.api.probeConnectionFailed", { message: result.message }),
     };
   }
 

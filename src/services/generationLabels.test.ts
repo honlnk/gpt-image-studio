@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "../i18n";
 import {
   continuedGenerationLabel,
   filenameFromAsset,
@@ -59,60 +60,90 @@ describe("outputFormatToMimeType", () => {
 
 describe("resultCountLabel", () => {
   it("uses singular form for count === 1", () => {
-    expect(resultCountLabel("已生成", 1)).toBe("已生成一张图片。");
+    expect(resultCountLabel("已生成", 1)).toBe(
+      t("generation.result.countSingular", { prefix: "已生成" }),
+    );
   });
 
   it("uses plural form for count > 1", () => {
-    expect(resultCountLabel("已生成", 3)).toBe("已生成 3 张图片。");
+    expect(resultCountLabel("已生成", 3)).toBe(
+      t("generation.result.countPlural", { prefix: "已生成", count: 3 }),
+    );
   });
 });
 
 describe("pendingGenerationLabel", () => {
   it("generates text-only label for count === 1", () => {
-    expect(pendingGenerationLabel(false, 1)).toBe("正在生成图片。");
+    expect(pendingGenerationLabel(false, 1)).toBe(t("generation.pending.textSingular"));
   });
 
   it("generates plural text-only label", () => {
-    expect(pendingGenerationLabel(false, 2)).toBe("正在生成 2 张图片。");
+    expect(pendingGenerationLabel(false, 2)).toBe(
+      t("generation.pending.textPlural", { count: 2 }),
+    );
   });
 
   it("generates edit label for count === 1", () => {
-    expect(pendingGenerationLabel(true, 1)).toBe("正在基于引用图片生成编辑结果。");
+    expect(pendingGenerationLabel(true, 1)).toBe(t("generation.pending.editSingular"));
   });
 
   it("generates plural edit label", () => {
-    expect(pendingGenerationLabel(true, 3)).toBe("正在基于引用图片生成 3 张编辑结果。");
+    expect(pendingGenerationLabel(true, 3)).toBe(
+      t("generation.pending.editPlural", { count: 3 }),
+    );
   });
 });
 
 describe("continuedGenerationLabel", () => {
   it("handles text + replace case", () => {
-    expect(continuedGenerationLabel(false, true, 1)).toBe("正在重新生成图片。");
+    expect(continuedGenerationLabel(false, true, 1)).toBe(t("generation.regenerating.image"));
   });
 
   it("handles text + continue + multiple", () => {
-    expect(continuedGenerationLabel(false, false, 2)).toBe("正在继续生成 2 张图片。");
+    expect(continuedGenerationLabel(false, false, 2)).toBe(
+      t("generation.continued.textPlural", { count: 2 }),
+    );
   });
 
   it("handles edit + replace case", () => {
-    expect(continuedGenerationLabel(true, true, 1)).toBe("正在重新生成编辑结果。");
+    expect(continuedGenerationLabel(true, true, 1)).toBe(
+      t("generation.regenerating.editResult"),
+    );
   });
 
   it("handles edit + continue + single", () => {
-    expect(continuedGenerationLabel(true, false, 1)).toBe("正在继续生成编辑结果。");
+    expect(continuedGenerationLabel(true, false, 1)).toBe(
+      t("generation.continued.editSingular"),
+    );
   });
 });
 
 describe("pendingResultLabel", () => {
   it("omits generated part when generatedCount is 0", () => {
-    expect(pendingResultLabel(false, 0, 2)).toBe("还有 2 张图片正在生成。");
+    expect(pendingResultLabel(false, 0, 2)).toBe(
+      t("generation.pendingResult.remaining", {
+        count: 2,
+        noun: t("generation.pendingResult.nounImage", 2),
+      }),
+    );
   });
 
   it("includes generated part when generatedCount > 0", () => {
-    expect(pendingResultLabel(false, 1, 2)).toBe("已生成 1 张，还有 2 张图片正在生成。");
+    expect(pendingResultLabel(false, 1, 2)).toBe(
+      t("generation.pendingResult.generatedPart", { count: 1 }) +
+        t("generation.pendingResult.remaining", {
+          count: 2,
+          noun: t("generation.pendingResult.nounImage", 2),
+        }),
+    );
   });
 
   it("uses edit noun for isEdit", () => {
-    expect(pendingResultLabel(true, 0, 1)).toBe("还有 1 张编辑结果正在生成。");
+    expect(pendingResultLabel(true, 0, 1)).toBe(
+      t("generation.pendingResult.remaining", {
+        count: 1,
+        noun: t("generation.pendingResult.nounEditResult", 1),
+      }),
+    );
   });
 });

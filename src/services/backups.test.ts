@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { t } from "../i18n";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
 import { PROMPT_REWRITE_GUARD_PREFIX } from "./imagesApi";
 import {
@@ -172,7 +173,7 @@ describe("studio backups", () => {
     });
 
     await expect(restoreStudioBackup(fileFromBlob(backup))).rejects.toThrow(
-      "这不是 GPT Image Studio 的备份文件。",
+      t("settings.backup.notStudioFile"),
     );
     expect(spyStorage.clear).not.toHaveBeenCalled();
   });
@@ -187,7 +188,7 @@ describe("studio backups", () => {
     });
 
     await expect(restoreStudioBackup(fileFromBlob(backup))).rejects.toThrow(
-      "备份缺少图片文件：blob 1",
+      t("settings.backup.missingImageBlob", { key: "blob 1" }),
     );
     expect(spyStorage.clear).not.toHaveBeenCalled();
   });

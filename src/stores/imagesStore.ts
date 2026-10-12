@@ -4,6 +4,7 @@ import type { ImageAssetServices } from "../services/imageAssets";
 import { readImageDimensions } from "../services/imageMetadata";
 import { toPlainImageAsset } from "../services/messageSerialization";
 import type { StorageUsage, StorageUsageServices } from "../services/storageUsage";
+import { t } from "../i18n";
 import { isoTimestamp, timestampFromCreatedAt } from "../shared/dateTime";
 import { formatError } from "../shared/errors";
 import { createId } from "../shared/id";
@@ -114,13 +115,13 @@ export const useImagesStore = defineStore("images", () => {
     const isAttached = attachedImages.value.includes(id);
 
     const confirmMessage = relatedMessages.length || isAttached
-      ? "这张图片正在被聊天记录或当前输入引用，删除后聊天记录中会保留无法显示的占位。确定删除吗？"
-      : "确定从图片库中删除这张图片吗？";
+      ? t("library.deleteConfirmHint")
+      : t("library.deleteConfirmSimple");
     const feedback = useFeedbackStore();
     const confirmed = await feedback.requestConfirmation({
-      title: "删除图片",
+      title: t("library.deleteTitle"),
       description: confirmMessage,
-      confirmLabel: "删除图片",
+      confirmLabel: t("library.deleteTitle"),
       tone: "danger",
     });
     if (!confirmed) return;
@@ -134,12 +135,14 @@ export const useImagesStore = defineStore("images", () => {
         image.blobKey ? input.services.imageAssets.deleteBlob(image.blobKey) : Promise.resolve(),
       ]);
       await refreshStorageUsage();
-      feedback.notifySuccess("图片已删除。");
+      feedback.notifySuccess(t("library.deleteSuccess"));
     } catch (error) {
       // 回滚乐观删除：把图片塞回内存，避免「界面删了但库里还在」的撕裂态。
       if (isAttached) attachedImages.value = [...attachedImages.value, id];
       imageAssets.value = [image, ...imageAssets.value];
-      feedback.notifyError(`删除图片失败：${formatError(error)}`);
+      feedback.notifyError(
+        t("library.deleteFailed", { error: formatError(error) }),
+      );
       input.onStorageError(error);
     }
   }
@@ -167,12 +170,16 @@ export const useImagesStore = defineStore("images", () => {
         ]),
       );
       await refreshStorageUsage();
-      feedback.notifySuccess(`已删除 ${deletedImages.length} 张图片。`);
+      feedback.notifySuccess(
+        t("library.deleteCountSuccess", { count: deletedImages.length }),
+      );
     } catch (error) {
       // 回滚乐观删除，避免批量删除部分失败时的撕裂态。
       attachedImages.value = [...attachedImages.value, ...removedAttachments];
       imageAssets.value = [...deletedImages, ...imageAssets.value];
-      feedback.notifyError(`删除图片失败：${formatError(error)}`);
+      feedback.notifyError(
+        t("library.deleteFailed", { error: formatError(error) }),
+      );
       input.onStorageError(error);
     }
   }
@@ -265,9 +272,13 @@ export const useImagesStore = defineStore("images", () => {
       imageAssets.value = [...importedAssets, ...imageAssets.value];
       importedAssets.forEach((asset) => attachImage(asset.id));
       await refreshStorageUsage();
-      feedback.notifySuccess(`已导入 ${importedAssets.length} 张图片并加入引用。`);
+      feedback.notifySuccess(
+        t("library.importSuccess", { count: importedAssets.length }),
+      );
     } catch (error) {
-      feedback.notifyError(`导入图片失败：${formatError(error)}`);
+      feedback.notifyError(
+        t("library.importFailed", { error: formatError(error) }),
+      );
       input.onStorageError(error);
     }
   }
@@ -282,14 +293,14 @@ export const useImagesStore = defineStore("images", () => {
     const imageAsset: ImageAsset = {
       id: imageId,
       blobKey,
-      name: file.name || `导入图片-${now}`,
+      name: file.name || t("library.importedNameFallback", { timestamp: now }),
       source: "imported",
       mimeType: file.type || "image/png",
       width: dimensions?.width,
       height: dimensions?.height,
       sizeBytes: file.size,
       conversationId: input.activeConversationId.value || undefined,
-      prompt: "用户导入的参考图",
+      prompt: t("library.importedPrompt"),
       createdAt,
       updatedAt: createdAt,
       previewUrl: createObjectUrl(file),
@@ -311,14 +322,14 @@ export const useImagesStore = defineStore("images", () => {
     const maskAsset: ImageAsset = {
       id: imageId,
       blobKey: undefined,
-      name: `${sourceImage.name}-编辑区域`,
+      name: t("library.maskAssetName", { name: sourceImage.name }),
       source: "generated",
       mimeType: "image/png",
       width: sourceImage.width,
       height: sourceImage.height,
       sizeBytes: maskBlob.size,
       conversationId: input.activeConversationId.value || undefined,
-      prompt: "局部编辑遮罩",
+      prompt: t("library.maskPrompt"),
       editSourceImageId: sourceImage.id,
       isEditMask: true,
       isTransientMask: true,
@@ -406,7 +417,7 @@ export const useImagesStore = defineStore("images", () => {
     if (!image?.blobKey) return;
     try {
       const blob = await input.services.imageAssets.loadBlob(image.blobKey);
-      if (!blob) throw new Error(`图片二进制不存在：${image.blobKey}`);
+      if (!blob) throw new Error(`Image blob not found: ${image.blobKey}`);
 
       let nextAsset: ImageAsset = { ...image, previewUrl: createObjectUrl(blob) };
       if (!nextAsset.width || !nextAsset.height) {

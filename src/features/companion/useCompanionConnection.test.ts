@@ -260,7 +260,7 @@ describe("useCompanionConnection", () => {
     await result.connectWithKey("bad-key");
     expect(onAccessKeyAcquired).toHaveBeenCalledWith("bad-key");
     expect(onClearAccessKey).toHaveBeenCalledTimes(1);
-    expect(result.connectError.value).toContain("密钥无效");
+    expect(result.connectError.value).toContain("connection key is invalid");
   });
 
   it("reports error when companion is offline during connect", async () => {
@@ -272,7 +272,7 @@ describe("useCompanionConnection", () => {
 
     await result.connectWithKey("some-key");
     expect(onClearAccessKey).toHaveBeenCalledTimes(1);
-    expect(result.connectError.value).toContain("无法连接");
+    expect(result.connectError.value).toContain("Cannot reach the Companion service");
   });
 
   it("disconnect clears access key locally without backend call", async () => {

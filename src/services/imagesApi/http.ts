@@ -1,5 +1,6 @@
 import type { ApiMode } from "../../types/studio";
 import { ApiClientError } from "../../shared/apiErrorCodes";
+import { t } from "../../i18n";
 import type { ImageApiResponse } from "./types.js";
 
 /** 把用户配置的 apiBaseUrl 规整成完整的 API 端点前缀。 */
@@ -46,9 +47,12 @@ export async function parseImageResponse(response: Response) {
   const payload = text ? (JSON.parse(text) as ImageApiResponse) : {};
 
   if (!response.ok) {
-    const statusMessage = `请求失败：HTTP ${response.status}`;
+    const statusMessage = t("errors.api.httpError", { status: response.status });
     const detail = payload.error?.message;
-    const message = detail ? `${statusMessage}：${detail}` : statusMessage;
+    // detail 是服务端返回的原文，透传不套 t()；只本地化我们自己的状态码前缀。
+    const message = detail
+      ? t("errors.api.httpErrorDetail", { status: response.status, message: detail })
+      : statusMessage;
     // 401/403 是配置类错误（key 无效/无权限），带 code 让
     // isApiConfigurationError 走结构化判定而非文本匹配。
     if (response.status === 401 || response.status === 403) {
@@ -69,7 +73,7 @@ export async function parseJsonResponse<T>(response: Response): Promise<T> {
 /** 从错误响应里提取可读的 HTTP 错误信息。 */
 export async function getApiErrorMessage(response: Response) {
   const text = await response.text();
-  if (!text) return `请求失败：HTTP ${response.status}`;
+  if (!text) return t("errors.api.httpError", { status: response.status });
 
   try {
     const payload = JSON.parse(text) as {
@@ -79,9 +83,11 @@ export async function getApiErrorMessage(response: Response) {
     const detail = typeof payload.error === "string"
       ? payload.error
       : payload.error?.message || payload.message;
-    return detail ? `请求失败：HTTP ${response.status}：${detail}` : `请求失败：HTTP ${response.status}`;
+    return detail
+      ? t("errors.api.httpErrorDetail", { status: response.status, message: detail })
+      : t("errors.api.httpError", { status: response.status });
   } catch {
-    return `请求失败：HTTP ${response.status}`;
+    return t("errors.api.httpError", { status: response.status });
   }
 }
 

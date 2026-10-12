@@ -4,6 +4,7 @@ import type {
   ConversationServices,
 } from "../services/conversations";
 import { normalizeInterruptedMessages, type MessageServices } from "../services/messages";
+import { t } from "../i18n";
 import { isoTimestamp } from "../shared/dateTime";
 import { formatError } from "../shared/errors";
 import { createId } from "../shared/id";
@@ -75,9 +76,11 @@ export const useConversationsStore = defineStore("conversations", () => {
     const input = getContext();
     const feedback = useFeedbackStore();
     const confirmed = await feedback.requestConfirmation({
-      title: "删除会话",
-      description: `确定删除会话“${conversation.title}”吗？聊天记录会被移除，图片库中的图片会保留。`,
-      confirmLabel: "删除会话",
+      title: t("chat.sidebar.deleteConversation"),
+      description: t("chat.sidebar.deleteConfirmDescription", {
+        title: conversation.title,
+      }),
+      confirmLabel: t("chat.sidebar.deleteConversation"),
       tone: "danger",
     });
     if (!confirmed) return;
@@ -103,9 +106,11 @@ export const useConversationsStore = defineStore("conversations", () => {
         ),
       ]);
       await input.refreshStorageUsage();
-      feedback.notifySuccess("会话已删除。");
+      feedback.notifySuccess(t("chat.sidebar.deleteSuccess"));
     } catch (error) {
-      feedback.notifyError(`删除会话失败：${formatError(error)}`);
+      feedback.notifyError(
+        t("chat.sidebar.deleteFailed", { error: formatError(error) }),
+      );
       input.onStorageError(error);
     }
   }
@@ -142,17 +147,21 @@ export const useConversationsStore = defineStore("conversations", () => {
         ),
       ]);
       await input.refreshStorageUsage();
-      feedback.notifySuccess(`已删除 ${ids.length} 个对话。`);
+      feedback.notifySuccess(
+        t("chat.sidebar.deleteCountSuccess", { count: ids.length }),
+      );
     } catch (error) {
-      feedback.notifyError(`删除对话失败：${formatError(error)}`);
+      feedback.notifyError(
+        t("chat.sidebar.deleteCountFailed", { error: formatError(error) }),
+      );
       input.onStorageError(error);
     }
   }
 
   async function createConversation() {
     const conversation = await createConversationRecord({
-      title: "新的图片创作",
-      summary: "尚未开始",
+      title: t("chat.sidebar.defaultConversationTitle"),
+      summary: t("chat.sidebar.defaultConversationSummary"),
       updatedAt: isoTimestamp(),
     });
     activeConversationId.value = conversation.id;

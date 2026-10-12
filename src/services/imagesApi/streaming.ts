@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type {
   ImageApiResponse,
   ImageApiResult,
@@ -25,7 +26,7 @@ export async function readJsonServerSentEvents(
   response: Response,
   onEvent: (event: Record<string, unknown>) => void | Promise<void>,
 ) {
-  if (!response.body) throw new Error("接口未返回可读取的流式响应。");
+  if (!response.body) throw new Error(t("errors.stream.bodyMissing"));
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -39,7 +40,7 @@ export async function readJsonServerSentEvents(
     try {
       event = JSON.parse(data);
     } catch {
-      throw new Error("流式响应包含无法解析的 JSON 事件。");
+      throw new Error(t("errors.stream.invalidJsonEvent"));
     }
     if (!isRecordValue(event)) return;
 
@@ -93,7 +94,7 @@ function getStreamEventErrorMessage(event: Record<string, unknown>) {
 
   const type = getStringValue(event, "type");
   if (type?.endsWith(".failed")) {
-    return getStringValue(event, "message") ?? "流式请求失败。";
+    return getStringValue(event, "message") ?? t("errors.stream.requestFailed");
   }
 
   return null;
@@ -158,7 +159,7 @@ export async function parseImagesApiStreamResponse(
   }
 
   throw new Error(
-    `流式接口未返回最终图片数据，服务商返回的数据可能不标准。${DIRECT_MODE_FALLBACK_HINT}`,
+    t("errors.stream.noImageData", { hint: DIRECT_MODE_FALLBACK_HINT() }),
   );
 }
 
@@ -195,7 +196,7 @@ export async function parseResponsesApiStreamResponse(
 
   const payload = completedPayload ?? (outputItems.length ? { output: outputItems } : null);
   if (!payload) {
-    throw new Error("流式接口未返回最终图片数据。");
+    throw new Error(t("errors.stream.noResult"));
   }
 
   const imageItem = payload.output?.find(
@@ -203,12 +204,12 @@ export async function parseResponsesApiStreamResponse(
       getResponsesImageResultBase64(item.result) || getResponsesImageUrl(item.result),
   );
   if (!imageItem) {
-    throw new Error("流式接口未返回 image_generation_call 结果。");
+    throw new Error(t("errors.stream.noImageCall"));
   }
 
   const result = await resolveResponsesImageItemResult(imageItem);
   if (!result) {
-    throw new Error("流式接口未返回最终图片数据。");
+    throw new Error(t("errors.stream.noResult"));
   }
   return result;
 }
@@ -261,7 +262,7 @@ export async function extractImageResult(
   }
 
   throw new Error(
-    `服务商返回的数据不标准：响应中没有 data[0].b64_json 或 data[0].url。${DIRECT_MODE_FALLBACK_HINT}`,
+    t("errors.api.missingImagesApiPayload", { hint: DIRECT_MODE_FALLBACK_HINT() }),
   );
 }
 
@@ -280,7 +281,7 @@ export async function extractResponsesImageResult(
   const result = await resolveResponsesImageItemResult(item);
   if (!result) {
     throw new Error(
-      `服务商返回的数据不标准：响应中没有 image_generation_call 结果。${DIRECT_MODE_FALLBACK_HINT}`,
+      t("errors.api.missingResponsesPayload", { hint: DIRECT_MODE_FALLBACK_HINT() }),
     );
   }
   return result;

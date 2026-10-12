@@ -3,6 +3,7 @@ import type { ImageAssetServices } from "../../services/imageAssets";
 import type { MessageServices } from "../../services/messages";
 import type { SettingsServices } from "../../services/settings";
 import type { TimeFieldMigrationServices } from "../../services/timeFieldMigration";
+import { t } from "../../i18n";
 import { readStorage } from "../../shared/localStorage";
 import { formatError } from "../../shared/errors";
 import { readConversationIdFromUrl } from "../../services/conversationUrl";
@@ -128,7 +129,7 @@ export function useStudioRestore(input: UseStudioRestoreInput) {
 
       await input.refreshStorageUsage();
     } catch (error) {
-      input.notifyError(`读取本地数据失败：${formatError(error)}`);
+      input.notifyError(t("settings.backup.readLocalDataFailed", { error: formatError(error) }));
       input.onStorageError(error);
     } finally {
       input.isHydrated.value = true;
