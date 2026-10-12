@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "../../i18n";
 import { FALLBACK_RELEASE } from "../../shared/downloads";
 import {
   classifyAssets,
@@ -123,7 +124,9 @@ describe("detectPlatform", () => {
 
 describe("formatAssetSize", () => {
   it("formats bytes as 约 x.x MB", () => {
-    expect(formatAssetSize(1972875)).toBe("约 1.9 MB");
+    expect(formatAssetSize(1972875)).toBe(
+      t("download.ui.approxSize", { size: "1.9" }),
+    );
   });
 
   it("returns empty string for zero/invalid sizes", () => {

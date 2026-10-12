@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   exportBackup: [];
@@ -28,11 +31,10 @@ function importBackupFromInput(event: Event) {
       id="backupSettingsTitle"
       class="text-base font-semibold text-gray-900"
     >
-      数据备份
+      {{ $t("settings.backup.title") }}
     </h3>
     <p class="mt-1 text-sm leading-relaxed text-gray-500">
-      导出会话、消息和图片；API key
-      不会写入备份。恢复备份会覆盖当前浏览器里的本地数据。
+      {{ $t("settings.backup.description") }}
     </p>
 
     <div class="mt-5 flex flex-wrap gap-2">
@@ -41,14 +43,14 @@ function importBackupFromInput(event: Event) {
         type="button"
         @click="emit('exportBackup')"
       >
-        导出备份
+        {{ $t("settings.backup.exportButton") }}
       </button>
       <button
         class="cursor-pointer rounded-lg bg-black px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
         type="button"
         @click="chooseBackupFile"
       >
-        恢复备份
+        {{ $t("settings.backup.restoreButton") }}
       </button>
       <input
         ref="backupInputRef"

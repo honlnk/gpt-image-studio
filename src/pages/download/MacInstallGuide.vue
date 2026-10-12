@@ -4,6 +4,7 @@
  * 顶部是推荐方式：curl|sh 一行命令安装（命令行下载不写隔离标记，
  * Gatekeeper 零警告，见分发方案 §3.1）；下方为浏览器手动下载的
  * Gatekeeper 放行指引（文案与分发方案 §3.2 一致）。
+ * 文案走 download.ui.guide 词键；命令串与文件名保持原样不翻。
  */
 import { ref } from "vue";
 
@@ -45,17 +46,16 @@ async function copyCommand(key: string, text: string) {
 </script>
 
 <template>
-  <h2 class="text-2xl font-bold tracking-tight">macOS 安装指引</h2>
+  <h2 class="text-2xl font-bold tracking-tight">{{ $t("download.ui.guide.title") }}</h2>
 
   <!-- 推荐方式：一行命令安装（curl 下载不带隔离属性，全程不触发 Gatekeeper） -->
   <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
     <div class="flex items-center gap-2">
-      <span class="rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">推荐方式</span>
-      <div class="font-medium">终端一行命令安装，全程零警告</div>
+      <span class="rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">{{ $t("download.ui.guide.recommended") }}</span>
+      <div class="font-medium">{{ $t("download.ui.guide.recommendedTitle") }}</div>
     </div>
     <p class="mt-2 text-sm leading-relaxed text-gray-600">
-      命令行下载的文件不会被 macOS 标记隔离，Gatekeeper 不会拦截——复制下面这行到「终端」执行，
-      自动完成下载、安装到「应用程序」，装完直接打开，无需下面的手动放行步骤：
+      {{ $t("download.ui.guide.recommendedDesc") }}
     </p>
     <div class="mt-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-950 px-4 py-3">
       <code class="min-w-0 flex-1 overflow-x-auto font-mono text-[13px] whitespace-nowrap text-emerald-300">{{ INSTALL_COMMAND }}</code>
@@ -64,51 +64,46 @@ async function copyCommand(key: string, text: string) {
         class="shrink-0 cursor-pointer rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-700"
         @click="copyCommand('install', INSTALL_COMMAND)"
       >
-        {{ copiedKey === "install" ? "已复制 ✓" : "复制" }}
+        {{ copiedKey === "install" ? $t("download.ui.guide.copied") : $t("download.ui.guide.copy") }}
       </button>
     </div>
     <p class="mt-2 text-xs text-gray-400">
-      脚本内容公开可审计：<a href="https://github.com/honlnk/gpt-image-studio/blob/main/scripts/install-desktop.sh" target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-gray-600">scripts/install-desktop.sh</a>
+      {{ $t("download.ui.guide.auditNote") }}<a href="https://github.com/honlnk/gpt-image-studio/blob/main/scripts/install-desktop.sh" target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-gray-600">scripts/install-desktop.sh</a>
     </p>
   </div>
 
   <!-- 手动方式：浏览器下载 dmg 后的 Gatekeeper 放行指引 -->
-  <p class="mt-10 text-sm font-semibold text-gray-900">手动安装（浏览器下载）</p>
+  <p class="mt-10 text-sm font-semibold text-gray-900">{{ $t("download.ui.guide.manualTitle") }}</p>
   <p class="mt-2 text-sm leading-relaxed text-gray-500">
-    安装包没有购买 Apple 开发者签名（$99/年，对本项目没有性价比），首次打开会被
-    Gatekeeper 拦一次。这是<strong class="font-medium text-gray-700">开源未签名软件的正常提示，不是病毒</strong>——
-    整个应用（<a href="https://github.com/honlnk/gpt-image-studio" target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-gray-700">源码</a>）都可审计。放行一次，之后与正常应用无异。
+    {{ $t("download.ui.guide.manualIntro1") }}<strong class="font-medium text-gray-700">{{ $t("download.ui.guide.manualIntroBold") }}</strong>{{ $t("download.ui.guide.manualIntro2") }}<a href="https://github.com/honlnk/gpt-image-studio" target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-gray-700">{{ $t("download.ui.guide.manualIntroLink") }}</a>{{ $t("download.ui.guide.manualIntro3") }}
   </p>
 
   <ol class="mt-8 space-y-6">
     <li class="flex gap-4">
       <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white">1</span>
       <div>
-        <div class="font-medium">安装</div>
+        <div class="font-medium">{{ $t("download.ui.guide.step1Title") }}</div>
         <p class="mt-1 text-sm leading-relaxed text-gray-600">
-          打开下载的 <code class="rounded bg-gray-100 px-1.5 py-0.5 text-[13px]">.dmg</code> 文件，把
-          <strong class="font-medium">GPT Image Studio</strong> 拖进「应用程序」（Applications）文件夹。
+          {{ $t("download.ui.guide.step1Desc1") }}<code class="rounded bg-gray-100 px-1.5 py-0.5 text-[13px]">.dmg</code>{{ $t("download.ui.guide.step1Desc2") }}<strong class="font-medium">GPT Image Studio</strong>{{ $t("download.ui.guide.step1Desc3") }}
         </p>
       </div>
     </li>
     <li class="flex gap-4">
       <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white">2</span>
       <div>
-        <div class="font-medium">首次打开：方式一（图形界面）</div>
+        <div class="font-medium">{{ $t("download.ui.guide.step2Title") }}</div>
         <p class="mt-1 text-sm leading-relaxed text-gray-600">
-          双击打开会提示「无法打开，因为无法验证开发者」。这时前往
-          <strong class="font-medium">系统设置 → 隐私与安全性</strong>，下拉到「安全性」一节，点
-          GPT Image Studio 旁的「<strong class="font-medium">仍要打开</strong>」。
-          <span class="text-gray-400">（macOS 15 起已不再支持「右键 → 打开」的老旁路。）</span>
+          {{ $t("download.ui.guide.step2Desc1") }}<strong class="font-medium">{{ $t("download.ui.guide.step2Bold1") }}</strong>{{ $t("download.ui.guide.step2Desc2") }}<strong class="font-medium">{{ $t("download.ui.guide.step2Bold2") }}</strong>{{ $t("download.ui.guide.step2Desc3") }}
+          <span class="text-gray-400">{{ $t("download.ui.guide.step2Note") }}</span>
         </p>
       </div>
     </li>
     <li class="flex gap-4">
       <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white">3</span>
       <div class="min-w-0 flex-1">
-        <div class="font-medium">首次打开：方式二（终端一行命令）</div>
+        <div class="font-medium">{{ $t("download.ui.guide.step3Title") }}</div>
         <p class="mt-1 text-sm leading-relaxed text-gray-600">
-          更习惯终端的话，清除下载隔离属性即可，与方式一等效：
+          {{ $t("download.ui.guide.step3Desc") }}
         </p>
         <div class="mt-2.5 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-950 px-4 py-3">
           <code class="min-w-0 flex-1 overflow-x-auto font-mono text-[13px] whitespace-nowrap text-emerald-300">{{ XATTR_COMMAND }}</code>
@@ -117,7 +112,7 @@ async function copyCommand(key: string, text: string) {
             class="shrink-0 cursor-pointer rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-700"
             @click="copyCommand('xattr', XATTR_COMMAND)"
           >
-            {{ copiedKey === "xattr" ? "已复制 ✓" : "复制" }}
+            {{ copiedKey === "xattr" ? $t("download.ui.guide.copied") : $t("download.ui.guide.copy") }}
           </button>
         </div>
       </div>
@@ -125,10 +120,9 @@ async function copyCommand(key: string, text: string) {
     <li class="flex gap-4">
       <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white">4</span>
       <div>
-        <div class="font-medium">正常使用</div>
+        <div class="font-medium">{{ $t("download.ui.guide.step4Title") }}</div>
         <p class="mt-1 text-sm leading-relaxed text-gray-600">
-          之后从「应用程序」或 Launchpad 正常打开即可。内嵌的 Companion 服务会随应用自动启动并完成连接，
-          打开设置页即可配置服务商凭据。
+          {{ $t("download.ui.guide.step4Desc") }}
         </p>
       </div>
     </li>

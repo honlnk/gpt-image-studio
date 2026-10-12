@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { t } from "../i18n";
 import { resolveImageEditRequest } from "./imageEditRequest";
 import type { GenerationParams, ImageAsset, PromptRequestSettings } from "../types/studio";
 
@@ -71,7 +72,7 @@ describe("resolveImageEditRequest", () => {
         imageById: () => undefined,
         resolveBlob: async () => new Blob(),
       }),
-    ).rejects.toThrow("引用图片不存在，请重新添加引用。");
+    ).rejects.toThrow(t("generation.editError.referenceMissing"));
   });
 
   it("throws when blob cannot be resolved", async () => {
@@ -84,7 +85,7 @@ describe("resolveImageEditRequest", () => {
         imageById: () => makeImage(),
         resolveBlob: async () => undefined,
       }),
-    ).rejects.toThrow("无法读取引用图片文件，请重新生成或导入图片。");
+    ).rejects.toThrow(t("generation.editError.referenceUnreadable"));
   });
 
   it("throws when total size exceeds 20MB", async () => {
@@ -99,7 +100,7 @@ describe("resolveImageEditRequest", () => {
         imageById: () => makeImage(),
         resolveBlob: async () => bigBlob,
       }),
-    ).rejects.toThrow(/超过 20MB 上限/);
+    ).rejects.toThrow(/exceeding the 20MB limit/);
   });
 
   it("throws when mask is not PNG", async () => {
@@ -116,7 +117,7 @@ describe("resolveImageEditRequest", () => {
         resolveBlob: async (img) =>
           new Blob(["x"], { type: img?.mimeType ?? "image/png" }),
       }),
-    ).rejects.toThrow("编辑遮罩必须是 PNG 文件，请重新选择编辑区域。");
+    ).rejects.toThrow(t("generation.editError.maskNotPng"));
   });
 
   it("throws when editSourceImageId is not in references", async () => {
@@ -130,7 +131,7 @@ describe("resolveImageEditRequest", () => {
         imageById: (id) => makeImage({ id }),
         resolveBlob: async () => new Blob(["x"]),
       }),
-    ).rejects.toThrow("编辑源图不在当前引用列表中，请重新选择继续编辑。");
+    ).rejects.toThrow(t("generation.editError.sourceNotInReferences"));
   });
 
   it("throws when mask specified without source image", async () => {
@@ -144,7 +145,7 @@ describe("resolveImageEditRequest", () => {
         imageById: (id) => makeImage({ id }),
         resolveBlob: async () => new Blob(["x"], { type: "image/png" }),
       }),
-    ).rejects.toThrow("缺少编辑源图，无法使用局部编辑。");
+    ).rejects.toThrow(t("generation.editError.sourceMissing"));
   });
 
   it("passes through prompt / params / promptRequestSettings", async () => {

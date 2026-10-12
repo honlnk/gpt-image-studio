@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { EditorKey } from "../../types/studio";
+
+const { t } = useI18n();
 
 defineProps<{
   activeEditor: EditorKey | null;
@@ -39,7 +42,7 @@ function selectRatioMode() {
             type="button"
             @click="settings.applySizePreset('auto')"
           >
-            自动
+            {{ $t("chat.editor.sizeAuto") }}
           </button>
           <button
             :class="[
@@ -51,7 +54,7 @@ function selectRatioMode() {
             type="button"
             @click="selectRatioMode"
           >
-            比例
+            {{ $t("chat.editor.sizeRatio") }}
           </button>
           <button
             :class="[
@@ -63,7 +66,7 @@ function selectRatioMode() {
             type="button"
             @click="settings.applySizePreset('custom')"
           >
-            自定义
+            {{ $t("chat.editor.custom") }}
           </button>
         </div>
         <div v-if="isRatioMode" class="flex items-center gap-1">
@@ -112,7 +115,7 @@ function selectRatioMode() {
           :min="settings.minCustomDimension"
           :max="settings.maxCustomDimension"
           :step="settings.sizeStep"
-          placeholder="宽"
+          :placeholder="$t('chat.editor.widthPlaceholder')"
           @input="
             settings.imageWidth = Number(
               ($event.target as HTMLInputElement).value,
@@ -127,7 +130,7 @@ function selectRatioMode() {
           :min="settings.minCustomDimension"
           :max="settings.maxCustomDimension"
           :step="settings.sizeStep"
-          placeholder="高"
+          :placeholder="$t('chat.editor.heightPlaceholder')"
           @input="
             settings.imageHeight = Number(
               ($event.target as HTMLInputElement).value,
@@ -155,7 +158,7 @@ function selectRatioMode() {
           type="button"
           @click="settings.applyImageCountMode('preset')"
         >
-          选择
+          {{ $t("chat.editor.countPreset") }}
         </button>
         <button
           :class="[
@@ -167,7 +170,7 @@ function selectRatioMode() {
           type="button"
           @click="settings.applyImageCountMode('custom')"
         >
-          自定义
+          {{ $t("chat.editor.custom") }}
         </button>
       </div>
 
@@ -201,7 +204,7 @@ function selectRatioMode() {
           type="number"
           :min="settings.minImageCount"
           step="1"
-          placeholder="数量"
+          :placeholder="$t('chat.editor.countPlaceholder')"
           @input="
             settings.applyImageCount(
               ($event.target as HTMLInputElement).value,
@@ -209,11 +212,11 @@ function selectRatioMode() {
             )
           "
         />
-        <span class="text-xs text-gray-400">张</span>
+        <span class="text-xs text-gray-400">{{ $t("chat.editor.countUnit") }}</span>
       </div>
 
       <p class="text-xs leading-relaxed text-gray-400">
-        理论无上限，但请量力而行；一次太多可能影响本机和API供应商的服务器。
+        {{ $t("chat.editor.countHint") }}
       </p>
     </div>
 

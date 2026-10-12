@@ -1,3 +1,5 @@
+import { ApiClientError } from "../../../shared/apiErrorCodes";
+import { t } from "../../../i18n";
 import type { ApiMode } from "../../../types/studio";
 import { editImage, generateImage } from "../../../services/imagesApi";
 import type { SizeConstraints } from "../../../services/imagesApi";
@@ -23,11 +25,11 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
       const model = config.getModel();
 
       if (!apiKey) {
-        throw new Error("请先在设置里填写 OpenAI API key。");
+        throw new ApiClientError("api-key-missing", t("errors.api.apiKeyMissing"));
       }
 
       if (!apiBaseUrl) {
-        throw new Error("请先在设置里填写 API Base URL。");
+        throw new ApiClientError("base-url-missing", t("errors.api.baseUrlMissing"));
       }
 
       return generateImage({
@@ -57,11 +59,11 @@ export function createDirectImagesClient(config: DirectClientConfig): ImageClien
       const model = config.getModel();
 
       if (!apiKey) {
-        throw new Error("请先在设置里填写 OpenAI API key。");
+        throw new ApiClientError("api-key-missing", t("errors.api.apiKeyMissing"));
       }
 
       if (!apiBaseUrl) {
-        throw new Error("请先在设置里填写 API Base URL。");
+        throw new ApiClientError("base-url-missing", t("errors.api.baseUrlMissing"));
       }
 
       return editImage({

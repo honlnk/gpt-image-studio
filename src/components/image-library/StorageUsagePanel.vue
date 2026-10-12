@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import type { StorageUsage } from "../../services/storageUsage";
 import { useSettingsStore } from "../../stores/settingsStore";
 import Tooltip from "../ui/Tooltip.vue";
@@ -9,6 +10,9 @@ const props = defineProps<{
 }>();
 
 const settings = useSettingsStore();
+
+const { t } = useI18n();
+
 // Companion 模式数据在服务端（SQLite/OSS），没有浏览器配额概念：
 // 不显示进度条和上限，只给一个已用量的静态数字。
 const isCompanion = computed(() => settings.connectionMode === "localCompanion");
@@ -58,12 +62,19 @@ function percentOf(value: number, total: number) {
     v-if="isCompanion"
     class="mt-3 flex items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs"
   >
-    <span class="font-medium text-gray-700">存储用量</span>
+    <span class="font-medium text-gray-700">
+      {{ $t("library.storage.usage") }}
+    </span>
     <span class="ml-auto text-gray-500">
       {{ formatBytes(storageUsage.projectBytes) }}
     </span>
     <Tooltip
-      :text="`图片 ${formatBytes(storageUsage.imageBytes)}，文本与索引 ${formatBytes(storageUsage.metadataBytes)}。数据存储在 Companion 服务端，上限取决于服务器磁盘或 OSS 用量。`"
+      :text="
+        $t('library.storage.companionHint', {
+          imageBytes: formatBytes(storageUsage.imageBytes),
+          metadataBytes: formatBytes(storageUsage.metadataBytes),
+        })
+      "
     >
       <span
         class="ml-1 inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-300"
@@ -102,14 +113,16 @@ function percentOf(value: number, total: number) {
           clip-rule="evenodd"
         />
       </svg>
-      <span class="font-medium text-gray-700">本地存储</span>
+      <span class="font-medium text-gray-700">
+        {{ $t("library.storage.local") }}
+      </span>
       <span class="ml-auto inline-flex items-center gap-1 text-gray-500">
         {{ formatBytes(storageUsage.projectBytes) }}
         <template v-if="storageUsage.quotaBytes">
           / {{ formatBytes(storageUsage.quotaBytes) }}
         </template>
       </span>
-      <Tooltip text="根据当前浏览器和设备状态估算，可用空间可能会变化。">
+      <Tooltip :text="$t('library.storage.localHint')">
         <span
           class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-300"
         >
@@ -135,12 +148,12 @@ function percentOf(value: number, total: number) {
         <div
           class="h-full flex-none bg-gray-900"
           :style="{ width: `${imageStoragePercent}%` }"
-          title="图片数据"
+          :title="$t('library.storage.imageData')"
         ></div>
         <div
           class="h-full flex-none bg-gray-400"
           :style="{ width: `${metadataStoragePercent}%` }"
-          title="文本与索引"
+          :title="$t('library.storage.textAndIndex')"
         ></div>
       </div>
       <div
@@ -148,16 +161,20 @@ function percentOf(value: number, total: number) {
       >
         <span class="inline-flex items-center gap-1">
           <span class="h-2 w-2 rounded-full bg-gray-900"></span>
-          图片 {{ formatBytes(storageUsage.imageBytes) }}
+          {{ $t("library.storage.images") }}
+          {{ formatBytes(storageUsage.imageBytes) }}
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="h-2 w-2 rounded-full bg-gray-400"></span>
-          文本与索引 {{ formatBytes(storageUsage.metadataBytes) }}
+          {{ $t("library.storage.textAndIndex") }}
+          {{ formatBytes(storageUsage.metadataBytes) }}
         </span>
         <span v-if="storageUsage.quotaBytes" class="ml-auto">
           {{ storageUsedPercent.toFixed(1) }}%
         </span>
-        <span v-else class="ml-auto">浏览器未提供上限</span>
+        <span v-else class="ml-auto">
+          {{ $t("library.storage.noQuota") }}
+        </span>
       </div>
     </div>
   </div>

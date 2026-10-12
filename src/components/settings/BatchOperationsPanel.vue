@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useFeedbackStore } from "../../stores/feedbackStore";
 import { formatError } from "../../shared/errors";
@@ -32,6 +33,8 @@ const emit = defineEmits<{
   previewImage: [id: string];
 }>();
 
+const { t, locale } = useI18n();
+
 const activeBatchPanel = ref<BatchPanel>("images");
 const confirmAction = ref<ConfirmAction | null>(null);
 const searchText = ref("");
@@ -42,19 +45,21 @@ const conversationSortDirection = ref<SortDirection>("desc");
 const selectedImageIds = ref<Set<string>>(new Set());
 const selectedConversationIds = ref<Set<string>>(new Set());
 
-const batchPanels: { key: BatchPanel; label: string }[] = [
-  { key: "images", label: "图片" },
-  { key: "conversations", label: "对话" },
-];
-const imageSortOptions: { key: ImageSortKey; label: string }[] = [
-  { key: "name", label: "名称" },
-  { key: "size", label: "文件" },
-  { key: "time", label: "时间" },
-];
-const conversationSortOptions: { key: ConversationSortKey; label: string }[] = [
-  { key: "name", label: "名称" },
-  { key: "time", label: "时间" },
-];
+const batchPanels = computed<{ key: BatchPanel; label: string }[]>(() => [
+  { key: "images", label: t("settings.batch.panelImages") },
+  { key: "conversations", label: t("settings.batch.panelConversations") },
+]);
+const imageSortOptions = computed<{ key: ImageSortKey; label: string }[]>(() => [
+  { key: "name", label: t("settings.batch.sortName") },
+  { key: "size", label: t("settings.batch.sortFile") },
+  { key: "time", label: t("settings.batch.sortTime") },
+]);
+const conversationSortOptions = computed<
+  { key: ConversationSortKey; label: string }[]
+>(() => [
+  { key: "name", label: t("settings.batch.sortName") },
+  { key: "time", label: t("settings.batch.sortTime") },
+]);
 
 const normalizedSearchText = computed(() => searchText.value.trim().toLowerCase());
 const filteredImages = computed(() => {
@@ -108,23 +113,25 @@ const selectedConversations = computed(() =>
   ),
 );
 const searchPlaceholder = computed(() =>
-  activeBatchPanel.value === "images" ? "搜索图片名称..." : "搜索对话消息...",
+  activeBatchPanel.value === "images"
+    ? t("settings.batch.searchImagesPlaceholder")
+    : t("settings.batch.searchConversationsPlaceholder"),
 );
 const confirmState = computed(() => {
   if (confirmAction.value === "deleteImages") {
     const count = selectedImages.value.length;
     return {
-      title: "删除选中图片",
-      confirmText: `我确认删除选中的 ${count} 个图片`,
-      confirmLabel: "删除图片",
+      title: t("settings.batch.deleteImagesTitle"),
+      confirmText: t("settings.batch.deleteImagesConfirmText", { count }),
+      confirmLabel: t("settings.batch.deleteImagesLabel"),
     };
   }
 
   const count = selectedConversations.value.length;
   return {
-    title: "删除选中对话",
-    confirmText: `我确认删除选中的 ${count} 个对话`,
-    confirmLabel: "删除对话",
+    title: t("settings.batch.deleteConversationsTitle"),
+    confirmText: t("settings.batch.deleteConversationsConfirmText", { count }),
+    confirmLabel: t("settings.batch.deleteConversationsLabel"),
   };
 });
 
@@ -250,7 +257,7 @@ function compareConversations(a: Conversation, b: Conversation) {
 }
 
 function compareText(a: string, b: string) {
-  return a.localeCompare(b, "zh-Hans", {
+  return a.localeCompare(b, locale.value, {
     numeric: true,
     sensitivity: "base",
   });
@@ -335,7 +342,7 @@ async function downloadSelectedImages() {
     anchor.click();
     revokeObjectUrl(downloadUrl);
   } catch (error) {
-    feedback.notifyError(`批量下载失败：${formatError(error)}`);
+    feedback.notifyError(t("settings.batch.downloadFailed", { error: formatError(error) }));
   }
 }
 
@@ -365,7 +372,7 @@ function uniqueZipEntryName(filename: string, index: number) {
   >
     <div class="shrink-0">
       <h3 id="batchSettingsTitle" class="text-base font-semibold text-gray-900">
-        批量操作
+        {{ $t("settings.batch.title") }}
       </h3>
 
       <div class="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -409,7 +416,7 @@ function uniqueZipEntryName(filename: string, index: number) {
           <button
             v-if="searchText"
             class="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-            aria-label="清空搜索"
+            :aria-label="$t('settings.batch.clearSearch')"
             type="button"
             @click="searchText = ''"
           >
@@ -468,16 +475,17 @@ function uniqueZipEntryName(filename: string, index: number) {
   <ConfirmInputModal
     :confirm-label="confirmState.confirmLabel"
     :confirm-text="confirmState.confirmText"
-    description="所有数据仅保存在当前浏览器中，删除后无法通过任何方式找回，请谨慎操作。"
+    :description="$t('settings.batch.deleteWarning')"
     :is-open="Boolean(confirmAction)"
     :title="confirmState.title"
     @cancel="cancelConfirm"
     @confirm="confirmPendingAction"
   >
     <template #description>
-      所有数据仅保存在当前浏览器中，删除后<strong class="font-bold text-red-600"
-        >无法通过任何方式找回</strong
-      >，请谨慎操作。
+      {{ $t("settings.batch.deleteWarningPrefix") }}<strong class="font-bold text-red-600">{{
+        $t("settings.batch.deleteWarningBold")
+      }}</strong
+      >{{ $t("settings.batch.deleteWarningSuffix") }}
     </template>
   </ConfirmInputModal>
 </template>

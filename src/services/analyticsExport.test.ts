@@ -293,7 +293,7 @@ describe("analyticsExport", () => {
     expect(conversationFiles).toHaveLength(1);
 
     const shard = await readText(files, conversationFiles[0]);
-    expect(shard).toContain("title: \"(已删除会话)\"");
+    expect(shard).toContain("title: \"(deleted conversation)\"");
   });
 
   it("summary includes a color-tagging section with action and color distribution", async () => {
@@ -320,7 +320,7 @@ describe("analyticsExport", () => {
     const files = await readLocalZipFiles(zip);
     const summary = await readText(files, "reports/summary.md");
 
-    expect(summary).toContain("## 颜色分组行为");
+    expect(summary).toContain("## Color-Grouping Behavior");
     // 操作分布
     expect(summary).toContain("image.tag_color_set");
     expect(summary).toContain("image.tag_color_changed");
@@ -339,7 +339,7 @@ describe("analyticsExport", () => {
     const files = await readLocalZipFiles(zip);
     const summary = await readText(files, "reports/summary.md");
 
-    expect(summary).toContain("## 颜色分组行为");
-    expect(summary).toContain("暂无颜色分组相关事件");
+    expect(summary).toContain("## Color-Grouping Behavior");
+    expect(summary).toContain("No color-grouping events yet");
   });
 });

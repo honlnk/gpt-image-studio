@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import type { FavoritePrompt } from "../../types/studio";
+
+const { t, locale } = useI18n();
 
 const props = defineProps<{
   prompts: FavoritePrompt[];
@@ -70,8 +73,8 @@ function resetDraft() {
 
 function formatUpdatedAt(dateString: string) {
   const timestamp = Date.parse(dateString);
-  if (!Number.isFinite(timestamp)) return "未知时间";
-  return new Intl.DateTimeFormat("zh-CN", {
+  if (!Number.isFinite(timestamp)) return t("settings.favoritePrompts.unknownTime");
+  return new Intl.DateTimeFormat(locale.value, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -91,10 +94,10 @@ function formatUpdatedAt(dateString: string) {
           id="favoritePromptsSettingsTitle"
           class="text-base font-semibold text-gray-900"
         >
-          常用提示词
+          {{ $t("settings.favoritePrompts.title") }}
         </h3>
         <p class="mt-1 text-sm leading-relaxed text-gray-500">
-          在输入框输入 @ 后，可以用上下键选择，按空格或回车插入。
+          {{ $t("settings.favoritePrompts.usageHint") }}
         </p>
       </div>
       <button
@@ -102,7 +105,7 @@ function formatUpdatedAt(dateString: string) {
         type="button"
         @click="startCreate"
       >
-        新建
+        {{ $t("settings.favoritePrompts.create") }}
       </button>
     </div>
 
@@ -112,7 +115,7 @@ function formatUpdatedAt(dateString: string) {
           v-if="!sortedPrompts.length"
           class="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400"
         >
-          还没有常用提示词
+          {{ $t("settings.favoritePrompts.empty") }}
         </div>
 
         <article
@@ -135,14 +138,14 @@ function formatUpdatedAt(dateString: string) {
                 type="button"
                 @click="startEdit(prompt)"
               >
-                编辑
+                {{ $t("settings.favoritePrompts.edit") }}
               </button>
               <button
                 class="cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
                 type="button"
                 @click="emit('deletePrompt', prompt.id)"
               >
-                删除
+                {{ $t("common.delete") }}
               </button>
             </div>
           </div>
@@ -159,30 +162,34 @@ function formatUpdatedAt(dateString: string) {
         @submit.prevent="saveDraft"
       >
         <h4 class="text-sm font-medium text-gray-800">
-          {{ isEditingExisting ? "编辑提示词" : "新增提示词" }}
+          {{
+            isEditingExisting
+              ? $t("settings.favoritePrompts.editTitle")
+              : $t("settings.favoritePrompts.createTitle")
+          }}
         </h4>
         <div class="mt-3 flex min-h-0 flex-1 flex-col gap-3">
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-500" for="favoritePromptTitle">
-              名称
+              {{ $t("settings.favoritePrompts.nameLabel") }}
             </label>
             <input
               id="favoritePromptTitle"
               v-model="draftTitle"
               class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-gray-500"
-              placeholder="例如：产品摄影"
+              :placeholder="$t('settings.favoritePrompts.titlePlaceholder')"
               type="text"
             />
           </div>
           <div class="flex min-h-0 flex-1 flex-col">
             <label class="mb-1 block text-xs font-medium text-gray-500" for="favoritePromptText">
-              提示词
+              {{ $t("settings.favoritePrompts.textLabel") }}
             </label>
             <textarea
               id="favoritePromptText"
               v-model="draftText"
               class="min-h-0 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed text-gray-900 outline-none transition-colors focus:border-gray-500"
-              placeholder="输入要复用的提示词内容"
+              :placeholder="$t('settings.favoritePrompts.textPlaceholder')"
             />
           </div>
         </div>
@@ -192,14 +199,14 @@ function formatUpdatedAt(dateString: string) {
             type="button"
             @click="resetDraft"
           >
-            取消
+            {{ $t("common.cancel") }}
           </button>
           <button
             class="cursor-pointer rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="!canSave"
             type="submit"
           >
-            保存
+            {{ $t("common.save") }}
           </button>
         </div>
       </form>

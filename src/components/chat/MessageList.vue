@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useNow } from "../../composables/useNow";
 import type { ImageAsset, Message } from "../../types/studio";
 import ChatEmptyState from "./ChatEmptyState.vue";
 import MessageItem from "./MessageItem.vue";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   attachedImageIds: string[];
@@ -93,7 +96,7 @@ watch(
         v-if="loadingHistory"
         class="pb-3 text-center text-xs text-gray-400"
       >
-        加载更早的消息…
+        {{ $t("chat.list.loadingEarlier") }}
       </div>
       <MessageItem
         v-for="message in messages"

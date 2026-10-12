@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 平台下载卡片区。可用性完全由 release.assets 驱动：CI 发布某平台安装包后，
- * 对应按钮自动点亮；未提供的平台显示「敬请期待」。
+ * 对应按钮自动点亮；未提供的平台显示「敬请期待」。文案走 download.ui.cards 词键。
  */
 import {
   GITHUB_RELEASES_URL,
@@ -22,27 +22,27 @@ defineProps<{ release: DesktopReleaseInfo }>();
         </svg>
         <div>
           <div class="font-semibold">macOS</div>
-          <div class="text-xs text-gray-500">Apple Silicon（M 系列芯片）</div>
+          <div class="text-xs text-gray-500">{{ $t("download.ui.cards.macChip") }}</div>
         </div>
       </div>
       <p class="mt-3 flex-1 text-sm leading-relaxed text-gray-600">
-        下载 dmg 拖入「应用程序」即可。未签名应用首次打开需放行一次，<a href="#macos-guide" class="text-gray-900 underline underline-offset-2">看图文指引</a>。
+        {{ $t("download.ui.cards.macDesc") }}<a href="#macos-guide" class="text-gray-900 underline underline-offset-2">{{ $t("download.ui.cards.macGuideLink") }}</a>{{ $t("download.ui.cards.macGuideSuffix") }}
       </p>
       <a
         v-if="release.assets.macArm64"
         :href="release.assets.macArm64.url"
         class="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
       >
-        下载 dmg
+        {{ $t("download.ui.cards.downloadDmg") }}
         <span class="font-normal text-gray-300">{{ formatAssetSize(release.assets.macArm64.sizeBytes) }}</span>
       </a>
       <span
         v-else
         class="mt-5 inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-gray-100 px-4 py-2.5 text-sm text-gray-400"
       >
-        敬请期待
+        {{ $t("download.ui.cards.comingSoon") }}
       </span>
-      <p class="mt-2 text-xs text-gray-400">Intel 芯片版本后续提供</p>
+      <p class="mt-2 text-xs text-gray-400">{{ $t("download.ui.cards.macIntelNote") }}</p>
     </div>
 
     <!-- Windows -->
@@ -53,27 +53,27 @@ defineProps<{ release: DesktopReleaseInfo }>();
         </svg>
         <div>
           <div class="font-semibold">Windows</div>
-          <div class="text-xs text-gray-500">64 位 · NSIS 安装包</div>
+          <div class="text-xs text-gray-500">{{ $t("download.ui.cards.winChip") }}</div>
         </div>
       </div>
       <p class="mt-3 flex-1 text-sm leading-relaxed text-gray-600">
-        安装包未签名，首次运行 SmartScreen 点「更多信息 → 仍要运行」即可正常使用。
+        {{ $t("download.ui.cards.winDesc") }}
       </p>
       <a
         v-if="release.assets.windowsX64"
         :href="release.assets.windowsX64.url"
         class="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
       >
-        下载安装包
+        {{ $t("download.ui.cards.downloadInstaller") }}
         <span class="font-normal text-gray-300">{{ formatAssetSize(release.assets.windowsX64.sizeBytes) }}</span>
       </a>
       <span
         v-else
         class="mt-5 inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-gray-100 px-4 py-2.5 text-sm text-gray-400"
       >
-        敬请期待 · 随下一版本发布
+        {{ $t("download.ui.cards.comingSoonNext") }}
       </span>
-      <p class="mt-2 text-xs text-gray-400">构建流水线已就绪，发版后此按钮自动开放</p>
+      <p class="mt-2 text-xs text-gray-400">{{ $t("download.ui.cards.pipelineReady") }}</p>
     </div>
 
     <!-- Linux -->
@@ -85,11 +85,11 @@ defineProps<{ release: DesktopReleaseInfo }>();
         </svg>
         <div>
           <div class="font-semibold">Linux</div>
-          <div class="text-xs text-gray-500">AppImage · deb</div>
+          <div class="text-xs text-gray-500">{{ $t("download.ui.cards.linuxChip") }}</div>
         </div>
       </div>
       <p class="mt-3 flex-1 text-sm leading-relaxed text-gray-600">
-        无来源检查机制：AppImage 加执行权限即跑，deb 直接安装。
+        {{ $t("download.ui.cards.linuxDesc") }}
       </p>
       <div class="mt-5 flex flex-col gap-2">
         <a
@@ -112,16 +112,14 @@ defineProps<{ release: DesktopReleaseInfo }>();
           v-if="!release.assets.linuxAppImage && !release.assets.linuxDeb"
           class="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-gray-100 px-4 py-2.5 text-sm text-gray-400"
         >
-          敬请期待 · 随下一版本发布
+          {{ $t("download.ui.cards.comingSoonNext") }}
         </span>
       </div>
-      <p class="mt-2 text-xs text-gray-400">构建流水线已就绪，发版后按钮自动开放</p>
+      <p class="mt-2 text-xs text-gray-400">{{ $t("download.ui.cards.linuxPipelineReady") }}</p>
     </div>
   </div>
 
   <p class="mt-6 text-center text-xs text-gray-400">
-    需要历史版本或校验文件？前往
-    <a :href="GITHUB_RELEASES_URL" target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-gray-600">GitHub Releases</a>
-    下载任意版本。
+    {{ $t("download.ui.cards.historyPrefix") }}<a :href="GITHUB_RELEASES_URL" target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-gray-600">GitHub Releases</a>{{ $t("download.ui.cards.historySuffix") }}
   </p>
 </template>

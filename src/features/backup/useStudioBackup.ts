@@ -1,4 +1,5 @@
 import type { BackupServices } from "../../services/backups";
+import { t } from "../../i18n";
 import { track } from "../analytics/useAnalyticsTracker";
 import { formatError } from "../../shared/errors";
 import { createObjectUrl, revokeObjectUrl } from "../../shared/objectUrls";
@@ -30,10 +31,10 @@ export function useStudioBackup(input: UseStudioBackupInput) {
       anchor.click();
       revokeObjectUrl(url);
       track("backup.export_succeeded", { kind: "project", sizeBytes: backup.size }, "system");
-      input.notifySuccess("备份已开始下载。");
+      input.notifySuccess(t("settings.backup.exportStarted"));
     } catch (error) {
       track("backup.export_failed", { kind: "project" }, "system");
-      input.notifyError(`导出备份失败：${formatError(error)}`);
+      input.notifyError(t("settings.backup.exportFailed", { error: formatError(error) }));
       input.onStorageError(error);
     }
   }
@@ -48,10 +49,10 @@ export function useStudioBackup(input: UseStudioBackupInput) {
       input.activeConversationId.value = "";
       await input.restoreFromStorage();
       track("backup.import_succeeded", { kind: "project" }, "system");
-      input.notifySuccess("备份已恢复，本地数据已刷新。");
+      input.notifySuccess(t("settings.backup.restored"));
     } catch (error) {
       track("backup.import_failed", { kind: "project" }, "system");
-      input.notifyError(`恢复备份失败：${formatError(error)}`);
+      input.notifyError(t("settings.backup.restoreFailed", { error: formatError(error) }));
       input.onStorageError(error);
     }
   }

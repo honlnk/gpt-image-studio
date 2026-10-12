@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useCompanionStore } from "../../stores/companionStore";
 import { openAdminWindow } from "../../services/desktopCompanion";
@@ -15,6 +16,7 @@ import { openAdminWindow } from "../../services/desktopCompanion";
  * 点击经 open_admin_window 在应用内开原生子窗口。
  */
 
+const { t } = useI18n();
 const settings = useSettingsStore();
 const companion = useCompanionStore();
 
@@ -48,10 +50,11 @@ const upgradeHintVisible = ref(false);
 
     <div class="mt-4 space-y-3">
       <div class="rounded-lg bg-gray-50 p-4 space-y-2 text-sm text-gray-600">
-        <p class="font-medium text-gray-800">本地 Companion 服务</p>
+        <p class="font-medium text-gray-800">{{
+          $t("settings.companion.localServiceTitle")
+        }}</p>
         <p class="text-xs leading-relaxed">
-          Companion 是一个运行在本机的轻量代理服务，负责将浏览器请求转发给你配置的 AI 图片生成接口。
-          provider 凭据、存储位置等配置都在 Companion 自带管理页维护。
+          {{ $t("settings.companion.localServiceDescription") }}
         </p>
       </div>
 
@@ -61,17 +64,22 @@ const upgradeHintVisible = ref(false);
         class="rounded-lg border border-green-200 bg-green-50 p-4 space-y-2"
       >
         <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-green-800">内置 Companion 服务</span>
+          <span class="text-sm font-medium text-green-800">{{
+            $t("settings.companion.builtinTitle")
+          }}</span>
           <span
             class="text-xs"
             :class="companion.companionOnline ? 'text-green-600' : 'text-amber-600'"
           >
-            {{ companion.companionOnline ? "运行中" : "启动中 / 离线" }}
+            {{
+              companion.companionOnline
+                ? $t("settings.companion.statusRunning")
+                : $t("settings.companion.statusStartingOrOffline")
+            }}
           </span>
         </div>
         <p class="text-xs leading-relaxed text-green-700">
-          服务随桌面应用自动启动并完成连接，与 npm CLI 版共享数据（~/.gpt-image-studio）。
-          无需粘贴连接密钥。
+          {{ $t("settings.companion.builtinDescription") }}
         </p>
       </div>
 
@@ -81,37 +89,47 @@ const upgradeHintVisible = ref(false);
         class="rounded-lg border border-gray-200 p-4 space-y-3"
       >
         <div class="flex items-center justify-between">
-          <h4 class="text-sm font-medium text-gray-700">连接</h4>
+          <h4 class="text-sm font-medium text-gray-700">{{
+            $t("settings.companion.connectionTitle")
+          }}</h4>
           <span
             class="text-xs"
             :class="companion.companionOnline ? 'text-green-600' : 'text-gray-400'"
           >
-            {{ companion.companionOnline ? "Companion 在线" : "Companion 离线" }}
+            {{
+              companion.companionOnline
+                ? $t("settings.companion.online")
+                : $t("settings.companion.offline")
+            }}
           </span>
         </div>
 
         <template v-if="settings.companionConnected">
           <div class="flex items-center justify-between">
-            <span class="text-sm text-green-700">已连接</span>
+            <span class="text-sm text-green-700">{{
+              $t("settings.companion.connected")
+            }}</span>
             <button
               class="cursor-pointer text-xs text-red-500 hover:text-red-700"
               type="button"
               @click="companion.disconnect()"
             >
-              断开连接
+              {{ $t("settings.companion.disconnect") }}
             </button>
           </div>
         </template>
         <template v-else>
           <p class="text-sm text-gray-500">
-            请将 Companion 终端打印的连接密钥粘贴到下方完成连接。
-            密钥可在终端用 <span class="font-mono text-gray-700">gpt-image-studio status</span> 查看。
+            {{ $t("settings.companion.keyPasteHint") }}
+            {{ $t("settings.companion.keyViewHintBefore") }}
+            <span class="font-mono text-gray-700">gpt-image-studio status</span>
+            {{ $t("settings.companion.keyViewHintAfter") }}
           </p>
           <div class="flex gap-2">
             <input
               v-model="accessKeyInput"
               class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-500"
-              placeholder="粘贴连接密钥"
+              :placeholder="$t('settings.companion.keyPlaceholder')"
               @keydown.enter="connectCompanion"
             />
             <button
@@ -120,7 +138,11 @@ const upgradeHintVisible = ref(false);
               :disabled="companion.connecting || !accessKeyInput.trim()"
               @click="connectCompanion"
             >
-              {{ companion.connecting ? "连接中…" : "连接" }}
+              {{
+                companion.connecting
+                  ? $t("settings.companion.connecting")
+                  : $t("settings.companion.connect")
+              }}
             </button>
           </div>
         </template>
@@ -137,7 +159,7 @@ const upgradeHintVisible = ref(false);
         class="flex items-center justify-between rounded-lg border border-gray-200 p-3"
       >
         <div class="text-xs text-gray-500">
-          provider 凭据、存储位置、日志由 Companion 自带管理页维护
+          {{ $t("settings.companion.adminHint") }}
         </div>
         <button
           v-if="settings.isDesktopCompanion"
@@ -145,7 +167,7 @@ const upgradeHintVisible = ref(false);
           type="button"
           @click="openAdminExternally"
         >
-          打开管理页 →
+          {{ $t("settings.companion.openAdmin") }}
         </button>
         <a
           v-else
@@ -154,7 +176,7 @@ const upgradeHintVisible = ref(false);
           rel="noopener noreferrer"
           class="shrink-0 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-700"
         >
-          打开管理页 →
+          {{ $t("settings.companion.openAdmin") }}
         </a>
       </div>
 
@@ -165,20 +187,26 @@ const upgradeHintVisible = ref(false);
           type="button"
           @click="upgradeHintVisible = !upgradeHintVisible"
         >
-          {{ upgradeHintVisible ? "收起升级提示" : "查看升级提示（从旧版本迁移）" }}
+          {{
+            upgradeHintVisible
+              ? $t("settings.companion.hideUpgradeHint")
+              : $t("settings.companion.showUpgradeHint")
+          }}
         </button>
         <div
           v-if="upgradeHintVisible"
           class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2"
         >
-          <p class="text-sm font-medium text-amber-800">⚙️ 升级提示</p>
+          <p class="text-sm font-medium text-amber-800">{{
+            $t("settings.companion.upgradeHintTitle")
+          }}</p>
           <p class="text-xs leading-relaxed text-amber-700">
-            Companion 凭据存储结构已重构，不再兼容旧版本。如果你之前使用过 Companion，请：
+            {{ $t("settings.companion.upgradeHintDescription") }}
           </p>
           <ol class="ml-4 list-decimal space-y-1 text-xs leading-relaxed text-amber-700">
-            <li>更新 Companion：<span class="font-mono text-amber-900">npm install -g @honlnk/image-studio-companion@latest</span></li>
-            <li>删除旧配置：<span class="font-mono text-amber-900">rm ~/.gpt-image-studio/credentials.json</span></li>
-            <li>前往管理页重新添加 provider 配置</li>
+            <li>{{ $t("settings.companion.upgradeStepUpdate") }}<span class="font-mono text-amber-900">npm install -g @honlnk/image-studio-companion@latest</span></li>
+            <li>{{ $t("settings.companion.upgradeStepRemoveConfig") }}<span class="font-mono text-amber-900">rm ~/.gpt-image-studio/credentials.json</span></li>
+            <li>{{ $t("settings.companion.upgradeStepReconfigure") }}</li>
           </ol>
         </div>
       </div>

@@ -39,6 +39,7 @@ export function useStudioSettings(input: UseStudioSettingsInput) {
       refs.streamImages,
       refs.streamPartialImages,
       refs.model,
+      refs.language,
       refs.promptMode,
       refs.promptWordbanks,
       refs.promptRewriteGuardEnabled,

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { track } from "../../features/analytics/useAnalyticsTracker";
 import type { ImageAsset } from "../../types/studio";
 import Tooltip from "../ui/Tooltip.vue";
+
+const { t } = useI18n();
 
 type EditTool = "brush" | "eraser" | "rect" | "ellipse" | "pan";
 type SelectionOperation = "add" | "erase";
@@ -350,7 +353,7 @@ function canvasToBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob);
-      else reject(new Error("无法生成遮罩图片。"));
+      else reject(new Error(t("chat.maskEditor.maskExportFailed")));
     }, "image/png");
   });
 }
@@ -407,12 +410,12 @@ function clamp(value: number, min: number, max: number) {
       <div class="w-full max-w-5xl rounded-xl bg-white p-4">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div class="text-sm font-semibold text-gray-900">选择要编辑的区域</div>
-            <div class="text-xs text-gray-500">支持画笔、矩形、圆形，多次叠加选区</div>
+            <div class="text-sm font-semibold text-gray-900">{{ $t("chat.maskEditor.title") }}</div>
+            <div class="text-xs text-gray-500">{{ $t("chat.maskEditor.subtitle") }}</div>
           </div>
           <div class="flex items-center gap-1">
             <div v-if="tool === 'brush' || tool === 'eraser'" class="mr-2 flex items-center gap-2 whitespace-nowrap">
-              <span class="text-xs text-gray-500">{{ tool === "eraser" ? "橡皮" : "画笔" }}</span>
+              <span class="text-xs text-gray-500">{{ tool === "eraser" ? $t("chat.maskEditor.eraser") : $t("chat.maskEditor.brush") }}</span>
               <input
                 v-model.number="brushRadius"
                 class="styled-range w-40"
@@ -423,10 +426,10 @@ function clamp(value: number, min: number, max: number) {
               />
             </div>
             <div class="mr-2 flex items-center gap-2">
-              <span class="text-xs text-gray-500">软边</span>
+              <span class="text-xs text-gray-500">{{ $t("chat.maskEditor.softEdge") }}</span>
               <input v-model.number="edgeSoftness" class="styled-range" type="range" min="0" max="24" step="1" />
             </div>
-            <Tooltip text="画笔" :delay="2000">
+            <Tooltip :text="$t('chat.maskEditor.brush')" :delay="2000">
               <button
                 :class="[
                   'rounded-lg p-2',
@@ -438,7 +441,7 @@ function clamp(value: number, min: number, max: number) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5 4.5 15"/></svg>
               </button>
             </Tooltip>
-            <Tooltip text="橡皮" :delay="2000">
+            <Tooltip :text="$t('chat.maskEditor.eraser')" :delay="2000">
               <button
                 :class="[
                   'rounded-lg p-2',
@@ -450,7 +453,7 @@ function clamp(value: number, min: number, max: number) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
               </button>
             </Tooltip>
-            <Tooltip text="方框" :delay="2000">
+            <Tooltip :text="$t('chat.maskEditor.rect')" :delay="2000">
               <button
                 :class="[
                   'rounded-lg p-2',
@@ -462,7 +465,7 @@ function clamp(value: number, min: number, max: number) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
               </button>
             </Tooltip>
-            <Tooltip text="圆框" :delay="2000">
+            <Tooltip :text="$t('chat.maskEditor.ellipse')" :delay="2000">
               <button
                 :class="[
                   'rounded-lg p-2',
@@ -474,7 +477,7 @@ function clamp(value: number, min: number, max: number) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>
               </button>
             </Tooltip>
-            <Tooltip text="移动" :delay="2000">
+            <Tooltip :text="$t('chat.maskEditor.pan')" :delay="2000">
               <button
                 :class="[
                   'rounded-lg p-2',
@@ -489,7 +492,7 @@ function clamp(value: number, min: number, max: number) {
           </div>
         </div>
         <div class="mb-3 flex items-center justify-end gap-1">
-          <Tooltip text="撤销" :delay="2000">
+          <Tooltip :text="$t('chat.maskEditor.undo')" :delay="2000">
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
@@ -499,7 +502,7 @@ function clamp(value: number, min: number, max: number) {
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
             </button>
           </Tooltip>
-          <Tooltip text="重做" :delay="2000">
+          <Tooltip :text="$t('chat.maskEditor.redo')" :delay="2000">
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
@@ -509,7 +512,7 @@ function clamp(value: number, min: number, max: number) {
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
             </button>
           </Tooltip>
-          <Tooltip text="重置选区" :delay="2000">
+          <Tooltip :text="$t('chat.maskEditor.resetSelection')" :delay="2000">
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
@@ -520,7 +523,7 @@ function clamp(value: number, min: number, max: number) {
             </button>
           </Tooltip>
           <div class="mx-1 h-5 w-px bg-gray-200"></div>
-          <Tooltip text="缩小" :delay="2000">
+          <Tooltip :text="$t('chat.maskEditor.zoomOut')" :delay="2000">
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
               type="button"
@@ -530,7 +533,7 @@ function clamp(value: number, min: number, max: number) {
             </button>
           </Tooltip>
           <span class="min-w-10 text-center text-xs text-gray-500">{{ Math.round(zoom * 100) }}%</span>
-          <Tooltip text="放大" :delay="2000">
+          <Tooltip :text="$t('chat.maskEditor.zoomIn')" :delay="2000">
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
               type="button"
@@ -539,7 +542,7 @@ function clamp(value: number, min: number, max: number) {
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
             </button>
           </Tooltip>
-          <Tooltip text="复位视图" :delay="2000">
+          <Tooltip :text="$t('chat.maskEditor.resetView')" :delay="2000">
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
               type="button"
@@ -554,7 +557,7 @@ function clamp(value: number, min: number, max: number) {
             type="button"
             @click="closeModal"
           >
-            取消
+            {{ $t("common.cancel") }}
           </button>
           <button
             class="rounded-lg bg-black px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
@@ -562,7 +565,7 @@ function clamp(value: number, min: number, max: number) {
             :disabled="!canApply"
             @click="applyMask"
           >
-            应用区域
+            {{ $t("chat.maskEditor.apply") }}
           </button>
         </div>
         <div
@@ -620,7 +623,7 @@ function clamp(value: number, min: number, max: number) {
           </div>
         </div>
         <div class="mt-2 text-xs text-gray-500">
-          预览说明：黑色区域=编辑区域，绿色区域=擦除已选区域；支持多选区、撤销重做、缩放平移。
+          {{ $t("chat.maskEditor.previewHint") }}
         </div>
       </div>
     </div>

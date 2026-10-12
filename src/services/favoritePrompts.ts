@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { isoTimestamp } from "../shared/dateTime";
 import { createId } from "../shared/id";
 import type { FavoritePrompt } from "../types/studio";
@@ -59,7 +60,7 @@ function normalizePromptTitle(title: unknown, text: string) {
   if (normalizedTitle) return normalizedTitle.slice(0, 80);
 
   const firstLine = text.split(/\r?\n/).find((line) => line.trim()) ?? "";
-  return firstLine.trim().slice(0, 32) || "未命名提示词";
+  return firstLine.trim().slice(0, 32) || t("settings.favoritePrompts.unnamedTitle");
 }
 
 function normalizePromptText(text: unknown) {

@@ -44,11 +44,12 @@
     "@tauri-apps/api": "^2.11.1",
     "pinia": "^3.0.4",
     "qrcode": "^1.5.4",
-    "vue": "^3.5.32"
+    "vue": "^3.5.32",
+    "vue-i18n": "^11.4.14"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
-    "@tauri-apps/cli": "^2.11.3",
+    "@tauri-apps/cli": "^2.12.2",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-vue": "^6.0.6",
     "fake-indexeddb": "^6.2.5",

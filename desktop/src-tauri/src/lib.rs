@@ -121,7 +121,7 @@ fn probe_companion(port: u16) -> bool {
 
 fn publish_info(state: &SidecarState, port: u16) {
     let Some(key) = read_access_key() else {
-        eprintln!("[desktop] companion 已就绪但读不到 access-key.json，放弃内置连接");
+        eprintln!("[desktop] companion ready but access-key.json unreadable, giving up built-in connection");
         return;
     };
     *state.info.lock().unwrap() = DesktopCompanionInfo {
@@ -149,7 +149,7 @@ fn start_embedded_companion(app: tauri::AppHandle) {
         .ok();
     if let Some(dir) = &admin_dir {
         if !dir.is_dir() {
-            eprintln!("[desktop] admin 资源目录缺失（{dir:?}），管理页将不可用");
+            eprintln!("[desktop] admin assets directory missing ({dir:?}), admin page will be unavailable");
         }
     }
 
@@ -159,10 +159,10 @@ fn start_embedded_companion(app: tauri::AppHandle) {
                 publish_info(&state, actual_port);
                 return;
             }
-            Err(err) => eprintln!("[desktop] companion sidecar (port {port}) 启动失败: {err}"),
+            Err(err) => eprintln!("[desktop] companion sidecar (port {port}) failed to start: {err}"),
         }
     }
-    eprintln!("[desktop] companion sidecar 两次启动均失败，webview 将回落 standalone 模式");
+    eprintln!("[desktop] companion sidecar failed both attempts, webview falls back to standalone mode");
 }
 
 /// spawn sidecar 并等待 COMPANION_READY 握手，返回实际监听端口。
@@ -174,7 +174,7 @@ fn spawn_and_wait_ready(
     let mut command = app
         .shell()
         .sidecar("companion")
-        .map_err(|e| format!("解析 sidecar 二进制失败: {e}"))?;
+        .map_err(|e| format!("Failed to resolve sidecar binary: {e}"))?;
     command = command
         .args([
             "serve",
@@ -194,7 +194,7 @@ fn spawn_and_wait_ready(
 
     let (mut rx, child) = command
         .spawn()
-        .map_err(|e| format!("spawn 失败: {e}"))?;
+        .map_err(|e| format!("Failed to spawn sidecar: {e}"))?;
     app.state::<SidecarState>()
         .child
         .lock()
@@ -216,7 +216,7 @@ fn spawn_and_wait_ready(
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            return Err("等待 COMPANION_READY 握手超时".into());
+            return Err("Timed out waiting for COMPANION_READY handshake".into());
         }
         match event_rx.recv_timeout(remaining) {
             Ok(CommandEvent::Stdout(bytes)) => {
@@ -233,10 +233,10 @@ fn spawn_and_wait_ready(
                 }
             }
             Ok(CommandEvent::Terminated(payload)) => {
-                return Err(format!("进程提前退出: {payload:?}"));
+                return Err(format!("Sidecar exited early: {payload:?}"));
             }
             Ok(_) => {}
-            Err(_) => return Err("等待 COMPANION_READY 握手超时".into()),
+            Err(_) => return Err("Timed out waiting for COMPANION_READY handshake".into()),
         }
     }
 }
@@ -282,15 +282,15 @@ fn open_external_url(url: String) -> Result<(), String> {
 async fn open_admin_window(app: tauri::AppHandle, url: String) -> Result<(), String> {
     const LABEL: &str = "companion-admin";
     if !url.starts_with("http://127.0.0.1:") && !url.starts_with("http://localhost:") {
-        return Err(format!("管理页 URL 必须是 loopback 地址，收到: {url}"));
+        return Err(format!("Admin URL must be a loopback address, got: {url}"));
     }
     if let Some(win) = app.get_webview_window(LABEL) {
         win.set_focus().map_err(|e| e.to_string())?;
         return Ok(());
     }
-    let parsed: tauri::Url = url.parse().map_err(|e| format!("URL 解析失败: {e}"))?;
+    let parsed: tauri::Url = url.parse().map_err(|e| format!("Failed to parse URL: {e}"))?;
     tauri::WebviewWindowBuilder::new(&app, LABEL, tauri::WebviewUrl::External(parsed))
-        .title("Companion 管理页")
+        .title("Companion Admin")
         .inner_size(1000.0, 720.0)
         .min_inner_size(720.0, 480.0)
         .build()

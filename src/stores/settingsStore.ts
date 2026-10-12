@@ -1,5 +1,12 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
+import {
+  LANGUAGE_MIRROR_KEY,
+  normalizeLanguageSetting,
+  resolveLocale,
+  setAppLocale,
+  t,
+} from "../i18n";
 import type { DesktopCompanionConfig } from "../services/desktopCompanion";
 import {
   isSizeRatio,
@@ -62,10 +69,12 @@ import type {
 import type {
   AnalyticsPromptCapture,
   ApiMode,
+  AppLocale,
   AppSettings,
   ConnectionMode,
   FavoritePrompt,
   GenerationParams,
+  LanguageSetting,
   PromptMode,
   PromptRewriteGuardHistoryItem,
   PromptWordbankSectionKey,
@@ -166,8 +175,17 @@ export const useSettingsStore = defineStore("settings", () => {
   const isDesktopCompanion = computed(() => desktopCompanion.value !== null);
   // 阶段三 PR7：嵌入态是否隐藏子应用自带侧边栏（默认 true，会话管理交宿主）。见文档 §2.5。
   const hideSidebarInEmbed = ref(true);
+  // i18n 阶段 6：宿主通过 qiankun props 注入的显式 locale（zh-CN / en-US）。
+  // 非空时优先于持久化 language（含 'auto' 检测），仅内存态不落盘——嵌入态
+  // 界面语言跟宿主外壳走，退出嵌入后不影响本地设置。
+  const embeddedLocale = ref<AppLocale | null>(null);
   const apiMode = ref<ApiMode>("images");
   const model = ref(FIXED_IMAGE_MODEL);
+  // 界面语言（i18n 改造）：初始值同步读 localStorage 镜像（与连接键同模式），
+  // i18n 实例创建时也读同一镜像；hydrate 的 applySettings 会按记录值回同步。
+  const language = ref<LanguageSetting>(
+    normalizeLanguageSetting(readStorage(LANGUAGE_MIRROR_KEY, "auto")),
+  );
   // 直连模式下用户选择的模型（请求用 model.value；companion 模式下 model 由 /auth/status 覆盖，
   // directModel 独立记忆，切回直连时恢复，避免被 companion 的 provider 模型冲掉）。
   const directModel = ref<DirectImageModel>(FIXED_IMAGE_MODEL);
@@ -240,17 +258,18 @@ export const useSettingsStore = defineStore("settings", () => {
   const maxCustomPixels = ref(DEFAULT_MAX_CUSTOM_PIXELS);
   const minCustomPixels = ref(DEFAULT_MIN_CUSTOM_PIXELS);
   const maxAspectRatio = ref<number | null>(DEFAULT_MAX_ASPECT_RATIO);
-  const qualityOptions = [
-    { value: "auto", label: "自动" },
-    { value: "high", label: "高" },
-    { value: "medium", label: "中" },
-    { value: "low", label: "低" },
-  ] as const;
-  // 全量选项（capability 过滤的数据源）
+  // label 在 getter 内按需 t()（追踪 i18n locale ref），语言切换时自动重算。
+  const qualityOptions = computed(() => [
+    { value: "auto", label: t("chat.editor.qualityAuto") },
+    { value: "high", label: t("chat.editor.qualityHigh") },
+    { value: "medium", label: t("chat.editor.qualityMedium") },
+    { value: "low", label: t("chat.editor.qualityLow") },
+  ]);
+  // 全量选项（capability 过滤的数据源）；label 在下方 computed 内按需 t()。
   const allBackgroundOptions = [
-    { value: "auto", label: "自动" },
-    { value: "opaque", label: "不透明" },
-    { value: "transparent", label: "透明" },
+    { value: "auto", labelKey: "chat.editor.backgroundAuto" },
+    { value: "opaque", labelKey: "chat.editor.backgroundOpaque" },
+    { value: "transparent", labelKey: "chat.editor.backgroundTransparent" },
   ] as const;
   const allFormatOptions = [
     { value: "png", label: "PNG" },
@@ -259,9 +278,11 @@ export const useSettingsStore = defineStore("settings", () => {
   ] as const;
   // 按 capability 过滤后的可见选项。provider 不支持的值不会出现。
   const backgroundOptions = computed(() =>
-    allBackgroundOptions.filter((o) =>
-      providerCapability.value.backgrounds.includes(o.value),
-    ),
+    allBackgroundOptions
+      .filter((o) =>
+        providerCapability.value.backgrounds.includes(o.value),
+      )
+      .map((o) => ({ value: o.value, label: t(o.labelKey) })),
   );
   const formatOptions = computed(() =>
     allFormatOptions.filter((o) =>
@@ -271,7 +292,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const backgroundTagVisible = computed(() => backgroundOptions.value.length > 1);
   const formatTagVisible = computed(() => formatOptions.value.length > 1);
   const sizeLabel = computed(() => {
-    if (activeSizePreset.value === "auto") return "自动";
+    if (activeSizePreset.value === "auto") return t("chat.editor.sizeAuto");
     if (activeSizePreset.value === "custom")
       return `${imageWidth.value} x ${imageHeight.value}`;
     return `${imageWidth.value} x ${imageHeight.value}`;
@@ -297,7 +318,7 @@ export const useSettingsStore = defineStore("settings", () => {
   });
   const qualityLabel = computed(
     () =>
-      qualityOptions.find((o) => o.value === quality.value)?.label ??
+      qualityOptions.value.find((o) => o.value === quality.value)?.label ??
       quality.value,
   );
   const backgroundLabel = computed(
@@ -521,8 +542,8 @@ export const useSettingsStore = defineStore("settings", () => {
       modelIds: [],
       message:
         result.kind === "invalidKey"
-          ? `API key 无效：${result.message}`
-          : `连接失败：${result.message}`,
+          ? t("settings.api.probeInvalidKey", { message: result.message })
+          : t("settings.api.probeConnectionFailed", { message: result.message }),
     };
   }
 
@@ -531,6 +552,14 @@ export const useSettingsStore = defineStore("settings", () => {
     if (options.some((option) => option.value === directModel.value)) return;
     setDirectModel(FIXED_IMAGE_MODEL);
   });
+
+  /** 切换界面语言：同步切 i18n locale + 写 localStorage 镜像；IndexedDB 持久化走 useStudioSettings 的 watch。 */
+  function setLanguage(value: LanguageSetting) {
+    language.value = value;
+    setAppLocale(resolveLocale(value));
+    if (isEmbedded.value) return;
+    writeStorage(LANGUAGE_MIRROR_KEY, value);
+  }
 
   function applySettings(settings: AppSettings) {
     const defaults = normalizeGenerationParams(settings.defaults);
@@ -578,6 +607,14 @@ export const useSettingsStore = defineStore("settings", () => {
     quality.value = defaults.quality;
     background.value = normalizeBackground(defaults.background);
     outputFormat.value = defaults.outputFormat;
+    // 语言按记录值回同步（restore 旧备份时语言跟随备份记录）；
+    // 'auto' 时重新检测系统 locale，与启动期行为一致。
+    // 嵌入态宿主注入过显式 locale 时以宿主为准（宿主外壳语言优先于子应用记录）。
+    language.value = settings.language;
+    setAppLocale(embeddedLocale.value ?? resolveLocale(settings.language));
+    if (!isEmbedded.value) {
+      writeStorage(LANGUAGE_MIRROR_KEY, settings.language);
+    }
     if (connectionMode.value === "direct") {
       applyDirectProviderInfo();
     }
@@ -594,6 +631,7 @@ export const useSettingsStore = defineStore("settings", () => {
       streamPartialImages: streamPartialImages.value,
       model: model.value,
       directModel: directModel.value,
+      language: language.value,
       promptMode: promptMode.value,
       promptWordbanks: clonePromptWordbanks(promptWordbanks.value),
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
@@ -765,12 +803,16 @@ export const useSettingsStore = defineStore("settings", () => {
     jwt: string;
     /** 嵌入态隐藏侧边栏，省略时默认 true。 */
     hideSidebar?: boolean;
+    /** 宿主显式指定的界面语言（i18n 阶段 6）；省略时沿用子应用自身设置。 */
+    locale?: AppLocale;
   }) {
     companionUrl.value = input.companionUrl;
     companionAccessKey.value = input.jwt;
     connectionMode.value = "localCompanion";
     isEmbedded.value = true;
     hideSidebarInEmbed.value = input.hideSidebar ?? true;
+    embeddedLocale.value = input.locale ?? null;
+    if (input.locale) setAppLocale(input.locale);
   }
 
   /**
@@ -817,7 +859,10 @@ export const useSettingsStore = defineStore("settings", () => {
     connectionMode,
     isEmbedded,
     hideSidebarInEmbed,
+    embeddedLocale,
     isDesktopCompanion,
+    language,
+    setLanguage,
     applyEmbeddedConfig,
     applyDesktopCompanionConfig,
     applySettings,

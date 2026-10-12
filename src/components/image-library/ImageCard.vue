@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { formatRelativeTime } from "../../shared/dateTime";
 import { useImagesStore } from "../../stores/imagesStore";
 import type { ImageAsset } from "../../types/studio";
@@ -23,6 +24,8 @@ const emit = defineEmits<{
 }>();
 
 const imagesStore = useImagesStore();
+
+const { t } = useI18n();
 
 // PR9 懒加载：缩略图进入视口（含 200px 预取边距）才请求 blob。
 // 每张卡片自观察——图片库是 overflow 滚动容器，root=null（视口）即可正确触发，
@@ -102,7 +105,7 @@ const titleStyle = computed(() => {
         v-else-if="imagesStore.isPreviewError(image.id)"
         class="h-full w-full cursor-pointer rounded-lg text-gray-400 hover:bg-gray-200"
         type="button"
-        title="加载失败，点击重试"
+        :title="$t('library.card.previewFailedRetry')"
         @click.stop="imagesStore.ensurePreviewLoaded(image.id)"
       >
         !
@@ -118,7 +121,7 @@ const titleStyle = computed(() => {
         type="button"
         @click.stop="emit('previewImage', image.id)"
       >
-        点击查看
+        {{ $t("library.card.view") }}
       </button>
     </div>
     <div class="min-w-0 flex-1">
@@ -138,7 +141,7 @@ const titleStyle = computed(() => {
         :href="image.previewUrl"
         @click.stop
       >
-        下载
+        {{ $t("library.preview.download") }}
       </a>
       <button
         :class="[
@@ -150,7 +153,7 @@ const titleStyle = computed(() => {
         type="button"
         @click.stop="emit('attachImage', image.id)"
       >
-        {{ isAttached ? "已引用" : "引用" }}
+        {{ isAttached ? $t("library.card.attached") : $t("library.card.attach") }}
       </button>
     </div>
   </article>

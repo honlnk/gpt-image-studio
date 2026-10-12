@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { useNow } from "../../composables/useNow";
 import { formatRelativeTime } from "../../shared/dateTime";
 import { formatFileSize } from "../../shared/fileFormatters";
 import type { ImageAsset } from "../../types/studio";
+
+const { t } = useI18n();
 
 type SortDirection = "asc" | "desc";
 type ImageSortKey = "name" | "size" | "time";
@@ -30,7 +33,9 @@ const emit = defineEmits<{
 }>();
 
 function sourceLabel(image: ImageAsset) {
-  return image.source === "generated" ? "生成图" : "导入图";
+  return image.source === "generated"
+    ? t("settings.batchImages.sourceGenerated")
+    : t("settings.batchImages.sourceImported");
 }
 
 function imageSize(image: ImageAsset) {
@@ -60,15 +65,20 @@ const createdAtLabels = computed(() =>
           id="batchImagesTitle"
           class="text-sm font-semibold text-gray-900"
         >
-          图片
+          {{ $t("settings.batchImages.title") }}
         </h4>
         <p class="mt-0.5 text-xs text-gray-500">
-          找到 {{ filteredImages.length }} 张，共 {{ images.length }} 张，已选
-          {{ selectedImages.length }} 张
+          {{
+            $t("settings.batchImages.summary", {
+              matched: filteredImages.length,
+              total: images.length,
+              selected: selectedImages.length,
+            })
+          }}
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-1 text-xs">
-        <span class="text-gray-400">排序</span>
+        <span class="text-gray-400">{{ $t("settings.batchImages.sortLabel") }}</span>
         <button
           v-for="option in imageSortOptions"
           :key="option.key"
@@ -106,14 +116,14 @@ const createdAtLabels = computed(() =>
           type="button"
           @click="emit('selectAll')"
         >
-          全选
+          {{ $t("settings.batchImages.selectAll") }}
         </button>
         <button
           class="cursor-pointer rounded-lg px-2 py-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
           type="button"
           @click="emit('clearSelection')"
         >
-          清空
+          {{ $t("settings.batchImages.clearSelection") }}
         </button>
       </div>
     </div>
@@ -154,7 +164,7 @@ const createdAtLabels = computed(() =>
             type="button"
             @click.stop="emit('previewImage', image.id)"
           >
-            点击查看
+            {{ $t("settings.batchImages.previewHint") }}
           </button>
           <span
             v-if="selectedImageIds.has(image.id)"
@@ -193,19 +203,19 @@ const createdAtLabels = computed(() =>
           v-if="searchText"
           class="text-sm font-medium text-gray-600"
         >
-          没有找到匹配的图片
+          {{ $t("settings.batchImages.emptySearchTitle") }}
         </p>
         <p
           v-else
           class="text-sm font-medium text-gray-600"
         >
-          还没有可批量处理的图片
+          {{ $t("settings.batchImages.emptyTitle") }}
         </p>
         <p class="mt-1 text-xs leading-relaxed text-gray-400">
           {{
             searchText
-              ? "换一个图片名称关键词试试。"
-              : "生成图片或从输入框导入本地图片后，这里会显示可下载和可删除的图片列表。"
+              ? $t("settings.batchImages.emptySearchHint")
+              : $t("settings.batchImages.emptyHint")
           }}
         </p>
       </div>
@@ -218,7 +228,11 @@ const createdAtLabels = computed(() =>
         type="button"
         @click="emit('downloadSelected')"
       >
-        下载 ZIP ({{ selectedImages.length }})
+        {{
+          $t("settings.batchImages.downloadZip", {
+            count: selectedImages.length,
+          })
+        }}
       </button>
       <button
         class="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors enabled:cursor-pointer enabled:hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
@@ -226,7 +240,11 @@ const createdAtLabels = computed(() =>
         type="button"
         @click="emit('deleteSelected')"
       >
-        删除选中图片 ({{ selectedImages.length }})
+        {{
+          $t("settings.batchImages.deleteSelected", {
+            count: selectedImages.length,
+          })
+        }}
       </button>
     </div>
   </section>

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ImageAsset, Message } from "../../../types/studio";
 import { useImagesStore } from "../../../stores/imagesStore";
 import Tooltip from "../../ui/Tooltip.vue";
 import { durationLabel, imageDownloadName } from "./messageImageFormat";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   image?: ImageAsset;
@@ -30,8 +33,10 @@ onMounted(ensurePreview);
 watch(() => props.imageId, ensurePreview);
 
 function attachActionLabel() {
-  if (!props.image) return "不可引用";
-  return props.isAttached ? "已引用" : "加入引用";
+  if (!props.image) return t("chat.resultCard.attachUnavailable");
+  return props.isAttached
+    ? t("chat.resultCard.attached")
+    : t("chat.resultCard.attach");
 }
 </script>
 
@@ -44,7 +49,7 @@ function attachActionLabel() {
         v-if="image?.editSourceImageId"
         class="absolute left-2 top-2 z-10 rounded bg-black px-1.5 py-0.5 text-[11px] font-medium text-white"
       >
-        已编辑
+        {{ $t("chat.resultCard.editedBadge") }}
       </span>
       <button
         v-if="image?.previewUrl"
@@ -60,16 +65,18 @@ function attachActionLabel() {
         <span
           class="absolute inset-0 flex items-center justify-center bg-black/45 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
         >
-          点击查看
+          {{ $t("chat.resultCard.clickToView") }}
         </span>
       </button>
       <div
         v-else-if="!image || !image.blobKey"
         class="flex h-full w-full flex-col items-center justify-center gap-1 border border-dashed border-gray-300 bg-gray-50 px-4 text-center"
       >
-        <span class="text-sm font-medium text-gray-500">图片已删除</span>
+        <span class="text-sm font-medium text-gray-500">{{
+          $t("chat.resultCard.imageDeleted")
+        }}</span>
         <span class="text-xs text-gray-400">
-          这张图片已从图片库移除，无法显示预览
+          {{ $t("chat.resultCard.imageDeletedHint") }}
         </span>
       </div>
       <!-- PR9：加载失败（blob 缺失/网络错误）可点击重试，与"已删除"明确区分 -->
@@ -79,8 +86,12 @@ function attachActionLabel() {
         type="button"
         @click="imagesStore.ensurePreviewLoaded(imageId)"
       >
-        <span class="text-sm font-medium text-gray-500">加载失败</span>
-        <span class="text-xs text-gray-400">点击重试</span>
+        <span class="text-sm font-medium text-gray-500">{{
+          $t("chat.resultCard.loadFailed")
+        }}</span>
+        <span class="text-xs text-gray-400">{{
+          $t("chat.resultCard.clickToRetry")
+        }}</span>
       </button>
       <!-- PR9：加载中骨架（idle/loading），不再误显示为"已删除" -->
       <div
@@ -90,21 +101,25 @@ function attachActionLabel() {
         <span
           class="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500"
         ></span>
-        <span class="text-xs text-gray-400">加载中…</span>
+        <span class="text-xs text-gray-400">{{ $t("common.loading") }}</span>
       </div>
     </div>
     <figcaption class="px-3 py-2">
       <div class="min-w-0">
         <div class="flex min-w-0 items-center justify-between gap-3">
           <div class="truncate text-sm font-medium">
-            {{ image?.name || "图片已删除" }}
+            {{ image?.name || $t("chat.resultCard.imageDeleted") }}
           </div>
           <div class="shrink-0 text-xs text-gray-400">
-            生成耗时：{{ durationLabel(image?.generationDurationMs) }}
+            {{
+              $t("chat.resultCard.generationDuration", {
+                duration: durationLabel(image?.generationDurationMs),
+              })
+            }}
           </div>
         </div>
         <div class="truncate text-xs text-gray-500">
-          {{ image?.prompt || "原图片资产已从图片库中删除" }}
+          {{ image?.prompt || $t("chat.resultCard.assetDeletedPrompt") }}
         </div>
       </div>
       <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -115,7 +130,7 @@ function attachActionLabel() {
           :class="!image ? 'cursor-not-allowed opacity-30 hover:bg-black' : ''"
           @click="emit('continueEdit', imageId)"
         >
-          继续编辑
+          {{ $t("chat.resultCard.continueEdit") }}
         </button>
         <div class="flex shrink-0 items-center gap-1">
           <Tooltip :text="attachActionLabel()" preferred-placement="top">
@@ -160,12 +175,15 @@ function attachActionLabel() {
               </svg>
             </button>
           </Tooltip>
-          <Tooltip text="再次生成" preferred-placement="top">
+          <Tooltip
+            :text="$t('chat.resultCard.generateAnother')"
+            preferred-placement="top"
+          >
             <button
               class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
               type="button"
               :disabled="!image"
-              aria-label="再次生成"
+              :aria-label="$t('chat.resultCard.generateAnother')"
               @click="emit('generateAnother', message)"
             >
               <svg
@@ -183,12 +201,15 @@ function attachActionLabel() {
               </svg>
             </button>
           </Tooltip>
-          <Tooltip text="刷新" preferred-placement="top">
+          <Tooltip
+            :text="$t('chat.resultCard.refresh')"
+            preferred-placement="top"
+          >
             <button
               class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
               type="button"
               :disabled="!image"
-              aria-label="刷新"
+              :aria-label="$t('chat.resultCard.refresh')"
               @click="emit('refreshImage', message, imageId)"
             >
               <svg
@@ -208,13 +229,16 @@ function attachActionLabel() {
               </svg>
             </button>
           </Tooltip>
-          <Tooltip text="下载" preferred-placement="top">
+          <Tooltip
+            :text="$t('chat.resultCard.download')"
+            preferred-placement="top"
+          >
             <a
               v-if="image?.previewUrl"
               class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100"
               :download="imageDownloadName(image)"
               :href="image?.previewUrl"
-              aria-label="下载"
+              :aria-label="$t('chat.resultCard.download')"
             >
               <svg
                 class="h-4 w-4"

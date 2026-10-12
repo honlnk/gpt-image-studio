@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import { QQ_GROUP_QR_URL } from "../../shared/community";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   close: [];
@@ -16,7 +19,7 @@ const emit = defineEmits<{
       <button
         class="absolute right-5 top-5 cursor-pointer rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
         type="button"
-        aria-label="关闭"
+        :aria-label="$t('common.close')"
         @click="emit('close')"
       >
         <svg
@@ -33,7 +36,7 @@ const emit = defineEmits<{
 
       <img
         :src="QQ_GROUP_QR_URL"
-        alt="QQ 群二维码"
+        :alt="$t('common.qqGroup.qrCodeAlt')"
         class="max-h-[90vh] w-auto max-w-full rounded-lg shadow-2xl"
         @click="emit('close')"
       />

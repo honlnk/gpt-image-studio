@@ -8,6 +8,7 @@ import {
 } from "./promptRewriteGuard";
 import { normalizeFavoritePrompts } from "./favoritePrompts";
 import { normalizePromptWordbanks } from "./promptWordbanks";
+import { t } from "../i18n";
 import type { AppSettings, Conversation, ImageAsset, Message } from "../types/studio";
 import {
   STORE_NAMES,
@@ -169,6 +170,9 @@ export function createBackupServices(storage: StudioStorage) {
             analyticsEnabled: data.settings.analyticsEnabled ?? true,
             analyticsPromptCapture:
               data.settings.analyticsPromptCapture ?? "length_only",
+            // 旧备份（i18n 之前）无 language 字段：保留当前选择而非重置为 auto。
+            language:
+              data.settings.language ?? currentSettings?.language ?? "auto",
           }
         : currentSettings;
 
@@ -260,7 +264,7 @@ function blobEntryName(blobKey: string) {
 async function readJsonFile<T>(files: ZipFileMap, name: string) {
   const file = files.get(name);
   if (!file) {
-    throw new Error(`备份缺少 ${name}。`);
+    throw new Error(t("settings.backup.missingFile", { name }));
   }
 
   return JSON.parse(await file.text()) as T;
@@ -268,11 +272,11 @@ async function readJsonFile<T>(files: ZipFileMap, name: string) {
 
 function validateManifest(manifest: BackupManifest) {
   if (manifest.app !== "gpt-image-studio") {
-    throw new Error("这不是 GPT Image Studio 的备份文件。");
+    throw new Error(t("settings.backup.notStudioFile"));
   }
 
   if (manifest.version !== BACKUP_VERSION) {
-    throw new Error("备份版本不兼容。");
+    throw new Error(t("settings.backup.versionIncompatible"));
   }
 }
 
@@ -282,7 +286,7 @@ function validateBackupData(data: BackupData) {
     !Array.isArray(data.messages) ||
     !Array.isArray(data.imageAssets)
   ) {
-    throw new Error("备份数据结构不完整。");
+    throw new Error(t("settings.backup.incompleteData"));
   }
 }
 
@@ -292,7 +296,7 @@ function validateImageBlobs(data: BackupData, files: ZipFileMap) {
   );
 
   if (missingBlob?.blobKey) {
-    throw new Error(`备份缺少图片文件：${missingBlob.blobKey}`);
+    throw new Error(t("settings.backup.missingImageBlob", { key: missingBlob.blobKey }));
   }
 }
 
@@ -315,7 +319,7 @@ async function readZipFiles(file: File): Promise<ZipFileMap> {
 
     const compressionMethod = view.getUint16(offset + 8, true);
     if (compressionMethod !== 0) {
-      throw new Error("备份文件使用了暂不支持的压缩格式。");
+      throw new Error(t("settings.backup.unsupportedCompression"));
     }
 
     const compressedSize = view.getUint32(offset + 18, true);

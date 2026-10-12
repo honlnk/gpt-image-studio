@@ -1,3 +1,5 @@
+import { currentLocale, t } from "../i18n";
+
 export function isoTimestamp(timestampMs = Date.now()) {
   return new Date(timestampMs).toISOString();
 }
@@ -16,20 +18,24 @@ export function formatRelativeTime(dateString?: string, nowMs = Date.now()) {
 }
 
 function formatRelativeTimestamp(timestamp: number, nowMs = Date.now()) {
-  if (!timestamp) return "未知时间";
+  if (!timestamp) return t("common.time.unknown");
 
   const diffSeconds = Math.max(0, Math.floor((nowMs - timestamp) / 1000));
+  // RelativeTimeFormat 每次按当前 locale 新建（numeric:auto 得「刚刚/now」而非「0 秒前」）。
+  const relative = new Intl.RelativeTimeFormat(currentLocale(), {
+    numeric: "auto",
+  });
 
-  if (diffSeconds < 30) return "刚刚";
-  if (diffSeconds < 60) return "一分钟内";
+  if (diffSeconds < 30) return relative.format(0, "second");
+  if (diffSeconds < 60) return relative.format(-1, "minute");
   if (diffSeconds < 60 * 60) {
-    return `${Math.floor(diffSeconds / 60)} 分钟前`;
+    return relative.format(-Math.floor(diffSeconds / 60), "minute");
   }
   if (diffSeconds < 24 * 60 * 60) {
-    return `${Math.floor(diffSeconds / 60 / 60)} 小时前`;
+    return relative.format(-Math.floor(diffSeconds / 60 / 60), "hour");
   }
 
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(currentLocale(), {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

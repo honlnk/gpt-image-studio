@@ -131,7 +131,7 @@
     }
     </script>
 
-    <!-- 启动画面关键样式：必须 inline——要在外部 CSS/JS bundle 加载完成前就生效 -->
+    <!-- Splash critical styles: must stay inline so they take effect before external CSS/JS bundles load -->
     <style>
       #app-splash {
         position: fixed;
@@ -183,9 +183,10 @@
   </head>
   <body>
     <div id="app"></div>
-    <!-- 启动画面：纯 HTML + inline CSS，页面解析即呈现（不依赖 JS bundle），
-         盖住预渲染的空工作台；JS 就绪后由 main.ts 淡出并移除。
-         Logo 内联自 public/favicon.svg（改图标需同步此处）。 -->
+    <!-- Splash markup: plain HTML + inline CSS, rendered as the page parses (no JS
+         bundle dependency); covers the empty prerendered workbench until main.ts
+         fades it out and removes it. Logo inlined from public/favicon.svg (keep in
+         sync when the icon changes). -->
     <div id="app-splash" role="status" aria-label="应用加载中">
       <div id="app-splash-inner">
         <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 64 64" fill="none" role="img" aria-label="GPT Image Studio">
@@ -213,6 +214,35 @@
         <div class="splash-tagline">本地优先的 AI 图片创作工作台</div>
       </div>
     </div>
+    <!-- First-frame language script (i18n): swaps splash copy and html lang based on
+         the localStorage mirror + system locale before the JS bundle loads. Key must
+         match LANGUAGE_MIRROR_KEY in src/i18n/index.ts; non-zh users no longer see a
+         Chinese splash. -->
+    <script>
+      (function () {
+        try {
+          var setting = localStorage.getItem('gpt-image-studio:language');
+          var langs = (navigator.languages && navigator.languages.length)
+            ? navigator.languages
+            : [navigator.language || ''];
+          var isZh = setting === 'zh-CN' ||
+            (setting !== 'en-US' && langs.some(function (l) {
+              return typeof l === 'string' && l.toLowerCase().indexOf('zh') === 0;
+            }));
+          var lang = isZh ? 'zh-CN' : 'en-US';
+          document.documentElement.lang = lang;
+          var strings = isZh
+            ? { tagline: '本地优先的 AI 图片创作工作台', loading: '应用加载中' }
+            : { tagline: 'Local-first AI Image Workbench', loading: 'Loading' };
+          var tagline = document.querySelector('#app-splash .splash-tagline');
+          if (tagline) tagline.textContent = strings.tagline;
+          var splash = document.getElementById('app-splash');
+          if (splash) splash.setAttribute('aria-label', strings.loading);
+        } catch (e) {
+          /* localStorage 不可用时保持默认中文 splash */
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

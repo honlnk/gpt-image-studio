@@ -1,40 +1,69 @@
 <script setup lang="ts">
 /**
- * /download 下载页（预渲染静态营销页）。
+ * /download 下载页（预渲染静态营销页，zh /download 与 en /en/download 双语）。
  *
  * - SSG：entry-ssg.ts 按路由渲染本组件（不挂 pinia），初始数据是
  *   FALLBACK_RELEASE，保证爬虫/无 JS 环境看到完整内容与有效下载链接；
  * - 客户端：main.ts 按 location.pathname 分流后动态 import 本组件挂载，
  *   onMounted 里跑 GitHub Releases API 把按钮切换到真实最新版本；
+ * - 语言：文案全部走 download.ui 前缀的词键；页头提供另一语言互链；挂载后
+ *   若页面语言与浏览器语言不匹配，显示一条切换提示条（SSG 首屏不渲染）；
  * - 不初始化工作室的 analytics/IndexedDB 体系（本页刻意零存储零埋点）。
  */
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   FALLBACK_RELEASE,
   GITHUB_RELEASES_URL,
   type DesktopPlatformKey,
   type DesktopReleaseInfo,
 } from "../../shared/downloads";
+import { currentLocale, detectSystemLocale } from "../../i18n";
 import {
   detectPlatform,
   fetchLatestDesktopRelease,
   formatAssetSize,
   type DetectedPlatform,
 } from "./releaseClient";
-import { PLATFORM_LABELS } from "./content";
+import { DOWNLOAD_URLS } from "./content";
 import PlatformCards from "./PlatformCards.vue";
 import MacInstallGuide from "./MacInstallGuide.vue";
 import FaqSection from "./FaqSection.vue";
 
+const { t } = useI18n();
+
 const release = ref<DesktopReleaseInfo>(FALLBACK_RELEASE);
 const platform = ref<DetectedPlatform>("unknown");
 
+/** 语言提示条：内容语言与浏览器语言不匹配时提示另一语言版本（初始 false，SSG 首屏不渲染）。 */
+const showLocaleNotice = ref(false);
+
 onMounted(async () => {
+  // 与 i18n 的系统语言检测同一口径：任一 navigator 偏好语言以 zh 开头视为中文用户
+  const browserLocale = detectSystemLocale();
+  showLocaleNotice.value =
+    currentLocale() === "zh-CN"
+      ? browserLocale !== "zh-CN"
+      : browserLocale === "zh-CN";
+
   platform.value = detectPlatform();
   release.value = await fetchLatestDesktopRelease();
 });
 
 const publishedDate = computed(() => release.value.publishedAt.slice(0, 10));
+
+/** 平台展示名（hero 推荐按钮；键必须全字面量，供 scripts/i18n-verify-refs.mjs 扫描）。 */
+const platformLabels = computed<Record<DesktopPlatformKey, string>>(() => ({
+  macArm64: t("download.ui.platforms.macArm64"),
+  windowsX64: t("download.ui.platforms.windowsX64"),
+  linuxAppImage: t("download.ui.platforms.linuxAppImage"),
+  linuxDeb: t("download.ui.platforms.linuxDeb"),
+}));
+
+/** 另一语言的下载页地址（页头互链与语言提示条共用目标）。 */
+const otherLocaleUrl = computed(
+  () => DOWNLOAD_URLS[currentLocale() === "en-US" ? "zh" : "en"],
+);
 
 /** hero 推荐按钮：按检测到的平台取资产；检测不到 / 该平台暂无资产时回退到任一可用资产。 */
 const recommended = computed(() => {
@@ -62,12 +91,18 @@ const recommended = computed(() => {
       </a>
       <nav class="flex items-center gap-1 text-sm text-gray-600">
         <a
+          :href="otherLocaleUrl"
+          class="rounded-lg px-3 py-1.5 transition-colors hover:bg-gray-100 hover:text-gray-900"
+        >
+          {{ $t("download.ui.langSwitch") }}
+        </a>
+        <a
           :href="GITHUB_RELEASES_URL"
           target="_blank"
           rel="noopener"
           class="rounded-lg px-3 py-1.5 transition-colors hover:bg-gray-100 hover:text-gray-900"
         >
-          全部版本
+          {{ $t("download.ui.nav.releases") }}
         </a>
         <a
           href="https://github.com/honlnk/gpt-image-studio"
@@ -81,10 +116,21 @@ const recommended = computed(() => {
           href="/"
           class="ml-1 rounded-lg bg-gray-900 px-3.5 py-1.5 font-medium text-white transition-colors hover:bg-gray-700"
         >
-          打开网页版
+          {{ $t("download.ui.nav.openWeb") }}
         </a>
       </nav>
     </header>
+
+    <!-- 语言提示条：页面语言与浏览器语言不匹配时建议切换 -->
+    <div
+      v-if="showLocaleNotice"
+      class="border-b border-amber-100 bg-amber-50 px-6 py-2 text-center text-xs text-amber-800"
+    >
+      {{ $t("download.ui.noticeText") }}
+      <a :href="otherLocaleUrl" class="font-medium underline underline-offset-2 hover:text-amber-900">
+        {{ $t("download.ui.noticeLink") }}
+      </a>
+    </div>
 
     <!-- Hero -->
     <section class="relative overflow-hidden">
@@ -97,14 +143,13 @@ const recommended = computed(() => {
           class="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1 text-xs font-medium text-emerald-700"
         >
           <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          开源免费 · MIT · v{{ release.version }}（{{ publishedDate }} 发布）
+          {{ $t("download.ui.hero.badge", { version: release.version, date: publishedDate }) }}
         </div>
         <h1 class="text-4xl leading-tight font-bold tracking-tight sm:text-5xl">
-          下载 GPT Image Studio<br />桌面版
+          {{ $t("download.ui.hero.titleLine1") }}<br />{{ $t("download.ui.hero.titleLine2") }}
         </h1>
         <p class="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-gray-600">
-          本地优先的 AI 图片创作工作台。桌面版内嵌 Companion 本地服务——安装即用，
-          无需安装 Node、无需手动配对，多服务商凭据管理都在你自己的电脑上完成。
+          {{ $t("download.ui.hero.subtitle") }}
         </p>
 
         <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -118,7 +163,7 @@ const recommended = computed(() => {
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            下载 {{ PLATFORM_LABELS[recommended.key] }} 版
+            {{ $t("download.ui.hero.downloadFor", { platform: platformLabels[recommended.key] }) }}
           </a>
           <a
             :href="GITHUB_RELEASES_URL"
@@ -126,15 +171,15 @@ const recommended = computed(() => {
             rel="noopener"
             class="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-6 py-3 text-[15px] font-medium text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900"
           >
-            全部版本（GitHub Releases）
+            {{ $t("download.ui.hero.allReleases") }}
           </a>
         </div>
         <p v-if="recommended" class="mt-3 text-xs text-gray-500">
           {{ recommended.asset.name }} · {{ formatAssetSize(recommended.asset.sizeBytes) }}
-          <span v-if="platform === 'unknown'">（未识别系统时已为你推荐主流平台，可在下方卡片切换）</span>
+          <span v-if="platform === 'unknown'">{{ $t("download.ui.hero.unknownPlatformHint") }}</span>
         </p>
         <p class="mt-4 text-xs text-gray-400">
-          无广告 · 数据不出本机 · 安装包未做平台签名（开源免签名分发，<a href="#macos-guide" class="underline underline-offset-2 hover:text-gray-600">首次打开指引</a>）
+          {{ $t("download.ui.hero.trustPrefix") }}<a href="#macos-guide" class="underline underline-offset-2 hover:text-gray-600">{{ $t("download.ui.hero.firstRunGuide") }}</a>{{ $t("download.ui.hero.trustSuffix") }}
         </p>
       </div>
     </section>
@@ -153,31 +198,31 @@ const recommended = computed(() => {
 
     <!-- 为什么用桌面版 -->
     <section class="mx-auto max-w-5xl px-6 py-16">
-      <h2 class="text-center text-2xl font-bold tracking-tight">为什么用桌面版？</h2>
-      <p class="mt-2 text-center text-sm text-gray-500">网页版已经够用，桌面版让体验再进一步。</p>
+      <h2 class="text-center text-2xl font-bold tracking-tight">{{ $t("download.ui.why.title") }}</h2>
+      <p class="mt-2 text-center text-sm text-gray-500">{{ $t("download.ui.why.subtitle") }}</p>
       <div class="mt-10 grid gap-5 sm:grid-cols-2">
         <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div class="text-lg font-semibold">开箱即连</div>
+          <div class="text-lg font-semibold">{{ $t("download.ui.why.feature1Title") }}</div>
           <p class="mt-2 text-sm leading-relaxed text-gray-600">
-            内嵌 Companion 本地服务，启动应用自动拉起并完成连接——不用装 Node、不用 npm 全局包、不用复制粘贴连接密钥。和 CLI 版 Companion 共享数据目录，凭据配置两边通用。
+            {{ $t("download.ui.why.feature1Desc") }}
           </p>
         </div>
         <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div class="text-lg font-semibold">不受浏览器跨域限制</div>
+          <div class="text-lg font-semibold">{{ $t("download.ui.why.feature2Title") }}</div>
           <p class="mt-2 text-sm leading-relaxed text-gray-600">
-            部分中转服务商只返回图片链接而不返回 base64，网页直连模式受 CDN 的 CORS 策略限制可能取不到图。桌面版由本机服务在服务端取图，没有这个问题。
+            {{ $t("download.ui.why.feature2Desc") }}
           </p>
         </div>
         <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div class="text-lg font-semibold">数据不出本机</div>
+          <div class="text-lg font-semibold">{{ $t("download.ui.why.feature3Title") }}</div>
           <p class="mt-2 text-sm leading-relaxed text-gray-600">
-            会话、图片、服务商凭据全部保存在你自己的电脑上（~/.gpt-image-studio），不经过任何第三方服务器。应用本身不联网、不埋点、无广告。
+            {{ $t("download.ui.why.feature3Desc") }}
           </p>
         </div>
         <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div class="text-lg font-semibold">轻量原生体验</div>
+          <div class="text-lg font-semibold">{{ $t("download.ui.why.feature4Title") }}</div>
           <p class="mt-2 text-sm leading-relaxed text-gray-600">
-            基于 Tauri v2 系统 webview，安装包只有数 MB（而非 Electron 的数百 MB）。独立窗口、独立数据分区，与浏览器里的网页版互不影响。
+            {{ $t("download.ui.why.feature4Desc") }}
           </p>
         </div>
       </div>
@@ -195,12 +240,12 @@ const recommended = computed(() => {
       <div
         class="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-8 text-sm text-gray-500 sm:flex-row"
       >
-        <div>MIT 开源 · © honlnk</div>
+        <div>{{ $t("download.ui.footer.license") }}</div>
         <div class="flex items-center gap-5">
-          <a href="/" class="transition-colors hover:text-gray-900">网页版</a>
-          <a :href="GITHUB_RELEASES_URL" target="_blank" rel="noopener" class="transition-colors hover:text-gray-900">全部版本</a>
+          <a href="/" class="transition-colors hover:text-gray-900">{{ $t("download.ui.footer.web") }}</a>
+          <a :href="GITHUB_RELEASES_URL" target="_blank" rel="noopener" class="transition-colors hover:text-gray-900">{{ $t("download.ui.nav.releases") }}</a>
           <a href="https://github.com/honlnk/gpt-image-studio" target="_blank" rel="noopener" class="transition-colors hover:text-gray-900">GitHub</a>
-          <a href="https://github.com/honlnk/gpt-image-studio/issues" target="_blank" rel="noopener" class="transition-colors hover:text-gray-900">问题反馈</a>
+          <a href="https://github.com/honlnk/gpt-image-studio/issues" target="_blank" rel="noopener" class="transition-colors hover:text-gray-900">{{ $t("download.ui.footer.issues") }}</a>
         </div>
       </div>
     </footer>

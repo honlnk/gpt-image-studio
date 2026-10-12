@@ -20,6 +20,7 @@ const currentSettings: AppSettings = {
   streamImages: false,
   streamPartialImages: 1,
   model: "gpt-image-2",
+  language: "auto",
   promptMode: "default",
   promptWordbanks: defaultPromptWordbanks,
   promptRewriteGuardEnabled: true,

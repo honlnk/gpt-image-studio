@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRepoStars } from "../../composables/useRepoStars";
 import { QQ_GROUP_NUMBER } from "../../shared/community";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   copyText: [text: string];
@@ -8,13 +12,14 @@ const emit = defineEmits<{
 
 const { stars, failed: starsFailed } = useRepoStars();
 
-const features = [
-  "本地 Companion 配对，API key 不落浏览器",
-  "提示词四档模式，灵感词库可自定义",
-  "图片库七色标签，一按即筛同类作品",
-  "流式预览，生成过程边出图边看",
-  "行为日志本地留存，提示词可脱敏采集",
-];
+// computed + t() 保证切换语言时特性文案响应。
+const features = computed(() => [
+  t("chat.emptyState.featureCompanion"),
+  t("chat.emptyState.featurePromptModes"),
+  t("chat.emptyState.featureImageTags"),
+  t("chat.emptyState.featureStreaming"),
+  t("chat.emptyState.featureLocalAnalytics"),
+]);
 </script>
 
 <template>
@@ -77,10 +82,10 @@ const features = [
       </svg>
 
       <h2 class="mt-4 text-lg font-semibold text-gray-900">
-        开始你的第一张图片
+        {{ $t("chat.emptyState.heading") }}
       </h2>
       <p class="mt-1.5 text-sm leading-relaxed text-gray-500">
-        在下方输入框描述你想要的画面即可生成或编辑图片
+        {{ $t("chat.emptyState.hint") }}
       </p>
 
       <div
@@ -93,14 +98,14 @@ const features = [
         class="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-gray-400"
       >
         <span
-          >输入
+          >{{ $t("chat.emptyState.atHintPrefix") }}
           <kbd
             class="rounded border border-gray-300 bg-gray-50 px-1 py-0.5 font-sans text-gray-500"
             >@</kbd
           >
-          插入常用提示词</span
+          {{ $t("chat.emptyState.atHintSuffix") }}</span
         >
-        <span>拖拽图片到此处可编辑</span>
+        <span>{{ $t("chat.emptyState.dragHint") }}</span>
       </div>
 
       <a
@@ -119,19 +124,19 @@ const features = [
             d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"
           />
         </svg>
-        <template v-if="starsFailed">求个 Star 鼓励一下嘛</template>
-        <template v-else-if="stars === null">求个 Star 鼓励一下嘛</template>
-        <template v-else
-          >求个 Star 鼓励一下嘛（{{ stars }} 位好心人已点亮）</template
-        >
+        <template v-if="starsFailed">{{ $t("chat.emptyState.starCta") }}</template>
+        <template v-else-if="stars === null">{{ $t("chat.emptyState.starCta") }}</template>
+        <template v-else>{{
+          $t("chat.emptyState.starCtaWithCount", { count: stars })
+        }}</template>
       </a>
 
       <p class="mt-3 text-xs text-gray-400">
-        欢迎加入 QQ 交流群
+        {{ $t("chat.emptyState.qqGroupPrefix") }}
         <button
           class="inline-flex cursor-pointer items-center gap-1 align-middle font-medium text-gray-500 transition-colors hover:text-gray-900"
           type="button"
-          title="点击复制群号"
+          :title="$t('chat.emptyState.copyQqGroupNumber')"
           @click="emit('copyText', QQ_GROUP_NUMBER)"
         >
           {{ QQ_GROUP_NUMBER }}
@@ -145,7 +150,7 @@ const features = [
             <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z" />
           </svg>
         </button>
-        ，交流使用心得、反馈问题
+        {{ $t("chat.emptyState.qqGroupSuffix") }}
       </p>
     </div>
   </div>

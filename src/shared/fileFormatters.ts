@@ -1,4 +1,5 @@
 import type { ImageAsset } from "../types/studio";
+import { t } from "../i18n";
 
 export const BYTE_KB = 1024;
 export const BYTE_MB = 1024 * 1024;
@@ -14,7 +15,7 @@ export const BYTE_GB = 1024 * 1024 * 1024;
  * - ≥ 1 GB 时显示 GB（2 位小数）
  */
 export function formatFileSize(bytes?: number): string {
-  if (!bytes) return "未知大小";
+  if (!bytes) return t("common.format.unknownSize");
   if (bytes < BYTE_MB) {
     return `${Math.max(1, Math.round(bytes / BYTE_KB))} KB`;
   }

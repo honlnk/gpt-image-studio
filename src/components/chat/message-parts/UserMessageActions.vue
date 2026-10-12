@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import type { Message } from "../../../types/studio";
 import Tooltip from "../../ui/Tooltip.vue";
+
+const { t } = useI18n();
 
 defineProps<{
   message: Message;
@@ -16,10 +19,10 @@ const emit = defineEmits<{
   <div
     class="absolute right-5 top-full z-10 mt-1 flex items-center gap-2 opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100"
   >
-    <Tooltip text="复制文本" preferred-placement="top">
+    <Tooltip :text="$t('chat.userActions.copyText')" preferred-placement="top">
       <button
         class="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900"
-        aria-label="复制文本"
+        :aria-label="$t('chat.userActions.copyText')"
         type="button"
         @click="emit('copyText', message.content)"
       >
@@ -38,10 +41,10 @@ const emit = defineEmits<{
         </svg>
       </button>
     </Tooltip>
-    <Tooltip text="加载到输入面板" preferred-placement="top">
+    <Tooltip :text="$t('chat.userActions.loadToComposer')" preferred-placement="top">
       <button
         class="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900"
-        aria-label="加载到输入面板"
+        :aria-label="$t('chat.userActions.loadToComposer')"
         type="button"
         @click="emit('loadMessageConfig', message)"
       >

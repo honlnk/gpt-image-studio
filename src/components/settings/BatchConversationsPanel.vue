@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { useNow } from "../../composables/useNow";
 import { formatRelativeTime } from "../../shared/dateTime";
 import type { Conversation } from "../../types/studio";
+
+const { t } = useI18n();
 
 type SortDirection = "asc" | "desc";
 type ConversationSortKey = "name" | "time";
@@ -48,16 +51,20 @@ const updatedAtLabels = computed(() =>
           id="batchConversationsTitle"
           class="text-sm font-semibold text-gray-900"
         >
-          对话
+          {{ $t("settings.batchConversations.title") }}
         </h4>
         <p class="mt-0.5 text-xs text-gray-500">
-          找到 {{ filteredConversations.length }} 个，共
-          {{ conversations.length }} 个，已选
-          {{ selectedConversations.length }} 个
+          {{
+            $t("settings.batchConversations.summary", {
+              matched: filteredConversations.length,
+              total: conversations.length,
+              selected: selectedConversations.length,
+            })
+          }}
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-1 text-xs">
-        <span class="text-gray-400">排序</span>
+        <span class="text-gray-400">{{ $t("settings.batchConversations.sortLabel") }}</span>
         <button
           v-for="option in conversationSortOptions"
           :key="option.key"
@@ -95,14 +102,14 @@ const updatedAtLabels = computed(() =>
           type="button"
           @click="emit('selectAll')"
         >
-          全选
+          {{ $t("settings.batchConversations.selectAll") }}
         </button>
         <button
           class="cursor-pointer rounded-lg px-2 py-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
           type="button"
           @click="emit('clearSelection')"
         >
-          清空
+          {{ $t("settings.batchConversations.clearSelection") }}
         </button>
       </div>
     </div>
@@ -127,7 +134,7 @@ const updatedAtLabels = computed(() =>
               : '',
           ]"
         >
-          {{ conversation.title.slice(0, 1) || "会" }}
+          {{ conversation.title.slice(0, 1) || $t("settings.batchConversations.initialFallback") }}
           <span
             v-if="selectedConversationIds.has(conversation.id)"
             class="pointer-events-none absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-[11px] font-bold text-white shadow"
@@ -164,19 +171,19 @@ const updatedAtLabels = computed(() =>
           v-if="searchText"
           class="text-sm font-medium text-gray-600"
         >
-          没有找到匹配的对话
+          {{ $t("settings.batchConversations.emptySearchTitle") }}
         </p>
         <p
           v-else
           class="text-sm font-medium text-gray-600"
         >
-          还没有可批量处理的对话
+          {{ $t("settings.batchConversations.emptyTitle") }}
         </p>
         <p class="mt-1 text-xs leading-relaxed text-gray-400">
           {{
             searchText
-              ? "换一个消息关键词试试。"
-              : "新建会话或发送第一条图片生成请求后，这里会显示可批量删除的对话列表。"
+              ? $t("settings.batchConversations.emptySearchHint")
+              : $t("settings.batchConversations.emptyHint")
           }}
         </p>
       </div>
@@ -189,7 +196,11 @@ const updatedAtLabels = computed(() =>
         type="button"
         @click="emit('deleteSelected')"
       >
-        删除选中对话 ({{ selectedConversations.length }})
+        {{
+          $t("settings.batchConversations.deleteSelected", {
+            count: selectedConversations.length,
+          })
+        }}
       </button>
     </div>
   </section>

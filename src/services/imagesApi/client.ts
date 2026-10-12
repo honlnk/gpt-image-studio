@@ -1,4 +1,5 @@
 import type { ApiMode, GenerationParams, PromptMode, PromptWordbanks } from "../../types/studio";
+import { t } from "../../i18n";
 import { buildImagePrompt } from "../promptBuilder";
 import { applyPromptRewriteGuard } from "../promptRewriteGuard";
 import {
@@ -9,6 +10,7 @@ import {
 } from "../sizeConstraints";
 import {
   buildApiEndpoint,
+  apiErrorFromResponse,
   getApiErrorMessage,
   isEventStreamResponse,
   normalizeStreamPartialImages,
@@ -58,10 +60,6 @@ type EditImageInput = GenerateImageInput & {
     name: string;
   };
 };
-
-/** 连接被服务端主动断开时的统一文案。 */
-const SERVER_DISCONNECTED_MESSAGE =
-  "服务器主动断开了连接，未返回任何响应。通常是提示词中存在不合规内容，触发了平台的内容审核策略，请调整提示词后重试。";
 
 export async function generateImage(input: GenerateImageInput) {
   const requestParams = imageApiParams(
@@ -237,11 +235,12 @@ async function postImagesApi(
     response = await fetch(url, init);
   } catch (error) {
     options.onFetchError?.(error);
-    throw new Error(SERVER_DISCONNECTED_MESSAGE);
+    // 连接被服务端主动断开时的统一文案（t 在抛错时求值，切语言生效）。
+    throw new Error(t("errors.api.serverDisconnected"));
   }
 
   if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response));
+    throw await apiErrorFromResponse(response);
   }
 
   return response;

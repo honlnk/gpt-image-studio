@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { ApiMode, GenerationParams } from "../types/studio";
 
 /**
@@ -52,7 +53,7 @@ export function validateBackground(
 ) {
   if ((apiMode ?? "images") === "images" && !supportsTransparent && background === "transparent") {
     throw new Error(
-      `${model} 当前不支持透明背景，请选择自动或不透明背景。`,
+      t("chat.editor.backgroundTransparentUnsupported", { model }),
     );
   }
 }
@@ -74,7 +75,7 @@ export function getCustomSizeError(width: number, height: number, c: SizeConstra
     normalizedWidth !== width ||
     normalizedHeight !== height
   ) {
-    return "自定义尺寸的宽高必须是整数。";
+    return t("chat.editor.customSizeInteger");
   }
 
   if (
@@ -85,19 +86,28 @@ export function getCustomSizeError(width: number, height: number, c: SizeConstra
     normalizedWidth % c.step !== 0 ||
     normalizedHeight % c.step !== 0
   ) {
-    return `自定义尺寸的宽高必须是 ${c.min} 到 ${c.max} 之间的 ${c.step} 的倍数。`;
+    return t("chat.editor.customSizeRange", {
+      min: c.min,
+      max: c.max,
+      step: c.step,
+    });
   }
 
   const pixels = normalizedWidth * normalizedHeight;
   if (pixels < c.minPixels || pixels > c.maxPixels) {
-    return `自定义尺寸的总像素必须在 ${c.minPixels.toLocaleString()} 到 ${c.maxPixels.toLocaleString()} 之间。`;
+    return t("chat.editor.customSizePixels", {
+      min: c.minPixels.toLocaleString(),
+      max: c.maxPixels.toLocaleString(),
+    });
   }
 
   if (c.maxAspectRatio !== null) {
     const longSide = Math.max(normalizedWidth, normalizedHeight);
     const shortSide = Math.min(normalizedWidth, normalizedHeight);
     if (longSide / shortSide > c.maxAspectRatio) {
-      return `自定义尺寸的长边与短边比例不能超过 ${c.maxAspectRatio}:1。`;
+      return t("chat.editor.customSizeAspectRatio", {
+        ratio: c.maxAspectRatio,
+      });
     }
   }
 

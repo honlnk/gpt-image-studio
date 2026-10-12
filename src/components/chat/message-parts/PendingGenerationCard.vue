@@ -1,15 +1,19 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+
 defineProps<{
   durationLabel: string;
   previewUrl?: string;
   retryAttempt?: number;
 }>();
+
+const { t } = useI18n();
 </script>
 
 <template>
   <figure
     class="generation-skeleton-card overflow-hidden rounded-xl border border-gray-200 bg-white"
-    aria-label="图片生成中"
+    :aria-label="$t('chat.pendingCard.ariaLabel')"
   >
     <div
       :class="[
@@ -37,13 +41,19 @@ defineProps<{
             : 'border border-gray-200 bg-white/90 text-gray-500',
         ]"
       >
-        {{ previewUrl ? "预览更新中" : "正在生成" }}：{{ durationLabel }}
+        {{
+          previewUrl
+            ? $t("chat.pendingCard.previewUpdating", {
+                duration: durationLabel,
+              })
+            : $t("chat.pendingCard.generating", { duration: durationLabel })
+        }}
       </div>
       <div
         v-if="retryAttempt"
         class="absolute right-3 top-3 z-1 rounded-lg border border-blue-200 bg-white/95 px-2.5 py-1 text-xs font-medium text-blue-600 shadow-sm backdrop-blur"
       >
-        正在重试第 {{ retryAttempt }} 次
+        {{ $t("chat.pendingCard.retryAttempt", { count: retryAttempt }) }}
       </div>
     </div>
     <figcaption class="px-3 py-2">

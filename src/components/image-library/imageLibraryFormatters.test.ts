@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "../../i18n";
 import type { ImageAsset } from "../../types/studio";
 import {
   classifyImageSource,
@@ -82,20 +83,24 @@ describe("classifyImageSource", () => {
 });
 
 describe("sourceLabel", () => {
-  it("纯生成图显示「生成图」", () => {
-    expect(sourceLabel(baseImage({ source: "generated" }))).toBe("生成图");
+  it("纯生成图取生成来源词条", () => {
+    expect(sourceLabel(baseImage({ source: "generated" }))).toBe(
+      t("library.shell.sourceGenerated"),
+    );
   });
 
-  it("编辑图显示「编辑图」", () => {
+  it("编辑图取编辑来源词条", () => {
     expect(
       sourceLabel(
         baseImage({ source: "generated", editSourceImageId: "img-base" }),
       ),
-    ).toBe("编辑图");
+    ).toBe(t("library.shell.sourceEdited"));
   });
 
-  it("导入图显示「导入图」", () => {
-    expect(sourceLabel(baseImage({ source: "imported" }))).toBe("导入图");
+  it("导入图取导入来源词条", () => {
+    expect(sourceLabel(baseImage({ source: "imported" }))).toBe(
+      t("library.shell.sourceImported"),
+    );
   });
 });
 
@@ -105,7 +110,9 @@ describe("imageFormat", () => {
     expect(imageFormat(baseImage({ mimeType: "image/webp" }))).toBe("WEBP");
   });
 
-  it("无 mimeType 显示「未知」", () => {
-    expect(imageFormat(baseImage({ mimeType: undefined }))).toBe("未知");
+  it("无 mimeType 取未知格式词条", () => {
+    expect(imageFormat(baseImage({ mimeType: undefined }))).toBe(
+      t("library.formatters.unknown"),
+    );
   });
 });

@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { getApiErrorMessage } from "./http.js";
 
 /**
@@ -43,14 +44,14 @@ export async function probeDirectApiModels(input: {
   apiKey: string;
 }): Promise<DirectModelsProbeResult> {
   if (!input.apiKey.trim()) {
-    return { ok: false, kind: "invalidKey", message: "请先填写 API key。" };
+    return { ok: false, kind: "invalidKey", message: t("errors.models.keyMissing") };
   }
   const endpoint = buildModelsEndpoint(
     input.apiBaseUrl,
     input.apiBaseUrlMode,
   );
   if (!endpoint) {
-    return { ok: false, kind: "requestFailed", message: "请先填写 API 地址。" };
+    return { ok: false, kind: "requestFailed", message: t("errors.models.baseUrlMissing") };
   }
 
   let response: Response;

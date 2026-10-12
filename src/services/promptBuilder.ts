@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { PromptMode, PromptWordbanks } from "../types/studio";
 import { promptWordbanks as defaultPromptWordbanks } from "./promptWordbanks";
 
@@ -8,20 +9,15 @@ export type BuildPromptInput = {
   wordbanks?: PromptWordbanks;
 };
 
-const MODE_LABELS: Record<Exclude<PromptMode, "default">, string> = {
-  safe: "安全",
-  creative: "创意",
-  adult: "成人",
-};
+// 模式标签与说明跟随界面语言（用户拍板：提示词模板跟随 locale），
+// 词表见 src/locales/{zh-CN,en-US}/prompt.ts。
+function modeLabel(mode: Exclude<PromptMode, "default">) {
+  return t(`prompt.mode.${mode}`);
+}
 
-const MODE_GUIDANCE: Record<Exclude<PromptMode, "default">, string> = {
-  safe:
-    "保持安全、优雅、干净的视觉表达。不要添加成人、裸露、色情或露骨元素，重点强化构图、光影、质感和画面完成度。",
-  creative:
-    "允许更大胆的时尚表现、性感氛围、暧昧张力和电影感姿态，但不要改写用户主体、场景、动作、构图或风格要求。",
-  adult:
-    "允许成人向氛围、成熟性感表达和更开放的成人视觉方向。仍然必须保留用户原意，并避免把未明确要求的主体、场景或构图替换成其他内容。",
-};
+function modeGuidance(mode: Exclude<PromptMode, "default">) {
+  return t(`prompt.guidance.${mode}`);
+}
 
 export function buildImagePrompt(input: BuildPromptInput) {
   if (input.mode === "default") return input.prompt;
@@ -34,18 +30,18 @@ export function buildImagePrompt(input: BuildPromptInput) {
   );
   const inspirationBlock = inspirationTerms.length
     ? inspirationTerms.join(", ")
-    : "无";
+    : t("prompt.wrapper.inspirationNone");
 
   return [
-    "请把用户原始提示词作为最高优先级。必须保留主体、动作、构图、风格、场景和用户明确提出的要求。",
-    "下面的模式说明和灵感词只用于补充细节、强化氛围与画面表现，不得覆盖用户原意。",
+    t("prompt.wrapper.priorityLine"),
+    t("prompt.wrapper.supplementLine"),
     "",
-    `当前模式：${MODE_LABELS[mode]}`,
-    `模式说明：${MODE_GUIDANCE[mode]}`,
+    t("prompt.wrapper.currentMode", { mode: modeLabel(mode) }),
+    t("prompt.wrapper.modeGuidance", { guidance: modeGuidance(mode) }),
     "",
-    `灵感词：${inspirationBlock}`,
+    t("prompt.wrapper.inspiration", { terms: inspirationBlock }),
     "",
-    "用户原始提示词：",
+    t("prompt.wrapper.userPromptHeader"),
     input.prompt,
   ].join("\n");
 }

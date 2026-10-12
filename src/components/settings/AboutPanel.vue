@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import QRCode from "qrcode";
 import { useRepoStars } from "../../composables/useRepoStars";
 import {
@@ -14,6 +15,8 @@ import {
   type DesktopUpdateStatus,
 } from "../../services/desktopUpdate";
 import { isTauriRuntime } from "../../services/storage/resolveStorage";
+
+const { t } = useI18n();
 
 const { stars: starCount, failed: starFailed } = useRepoStars();
 
@@ -54,22 +57,22 @@ onMounted(async () => {
   }
 });
 
-const appLinks = [
+const appLinks = computed(() => [
   {
-    label: "在线体验",
+    label: t("settings.about.linkOnline"),
     href: "https://image.honlnk.com",
     icon: "globe",
   },
   {
-    label: "源代码仓库",
+    label: t("settings.about.linkSourceCode"),
     href: "https://github.com/honlnk/gpt-image-studio",
     icon: "github",
   },
-];
+]);
 
-const authorLinks = [
+const authorLinks = computed(() => [
   {
-    label: "个人网站",
+    label: t("settings.about.authorWebsite"),
     href: "https://honlnk.com",
     icon: "globe",
   },
@@ -79,11 +82,11 @@ const authorLinks = [
     icon: "github",
   },
   {
-    label: "邮箱",
+    label: t("settings.about.authorEmail"),
     href: "mailto:jihongshen1@outlook.com",
     icon: "mail",
   },
-];
+]);
 
 const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
 </script>
@@ -95,11 +98,10 @@ const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
         id="aboutSettingsTitle"
         class="text-base font-semibold text-gray-900"
       >
-        关于
+        {{ $t("settings.about.title") }}
       </h3>
       <p class="mt-1 text-sm leading-relaxed text-gray-500">
-        本地优先的 AI 图片创作工作台，通过聊天式界面调用 OpenAI 兼容 Images API
-        生成与编辑图片。所有数据保存在浏览器本地，无需后端服务。
+        {{ $t("settings.about.description") }}
       </p>
 
       <div class="mt-5 grid gap-2 sm:grid-cols-2">
@@ -155,7 +157,7 @@ const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
         class="mt-4 rounded-lg border border-gray-200 px-3 py-2.5"
       >
         <div class="flex items-center gap-2">
-          <span class="text-sm text-gray-600">桌面版</span>
+          <span class="text-sm text-gray-600">{{ $t("settings.about.desktopLabel") }}</span>
           <span class="text-sm font-semibold text-gray-900">
             {{ currentVersion ? `v${currentVersion}` : "…" }}
           </span>
@@ -165,35 +167,35 @@ const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
             :disabled="updateChecking"
             @click="runUpdateCheck"
           >
-            {{ updateChecking ? "检查中…" : "检查更新" }}
+            {{ updateChecking ? $t("settings.about.checking") : $t("settings.about.checkUpdate") }}
           </button>
         </div>
         <p
           v-if="updateStatus?.kind === 'up-to-date'"
           class="mt-1.5 text-xs text-green-600"
         >
-          已是最新版本
+          {{ $t("settings.about.upToDate") }}
         </p>
         <div
           v-else-if="updateStatus?.kind === 'update-available'"
           class="mt-1.5 flex items-center gap-2 text-xs"
         >
           <span class="text-amber-600">
-            发现新版本 v{{ updateStatus.latestVersion }}
+            {{ $t("settings.about.updateAvailable", { version: updateStatus.latestVersion }) }}
           </span>
           <button
             type="button"
             class="cursor-pointer font-medium text-blue-600 hover:text-blue-800"
             @click="openExternalUrl(updateStatus.releaseUrl)"
           >
-            前往下载 →
+            {{ $t("settings.about.downloadLink") }}
           </button>
         </div>
         <p
           v-else-if="updateStatus?.kind === 'error'"
           class="mt-1.5 text-xs text-gray-400"
         >
-          检查失败，请检查网络后重试
+          {{ $t("settings.about.checkFailed") }}
         </p>
       </div>
 
@@ -223,14 +225,14 @@ const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
             d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"
           />
         </svg>
-        GitHub Stars：
+        {{ $t("settings.about.githubStars") }}
         <span v-if="starFailed" class="text-gray-400">—</span>
-        <span v-else-if="starCount === null" class="text-gray-400">加载中…</span>
+        <span v-else-if="starCount === null" class="text-gray-400">{{ $t("common.loading") }}</span>
         <span v-else class="font-semibold text-gray-900">{{ starCount }}</span>
       </a>
 
       <p class="mt-4 text-xs text-gray-400">
-        开源协议：MIT · 本应用不收集任何数据，所有内容仅保存在你的浏览器本地。
+        {{ $t("settings.about.licenseNote") }}
       </p>
 
       <div
@@ -238,7 +240,7 @@ const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
       >
         <img
           :src="qrDataUrl"
-          alt="QQ 群二维码"
+          :alt="$t('settings.about.qqQrAlt')"
           class="h-28 w-28 shrink-0 rounded-md bg-white ring-1 ring-gray-200"
           loading="lazy"
         />
@@ -257,37 +259,37 @@ const techStack = ["Vue 3", "TypeScript", "Tailwind CSS v4", "Tauri"];
                 d="M11.727 6.719c0-.022.01-.375.01-.557 0-3.07-1.45-6.156-5.015-6.156S1.708 3.092 1.708 6.162c0 .182.01.535.01.557l-.72 1.795a26 26 0 0 0-.534 1.508c-.68 2.187-.46 3.093-.292 3.113.36.044 1.401-1.647 1.401-1.647 0 .979.504 2.256 1.594 3.179-.408.126-.907.319-1.228.556-.29.213-.253.43-.201.518.228.386 3.92.246 4.985.126 1.065.12 4.756.26 4.984-.126.052-.088.088-.305-.2-.518-.322-.237-.822-.43-1.23-.557 1.09-.922 1.594-2.2 1.594-3.178 0 0 1.041 1.69 1.401 1.647.168-.02.388-.926-.292-3.113a26 26 0 0 0-.534-1.508l-.72-1.795ZM9.773 5.53a.1.1 0 0 1-.009.096c-.109.159-1.554.943-3.033.943h-.017c-1.48 0-2.925-.784-3.034-.943a.1.1 0 0 1-.018-.055q0-.022.01-.04c.13-.287 1.43-.606 3.042-.606h.017c1.611 0 2.912.319 3.042.605m-4.32-.989c-.483.022-.896-.529-.922-1.229s.344-1.286.828-1.308c.483-.022.896.529.922 1.23.027.7-.344 1.286-.827 1.307Zm2.538 0c-.484-.022-.854-.607-.828-1.308.027-.7.44-1.25.923-1.23.483.023.853.608.827 1.309-.026.7-.439 1.251-.922 1.23ZM2.928 8.99q.32.063.639.117v2.336s1.104.222 2.21.068V9.363q.49.027.937.023h.017c1.117.013 2.474-.136 3.786-.396.097.622.151 1.386.097 2.284-.146 2.45-1.6 3.99-3.846 4.012h-.091c-2.245-.023-3.7-1.562-3.846-4.011-.054-.9 0-1.663.097-2.285"
               />
             </svg>
-            QQ 交流群
+            {{ $t("settings.about.qqGroupTitle") }}
           </div>
           <p class="mt-1 text-sm text-gray-600">
-            群号：<span class="font-semibold text-gray-900">{{ QQ_GROUP_NUMBER }}</span>
+            {{ $t("settings.about.qqGroupNumberLabel") }}<span class="font-semibold text-gray-900">{{ QQ_GROUP_NUMBER }}</span>
           </p>
           <p class="mt-0.5 text-xs text-gray-400">
-            扫码或搜索群号加群，交流心得、反馈问题
+            {{ $t("settings.about.qqGroupHint") }}
           </p>
         </div>
       </div>
     </div>
 
     <div class="border-t border-gray-200 pt-6">
-      <h4 class="text-sm font-semibold text-gray-900">作者</h4>
+      <h4 class="text-sm font-semibold text-gray-900">{{ $t("settings.about.authorTitle") }}</h4>
 
       <div class="mt-4 flex items-center gap-4">
         <img
           src="https://avatars.githubusercontent.com/u/235359418?v=4"
-          alt="鸿影"
+          :alt="$t('settings.about.authorName')"
           class="h-14 w-14 rounded-full ring-2 ring-gray-100"
           loading="lazy"
         />
         <div>
           <div class="flex items-center gap-2">
-            <span class="text-sm font-semibold text-gray-900">鸿影</span>
+            <span class="text-sm font-semibold text-gray-900">{{ $t("settings.about.authorName") }}</span>
             <span class="text-xs text-gray-400">@honlnk</span>
           </div>
           <p class="mt-0.5 text-xs text-gray-500">
             The waste is lazy and leaves nothing behind
           </p>
-          <p class="mt-0.5 text-xs text-gray-400">山东 · 济南</p>
+          <p class="mt-0.5 text-xs text-gray-400">{{ $t("settings.about.authorLocation") }}</p>
         </div>
       </div>
 

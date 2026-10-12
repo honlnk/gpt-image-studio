@@ -12,6 +12,8 @@ const EMBEDDED_CSS_FILE = '__EMBEDDED_CSS_FILE__'
 import { trackDirective } from './directives/track'
 import { useSettingsStore } from './stores/settingsStore'
 import { configureEmbedding, listenHostMessages } from './services/embeddedBridge'
+import { i18n, setAppLocale, t } from './i18n'
+import type { AppLocale } from './types/studio'
 import {
   getDesktopCompanionConfig,
   initDesktopCompanion,
@@ -80,6 +82,14 @@ interface QiankunProps {
    * 示例：`allowedOrigins: ['https://admin.example.com']`
    */
   allowedOrigins?: string[]
+  /**
+   * 宿主显式指定的界面语言（i18n 阶段 6）：'zh-CN' | 'en-US'。
+   *
+   * 嵌入态下宿主外壳通常有自己的语言切换，传入后子应用界面跟随宿主，
+   * 优先于子应用自身的持久化语言设置（含 'auto' 系统检测）；不传则沿用
+   * 子应用设置。仅内存态，不写回子应用本地。
+   */
+  locale?: AppLocale
 }
 
 function render(props: QiankunProps = {}) {
@@ -98,6 +108,7 @@ function render(props: QiankunProps = {}) {
   // ViewModel 读不到（拿到不同的 store 实例）。
   setActivePinia(piniaInstance)
   app.use(piniaInstance)
+  app.use(i18n)
   app.directive('track', trackDirective)
 
   // 嵌入态：挂载前注入宿主配置（必须在 useStudioViewModel 装配前，
@@ -112,6 +123,7 @@ function render(props: QiankunProps = {}) {
       companionUrl: props.companionUrl ?? '',
       jwt: props.jwt ?? '',
       hideSidebar: props.hideSidebar,
+      locale: props.locale,
     })
     // 跨域白名单：宿主通过 props.allowedOrigins 注入，供 postMessage 通信桥做 origin 校验。
     // 未配置时仅允许同源（向后兼容 PR7/PR8 demo 的同源场景）。
@@ -149,6 +161,9 @@ function render(props: QiankunProps = {}) {
     appEl.style.cssText = 'opacity:0;transform:translateY(10px);filter:blur(4px)'
   }
   app.mount(mountTarget, false)
+
+  // 按当前语言更新页面标题（index.html 壳的中文 title 是中文 SEO 基线）。
+  document.title = t('common.appTitle')
 
   // #app 入场：初始隐藏态 → 上浮淡入。动画结束必须清理内联样式——
   // transform/filter 会为 position:fixed 后代（移动端侧边栏）创建新的包含块；
@@ -261,12 +276,21 @@ function injectEmbeddedCss(container: HTMLElement | string) {
 // splash 标记已在 SSG 模板改写时剔除（ssgTemplate.ts），这里无需处理 splash。
 // 下载页组件经动态 import 代码分割，主页路径的加载不受影响。
 function isDownloadPagePath(pathname: string): boolean {
-  return pathname === '/download' || pathname === '/download/'
+  return (
+    pathname === '/download' ||
+    pathname === '/download/' ||
+    pathname === '/en/download' ||
+    pathname === '/en/download/'
+  )
 }
 
 async function mountDownloadPage() {
+  // 页面语言由路由决定（/download → zh-CN，/en/download → en-US），与 SSG 产物一致；
+  // 文案走 i18n 词库 download.* 域（词表见 src/locales/{zh-CN,en-US}/download.ts）。
   const { default: DownloadPage } = await import('./pages/download/DownloadPage.vue')
   app = createApp(DownloadPage)
+  app.use(i18n)
+  setAppLocale(window.location.pathname.startsWith('/en/') ? 'en-US' : 'zh-CN')
   app.mount('#app', false)
 }
 

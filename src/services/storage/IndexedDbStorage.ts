@@ -10,6 +10,7 @@
  * - readConfig / writeConfig：用 `__config__:` 前缀复用 settings 表，不新建 store、不改 schema。
  * - estimateStoredBytes / estimateQuota：从 storageUsage.ts 收编的容量估算逻辑。
  */
+import { t } from "../../i18n";
 import {
   CONVERSATION_FILTERABLE_STORES,
   STORE_NAMES,
@@ -159,10 +160,13 @@ export class IndexedDbStorage implements StudioStorage {
   async listPage<T>(store: StoreName, opts: ListPageOptions): Promise<ListPageResult<T>> {
     const sortField = STORE_SORT_FIELDS[store];
     if (!sortField) {
-      throw new StorageError("UNKNOWN", `store ${store} 不支持分页查询`);
+      throw new StorageError("UNKNOWN", t("errors.storage.storeNotPageable", { store }));
     }
     if (opts.conversationId !== undefined && !CONVERSATION_FILTERABLE_STORES.includes(store)) {
-      throw new StorageError("UNKNOWN", `store ${store} 不支持 conversationId 过滤`);
+      throw new StorageError(
+        "UNKNOWN",
+        t("errors.storage.storeNotConversationFilterable", { store }),
+      );
     }
     const db = await this.getDb();
     const transaction = db.transaction(store, "readonly");

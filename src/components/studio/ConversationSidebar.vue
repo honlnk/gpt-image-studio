@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useComposerStore } from "../../stores/composerStore";
 import { useConversationsStore } from "../../stores/conversationsStore";
 import { useGenerationStore } from "../../stores/generationStore";
 import { resolvePublicAssetUrl } from "../../utils/publicAssets";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   createConversation: [];
@@ -56,7 +59,7 @@ function onListScroll(event: Event) {
       'flex w-65 shrink-0 flex-col bg-[#171717] text-gray-100 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-30 max-md:transition-transform max-md:duration-200',
       composer.isConversationSidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
     ]"
-    aria-label="历史会话"
+    :aria-label="$t('chat.sidebar.ariaLabel')"
   >
     <div class="flex items-center justify-between px-3 pt-3 pb-1">
       <div class="flex min-w-0 items-center gap-2 px-2 py-2">
@@ -75,7 +78,7 @@ function onListScroll(event: Event) {
       </div>
       <button
         class="cursor-pointer rounded-lg p-2 text-sm transition-colors hover:bg-white/10"
-        aria-label="打开设置"
+        :aria-label="$t('chat.sidebar.openSettings')"
         type="button"
         @click="emit('openSettings')"
       >
@@ -120,24 +123,24 @@ function onListScroll(event: Event) {
           <path d="M12 5v14" />
           <path d="M5 12h14" />
         </svg>
-        <span>新建会话</span>
+        <span>{{ $t("chat.sidebar.newChat") }}</span>
       </button>
     </div>
 
     <div class="px-3 py-2">
-      <label class="sr-only" for="conversationSearch">查找会话</label>
+      <label class="sr-only" for="conversationSearch">{{ $t("chat.sidebar.searchLabel") }}</label>
       <div class="relative">
         <input
           id="conversationSearch"
           v-model="searchText"
           class="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-3 pr-9 text-sm text-gray-100 outline-none transition-colors placeholder:text-gray-500 focus:border-white/20 focus:bg-white/10"
-          placeholder="查找会话..."
+          :placeholder="$t('chat.sidebar.searchPlaceholder')"
           type="text"
         />
         <button
           v-if="searchText"
           class="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-gray-500 transition-colors hover:bg-white/10 hover:text-gray-200"
-          aria-label="清空搜索"
+          :aria-label="$t('chat.sidebar.clearSearch')"
           type="button"
           @click="searchText = ''"
         >
@@ -160,7 +163,7 @@ function onListScroll(event: Event) {
         v-if="!filteredConversations.length"
         class="px-3 py-8 text-center text-sm text-gray-500"
       >
-        没有找到会话
+        {{ $t("chat.sidebar.noResults") }}
       </div>
       <div
         v-for="conversation in filteredConversations"
@@ -191,28 +194,28 @@ function onListScroll(event: Event) {
         <button
           class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-gray-200 group-hover:block focus:block"
           type="button"
-          aria-label="重命名会话"
-          title="重命名会话"
+          :aria-label="$t('chat.sidebar.renameConversation')"
+          :title="$t('chat.sidebar.renameConversation')"
           @click.stop="emit('renameConversation', conversation.id)"
         >
-          重命名
+          {{ $t("chat.sidebar.rename") }}
         </button>
         <button
           v-track="{ name: 'conversation.deleted', payload: { conversationId: conversation.id } }"
           class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-red-300 group-hover:block focus:block"
           type="button"
-          aria-label="删除会话"
-          title="删除会话"
+          :aria-label="$t('chat.sidebar.deleteConversation')"
+          :title="$t('chat.sidebar.deleteConversation')"
           @click.stop="emit('deleteConversation', conversation.id)"
         >
-          删除
+          {{ $t("common.delete") }}
         </button>
       </div>
       <div
         v-if="conversations.isLoadingMoreConversations"
         class="px-3 py-2 text-center text-xs text-gray-500"
       >
-        加载更多会话…
+        {{ $t("chat.sidebar.loadingMore") }}
       </div>
     </nav>
 

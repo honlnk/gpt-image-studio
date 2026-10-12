@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { FavoritePrompt } from "../../types/studio";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   activeAttachmentCount: number;
@@ -34,8 +37,8 @@ const PROMPT_MENU_MAX_HEIGHT = 256;
 
 const composerPlaceholder = computed(() =>
   props.activeAttachmentCount
-    ? "描述你想基于引用图修改什么... 输入 @ 可插入常用提示词"
-    : "描述你想生成的图片... 输入 @ 可插入常用提示词",
+    ? t("chat.input.placeholderEdit")
+    : t("chat.input.placeholderGenerate"),
 );
 const filteredFavoritePrompts = computed(() => {
   const query = promptQuery.value.trim().toLocaleLowerCase();
@@ -348,7 +351,7 @@ defineExpose({ focusComposer });
         : 'border-gray-300',
     ]"
   >
-    <label class="sr-only" for="composerText">输入图片需求</label>
+    <label class="sr-only" for="composerText">{{ $t("chat.input.label") }}</label>
     <textarea
       id="composerText"
       ref="textareaRef"
@@ -367,8 +370,8 @@ defineExpose({ focusComposer });
       <div class="flex min-w-0 flex-1 items-center gap-1.5">
         <label
           class="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
-          aria-label="上传图片"
-          title="上传图片"
+          :aria-label="$t('chat.input.uploadImage')"
+          :title="$t('chat.input.uploadImage')"
         >
           <svg
             class="h-5 w-5"
@@ -399,7 +402,7 @@ defineExpose({ focusComposer });
         :disabled="!canSend"
         type="submit"
       >
-        {{ isGenerating ? "继续发送" : "发送" }}
+        {{ isGenerating ? $t("chat.input.sendAnyway") : $t("chat.input.send") }}
       </button>
     </div>
 
@@ -414,12 +417,12 @@ defineExpose({ focusComposer });
           class="flex items-center justify-between border-b border-gray-100 bg-white px-3 py-2"
         >
           <span class="text-xs font-medium text-gray-500">
-            常用提示词
+            {{ $t("chat.input.favoritePrompts") }}
           </span>
           <button
             class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            aria-label="管理常用提示词"
-            title="管理常用提示词"
+            :aria-label="$t('chat.input.manageFavoritePrompts')"
+            :title="$t('chat.input.manageFavoritePrompts')"
             type="button"
             @mousedown.prevent="openFavoritePromptSettings"
           >

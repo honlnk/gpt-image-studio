@@ -47,7 +47,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error("desktop_companion_info 超时")), ms),
+      setTimeout(() => reject(new Error("desktop_companion_info timed out")), ms),
     ),
   ]);
 }
@@ -70,10 +70,10 @@ export async function initDesktopCompanion(): Promise<void> {
         accessKey: info.accessKey,
       };
     } else {
-      console.warn("[desktop] 内置 Companion 不可用，按 standalone 模式运行");
+      console.warn("[desktop] Built-in Companion unavailable, running in standalone mode");
     }
   } catch (err) {
-    console.warn("[desktop] 拉取内置 Companion 配置失败，按 standalone 模式运行:", err);
+    console.warn("[desktop] Failed to fetch built-in Companion config, running in standalone mode:", err);
   }
 }
 

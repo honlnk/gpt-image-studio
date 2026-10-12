@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { ConnectionMode } from "../../types/studio";
+import type { ConnectionMode, LanguageSetting } from "../../types/studio";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useFeedbackStore } from "../../stores/feedbackStore";
+import { useI18n } from "vue-i18n";
 
 const props = defineProps<{
   autoRetryOnNetworkError: boolean;
@@ -13,13 +14,21 @@ const emit = defineEmits<{
   "update:connectionMode": [value: ConnectionMode];
 }>();
 
+const { t } = useI18n();
 const settings = useSettingsStore();
 const feedback = useFeedbackStore();
 
-const MODE_LABELS: Record<ConnectionMode, string> = {
-  direct: "浏览器直连",
-  localCompanion: "本地 Companion",
-};
+function modeLabel(mode: ConnectionMode): string {
+  return mode === "direct"
+    ? t("settings.general.modeDirect")
+    : t("settings.general.modeLocalCompanion");
+}
+
+const LANGUAGE_OPTIONS: ReadonlyArray<{ value: LanguageSetting; labelKey: string }> = [
+  { value: "auto", labelKey: "settings.general.languageAuto" },
+  { value: "zh-CN", labelKey: "settings.general.languageZh" },
+  { value: "en-US", labelKey: "settings.general.languageEn" },
+];
 
 /**
  * 切换连接模式前先弹确认框：
@@ -32,9 +41,11 @@ async function handleSwitchMode(mode: ConnectionMode) {
   const current = props.connectionMode;
   if (mode === current) return;
   const confirmed = await feedback.requestConfirmation({
-    title: `切换到「${MODE_LABELS[mode]}」`,
-    description: `切换后，当前「${MODE_LABELS[current]}」的内容将不可见（不会删除），新内容会存到新位置。切回「${MODE_LABELS[current]}」可找回原有内容。页面将自动重新加载以应用新模式。`,
-    confirmLabel: "切换",
+    title: t("settings.general.switchTitle", { target: modeLabel(mode) }),
+    description: t("settings.general.switchDescription", {
+      current: modeLabel(current),
+    }),
+    confirmLabel: t("settings.general.switchConfirm"),
   });
   if (!confirmed) return;
   emit("update:connectionMode", mode);
@@ -44,7 +55,7 @@ async function handleSwitchMode(mode: ConnectionMode) {
 <template>
   <section aria-labelledby="generalSettingsTitle">
     <h3 id="generalSettingsTitle" class="text-base font-semibold text-gray-900">
-      通用
+      {{ $t("settings.general.title") }}
     </h3>
 
     <div class="mt-4 space-y-4">
@@ -53,9 +64,11 @@ async function handleSwitchMode(mode: ConnectionMode) {
         v-if="settings.isEmbedded"
         class="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-1"
       >
-        <p class="text-sm font-medium text-blue-800">🔗 嵌入模式</p>
+        <p class="text-sm font-medium text-blue-800">
+          {{ $t("settings.general.embeddedTitle") }}
+        </p>
         <p class="text-xs leading-relaxed text-blue-700">
-          当前作为子应用嵌入宿主系统运行，连接地址与认证令牌由宿主管控，无需手动配置。
+          {{ $t("settings.general.embeddedDescription") }}
         </p>
       </div>
 
@@ -64,15 +77,18 @@ async function handleSwitchMode(mode: ConnectionMode) {
         v-if="settings.isDesktopCompanion"
         class="rounded-lg border border-green-200 bg-green-50 p-4 space-y-1"
       >
-        <p class="text-sm font-medium text-green-800">🖥️ 桌面内置服务</p>
+        <p class="text-sm font-medium text-green-800">
+          {{ $t("settings.general.desktopTitle") }}
+        </p>
         <p class="text-xs leading-relaxed text-green-700">
-          内置 Companion 服务随桌面应用自动启动并完成连接，数据与 npm CLI 版共享
-          （~/.gpt-image-studio）。provider 凭据在管理页维护，无需手动配置连接。
+          {{ $t("settings.general.desktopDescription") }}
         </p>
       </div>
 
       <div>
-        <p class="mb-2 block text-sm font-medium text-gray-700">连接模式</p>
+        <p class="mb-2 block text-sm font-medium text-gray-700">
+          {{ $t("settings.general.connectionMode") }}
+        </p>
         <div class="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
           <button
             v-track="{ name: 'settings.connection_mode_changed', payload: { mode: 'direct' } }"
@@ -87,7 +103,7 @@ async function handleSwitchMode(mode: ConnectionMode) {
             :disabled="settings.isEmbedded || settings.isDesktopCompanion"
             @click="handleSwitchMode('direct')"
           >
-            浏览器直连
+            {{ $t("settings.general.modeDirect") }}
           </button>
           <button
             v-track="{ name: 'settings.connection_mode_changed', payload: { mode: 'localCompanion' } }"
@@ -102,19 +118,44 @@ async function handleSwitchMode(mode: ConnectionMode) {
             :disabled="settings.isEmbedded || settings.isDesktopCompanion"
             @click="handleSwitchMode('localCompanion')"
           >
-            本地 Companion
+            {{ $t("settings.general.modeLocalCompanion") }}
           </button>
         </div>
         <p class="mt-1.5 text-xs leading-relaxed text-gray-500">
-          切换连接模式后页面会自动重新加载，两种模式的数据互相隔离。
+          {{ $t("settings.general.connectionModeHint") }}
         </p>
+      </div>
+
+      <!-- 界面语言：auto = 跟随系统 locale（zh* → 中文，其余 → 英文） -->
+      <div>
+        <p class="mb-2 block text-sm font-medium text-gray-700">
+          {{ $t("settings.general.languageTitle") }}
+        </p>
+        <div class="grid grid-cols-3 gap-2 rounded-lg bg-gray-100 p-1">
+          <button
+            v-for="option in LANGUAGE_OPTIONS"
+            :key="option.value"
+            class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
+            :class="[
+              settings.language === option.value
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-800',
+            ]"
+            type="button"
+            @click="settings.setLanguage(option.value)"
+          >
+            {{ $t(option.labelKey) }}
+          </button>
+        </div>
       </div>
 
       <div class="flex items-start justify-between gap-4 rounded-lg border border-gray-200 px-3 py-2.5">
         <div>
-          <div class="text-sm font-medium text-gray-700">网络失败自动重试</div>
+          <div class="text-sm font-medium text-gray-700">
+            {{ $t("settings.general.autoRetryTitle") }}
+          </div>
           <p class="mt-1 text-xs leading-relaxed text-gray-500">
-            开启后，当网络连接失败时会自动重试（指数退避，最多 10 次）。
+            {{ $t("settings.general.autoRetryDescription") }}
           </p>
         </div>
         <button

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "../i18n";
 import {
   BYTE_GB,
   BYTE_KB,
@@ -12,8 +13,8 @@ import type { ImageAsset } from "../types/studio";
 
 describe("formatFileSize", () => {
   it("returns 未知大小 for 0 / undefined / null", () => {
-    expect(formatFileSize(0)).toBe("未知大小");
-    expect(formatFileSize(undefined)).toBe("未知大小");
+    expect(formatFileSize(0)).toBe(t("common.format.unknownSize"));
+    expect(formatFileSize(undefined)).toBe(t("common.format.unknownSize"));
   });
 
   it("formats bytes below 1MB as KB (rounded up, min 1)", () => {

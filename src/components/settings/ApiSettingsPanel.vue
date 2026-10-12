@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ApiMode } from "../../types/studio";
 import { FIXED_IMAGE_MODEL } from "../../shared/models";
 import DropdownSelect from "../ui/DropdownSelect.vue";
@@ -39,14 +40,27 @@ const emit = defineEmits<{
   "update:streamPartialImages": [value: 0 | 1 | 2 | 3];
 }>();
 
+const { t } = useI18n();
+
 const apiKeyVisible = ref(false);
 const apiKeyCopyStatus = ref<"idle" | "copied" | "failed">("idle");
 let apiKeyCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
-const apiModeOptions: Array<{ value: ApiMode; label: string; description: string }> = [
-  { value: "images", label: "Images API", description: "直接调用 /v1/images，兼容传统图片接口。" },
-  { value: "responses", label: "Responses API", description: "通过 /v1/responses 调用 image_generation 工具。" },
-];
+// Images API / Responses API 为专有名词，label 保持原文；描述文案走 i18n。
+const apiModeOptions = computed<
+  Array<{ value: ApiMode; label: string; description: string }>
+>(() => [
+  {
+    value: "images",
+    label: "Images API",
+    description: t("settings.api.modeImagesDescription"),
+  },
+  {
+    value: "responses",
+    label: "Responses API",
+    description: t("settings.api.modeResponsesDescription"),
+  },
+]);
 const partialImageOptions = [0, 1, 2, 3] as const;
 // DropdownSelect 以字符串值工作，这里把数值选项拍平成 {value,label}。
 const partialImageSelectOptions = partialImageOptions.map((count) => ({
@@ -112,19 +126,21 @@ onUnmounted(() => {
 <template>
   <section aria-labelledby="apiSettingsTitle">
     <h3 id="apiSettingsTitle" class="text-base font-semibold text-gray-900">
-      接口
+      {{ $t("settings.api.title") }}
     </h3>
     <p class="mt-1 text-sm text-gray-500">
-      浏览器直连模式的接口配置，会保存到浏览器本地 IndexedDB。
+      {{ $t("settings.api.description") }}
     </p>
 
     <div class="mt-5 space-y-4">
       <div class="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-        API key 会保存在当前浏览器本地环境。共享电脑或公共环境中请谨慎使用。
+        {{ $t("settings.api.securityNotice") }}
       </div>
 
       <div>
-        <p class="mb-2 block text-sm font-medium text-gray-700">接口模式</p>
+        <p class="mb-2 block text-sm font-medium text-gray-700">
+          {{ $t("settings.api.modeLabel") }}
+        </p>
         <div class="grid gap-2 sm:grid-cols-2">
           <button
             v-for="option in apiModeOptions"
@@ -154,7 +170,7 @@ onUnmounted(() => {
           class="mb-1 block text-sm font-medium text-gray-700"
           for="apiKey"
         >
-          OpenAI API key
+          {{ $t("settings.api.apiKeyLabel") }}
         </label>
         <div class="flex rounded-lg border border-gray-300 bg-white focus-within:border-gray-500">
           <input
@@ -171,8 +187,16 @@ onUnmounted(() => {
           <button
             class="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center border-l border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
             type="button"
-            :aria-label="apiKeyVisible ? '隐藏 API key' : '显示 API key'"
-            :title="apiKeyVisible ? '隐藏 API key' : '显示 API key'"
+            :aria-label="
+              apiKeyVisible
+                ? $t('settings.api.hideApiKey')
+                : $t('settings.api.showApiKey')
+            "
+            :title="
+              apiKeyVisible
+                ? $t('settings.api.hideApiKey')
+                : $t('settings.api.showApiKey')
+            "
             @click="toggleApiKeyVisibility"
           >
             <svg
@@ -211,20 +235,28 @@ onUnmounted(() => {
             class="flex h-10 shrink-0 cursor-pointer items-center border-l border-gray-200 px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:text-gray-300"
             type="button"
             :disabled="!apiKey"
-            :aria-label="apiKeyCopyStatus === 'copied' ? 'API key 已复制' : '复制 API key'"
-            :title="apiKeyCopyStatus === 'copied' ? '已复制' : '复制 API key'"
+            :aria-label="
+              apiKeyCopyStatus === 'copied'
+                ? $t('settings.api.apiKeyCopied')
+                : $t('settings.api.copyApiKey')
+            "
+            :title="
+              apiKeyCopyStatus === 'copied'
+                ? $t('settings.api.copied')
+                : $t('settings.api.copyApiKey')
+            "
             @click="copyApiKey"
           >
-            {{ apiKeyCopyStatus === "copied" ? "已复制" : "复制" }}
+            {{ apiKeyCopyStatus === "copied" ? $t("settings.api.copied") : $t("common.copy") }}
           </button>
           <button
             class="flex h-10 shrink-0 cursor-pointer items-center border-l border-gray-200 px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:text-gray-300"
             type="button"
             :disabled="!apiKey || probeBusy"
-            :title="'请求接口模型列表，验证 API key 是否有效'"
+            :title="$t('settings.api.testTooltip')"
             @click="emit('probeModels')"
           >
-            {{ probeBusy ? "测试中…" : "测试" }}
+            {{ probeBusy ? $t("settings.api.testing") : $t("settings.api.test") }}
           </button>
         </div>
         <p
@@ -238,9 +270,15 @@ onUnmounted(() => {
                 : 'text-gray-500'
           "
         >
-          <template v-if="probeBusy">正在连接接口验证 API key…</template>
+          <template v-if="probeBusy">{{
+            $t("settings.api.probeChecking")
+          }}</template>
           <template v-else-if="modelsProbe.status === 'ok'">
-            连接成功，API key 有效（接口返回 {{ modelsProbe.modelIds.length }} 个模型）。
+            {{
+              $t("settings.api.probeOk", {
+                count: modelsProbe.modelIds.length,
+              })
+            }}
           </template>
           <template v-else>{{ modelsProbe.message }}</template>
         </p>
@@ -248,7 +286,7 @@ onUnmounted(() => {
           v-if="apiKeyCopyStatus === 'failed'"
           class="mt-1.5 text-xs text-red-500"
         >
-          复制失败，请手动选择复制。
+          {{ $t("settings.api.copyFailed") }}
         </p>
       </div>
 
@@ -258,7 +296,7 @@ onUnmounted(() => {
             class="block text-sm font-medium text-gray-700"
             for="apiBaseUrl"
           >
-            API 地址
+            {{ $t("settings.api.baseUrlLabel") }}
           </label>
           <label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-500">
             <input
@@ -272,7 +310,7 @@ onUnmounted(() => {
                 )
               "
             />
-            输入完整 API Base URL
+            {{ $t("settings.api.fullBaseUrlLabel") }}
           </label>
         </div>
         <div class="flex rounded-lg border border-gray-300 bg-white focus-within:border-gray-500">
@@ -304,10 +342,12 @@ onUnmounted(() => {
         </div>
         <p class="mt-1.5 text-xs text-gray-500">
           <template v-if="apiBaseUrlMode === 'origin'">
-            输入站点根地址即可，应用会自动补上 {{ apiSuffixLabel }}。
+            {{
+              $t("settings.api.baseUrlOriginHint", { suffix: apiSuffixLabel })
+            }}
           </template>
           <template v-else>
-            已按完整 API Base URL 处理，不会自动补路径。
+            {{ $t("settings.api.baseUrlFullHint") }}
           </template>
         </p>
       </div>
@@ -317,7 +357,7 @@ onUnmounted(() => {
           class="mb-1 block text-sm font-medium text-gray-700"
           for="apiModel"
         >
-          模型
+          {{ $t("settings.api.modelLabel") }}
         </label>
         <DropdownSelect
           id="apiModel"
@@ -330,19 +370,25 @@ onUnmounted(() => {
           @update:model-value="emit('update:model', $event)"
         />
         <p class="mt-1.5 text-xs text-gray-500">
-          <template v-if="probeBusy">正在获取模型列表…</template>
+          <template v-if="probeBusy">{{
+            $t("settings.api.modelListLoading")
+          }}</template>
           <template v-else-if="modelsProbe.status === 'ok' && matchedNewModelCount === 0">
-            接口模型列表中未发现 GPT Image 2.5，已仅显示旧版选项。
+            {{ $t("settings.api.modelListNoNew") }}
           </template>
           <template v-else-if="modelsProbe.status === 'ok'">
-            已按接口返回的模型列表过滤可用模型。
+            {{ $t("settings.api.modelListFiltered") }}
           </template>
           <template v-else-if="modelsProbe.status === 'error'">
-            模型列表获取失败：{{ modelsProbe.message }}（当前显示全部选项）。
+            {{
+              $t("settings.api.modelListError", {
+                message: modelsProbe.message,
+              })
+            }}
           </template>
           <template v-else>
-            GPT Image 2.5（2026-09 发布）：Flare 更快、Sunburst 精度更高；
-            中转站未跟进新模型时请选择旧版 <span class="font-mono">gpt-image-2</span>。
+            {{ $t("settings.api.modelHint25Before") }}
+            <span class="font-mono">gpt-image-2</span>{{ $t("settings.api.modelHint25After") }}
           </template>
           <button
             class="ml-1 cursor-pointer text-gray-700 underline underline-offset-2 hover:text-gray-900 disabled:cursor-not-allowed disabled:text-gray-300"
@@ -350,7 +396,11 @@ onUnmounted(() => {
             :disabled="probeBusy"
             @click="emit('probeModels')"
           >
-            {{ modelsProbe.status === "idle" ? "检测可用性" : "重新检测" }}
+            {{
+              modelsProbe.status === "idle"
+                ? $t("settings.api.checkAvailability")
+                : $t("settings.api.recheck")
+            }}
           </button>
         </p>
       </div>
@@ -369,9 +419,11 @@ onUnmounted(() => {
             "
           />
           <span class="min-w-0">
-            <span class="block text-sm font-medium text-gray-700">流式预览</span>
+            <span class="block text-sm font-medium text-gray-700">{{
+              $t("settings.api.streamPreviewTitle")
+            }}</span>
             <span class="mt-1 block text-xs text-gray-500">
-              生成过程中接收中间图像，优先用于减少长时间等待时的空白状态。
+              {{ $t("settings.api.streamPreviewDescription") }}
             </span>
           </span>
         </label>
@@ -381,7 +433,7 @@ onUnmounted(() => {
             class="mb-1 block text-sm font-medium text-gray-700"
             for="streamPartialImages"
           >
-            中间图数量
+            {{ $t("settings.api.partialImagesLabel") }}
           </label>
           <DropdownSelect
             id="streamPartialImages"
@@ -393,7 +445,7 @@ onUnmounted(() => {
             "
           />
           <p class="mt-1.5 text-xs text-gray-500">
-            建议保留默认值 1。设置为 0 时仍可开启流式，但不会请求中间图。
+            {{ $t("settings.api.partialImagesHint") }}
           </p>
         </div>
       </div>

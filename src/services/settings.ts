@@ -15,6 +15,7 @@ import type {
   AnalyticsPromptCapture,
   AppSettings,
   ConnectionMode,
+  LanguageSetting,
   PromptMode,
   PromptRewriteGuardHistoryItem,
 } from "../types/studio";
@@ -106,6 +107,7 @@ type StoredAppSettings = Omit<
   | "favoritePrompts"
   | "analyticsEnabled"
   | "analyticsPromptCapture"
+  | "language"
 > & {
   connectionMode?: ConnectionMode;
   apiBaseUrlMode?: ApiBaseUrlMode;
@@ -121,6 +123,7 @@ type StoredAppSettings = Omit<
   directModel?: string;
   analyticsEnabled?: boolean;
   analyticsPromptCapture?: AnalyticsPromptCapture;
+  language?: LanguageSetting;
   defaults: StoredGenerationParams;
 };
 
@@ -157,7 +160,12 @@ function normalizeSettings(settings: StoredAppSettings): AppSettings {
     analyticsPromptCapture: normalizeAnalyticsPromptCapture(
       settings.analyticsPromptCapture,
     ),
+    language: normalizeLanguageSettingValue(settings.language),
   };
+}
+
+function normalizeLanguageSettingValue(value: unknown): LanguageSetting {
+  return value === "zh-CN" || value === "en-US" ? value : "auto";
 }
 
 function normalizeAnalyticsPromptCapture(

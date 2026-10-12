@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { GenerationParams, ImageAsset, PromptRequestSettings } from "../types/studio";
 import { readImageDimensions } from "./imageMetadata";
 import { filenameFromAsset } from "./generationLabels";
@@ -68,11 +69,11 @@ export async function resolveImageEditRequest(args: {
     references.map(async (id) => {
       const reference = imageById(id);
       if (!reference) {
-        throw new Error("引用图片不存在，请重新添加引用。");
+        throw new Error(t("generation.editError.referenceMissing"));
       }
       const blob = await resolveBlob(reference);
       if (!blob) {
-        throw new Error("无法读取引用图片文件，请重新生成或导入图片。");
+        throw new Error(t("generation.editError.referenceUnreadable"));
       }
 
       return {
@@ -87,7 +88,7 @@ export async function resolveImageEditRequest(args: {
   if (totalBytes > MAX_PAYLOAD_BYTES) {
     const totalMB = (totalBytes / 1024 / 1024).toFixed(1);
     throw new Error(
-      `引用图片总大小为 ${totalMB}MB，超过 20MB 上限。请减少图片数量或压缩图片后重试。`,
+      t("generation.editError.payloadTooLarge", { total: totalMB }),
     );
   }
 
@@ -97,10 +98,10 @@ export async function resolveImageEditRequest(args: {
   if (maskImage) {
     maskBlob = await resolveBlob(maskImage);
     if (!maskBlob) {
-      throw new Error("无法读取编辑遮罩文件，请重新选择编辑区域。");
+      throw new Error(t("generation.editError.maskUnreadable"));
     }
     if (maskBlob.type !== "image/png") {
-      throw new Error("编辑遮罩必须是 PNG 文件，请重新选择编辑区域。");
+      throw new Error(t("generation.editError.maskNotPng"));
     }
   }
 
@@ -108,18 +109,18 @@ export async function resolveImageEditRequest(args: {
     ? imageSources.filter((image) => image.id === editSourceImageId)
     : imageSources;
   if (editSourceImageId && !editImages.length) {
-    throw new Error("编辑源图不在当前引用列表中，请重新选择继续编辑。");
+    throw new Error(t("generation.editError.sourceNotInReferences"));
   }
   if (editMaskImageId && !maskImage) {
-    throw new Error("编辑遮罩不存在，请重新选择编辑区域。");
+    throw new Error(t("generation.editError.maskMissing"));
   }
   if (editMaskImageId && !editSourceImageId) {
-    throw new Error("缺少编辑源图，无法使用局部编辑。");
+    throw new Error(t("generation.editError.sourceMissing"));
   }
   if (maskBlob && sourceImage) {
     const sourceBlob = await resolveBlob(sourceImage);
     if (!sourceBlob) {
-      throw new Error("无法读取编辑源图，请重新引用图片。");
+      throw new Error(t("generation.editError.sourceUnreadable"));
     }
     const [sourceSize, maskSize] = await Promise.all([
       readImageDimensions(sourceBlob),
@@ -131,7 +132,7 @@ export async function resolveImageEditRequest(args: {
       (sourceSize.width !== maskSize.width ||
         sourceSize.height !== maskSize.height)
     ) {
-      throw new Error("编辑遮罩尺寸与源图不一致，请重新选择编辑区域。");
+      throw new Error(t("generation.editError.maskSizeMismatch"));
     }
   }
 
