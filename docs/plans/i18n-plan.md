@@ -232,6 +232,22 @@ flowchart TD
 
 ## 施工日志
 
+### 2026-10-12 · 阶段 4 · Companion 管理页双语 · ✅ 门禁通过
+
+**验收结论**
+
+- `pnpm typecheck:companion` / `pnpm test` 全绿（1441 tests）；`node --check` app.js / i18n.js 通过。
+- 新建 `companion/src/admin/i18n.js`（经典 script、`window.AdminI18n` 全局）：zh/en 各 95 键扁平字典、`t(key, params)`（`{name}` 插值 + zh 兜底 + key 回显）、`detectLang()`（`?lang=` 大小写不敏感 → localStorage `gpt-image-studio-admin:language` → navigator zh* 检测）、`setLang()`（同步 html lang + applyStatic + onLangChange 通知）、`applyStatic()`（`data-i18n-key` / `data-i18n-attr` / `data-i18n-params`）。
+- index.html：46 处 `data-i18n-key` + 3 处 `data-i18n-attr`；页头右侧语言切换器（中文 / English，自描述不翻译）。
+- app.js：48 处 `t()` 调用点；对话框 state 从存已解析文案改为存 key+params（打开中的对话框也能跟随切换）；标签常量改 key map + 解析函数。
+- 词条分组：status / credentials / storage / autostart / logs / common / errors / app。
+
+**偏差记录**
+
+1. HTML 节点保留中文默认文案（不掏空），en 环境有 JS 加载前的极短中文闪现——与主应用 splash 首帧处理同思路，loopback 本地加载不可感知。
+2. `?lang=` 切换后不从 URL 移除（显式参数优先于 localStorage），深链/测试用途保留该语义。
+3. 实际分组比计划多出 autostart.*（自启动管理文案，计划未列）；admin.test.ts 只测 API 端点，无需断言迁移。
+
 ### 2026-10-12 · 阶段 3 · 格式化 / 排序 / 提示词模板 / 桌面壳 · ✅ 门禁通过
 
 **验收结论**

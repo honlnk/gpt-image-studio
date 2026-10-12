@@ -6,6 +6,10 @@
 // 功能对齐原 Web 项目 CompanionPanel.vue：
 // 状态总览、凭据 CRUD + 激活、损坏恢复、日志查看。
 
+// ---- i18n ----
+// i18n.js（经典 script，先于本模块执行）挂载的迷你字典模块；所有用户可见文案走 t(key, params)。
+const { t } = window.AdminI18n;
+
 // ---- 全局状态 ----
 const state = {
   online: false,
@@ -28,11 +32,11 @@ const state = {
   ossConfig: null, // 脱敏视图 | null（未配置）
   ossEditing: false, // 已配置凭据时，是否展开完整表单（点「重新配置」后才为 true）
   storageKind: "filesystem-default", // 当前选中的切换目标
-  storageSuccess: "", // 切换成功提示（渲染间保留）
+  storageSuccess: "", // 切换成功提示 key（渲染间保留；"" = 无提示，非空时为词库 key）
   customDirHistory: [], // 历史自定义目录（从数据集记录提取，下拉列表 + 预填）
   dirDropdownOpen: false, // 历史目录下拉展开态
-  // 对话框
-  dialog: null, // { kind: 'delete'|'reset'|'storage', title, desc, payload? }
+  // 对话框（文案存词库 key + 插值参数，语言切换后 renderDialog 重新解析）
+  dialog: null, // { kind: 'delete'|'reset'|'storage', titleKey, titleParams?, descKey, descParams?, confirmKey?, payload? }
   // loading 标记
   loadingCredentials: false,
   loadingPresets: false,
@@ -167,7 +171,7 @@ async function api(path, options = {}) {
     } catch {
       // 非 JSON 错误响应
     }
-    const err = new Error(body?.error || `请求失败（${res.status}）`);
+    const err = new Error(body?.error || t("errors.requestFailed", { status: res.status }));
     err.status = res.status;
     err.body = body;
     throw err;
@@ -181,7 +185,7 @@ async function api(path, options = {}) {
 function renderStatus() {
   el.statusDot.classList.toggle("online", state.online);
   el.statusDot.classList.toggle("offline", !state.online);
-  el.statusText.textContent = state.online ? "Companion 在线" : "Companion 离线";
+  el.statusText.textContent = state.online ? t("status.online") : t("status.offline");
   el.statusVersion.textContent = state.health ? `v${state.health.version}` : "";
   el.offlineHint.hidden = state.online;
 
@@ -191,7 +195,7 @@ function renderStatus() {
     const parts = [];
     parts.push(
       `<span class="${s.ready ? "ready-true" : "ready-false"}">${
-        s.ready ? "凭据已配置" : "凭据未配置"
+        s.ready ? t("status.credentialReady") : t("status.credentialNotReady")
       }</span>`,
     );
     if (s.ready) {
@@ -214,8 +218,12 @@ function renderCorrupt() {
   }
   el.restoreBtn.disabled = state.loadingRestore || state.loadingReset;
   el.resetBtn.disabled = state.loadingRestore || state.loadingReset;
-  el.restoreBtn.textContent = state.loadingRestore ? "恢复中…" : "从备份恢复";
-  el.resetBtn.textContent = state.loadingReset ? "重置中…" : "重置成空配置";
+  el.restoreBtn.textContent = state.loadingRestore
+    ? t("credentials.restoring")
+    : t("credentials.restoreFromBackup");
+  el.resetBtn.textContent = state.loadingReset
+    ? t("credentials.resetting")
+    : t("credentials.resetEmpty");
 }
 
 function renderCredentialsVisibility() {
@@ -263,7 +271,7 @@ function renderEntry(entry) {
   if (entry.id === state.activeCredentialId) {
     const badge = document.createElement("span");
     badge.className = "entry-badge";
-    badge.textContent = "激活中";
+    badge.textContent = t("credentials.activeBadge");
     head.appendChild(badge);
   }
 
@@ -274,7 +282,7 @@ function renderEntry(entry) {
     const actBtn = document.createElement("button");
     actBtn.className = "btn-entry";
     actBtn.type = "button";
-    actBtn.textContent = "激活";
+    actBtn.textContent = t("credentials.activate");
     actBtn.onclick = () => activateCredential(entry.id);
     actions.appendChild(actBtn);
   }
@@ -282,14 +290,14 @@ function renderEntry(entry) {
   const editBtn = document.createElement("button");
   editBtn.className = "btn-entry";
   editBtn.type = "button";
-  editBtn.textContent = "编辑";
+  editBtn.textContent = t("common.edit");
   editBtn.onclick = () => startEdit(entry);
   actions.appendChild(editBtn);
 
   const delBtn = document.createElement("button");
   delBtn.className = "btn-entry danger";
   delBtn.type = "button";
-  delBtn.textContent = "删除";
+  delBtn.textContent = t("common.delete");
   delBtn.onclick = () => confirmDelete(entry);
   actions.appendChild(delBtn);
 
@@ -300,11 +308,11 @@ function renderEntry(entry) {
   const detail = document.createElement("div");
   detail.className = "entry-detail";
   detail.innerHTML = `
-    <div><span class="key">Provider：</span><span class="val">${escapeHtml(providerLabel(entry.provider))}</span></div>
-    <div><span class="key">Base URL：</span><span class="val mono">${escapeHtml(entry.apiBaseUrl)}</span></div>
-    <div><span class="key">Model：</span><span class="val mono">${escapeHtml(entry.model || "（未设置）")}</span></div>
+    <div><span class="key">${t("credentials.detailProvider")}</span><span class="val">${escapeHtml(providerLabel(entry.provider))}</span></div>
+    <div><span class="key">${t("credentials.detailBaseUrl")}</span><span class="val mono">${escapeHtml(entry.apiBaseUrl)}</span></div>
+    <div><span class="key">${t("credentials.detailModel")}</span><span class="val mono">${escapeHtml(entry.model || t("credentials.notSet"))}</span></div>
     <div class="apikey-row">
-      <span class="key">API Key：</span>
+      <span class="key">${t("credentials.detailApiKey")}</span>
       <span class="val mono" data-key="${entry.id}">${escapeHtml(maskKey(entry.apiKey))}</span>
     </div>
   `;
@@ -312,12 +320,12 @@ function renderEntry(entry) {
   const keyToggle = document.createElement("button");
   keyToggle.className = "btn-entry";
   keyToggle.type = "button";
-  keyToggle.textContent = state.showApiKey[entry.id] ? "隐藏" : "显示";
+  keyToggle.textContent = state.showApiKey[entry.id] ? t("common.hide") : t("common.show");
   keyToggle.onclick = () => {
     state.showApiKey[entry.id] = !state.showApiKey[entry.id];
     const keySpan = detail.querySelector(`[data-key="${entry.id}"]`);
     keySpan.textContent = state.showApiKey[entry.id] ? entry.apiKey : maskKey(entry.apiKey);
-    keyToggle.textContent = state.showApiKey[entry.id] ? "隐藏" : "显示";
+    keyToggle.textContent = state.showApiKey[entry.id] ? t("common.hide") : t("common.show");
   };
   detail.querySelector(".apikey-row").appendChild(keyToggle);
   node.appendChild(detail);
@@ -331,7 +339,8 @@ function renderForm() {
     return;
   }
   el.credForm.hidden = false;
-  el.formTitle.textContent = state.editingId === null ? "新增配置" : "编辑配置";
+  el.formTitle.textContent =
+    state.editingId === null ? t("credentials.formTitleAdd") : t("credentials.formTitleEdit");
   // 下拉
   el.fProvider.innerHTML = "";
   for (const p of state.presets) {
@@ -341,7 +350,7 @@ function renderForm() {
     el.fProvider.appendChild(opt);
   }
   el.formSubmit.disabled = state.savingCredentials;
-  el.formSubmit.textContent = state.savingCredentials ? "保存中…" : "保存";
+  el.formSubmit.textContent = state.savingCredentials ? t("common.saving") : t("common.save");
 }
 
 function renderError(node, msg) {
@@ -363,9 +372,9 @@ function renderDialog() {
     return;
   }
   el.dialogBackdrop.hidden = false;
-  el.dialogTitle.textContent = state.dialog.title;
-  el.dialogDesc.textContent = state.dialog.desc;
-  el.dialogConfirm.textContent = state.dialog.confirmLabel || "确定";
+  el.dialogTitle.textContent = t(state.dialog.titleKey, state.dialog.titleParams);
+  el.dialogDesc.textContent = t(state.dialog.descKey, state.dialog.descParams);
+  el.dialogConfirm.textContent = t(state.dialog.confirmKey || "common.confirm");
 }
 
 // ---- 数据加载 ----
@@ -422,7 +431,7 @@ async function loadCredentials() {
   } catch (e) {
     if (e.body && e.body.corrupt) {
       // 凭据损坏
-      state.corrupt = { message: e.body.error || "凭据文件异常" };
+      state.corrupt = { message: e.body.error || t("credentials.corruptFallback") };
       renderCorrupt();
       renderCredentialsVisibility();
       return;
@@ -539,7 +548,7 @@ async function refreshStatusOnly() {
 
 async function loadLogs() {
   state.loadingLogs = true;
-  el.refreshLogs.textContent = "加载中…";
+  el.refreshLogs.textContent = t("common.loading");
   el.refreshLogs.disabled = true;
   renderError(el.logsError, "");
   try {
@@ -567,18 +576,24 @@ async function loadLogs() {
     el.logsHint.hidden = false;
   } finally {
     state.loadingLogs = false;
-    el.refreshLogs.textContent = "刷新";
+    el.refreshLogs.textContent = t("common.refresh");
     el.refreshLogs.disabled = false;
   }
 }
 
 // ---- 存储位置（数据集） ----
 
-const STORAGE_KIND_LABELS = {
-  "filesystem-default": "默认目录",
-  "filesystem-custom": "指定目录",
-  oss: "阿里云 OSS",
+// 当前位置展示用的 kind 短标签（radio 选项标题见 index.html 的 storage.kind* 词条）
+const STORAGE_KIND_KEYS = {
+  "filesystem-default": "storage.kindLabelDefault",
+  "filesystem-custom": "storage.kindLabelCustom",
+  oss: "storage.kindLabelOss",
 };
+
+function storageKindLabel(kind) {
+  const key = STORAGE_KIND_KEYS[kind];
+  return key ? t(key) : "";
+}
 
 async function loadStorage() {
   if (!state.online) return;
@@ -626,11 +641,11 @@ async function loadStorage() {
 
 // ---- 开机自启 ----
 
-const AUTOSTART_PLATFORM_LABEL = {
-  macos: "macOS 登录项",
-  linux: "systemd 用户服务",
-  windows: "Windows 注册表启动项",
-  unsupported: "当前系统不支持",
+const AUTOSTART_PLATFORM_KEYS = {
+  macos: "autostart.platformMacos",
+  linux: "autostart.platformLinux",
+  windows: "autostart.platformWindows",
+  unsupported: "autostart.platformUnsupported",
 };
 
 async function loadAutostart() {
@@ -660,16 +675,16 @@ function renderAutostart() {
   el.autostartToggle.disabled = state.autostartLoading || s.platform === "unsupported";
   el.autostartToggle.setAttribute("aria-checked", String(enabled));
   el.autostartToggle.classList.toggle("on", enabled);
-  el.autostartPlatform.textContent = AUTOSTART_PLATFORM_LABEL[s.platform] || s.platform;
+  el.autostartPlatform.textContent = AUTOSTART_PLATFORM_KEYS[s.platform]
+    ? t(AUTOSTART_PLATFORM_KEYS[s.platform])
+    : s.platform;
 
   // 提示文案
   const hints = [];
   if (s.platform === "unsupported") {
-    hints.push("当前系统不支持开机自启（仅 macOS / Linux / Windows）。");
+    hints.push(t("autostart.unsupportedHint"));
   } else if (s.platform === "linux" && enabled && !s.linger) {
-    hints.push(
-      "当前为「登录即启」。如需「开机即启」（无需登录），请在终端执行：sudo loginctl enable-linger $USER",
-    );
+    hints.push(t("autostart.lingerHint"));
   }
   el.autostartHint.textContent = hints.join(" ");
 
@@ -691,7 +706,7 @@ async function toggleAutostart() {
     const path = s.enabled ? "/admin/api/autostart/disable" : "/admin/api/autostart/enable";
     state.autostart = await api(path, { method: "POST" });
   } catch (e) {
-    el.autostartError.textContent = `切换失败：${e.message}`;
+    el.autostartError.textContent = t("errors.switchFailed", { message: e.message });
     el.autostartError.hidden = false;
   } finally {
     state.autostartLoading = false;
@@ -706,10 +721,12 @@ function renderStorage() {
 
   // 当前位置
   if (state.activeDataset) {
-    const kind = STORAGE_KIND_LABELS[state.activeDataset.image_store_kind] || "";
-    el.storageCurrentLabel.textContent = `${state.activeDataset.label}（${kind}）`;
+    el.storageCurrentLabel.textContent = t("storage.currentValue", {
+      label: state.activeDataset.label,
+      kind: storageKindLabel(state.activeDataset.image_store_kind),
+    });
   } else {
-    el.storageCurrentLabel.textContent = "未配置";
+    el.storageCurrentLabel.textContent = t("storage.notConfigured");
   }
 
   // radio 选中态 + 子表单显隐
@@ -735,7 +752,9 @@ function renderStorage() {
 
   // 原生目录选择按钮态
   el.storagePickDir.disabled = state.pickingDirectory;
-  el.storagePickDir.textContent = state.pickingDirectory ? "选择中…" : "选择文件夹…";
+  el.storagePickDir.textContent = state.pickingDirectory
+    ? t("storage.picking")
+    : t("storage.pickDirectory");
 
   // OSS：已配置凭据时默认只显示摘要面板（Endpoint/Bucket/脱敏 AK + 重新配置按钮），
   // 点「重新配置」（ossEditing）或未配置时才显示完整表单。表单隐藏时输入框仍保留
@@ -746,20 +765,25 @@ function renderStorage() {
   el.storageOssFields.hidden = !showOssFields;
   el.storageOssCancelWrap.hidden = !ossConfigured;
   if (ossConfigured) {
-    el.storageOssCurrent.textContent =
-      `当前已配置：${state.ossConfig.endpoint} / ${state.ossConfig.bucket}（${state.ossConfig.accessKeyIdMasked}）`;
+    el.storageOssCurrent.textContent = t("storage.ossCurrent", {
+      endpoint: state.ossConfig.endpoint,
+      bucket: state.ossConfig.bucket,
+      masked: state.ossConfig.accessKeyIdMasked,
+    });
     if (!el.storageOssEndpoint.value) el.storageOssEndpoint.value = state.ossConfig.endpoint;
     if (!el.storageOssBucket.value) el.storageOssBucket.value = state.ossConfig.bucket;
   }
 
   // 提示与按钮态：切换按钮仅在选中「新目标」（与当前激活位置不同）时展开
-  el.storageSuccess.textContent = state.storageSuccess;
+  el.storageSuccess.textContent = state.storageSuccess ? t(state.storageSuccess) : "";
   el.storageSuccess.hidden = !state.storageSuccess;
   const isNewTarget =
     !state.activeDataset || state.storageKind !== state.activeDataset.image_store_kind;
   el.storageSwitchWrap.classList.toggle("open", isNewTarget);
   el.storageSwitchBtn.disabled = state.switchingStorage;
-  el.storageSwitchBtn.textContent = state.switchingStorage ? "切换中…" : "切换存储位置";
+  el.storageSwitchBtn.textContent = state.switchingStorage
+    ? t("storage.switching")
+    : t("storage.switchButton");
 }
 
 function onStorageKindChange(value) {
@@ -784,7 +808,7 @@ function askStorageSwitch() {
     const accessKeyId = el.storageOssAk.value.trim();
     const accessKeySecret = el.storageOssSk.value.trim();
     if (!endpoint || !bucket) {
-      renderError(el.storageError, "请填写 Endpoint 和 Bucket");
+      renderError(el.storageError, t("errors.ossEndpointBucketRequired"));
       return;
     }
     // 已保存过凭据且 Endpoint/Bucket 未变：AK/SK 留空即沿用（oss-credentials.json 与
@@ -798,9 +822,7 @@ function askStorageSwitch() {
     if (!reuseExisting && (!accessKeyId || !accessKeySecret)) {
       renderError(
         el.storageError,
-        state.ossConfig
-          ? "修改 Endpoint/Bucket 时需重新填写完整的 AccessKey ID 和 Secret；沿用已保存凭据请保持 Endpoint/Bucket 不变并将 AccessKey 留空"
-          : "请填写完整的 OSS 配置（endpoint/bucket/AccessKey）",
+        state.ossConfig ? t("errors.ossReenterCredentials") : t("errors.ossConfigRequired"),
       );
       return;
     }
@@ -814,7 +836,7 @@ function askStorageSwitch() {
   } else if (state.storageKind === "filesystem-custom") {
     const directory = el.storageDir.value.trim();
     if (!directory) {
-      renderError(el.storageError, "请输入目录路径");
+      renderError(el.storageError, t("errors.dirPathRequired"));
       return;
     }
     input = {
@@ -832,14 +854,19 @@ function askStorageSwitch() {
 
   // 确认对话框（当前内容将不可见但不删除）
   const currentLabel = state.activeDataset
-    ? `${state.activeDataset.label}（${STORAGE_KIND_LABELS[state.activeDataset.image_store_kind] || ""}）`
-    : "未知";
-  const newLabel = STORAGE_KIND_LABELS[state.storageKind];
+    ? t("storage.currentValue", {
+        label: state.activeDataset.label,
+        kind: storageKindLabel(state.activeDataset.image_store_kind),
+      })
+    : t("storage.unknown");
+  const newLabel = storageKindLabel(state.storageKind);
   state.dialog = {
     kind: "storage",
-    title: `切换到「${newLabel}」`,
-    desc: `切换后，当前「${currentLabel}」的内容将不可见（不会删除），新内容会存到新位置。切回「${currentLabel}」可找回原有内容。是否继续？`,
-    confirmLabel: "切换",
+    titleKey: "storage.switchDialogTitle",
+    titleParams: { target: newLabel },
+    descKey: "storage.switchDialogDesc",
+    descParams: { current: currentLabel },
+    confirmKey: "storage.switchConfirm",
     payload: input,
   };
   renderDialog();
@@ -868,15 +895,15 @@ async function doStorageSwitch(input) {
       body: JSON.stringify(body),
     });
     state.storageSuccess = result.created
-      ? "已创建新数据集并切换。请回到 web 页面刷新，以加载新位置的数据。"
-      : "已切换数据集。请回到 web 页面刷新，以加载新位置的数据。";
+      ? "storage.switchSuccessCreated"
+      : "storage.switchSuccess";
     // 切换成功后收起 OSS 表单回到摘要面板，并清空 AccessKey 输入（凭据已落盘）
     state.ossEditing = false;
     el.storageOssAk.value = "";
     el.storageOssSk.value = "";
     await loadStorage();
   } catch (e) {
-    renderError(el.storageError, `切换失败：${e.message}`);
+    renderError(el.storageError, t("errors.switchFailed", { message: e.message }));
   } finally {
     state.switchingStorage = false;
     renderStorage();
@@ -915,7 +942,7 @@ async function pickDirectory() {
       el.storageDir.value = result.path;
       renderError(el.storageError, "");
     } else if (!result.canceled) {
-      renderError(el.storageError, result.error || "无法打开目录选择框，请手动输入路径");
+      renderError(el.storageError, result.error || t("errors.pickDirFailed"));
     }
     // canceled：用户主动取消，静默不提示
   } catch (e) {
@@ -930,7 +957,7 @@ async function pickDirectory() {
 
 function startAdd() {
   if (state.presets.length === 0) {
-    renderError(el.credError, "Provider 预设加载失败，请刷新页面重试");
+    renderError(el.credError, t("errors.presetsLoadFailed"));
     return;
   }
   state.editingId = null;
@@ -980,7 +1007,7 @@ function submitForm() {
     model: el.fModel.value.trim() || undefined,
   };
   if (!form.apiBaseUrl || !form.apiKey) {
-    renderError(el.credError, "API Base URL 和 API Key 不能为空");
+    renderError(el.credError, t("errors.credRequired"));
     return;
   }
   renderError(el.credError, "");
@@ -996,9 +1023,10 @@ function submitForm() {
 function confirmDelete(entry) {
   state.dialog = {
     kind: "delete",
-    title: `删除「${entry.label}」`,
-    desc: "确定删除这条 provider 配置吗？此操作不可撤销。",
-    confirmLabel: "删除",
+    titleKey: "credentials.deleteTitle",
+    titleParams: { label: entry.label },
+    descKey: "credentials.deleteDesc",
+    confirmKey: "common.delete",
     payload: entry.id,
   };
   renderDialog();
@@ -1007,9 +1035,9 @@ function confirmDelete(entry) {
 function askResetEmpty() {
   state.dialog = {
     kind: "reset",
-    title: "重置成空配置",
-    desc: "将丢弃当前损坏的凭据文件，写入一份干净的空配置。之前备份的 .corrupt-*.json 文件会保留在配置目录中，可手动找回。确定继续吗？",
-    confirmLabel: "重置成空配置",
+    titleKey: "credentials.resetEmpty",
+    descKey: "credentials.resetDesc",
+    confirmKey: "credentials.resetEmpty",
   };
   renderDialog();
 }
@@ -1092,6 +1120,12 @@ function main() {
   el.logDate.value = state.logDate;
   el.logLines.value = String(state.logLines);
   bindEvents();
+  // 语言切换：静态文案由 i18n.js 的 applyStatic 处理，动态区在此重渲染
+  window.AdminI18n.onLangChange(() => {
+    renderAll();
+    renderStorage();
+    renderDialog();
+  });
   renderAll();
   checkStatus();
 }

@@ -52,6 +52,42 @@ body {
   line-height: 1.6;
 }
 
+/* 语言切换器：标题行右侧，「中文 / English」两按钮，当前语言深色高亮。 */
+.page-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lang-switch {
+  display: inline-flex;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.lang-btn {
+  background: #fff;
+  border: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.lang-btn + .lang-btn {
+  border-left: 1px solid #e5e7eb;
+}
+
+.lang-btn.active {
+  background: #111827;
+  color: #fff;
+}
+
 .card {
   background: #fff;
   border: 1px solid #e5e7eb;
