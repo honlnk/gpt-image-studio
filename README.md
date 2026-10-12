@@ -12,6 +12,8 @@
 
 本地优先的 AI 图片创作工作台。通过聊天式界面调用 OpenAI 兼容 Images API，生成和编辑图片。数据本地存储，无需后端即可使用；需要保护 API 凭据或多人共用时，可接入本地 Companion 或部署为服务器模式。
 
+> **English**: GPT Image Studio is a local-first AI image creation workbench. Generate and edit images through a chat-style UI against any OpenAI-compatible Images API. All data stays on your machine — browser storage by default, with an optional local Companion service or self-hosted server mode for credential protection and multi-user deployments. The UI is bilingual (中文 / English, following your system locale). [Download the desktop app →](https://image.honlnk.com/en/download/) · [Open the web app →](https://image.honlnk.com)
+
 ## 快速开始
 
 选择最适合你的使用方式：

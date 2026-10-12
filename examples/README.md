@@ -5,7 +5,7 @@
 | 示例 | 嵌入方式 | 配置注入 | 子应用后端 |
 |------|---------|---------|-----------|
 | `iframe-embed/` | iframe + URL query 参数 | `?settings=<json>` 或独立参数 | 浏览器直连（apiUrl/apiKey） |
-| `qiankun-host/` | qiankun 微前端 + props | `props: { companionUrl, jwt }` | Companion server 模式（JWT 鉴权） |
+| `qiankun-host/` | qiankun 微前端 + props | `props: { companionUrl, jwt, locale? }` | Companion server 模式（JWT 鉴权） |
 
 ## iframe-embed（iframe 方案）
 
@@ -59,6 +59,10 @@ cd examples/qiankun-host && node serve.mjs
 ```
 
 宿主顶栏会显示子应用挂载状态（MOUNTED）；「重新挂载子应用」按钮实际是整页刷新。
+
+### 界面语言注入（可选）
+
+宿主可通过 props 显式指定子应用语言：`locale: 'zh-CN' | 'en-US'`。传入后子应用界面语言跟随宿主，优先于子应用自身的持久化语言设置（含 auto 检测）；不传则沿用子应用设置。demo 宿主支持 URL 参数覆盖：`http://127.0.0.1:5599/?locale=en-US`（契约测试见 `src/qiankun-embed.test.ts` 的「嵌入态 locale 注入」）。
 
 ### 用 Docker 跑 Companion（推荐，替代上面的第 2 步）
 

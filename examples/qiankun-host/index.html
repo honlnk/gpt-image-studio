@@ -318,7 +318,12 @@
 // ─── 嵌入配置（注入给子应用的 props） ───
 // 配置由宿主服务 serve.mjs 的 /api/config 下发（非敏感）；JWT 由 /api/login 服务端签发，
 // 浏览器不持有任何 secret（与正式部署一致）。
-let HOST_CONFIG = { companionUrl: '', subappUrl: '', user: null, oss: null, jwt: '', hideSidebar: true };
+// locale 可选（i18n 阶段 6）：'zh-CN' | 'en-US'，URL ?locale= 覆盖——传入后子应用
+// 界面语言跟随宿主，优先于子应用自身持久化设置；不传则沿用子应用设置。
+let HOST_CONFIG = { companionUrl: '', subappUrl: '', user: null, oss: null, jwt: '', hideSidebar: true, locale: '' };
+
+const URL_LOCALE = new URLSearchParams(location.search).get('locale');
+if (URL_LOCALE === 'zh-CN' || URL_LOCALE === 'en-US') HOST_CONFIG.locale = URL_LOCALE;
 
 async function loadConfig() {
   try {
@@ -823,6 +828,7 @@ function boot(jwt) {
         companionUrl: HOST_CONFIG.companionUrl,
         jwt: HOST_CONFIG.jwt,
         hideSidebar: HOST_CONFIG.hideSidebar,
+        locale: HOST_CONFIG.locale || undefined,
       },
     },
   ]);

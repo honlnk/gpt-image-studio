@@ -10,8 +10,9 @@
  * 不直接测 main.ts 的渲染副作用（有 app.mount），而是分别测注入逻辑核心
  * （applyEmbeddedConfig）与 window 生命周期挂载约定（source-level 契约校验）。
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { currentLocale, setAppLocale } from "./i18n";
 import { useSettingsStore } from "./stores/settingsStore.js";
 
 describe("qiankun 嵌入态配置注入", () => {
@@ -53,6 +54,59 @@ describe("qiankun 嵌入态配置注入", () => {
   it("独立态默认 isEmbedded=false", () => {
     const store = useSettingsStore();
     expect(store.isEmbedded).toBe(false);
+  });
+
+  // ── i18n 阶段 6：宿主 locale props 注入 ──
+  // setAppLocale 是模块级单例，用例内保存/afterEach 恢复，避免污染同文件其他用例。
+  describe("嵌入态 locale 注入", () => {
+    const prevLocale = currentLocale();
+
+    afterEach(() => {
+      setAppLocale(prevLocale);
+    });
+
+    it("传入 locale 立即切子应用界面语言", () => {
+      const store = useSettingsStore();
+      store.applyEmbeddedConfig({
+        companionUrl: "http://x",
+        jwt: "y",
+        locale: "en-US",
+      });
+
+      expect(currentLocale()).toBe("en-US");
+      expect(store.embeddedLocale).toBe("en-US");
+    });
+
+    it("宿主 locale 优先于持久化语言记录（hydrate 不顶掉）", () => {
+      const store = useSettingsStore();
+      store.applyEmbeddedConfig({
+        companionUrl: "http://x",
+        jwt: "y",
+        locale: "en-US",
+      });
+      // 模拟 hydrate：持久化记录是 zh-CN，宿主显式 en-US 应保持
+      const persisted = store.currentSettings();
+      persisted.language = "zh-CN";
+      store.applySettings(persisted);
+
+      expect(currentLocale()).toBe("en-US");
+      expect(store.language).toBe("zh-CN"); // 记录值不篡改，仅显示语言跟随宿主
+    });
+
+    it("未传 locale 时沿用子应用设置（embeddedLocale 为 null）", () => {
+      const store = useSettingsStore();
+      store.applyEmbeddedConfig({ companionUrl: "http://x", jwt: "y" });
+
+      expect(store.embeddedLocale).toBeNull();
+    });
+
+    it("重复注入未带 locale 时清除上次宿主指定（以最新 props 为准）", () => {
+      const store = useSettingsStore();
+      store.applyEmbeddedConfig({ companionUrl: "http://x", jwt: "y", locale: "en-US" });
+      store.applyEmbeddedConfig({ companionUrl: "http://x", jwt: "y" });
+
+      expect(store.embeddedLocale).toBeNull();
+    });
   });
 });
 

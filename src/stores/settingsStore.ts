@@ -69,6 +69,7 @@ import type {
 import type {
   AnalyticsPromptCapture,
   ApiMode,
+  AppLocale,
   AppSettings,
   ConnectionMode,
   FavoritePrompt,
@@ -174,6 +175,10 @@ export const useSettingsStore = defineStore("settings", () => {
   const isDesktopCompanion = computed(() => desktopCompanion.value !== null);
   // 阶段三 PR7：嵌入态是否隐藏子应用自带侧边栏（默认 true，会话管理交宿主）。见文档 §2.5。
   const hideSidebarInEmbed = ref(true);
+  // i18n 阶段 6：宿主通过 qiankun props 注入的显式 locale（zh-CN / en-US）。
+  // 非空时优先于持久化 language（含 'auto' 检测），仅内存态不落盘——嵌入态
+  // 界面语言跟宿主外壳走，退出嵌入后不影响本地设置。
+  const embeddedLocale = ref<AppLocale | null>(null);
   const apiMode = ref<ApiMode>("images");
   const model = ref(FIXED_IMAGE_MODEL);
   // 界面语言（i18n 改造）：初始值同步读 localStorage 镜像（与连接键同模式），
@@ -604,8 +609,9 @@ export const useSettingsStore = defineStore("settings", () => {
     outputFormat.value = defaults.outputFormat;
     // 语言按记录值回同步（restore 旧备份时语言跟随备份记录）；
     // 'auto' 时重新检测系统 locale，与启动期行为一致。
+    // 嵌入态宿主注入过显式 locale 时以宿主为准（宿主外壳语言优先于子应用记录）。
     language.value = settings.language;
-    setAppLocale(resolveLocale(settings.language));
+    setAppLocale(embeddedLocale.value ?? resolveLocale(settings.language));
     if (!isEmbedded.value) {
       writeStorage(LANGUAGE_MIRROR_KEY, settings.language);
     }
@@ -797,12 +803,16 @@ export const useSettingsStore = defineStore("settings", () => {
     jwt: string;
     /** 嵌入态隐藏侧边栏，省略时默认 true。 */
     hideSidebar?: boolean;
+    /** 宿主显式指定的界面语言（i18n 阶段 6）；省略时沿用子应用自身设置。 */
+    locale?: AppLocale;
   }) {
     companionUrl.value = input.companionUrl;
     companionAccessKey.value = input.jwt;
     connectionMode.value = "localCompanion";
     isEmbedded.value = true;
     hideSidebarInEmbed.value = input.hideSidebar ?? true;
+    embeddedLocale.value = input.locale ?? null;
+    if (input.locale) setAppLocale(input.locale);
   }
 
   /**
@@ -849,6 +859,7 @@ export const useSettingsStore = defineStore("settings", () => {
     connectionMode,
     isEmbedded,
     hideSidebarInEmbed,
+    embeddedLocale,
     isDesktopCompanion,
     language,
     setLanguage,

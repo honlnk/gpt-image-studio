@@ -28,6 +28,7 @@ src/
 - `features/` 承载业务状态和业务编排。
 - `services/` 承载 IndexedDB 访问、Images API 调用、ZIP 备份逻辑和浏览器工具。
 - `shared/` 承载跨模块复用的通用浏览器工具与纯函数。
+- `i18n/`（vue-i18n 实例 + 非组件 `t()`）与 `locales/`（zh-CN / en-US 词库，深层同构）承载全部用户可见文案；新增文案一律进词库，不硬编码。
 - `types/studio.ts` 保存主要业务类型。
 
 目前主要压力点已经从"入口和业务混杂"收敛到"shared 能力边界整理"。应用级入口已经移动到 `src/app/studio/useStudioViewModel.ts`，核心业务 composable 已迁移到 `src/features/*`，Pinia stores 已按领域拆分到 `src/stores/`。Drafts 功能已独立为 feature 模块（`src/features/drafts/useStudioDrafts.ts`）。

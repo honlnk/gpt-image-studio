@@ -165,7 +165,7 @@ See `docs/plans/roadmap.md` for the full business roadmap. Current status:
 ## Conventions
 
 - Commit messages follow Conventional Commits (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `ci:`)
-- UI language is Chinese
+- UI is bilingual (zh-CN default, en-US) via vue-i18n: all new user-visible copy must go through the locale catalogs (`src/locales/{zh-CN,en-US}/*.ts`) with `t()` / `$t()` / `useI18n()` — never hardcode Chinese or English UI strings in components/services. en-US modules are type-isomorphic to zh-CN (`typeof zhModule`), so a missing key fails typecheck. Guard tests: `src/i18n/i18n-keys.test.ts` (key parity), `src/i18n/hardcodedCjk.test.ts` (CJK scan, baseline `scripts/cjk-baseline.json` must stay empty), `src/i18n/messageSyntax.test.ts` (message-compiler syntax; escape literal `@`/`{`/`}` as `{'@'}` etc.). Non-component `.ts` modules import `t` from `src/i18n`. Companion admin page uses its own mini-dictionary (`companion/src/admin/i18n.js`, `window.AdminI18n`); the `/download` marketing page renders per-route locales (`/download` zh, `/en/download` en).
 - Package manager is pnpm (specified in `package.json` `packageManager` field)
 - Branch: develop on `honlnk/dev`, PR to `main`
 - Deploy: GitHub Pages via GitHub Actions on push to `main`

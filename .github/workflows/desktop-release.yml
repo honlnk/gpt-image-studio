@@ -150,6 +150,31 @@ jobs:
       - name: Build desktop bundles
         run: pnpm exec tauri build --bundles ${{ matrix.bundles }}
 
+      # AppImage 目录收录要求：.DirIcon 必须可用。tauri-cli ≤2.11.3 的 bundler
+      # 会把它打成指向构建机绝对路径的死链（图标在 AppImage 内丢失，
+      # AppImage/appimage.github.io lint 直接失败）；上游修复见 tauri PR #15596
+      # （cli 2.11.4+）。这里守门：解包校验 .DirIcon 既存在也不是绝对链接。
+      - name: Verify AppImage .DirIcon
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE=desktop/src-tauri/target/release/bundle
+          APPIMAGE=$(ls "$BUNDLE"/appimage/*.AppImage | head -1)
+          chmod +x "$APPIMAGE"
+          rm -rf /tmp/diricon-check && mkdir -p /tmp/diricon-check
+          # 全量解包（约 110MB，几秒）：pattern 模式在不同 runtime 版本行为不一致
+          (cd /tmp/diricon-check && "$GITHUB_WORKSPACE/$APPIMAGE" --appimage-extract >/dev/null 2>&1)
+          DIRICON=/tmp/diricon-check/squashfs-root/.DirIcon
+          if [ ! -e "$DIRICON" ]; then
+            echo "::error::.DirIcon missing or dangling inside the AppImage"; exit 1
+          fi
+          TARGET=$(readlink "$DIRICON" || true)
+          if [ -n "$TARGET" ] && [ "${TARGET:0:1}" = "/" ]; then
+            echo "::error::.DirIcon is an absolute symlink ($TARGET) — broken inside the AppImage (tauri-cli <2.11.4 bug)"; exit 1
+          fi
+          echo ".DirIcon OK (target: ${TARGET:-regular file})"
+
       - name: Collect & rename artifacts
         shell: bash
         env:

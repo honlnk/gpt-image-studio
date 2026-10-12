@@ -233,6 +233,24 @@ flowchart TD
 
 ## 施工日志
 
+### 2026-10-12 · 阶段 6 · 收尾（README / 嵌入协议 / AGENTS.md / .DirIcon） · ✅ 门禁通过（发布与 PR 回复待用户确认）
+
+**验收结论**
+
+- `pnpm typecheck` / `typecheck:companion` / `pnpm test` 全绿（1453 tests，+4 来自嵌入态 locale 注入）；`pnpm build` 三页正常；`cargo check` 通过。
+- 嵌入协议：`QiankunProps.locale`（`'zh-CN' | 'en-US'`，可选）→ `applyEmbeddedConfig` 存 `embeddedLocale` 并立即 `setAppLocale`；hydrate 的 `applySettings` 以宿主 locale 优先（`embeddedLocale ?? resolveLocale(record)`），记录值不篡改、不落盘；`qiankun-embed.test.ts` 新增 4 例（注入生效 / hydrate 不顶掉 / 缺省 null / 重复注入清除）。examples：qiankun-host 支持 `?locale=` 覆盖并透传 props，README 补「界面语言注入」节。
+- README 顶部加英文简介段（含桌面版 /download 链接）；repo description 已是双语、topics 已含 tauri 等（此前已更新，无需改动）。
+- `.github/release-notes-desktop.md` 改双语（中文主体 + English 镜像段；CI 仅 `{{VERSION}}` 替换，不受影响）。
+- AGENTS.md Conventions：「UI language is Chinese」→ 双语词库约定（新文案一律走 `src/locales` 词库 `t()`，列 key 同构类型与三道守卫测试、Companion 管理页与 /download 的例外路径）。
+- **`.DirIcon` 根因修复**：解包 desktop-v0.3.2 AppImage（squashfs 偏移扫描 + docker unsquashfs）证实 `.DirIcon` 是指向 `/home/runner/work/...` 的**绝对死链**（AppImage 目录 lint 失败项）。上游 tauri-bundler PR #15596 已修（`@tauri-apps/cli` 2.11.4+），本项目锁 2.11.3 → 升 **2.12.2**；`desktop-release.yml` Linux 作业新增「Verify AppImage .DirIcon」守门步骤（全量 `--appimage-extract` 后校验存在 + 非绝对链接，回归即红）。
+- 双语言视觉走查（dev server + 浏览器实测）：设置→通用→English 即时全界面切换（侧栏 / 参数条 / 图库 / 设置九个分区逐项点击）；日期格式随 locale（`2026/09/11` ↔ `09/11/2026`）；`html lang` 与 `document.title` 同步；全 DOM 扫描零裸 key 回显；残留中文均为用户持久化数据（会话标题 / 历史消息），符合「新旧混杂」拍板。
+
+**偏差记录**
+
+1. **桌面端英文环境冒烟未在本机执行**：桌面 webview 语言跟随系统（用户系统为中文），macOS 本地无法构建 Linux AppImage，也无法不改系统语言模拟 en 桌面环境。替代验证：web 侧 en-US 全走查 + i18n 解析链路两端同一 `main.ts` bootstrap（桌面与 web 仅 navigator 来源不同，检测逻辑有单测）。真正的 en 桌面冒烟随 v0.4.0 发布后的产物复检一并做。
+2. **`.DirIcon` 修复的产物级验证顺延**：本地无法产 AppImage，守门检查在 CI 构建时生效；v0.4.0 发布后下载产物复检（同本次 v0.3.2 的解包方法）再回复 PR #9068。
+3. qiankun-host 的 locale 注入走 `?locale=` URL 参数（demo 宿主无独立语言 UI），宿主正式实现时直接传 props 即可——协议与测试均按 props 契约。
+
 ### 2026-10-12 · 阶段 5 · /download 双语 + SEO · ✅ 门禁通过
 
 **验收结论**

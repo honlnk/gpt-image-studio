@@ -13,6 +13,7 @@ import { trackDirective } from './directives/track'
 import { useSettingsStore } from './stores/settingsStore'
 import { configureEmbedding, listenHostMessages } from './services/embeddedBridge'
 import { i18n, setAppLocale, t } from './i18n'
+import type { AppLocale } from './types/studio'
 import {
   getDesktopCompanionConfig,
   initDesktopCompanion,
@@ -81,6 +82,14 @@ interface QiankunProps {
    * 示例：`allowedOrigins: ['https://admin.example.com']`
    */
   allowedOrigins?: string[]
+  /**
+   * 宿主显式指定的界面语言（i18n 阶段 6）：'zh-CN' | 'en-US'。
+   *
+   * 嵌入态下宿主外壳通常有自己的语言切换，传入后子应用界面跟随宿主，
+   * 优先于子应用自身的持久化语言设置（含 'auto' 系统检测）；不传则沿用
+   * 子应用设置。仅内存态，不写回子应用本地。
+   */
+  locale?: AppLocale
 }
 
 function render(props: QiankunProps = {}) {
@@ -114,6 +123,7 @@ function render(props: QiankunProps = {}) {
       companionUrl: props.companionUrl ?? '',
       jwt: props.jwt ?? '',
       hideSidebar: props.hideSidebar,
+      locale: props.locale,
     })
     // 跨域白名单：宿主通过 props.allowedOrigins 注入，供 postMessage 通信桥做 origin 校验。
     // 未配置时仅允许同源（向后兼容 PR7/PR8 demo 的同源场景）。
