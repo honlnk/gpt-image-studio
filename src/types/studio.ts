@@ -13,6 +13,12 @@ export type ApiMode = "images" | "responses";
 export type AnalyticsEventSource = "ui_click" | "ui_input" | "system";
 export type AnalyticsPromptCapture = "none" | "length_only" | "masked" | "raw";
 
+/** 应用支持的语言（i18n 改造，docs/plans/i18n-plan.md）。 */
+export type AppLocale = "zh-CN" | "en-US";
+
+/** 界面语言设置：auto = 跟随系统 locale（zh* → zh-CN，其余 → en-US）。 */
+export type LanguageSetting = "auto" | AppLocale;
+
 export type Conversation = {
   id: string;
   title: string;
@@ -134,6 +140,7 @@ export type AppSettings = {
   model: string;
   /** 直连模式下用户选择的模型（DIRECT_IMAGE_MODEL_OPTIONS 之一）；companion 模式不用。 */
   directModel?: string;
+  language: LanguageSetting;
   promptMode: PromptMode;
   promptWordbanks: PromptWordbanks;
   promptRewriteGuardEnabled: boolean;

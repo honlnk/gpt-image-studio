@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import App from './App.vue'
 import DownloadPage from './pages/download/DownloadPage.vue'
 import { trackDirective } from './directives/track'
+import { i18n } from './i18n'
 
 /**
  * vite-ssg 构建期渲染入口（只在 `vite-ssg build` 的 SSR 阶段被 import，不进浏览器）。
@@ -35,6 +36,7 @@ export async function createApp(route?: string) {
   const app = createSSRApp(App)
   const pinia = createPinia()
   app.use(pinia)
+  app.use(i18n)
   setActivePinia(pinia)
   app.directive('track', trackDirective)
   return { app }

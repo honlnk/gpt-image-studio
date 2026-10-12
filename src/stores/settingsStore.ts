@@ -1,5 +1,11 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
+import {
+  LANGUAGE_MIRROR_KEY,
+  normalizeLanguageSetting,
+  resolveLocale,
+  setAppLocale,
+} from "../i18n";
 import type { DesktopCompanionConfig } from "../services/desktopCompanion";
 import {
   isSizeRatio,
@@ -66,6 +72,7 @@ import type {
   ConnectionMode,
   FavoritePrompt,
   GenerationParams,
+  LanguageSetting,
   PromptMode,
   PromptRewriteGuardHistoryItem,
   PromptWordbankSectionKey,
@@ -168,6 +175,11 @@ export const useSettingsStore = defineStore("settings", () => {
   const hideSidebarInEmbed = ref(true);
   const apiMode = ref<ApiMode>("images");
   const model = ref(FIXED_IMAGE_MODEL);
+  // 界面语言（i18n 改造）：初始值同步读 localStorage 镜像（与连接键同模式），
+  // i18n 实例创建时也读同一镜像；hydrate 的 applySettings 会按记录值回同步。
+  const language = ref<LanguageSetting>(
+    normalizeLanguageSetting(readStorage(LANGUAGE_MIRROR_KEY, "auto")),
+  );
   // 直连模式下用户选择的模型（请求用 model.value；companion 模式下 model 由 /auth/status 覆盖，
   // directModel 独立记忆，切回直连时恢复，避免被 companion 的 provider 模型冲掉）。
   const directModel = ref<DirectImageModel>(FIXED_IMAGE_MODEL);
@@ -532,6 +544,14 @@ export const useSettingsStore = defineStore("settings", () => {
     setDirectModel(FIXED_IMAGE_MODEL);
   });
 
+  /** 切换界面语言：同步切 i18n locale + 写 localStorage 镜像；IndexedDB 持久化走 useStudioSettings 的 watch。 */
+  function setLanguage(value: LanguageSetting) {
+    language.value = value;
+    setAppLocale(resolveLocale(value));
+    if (isEmbedded.value) return;
+    writeStorage(LANGUAGE_MIRROR_KEY, value);
+  }
+
   function applySettings(settings: AppSettings) {
     const defaults = normalizeGenerationParams(settings.defaults);
     // connectionMode 故意不从 settings 记录回写：它是连接配置（决定读哪个后端），
@@ -578,6 +598,13 @@ export const useSettingsStore = defineStore("settings", () => {
     quality.value = defaults.quality;
     background.value = normalizeBackground(defaults.background);
     outputFormat.value = defaults.outputFormat;
+    // 语言按记录值回同步（restore 旧备份时语言跟随备份记录）；
+    // 'auto' 时重新检测系统 locale，与启动期行为一致。
+    language.value = settings.language;
+    setAppLocale(resolveLocale(settings.language));
+    if (!isEmbedded.value) {
+      writeStorage(LANGUAGE_MIRROR_KEY, settings.language);
+    }
     if (connectionMode.value === "direct") {
       applyDirectProviderInfo();
     }
@@ -594,6 +621,7 @@ export const useSettingsStore = defineStore("settings", () => {
       streamPartialImages: streamPartialImages.value,
       model: model.value,
       directModel: directModel.value,
+      language: language.value,
       promptMode: promptMode.value,
       promptWordbanks: clonePromptWordbanks(promptWordbanks.value),
       promptRewriteGuardEnabled: promptRewriteGuardEnabled.value,
@@ -818,6 +846,8 @@ export const useSettingsStore = defineStore("settings", () => {
     isEmbedded,
     hideSidebarInEmbed,
     isDesktopCompanion,
+    language,
+    setLanguage,
     applyEmbeddedConfig,
     applyDesktopCompanionConfig,
     applySettings,

@@ -169,6 +169,9 @@ export function createBackupServices(storage: StudioStorage) {
             analyticsEnabled: data.settings.analyticsEnabled ?? true,
             analyticsPromptCapture:
               data.settings.analyticsPromptCapture ?? "length_only",
+            // 旧备份（i18n 之前）无 language 字段：保留当前选择而非重置为 auto。
+            language:
+              data.settings.language ?? currentSettings?.language ?? "auto",
           }
         : currentSettings;
 

@@ -213,6 +213,34 @@
         <div class="splash-tagline">本地优先的 AI 图片创作工作台</div>
       </div>
     </div>
+    <!-- 首帧语言脚本（i18n 改造）：在 JS bundle 加载前按 localStorage 镜像 + 系统
+         locale 替换 splash 文案与 html lang。键与 src/i18n/index.ts 的
+         LANGUAGE_MIRROR_KEY 保持一致；无中文偏好时英文用户不再看到中文启动画面。 -->
+    <script>
+      (function () {
+        try {
+          var setting = localStorage.getItem('gpt-image-studio:language');
+          var langs = (navigator.languages && navigator.languages.length)
+            ? navigator.languages
+            : [navigator.language || ''];
+          var isZh = setting === 'zh-CN' ||
+            (setting !== 'en-US' && langs.some(function (l) {
+              return typeof l === 'string' && l.toLowerCase().indexOf('zh') === 0;
+            }));
+          var lang = isZh ? 'zh-CN' : 'en-US';
+          document.documentElement.lang = lang;
+          var strings = isZh
+            ? { tagline: '本地优先的 AI 图片创作工作台', loading: '应用加载中' }
+            : { tagline: 'Local-first AI Image Workbench', loading: 'Loading' };
+          var tagline = document.querySelector('#app-splash .splash-tagline');
+          if (tagline) tagline.textContent = strings.tagline;
+          var splash = document.getElementById('app-splash');
+          if (splash) splash.setAttribute('aria-label', strings.loading);
+        } catch (e) {
+          /* localStorage 不可用时保持默认中文 splash */
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

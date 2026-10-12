@@ -12,6 +12,20 @@ type UserConfigWithSSG = UserConfig & { ssgOptions?: Partial<ViteSSGOptions> }
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }): UserConfigWithSSG => ({
+  // vue-i18n 的 esm-bundler 产物引用 __VUE_PROD_DEVTOOLS__ 等编译期常量，
+  // vite-ssg 的 SSR bundle（node 直跑，不走 plugin-vue 的 define 注入）不会替换
+  // 它们——不显式 define 会 ReferenceError（i18n 改造，docs/plans/i18n-plan.md）。
+  define: {
+    __VUE_OPTIONS_API__: 'true',
+    __VUE_PROD_DEVTOOLS__: 'false',
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+  },
+  // vite-ssg 的 SSR 构建默认把 node_modules 依赖外置（Node 直跑原始 .mjs），
+  // vue-i18n 的 esm-bundler 产物里未被替换的编译期常量会 ReferenceError——
+  // 强制打包进 SSR bundle，让上面的 define 生效。
+  ssr: {
+    noExternal: ['vue-i18n'],
+  },
   // 用 '/' 而非 './'：/companion 独立页面需要绝对资源路径，否则 /companion 下
   // ./assets/... 会解析成 /companion/assets/... 导致 404。
   // 自定义域名 image.honlnk.com 在根路径，不再需要相对 base 兼容 GH Pages repo 子路径。

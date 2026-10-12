@@ -90,8 +90,11 @@ export function renderDownloadTemplate(indexHTML: string): string {
   // 提升到 <head>，届时后随元素是 </body>——两种结构都兼容；尾部空白用 \s*
   // 兜底（Windows 构建产物里 </div> 与 </body> 之间可能没有换行）。
   html = replaceOnce(html, /[ \t]*<!-- 启动画面关键样式[\s\S]*?<\/style>\s*/, "", "splash style");
-  // 失配时带上 </body> 前的原文样本——各平台构建产物结构有差异，日志里直接可见
-  const splashMarkup = /[ \t]*<!-- 启动画面：[\s\S]*?<\/div>\s*(?=<script|<\/body>)/;
+  // 失配时带上 </body> 前的原文样本——各平台构建产物结构有差异，日志里直接可见。
+  // splash 标记后可能跟着「首帧语言脚本」（i18n 首帧 splash 文案替换，锚点是其
+  // HTML 注释）——下载页没有 splash，该脚本一并剔除，否则 app-splash 清理检查
+  // 会命中脚本内的 querySelector 字符串误报。
+  const splashMarkup = /[ \t]*<!-- 启动画面：[\s\S]*?<\/div>\s*(?:<!-- 首帧语言脚本[\s\S]*?<\/script>\s*)?(?=<script|<\/body>)/;
   if (!splashMarkup.test(html)) {
     const bodyEnd = html.lastIndexOf("</body>");
     const sample = (bodyEnd === -1 ? html.slice(-500) : html.slice(Math.max(0, bodyEnd - 500), bodyEnd + 20))

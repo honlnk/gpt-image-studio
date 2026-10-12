@@ -25,6 +25,7 @@ const fullSettings: AppSettings = {
   streamImages: false,
   streamPartialImages: 1,
   model: "gpt-image-2",
+  language: "auto",
   directModel: "gpt-image-2.5-flare",
   promptMode: "default",
   promptWordbanks: defaultPromptWordbanks,

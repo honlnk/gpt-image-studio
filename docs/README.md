@@ -32,6 +32,7 @@
 | [用户行为日志计划](plans/analytics-event-logging-plan.md) | 本地行为日志系统方案（V1 采集 + V2 分析层已完成） |
 | [提示词模式计划](plans/prompt-modes.md) | 默认 / 安全 / 创意 / 开放四档提示词模式（已落地） |
 | [Responses API 流式预览](plans/responses-streaming-plan.md) | 浏览器直连模式接入 Responses API + 流式图片预览（已落地） |
+| [中英双语 i18n 改造计划](plans/i18n-plan.md) | vue-i18n 中英双语改造（主应用 + Companion 管理页 + /download），已定稿待开工 |
 
 ## Companion
 

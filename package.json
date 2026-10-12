@@ -44,7 +44,8 @@
     "@tauri-apps/api": "^2.11.1",
     "pinia": "^3.0.4",
     "qrcode": "^1.5.4",
-    "vue": "^3.5.32"
+    "vue": "^3.5.32",
+    "vue-i18n": "^11.4.14"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
