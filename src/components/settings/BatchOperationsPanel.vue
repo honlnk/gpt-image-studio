@@ -33,7 +33,7 @@ const emit = defineEmits<{
   previewImage: [id: string];
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const activeBatchPanel = ref<BatchPanel>("images");
 const confirmAction = ref<ConfirmAction | null>(null);
@@ -257,7 +257,7 @@ function compareConversations(a: Conversation, b: Conversation) {
 }
 
 function compareText(a: string, b: string) {
-  return a.localeCompare(b, "zh-Hans", {
+  return a.localeCompare(b, locale.value, {
     numeric: true,
     sensitivity: "base",
   });

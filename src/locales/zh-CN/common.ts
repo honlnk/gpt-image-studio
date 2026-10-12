@@ -21,11 +21,7 @@ export default {
     "qrCodeAlt": "QQ 群二维码"
   },
   "time": {
-    "unknown": "未知时间",
-    "justNow": "刚刚",
-    "withinAMinute": "一分钟内",
-    "minutesAgo": "{n} 分钟前",
-    "hoursAgo": "{n} 小时前"
+    "unknown": "未知时间"
   },
   "format": {
     "unknownSize": "未知大小"

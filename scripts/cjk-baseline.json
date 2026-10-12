@@ -5,6 +5,5 @@
   "src/pages/download/PlatformCards.vue",
   "src/pages/download/content.ts",
   "src/pages/download/releaseClient.ts",
-  "src/pages/download/ssgTemplate.ts",
-  "src/services/promptBuilder.ts"
+  "src/pages/download/ssgTemplate.ts"
 ]

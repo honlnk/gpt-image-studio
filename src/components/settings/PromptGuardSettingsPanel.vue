@@ -5,7 +5,7 @@ import { PROMPT_REWRITE_GUARD_PREFIX } from "../../services/promptRewriteGuard";
 import { copyText as copyTextToClipboard } from "../../shared/clipboard";
 import type { PromptRewriteGuardHistoryItem } from "../../types/studio";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const props = defineProps<{
   enabled: boolean;
@@ -67,7 +67,7 @@ async function copyHistory(item: PromptRewriteGuardHistoryItem) {
 function formatHistoryTime(dateString: string) {
   const timestamp = Date.parse(dateString);
   if (!Number.isFinite(timestamp)) return t("settings.promptGuard.unknownTime");
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(locale.value, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

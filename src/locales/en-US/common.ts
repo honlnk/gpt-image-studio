@@ -23,11 +23,7 @@ const common: ZhCommon = {
     "qrCodeAlt": "QQ Group QR code"
   },
   "time": {
-    "unknown": "Unknown time",
-    "justNow": "Just now",
-    "withinAMinute": "Within a minute",
-    "minutesAgo": "{n} min ago",
-    "hoursAgo": "{n} hr ago"
+    "unknown": "Unknown time"
   },
   "format": {
     "unknownSize": "Unknown size"

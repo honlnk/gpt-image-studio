@@ -151,8 +151,12 @@ describe("images API requests", () => {
 
     const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(requestBody.prompt).toContain(`${PROMPT_REWRITE_GUARD_PREFIX}\n`);
-    expect(requestBody.prompt).toContain("当前模式：创意");
-    expect(requestBody.prompt).toContain("用户原始提示词：\n画一张图");
+    expect(requestBody.prompt).toContain(
+      t("prompt.wrapper.currentMode", { mode: t("prompt.mode.creative") }),
+    );
+    expect(requestBody.prompt).toContain(
+      `${t("prompt.wrapper.userPromptHeader")}\n画一张图`,
+    );
   });
 
   it("uses custom prompt rewrite guard text when provided", async () => {

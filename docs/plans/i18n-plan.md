@@ -232,6 +232,22 @@ flowchart TD
 
 ## 施工日志
 
+### 2026-10-12 · 阶段 3 · 格式化 / 排序 / 提示词模板 / 桌面壳 · ✅ 门禁通过
+
+**验收结论**
+
+- `pnpm typecheck` / `pnpm test` 全绿（1441 tests，+2 来自 promptBuilder 双语参数化）；`cargo check` 通过；CJK 基线 8 → 7（仅剩 download 页 7 文件，归阶段 5）。
+- Intl locale 化：`dateTime.ts` 相对时间改 `Intl.RelativeTimeFormat`（numeric:auto，每次调用按 currentLocale 新建）；`PromptGuardSettingsPanel` / `FavoritePromptsPanel` 的 `DateTimeFormat("zh-CN")` 与 `ImageLibrary` / `BatchOperationsPanel` 的 `localeCompare("zh-Hans")` 全部改 `useI18n().locale`（模板/computed 内调用保持响应）。
+- promptBuilder 双语模板：模式标签/说明/包装结构全部词库化到 `prompt.*`（zh/en 两套，en 为意译），发送给 provider 的包装跟随界面语言（用户拍板项）。
+- 桌面壳：lib.rs 子窗口标题 `Companion 管理页` → `Companion Admin`，全部 Err 消息与 eprintln 日志英文化（剩余中文均为文档注释）。
+- 测试：dateTime 断言改 en-US RTF 输出（"now"/"6 minutes ago"）；promptBuilder 按 locale 参数化（zh/en 双 describe）；imagesApi 两处提示词断言改 t() 拼接。
+
+**偏差记录**
+
+1. **common.time 词表瘦身**：RTF 接管后 `justNow/withinAMinute/minutesAgo/hoursAgo` 四键从两语言词库删除（仅存 `unknown`），zh 输出从「一分钟内」变为「1分钟前」（RTF 标准行为）。
+2. **desktopCompanion 错误回流包装不适用**：`open_admin_window` 的两个前端调用点均 `.catch(() => {})` 吞错，Rust Err 不达 UI；按「Rust 侧统一英文」收口，未加前端包装层。
+3. analyticsExport 报告表头/说明的 locale 化在阶段 2d 已随 t() 改造完成（导出时求值），本阶段仅复核确认。
+
 ### 2026-10-12 · 阶段 2d · 动态消息层抽取 + 测试断言迁移 · ✅ 门禁通过
 
 **验收结论**

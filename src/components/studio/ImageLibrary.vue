@@ -21,7 +21,7 @@ import {
 import StorageUsagePanel from "../image-library/StorageUsagePanel.vue";
 import DropdownSelect from "../ui/DropdownSelect.vue";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 type SortKey = "time" | "name" | "size";
 type SortDirection = "asc" | "desc";
@@ -100,7 +100,7 @@ const sortOptions = computed<ReadonlyArray<{ value: SortKey; label: string }>>(
 const trimmedSearch = computed(() => searchText.value.trim().toLowerCase());
 
 function compareText(a: string, b: string) {
-  return a.localeCompare(b, "zh-Hans", {
+  return a.localeCompare(b, locale.value, {
     numeric: true,
     sensitivity: "base",
   });

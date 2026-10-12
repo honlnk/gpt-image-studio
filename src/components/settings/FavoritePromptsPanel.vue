@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { FavoritePrompt } from "../../types/studio";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const props = defineProps<{
   prompts: FavoritePrompt[];
@@ -74,7 +74,7 @@ function resetDraft() {
 function formatUpdatedAt(dateString: string) {
   const timestamp = Date.parse(dateString);
   if (!Number.isFinite(timestamp)) return t("settings.favoritePrompts.unknownTime");
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(locale.value, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",

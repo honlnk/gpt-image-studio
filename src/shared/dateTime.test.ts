@@ -5,6 +5,7 @@ import {
   isoTimestamp,
 } from "./dateTime";
 
+// 测试环境 i18n 解析为 en-US，相对时间标签由 Intl.RelativeTimeFormat(en-US) 产出。
 describe("date time helpers", () => {
   const base = Date.parse("2026-05-08T10:00:00.000Z");
 
@@ -13,17 +14,15 @@ describe("date time helpers", () => {
   });
 
   it("formats recent timestamps as relative labels", () => {
-    expect(formatRelativeTime("2026-05-08T09:59:45.000Z", base)).toBe(
-      t("common.time.justNow"),
-    );
+    expect(formatRelativeTime("2026-05-08T09:59:45.000Z", base)).toBe("now");
     expect(formatRelativeTime("2026-05-08T09:59:20.000Z", base)).toBe(
-      t("common.time.withinAMinute"),
+      "1 minute ago",
     );
     expect(formatRelativeTime("2026-05-08T09:54:00.000Z", base)).toBe(
-      t("common.time.minutesAgo", { n: 6 }),
+      "6 minutes ago",
     );
     expect(formatRelativeTime("2026-05-08T08:00:00.000Z", base)).toBe(
-      t("common.time.hoursAgo", { n: 2 }),
+      "2 hours ago",
     );
   });
 
