@@ -1,5 +1,6 @@
 import type { ImageAsset, Message } from "../../../types/studio";
 import { imageExtension as imageExtensionFromMime } from "../../../shared/fileFormatters";
+import { t } from "../../../i18n";
 
 /**
  * 从 ImageAsset 推导扩展名（不含点）。
@@ -19,7 +20,7 @@ export function imageDownloadName(image?: ImageAsset) {
 }
 
 export function durationLabel(milliseconds?: number) {
-  if (milliseconds === undefined) return "耗时未知";
+  if (milliseconds === undefined) return t("chat.imageFormat.durationUnknown");
   if (milliseconds < 1000) return `${milliseconds}ms`;
 
   const seconds = milliseconds / 1000;
@@ -31,5 +32,5 @@ export function durationLabel(milliseconds?: number) {
 }
 
 export function messageErrorText(message: Message) {
-  return message.errorMessage || "请重试这个图片卡片。";
+  return message.errorMessage || t("chat.imageFormat.defaultError");
 }

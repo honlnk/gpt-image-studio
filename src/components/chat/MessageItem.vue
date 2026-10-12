@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { formatRelativeTime } from "../../shared/dateTime";
 import { useGenerationStore } from "../../stores/generationStore";
 import type { ImageAsset, Message } from "../../types/studio";
@@ -8,6 +9,8 @@ import PendingGenerationCard from "./message-parts/PendingGenerationCard.vue";
 import ReferencedImageList from "./message-parts/ReferencedImageList.vue";
 import ResultImageCard from "./message-parts/ResultImageCard.vue";
 import UserMessageActions from "./message-parts/UserMessageActions.vue";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   attachedImageIds: string[];
@@ -121,7 +124,7 @@ function stopPendingTimer() {
     >
       <div class="mb-1.5 flex items-center gap-2 text-xs text-gray-500">
         <span class="font-semibold text-gray-700">
-          {{ message.role === "user" ? "你" : "Image Studio" }}
+          {{ message.role === "user" ? $t("chat.message.you") : "Image Studio" }}
         </span>
         <span>{{ createdAtLabel }}</span>
       </div>

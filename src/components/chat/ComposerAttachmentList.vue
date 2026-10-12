@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, watchEffect } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ImageAsset } from "../../types/studio";
 import { useImagesStore } from "../../stores/imagesStore";
 import { formatFileSizeCompact } from "../../shared/fileFormatters";
 import Tooltip from "../ui/Tooltip.vue";
+
+const { t } = useI18n();
 
 type EditingPairAttachment = {
   kind: "editingPair";
@@ -162,7 +165,7 @@ const totalSizeLabel = computed(() =>
         <button
           class="absolute right-0.5 top-0.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
           type="button"
-          aria-label="移除引用图片"
+          :aria-label="$t('chat.attachments.remove')"
           v-track="{ name: 'chat.remove_attachment', payload: { attachmentId: item.id } }"
           @click="handleRemove($event, item)"
         >

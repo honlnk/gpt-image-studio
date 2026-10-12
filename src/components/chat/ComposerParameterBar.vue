@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useComposerStore } from "../../stores/composerStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import ComposerEditorPanel from "./ComposerEditorPanel.vue";
@@ -8,14 +9,15 @@ const emit = defineEmits<{
   "update:editModeEnabled": [value: boolean];
 }>();
 
+const { t } = useI18n();
 const composer = useComposerStore();
 const settings = useSettingsStore();
 const promptModeLabel = computed(() => {
   const labels = {
-    default: "默认",
-    safe: "安全",
-    creative: "创意",
-    adult: "开放",
+    default: t("chat.parameterBar.promptModeDefault"),
+    safe: t("chat.parameterBar.promptModeSafe"),
+    creative: t("chat.parameterBar.promptModeCreative"),
+    adult: t("chat.parameterBar.promptModeOpen"),
   };
   return labels[settings.promptMode];
 });
@@ -38,12 +40,12 @@ watch(
     <span
       class="cursor-not-allowed rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-400"
     >
-      模型: {{ settings.model }}
+      {{ $t("chat.parameterBar.model") }}: {{ settings.model }}
     </span>
     <span
       class="cursor-not-allowed rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-400"
     >
-      内容: {{ promptModeLabel }}
+      {{ $t("chat.parameterBar.content") }}: {{ promptModeLabel }}
     </span>
     <button
       v-if="settings.providerCapability.mask"
@@ -57,7 +59,8 @@ watch(
       v-track="{ name: 'generation.edit_mode_toggled', payload: { enabled: !composer.editModeEnabled } }"
       @click="emit('update:editModeEnabled', !composer.editModeEnabled)"
     >
-      区域编辑: {{ composer.editModeEnabled ? "开" : "关" }}
+      {{ $t("chat.parameterBar.editMode") }}:
+      {{ composer.editModeEnabled ? $t("chat.parameterBar.on") : $t("chat.parameterBar.off") }}
     </button>
     <span class="relative inline-flex">
       <button
@@ -66,7 +69,7 @@ watch(
         type="button"
         @click="composer.toggleEditor('size')"
       >
-        尺寸: {{ settings.sizeLabel }}
+        {{ $t("chat.parameterBar.size") }}: {{ settings.sizeLabel }}
       </button>
       <ComposerEditorPanel
         v-if="composer.activeEditor === 'size'"
@@ -80,7 +83,7 @@ watch(
         type="button"
         @click="composer.toggleEditor('count')"
       >
-        数量: {{ settings.imageCount }}
+        {{ $t("chat.parameterBar.count") }}: {{ settings.imageCount }}
       </button>
       <ComposerEditorPanel
         v-if="composer.activeEditor === 'count'"
@@ -94,7 +97,7 @@ watch(
         type="button"
         @click="composer.toggleEditor('background')"
       >
-        背景: {{ settings.backgroundLabel }}
+        {{ $t("chat.parameterBar.background") }}: {{ settings.backgroundLabel }}
       </button>
       <ComposerEditorPanel
         v-if="composer.activeEditor === 'background'"
@@ -108,7 +111,7 @@ watch(
         type="button"
         @click="composer.toggleEditor('format')"
       >
-        格式: {{ settings.formatLabel }}
+        {{ $t("chat.parameterBar.format") }}: {{ settings.formatLabel }}
       </button>
       <ComposerEditorPanel
         v-if="composer.activeEditor === 'format'"

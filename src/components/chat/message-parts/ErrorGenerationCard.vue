@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import type { Message } from "../../../types/studio";
 import Tooltip from "../../ui/Tooltip.vue";
 import { messageErrorText } from "./messageImageFormat";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   message: Message;
@@ -15,7 +18,7 @@ const emit = defineEmits<{
 <template>
   <figure
     class="overflow-hidden rounded-xl border border-red-100 bg-white"
-    aria-label="图片生成失败"
+    :aria-label="$t('chat.errorCard.ariaLabel')"
   >
     <div
       class="flex h-48 flex-col items-center justify-center gap-3 bg-red-50/60 px-6 text-center"
@@ -39,7 +42,9 @@ const emit = defineEmits<{
         </svg>
       </div>
       <div>
-        <div class="text-sm font-medium text-red-700">生成中断</div>
+        <div class="text-sm font-medium text-red-700">{{
+          $t("chat.errorCard.interrupted")
+        }}</div>
         <Tooltip
           :text="messageErrorText(props.message)"
           preferred-placement="top"
@@ -56,7 +61,9 @@ const emit = defineEmits<{
     <figcaption class="px-3 py-2">
       <div class="flex items-center justify-between gap-3">
         <div class="min-w-0">
-          <div class="truncate text-sm font-medium">未生成图片</div>
+          <div class="truncate text-sm font-medium">{{
+            $t("chat.errorCard.noImage")
+          }}</div>
           <Tooltip
             :text="messageErrorText(props.message)"
             preferred-placement="top"
@@ -65,7 +72,11 @@ const emit = defineEmits<{
             :hide-delay="500"
           >
             <div class="truncate text-xs text-gray-500">
-              生成失败：{{ messageErrorText(props.message) }}
+              {{
+                $t("chat.errorCard.failedWith", {
+                  reason: messageErrorText(props.message),
+                })
+              }}
             </div>
           </Tooltip>
         </div>
@@ -75,7 +86,7 @@ const emit = defineEmits<{
           type="button"
           @click="emit('retryMessage', props.message)"
         >
-          重试
+          {{ $t("common.retry") }}
         </button>
       </div>
     </figcaption>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { storeToRefs } from "pinia";
 import { useComposerStore } from "../../stores/composerStore";
 import { useGenerationStore } from "../../stores/generationStore";
@@ -16,6 +17,8 @@ import QqGroupModal from "../ui/QqGroupModal.vue";
 import { DOWNLOAD_PAGE_URL } from "../../shared/downloads";
 import { openAdminWindow } from "../../services/desktopCompanion";
 import { isTauriRuntime } from "../../services/storage";
+
+const { t } = useI18n();
 
 type ChatWorkspaceHeader = {
   activeConversation?: Conversation;
@@ -91,6 +94,26 @@ function openCompanionAdmin() {
   void openAdminWindow(`${base}/admin`).catch(() => {});
 }
 let dragDepth = 0;
+
+// Companion 状态按钮的 title 提示：嵌入态在线时管理页由宿主提供；本地/桌面态
+// 在线附版本号并提示可点击管理。
+const companionStatusTitle = computed(() => {
+  const status = header.companionStatus;
+  if (!status) return "";
+  if (settings.isEmbedded) {
+    return status.online
+      ? t("chat.workspace.companionOnlineEmbedded")
+      : t("chat.workspace.companionOffline");
+  }
+  if (status.online) {
+    return status.version
+      ? t("chat.workspace.companionOnlineManage", {
+          version: status.version,
+        })
+      : t("chat.workspace.companionOnline");
+  }
+  return t("chat.workspace.companionOfflineManage");
+});
 
 function isImageAttached(id: string) {
   return images.activeAttachments.some((image) => image.id === id);
@@ -187,7 +210,7 @@ function imageFilesFromTransfer(
 <template>
   <section
     class="relative flex min-h-0 min-w-0 flex-1 flex-col"
-    aria-label="聊天工作区"
+    :aria-label="$t('chat.workspace.ariaLabel')"
     @dragenter.prevent="handleDragEnter"
     @dragleave.prevent="handleDragLeave"
     @dragover.prevent
@@ -198,8 +221,8 @@ function imageFilesFromTransfer(
       class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-white/85 backdrop-blur-sm"
     >
       <div class="rounded-2xl border border-dashed border-gray-400 bg-white px-8 py-6 text-center shadow-xl">
-        <div class="text-base font-semibold text-gray-900">松开以上传图片</div>
-        <div class="mt-1 text-sm text-gray-500">图片会保存到图片库，并作为下一条消息的引用图</div>
+        <div class="text-base font-semibold text-gray-900">{{ $t("chat.workspace.dropTitle") }}</div>
+        <div class="mt-1 text-sm text-gray-500">{{ $t("chat.workspace.dropHint") }}</div>
       </div>
     </div>
 
@@ -212,10 +235,10 @@ function imageFilesFromTransfer(
           type="button"
           @click="actions.openConversations"
         >
-          会话
+          {{ $t("chat.workspace.conversations") }}
         </button>
         <h1 class="truncate text-base font-semibold text-gray-800">
-          {{ header.activeConversation?.title || '新的对话' }}
+          {{ header.activeConversation?.title || $t("chat.workspace.newConversationTitle") }}
         </h1>
         <!-- 嵌入态隐藏侧边栏时,会话删/改入口由 header 承载(独立态走侧边栏)。
              仅在有激活会话时显示。点击复用 actions.deleteConversation/
@@ -225,8 +248,8 @@ function imageFilesFromTransfer(
             v-track="'conversation.rename_clicked'"
             class="shrink-0 cursor-pointer rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
             type="button"
-            aria-label="重命名会话"
-            title="重命名会话"
+            :aria-label="$t('chat.workspace.renameConversation')"
+            :title="$t('chat.workspace.renameConversation')"
             @click="actions.renameConversation(header.activeConversation!.id)"
           >
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -238,8 +261,8 @@ function imageFilesFromTransfer(
             v-track="{ name: 'conversation.delete_clicked', payload: { conversationId: header.activeConversation!.id } }"
             class="shrink-0 cursor-pointer rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
             type="button"
-            aria-label="删除会话"
-            title="删除会话"
+            :aria-label="$t('chat.workspace.deleteConversation')"
+            :title="$t('chat.workspace.deleteConversation')"
             @click="actions.deleteConversation(header.activeConversation!.id)"
           >
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -256,7 +279,7 @@ function imageFilesFromTransfer(
           v-if="generation.pendingJobCount > 0"
           class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
         >
-          正在生成 {{ generation.pendingJobCount }} 张
+          {{ $t("chat.workspace.generating", { count: generation.pendingJobCount }) }}
         </span>
         <button
           v-if="header.companionStatus?.show"
@@ -267,15 +290,7 @@ function imageFilesFromTransfer(
               : 'text-amber-600 hover:bg-amber-50'
           "
           type="button"
-          :title="
-            settings.isEmbedded
-              ? header.companionStatus.online
-                ? 'Companion 在线（server 模式管理页由宿主提供）'
-                : 'Companion 离线'
-              : header.companionStatus.online
-                ? `Companion 在线${header.companionStatus.version ? ' v' + header.companionStatus.version : ''}，点击管理`
-                : 'Companion 离线，点击管理'
-          "
+          :title="companionStatusTitle"
           @click="openCompanionAdmin"
         >
           <span
@@ -283,7 +298,7 @@ function imageFilesFromTransfer(
             :class="header.companionStatus.online ? 'bg-green-500' : 'bg-amber-400'"
           />
           <span class="hidden sm:inline">
-            {{ header.companionStatus.online ? 'Companion' : '离线' }}
+            {{ header.companionStatus.online ? 'Companion' : $t('chat.workspace.offline') }}
           </span>
         </button>
         <a
@@ -292,7 +307,7 @@ function imageFilesFromTransfer(
           target="_blank"
           rel="noopener"
           class="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-          title="下载桌面版（macOS / Windows / Linux）"
+          :title="$t('chat.workspace.downloadDesktop')"
         >
           <svg
             class="h-4 w-4"
@@ -308,13 +323,13 @@ function imageFilesFromTransfer(
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          <span class="hidden sm:inline">桌面版</span>
+          <span class="hidden sm:inline">{{ $t("chat.workspace.desktopLabel") }}</span>
         </a>
         <button
           class="cursor-pointer rounded-lg p-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
           type="button"
-          aria-label="QQ 交流群"
-          title="QQ 交流群：扫码加群讨论"
+          :aria-label="$t('chat.workspace.qqGroup')"
+          :title="$t('chat.workspace.qqGroupTitle')"
           @click="showQqModal = true"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
@@ -327,13 +342,13 @@ function imageFilesFromTransfer(
           target="_blank"
           rel="noopener noreferrer"
           class="cursor-pointer rounded-lg p-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-          aria-label="GitHub 仓库"
+          :aria-label="$t('chat.workspace.githubRepo')"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         </a>
         <button
           class="cursor-pointer rounded-lg p-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
-          aria-label="打开设置"
+          :aria-label="$t('chat.workspace.openSettings')"
           type="button"
           @click="actions.openSettings"
         >
@@ -356,7 +371,7 @@ function imageFilesFromTransfer(
           type="button"
           @click="actions.setLibraryOpen(!header.isLibraryOpen)"
         >
-          {{ header.isLibraryOpen ? "隐藏图片库" : "图片库" }}
+          {{ header.isLibraryOpen ? $t("chat.workspace.hideLibrary") : $t("chat.workspace.library") }}
         </button>
       </div>
     </header>

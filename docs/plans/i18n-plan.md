@@ -232,6 +232,22 @@ flowchart TD
 
 ## 施工日志
 
+### 2026-10-12 · 阶段 2b · chat + studio 组件文案抽取 · ✅ 门禁通过
+
+**验收结论**
+
+- `pnpm typecheck` / `pnpm test` 全绿（1439 tests）；CJK 基线 67 → 49（chat 14 文件 + studio 4 文件清零）。
+- 词库：`chat` 域 0 → 126 键（emptyState/list/message/userActions/resultCard/errorCard/pendingCard/references/imageFormat/input/attachments/editor/parameterBar/maskEditor/workspace/sidebar 十六个子命名空间）；`library` 域 0 → 28 键（shell/preview）。
+- 合并走通用脚本 `scripts/i18n-merge.mjs <module> <draft...>`（本阶段新增，2c/2d 复用）+ `scripts/i18n-verify-refs.mjs`（18 文件 158 处 key 引用全部可解析）。
+- messageImageFormat.ts（非组件 .ts）走模块级 `import { t } from "../../../i18n"`，函数体内调用保持切语言响应。
+
+**偏差记录**
+
+1. **store 下发的选项 label 暂留中文**：ComposerEditorPanel 的分辨率/比例/背景/格式选项 label、sizeLabel/customSizeError 来自 settingsStore（`settings.sizeResolutionOptions` 等），按「store 字符串归 2d」划线留待下一波——本波只做组件内硬编码。
+2. **EditMaskModal 的 `new Error("无法生成遮罩图片。")`**：该 rejection 不在组件内展示，本可不转；为过 CJK 零残留门禁仍包了 t()（错误消息随语言切换）。
+3. 带内嵌元素（`<kbd>`、加粗 span、可选 ` v{version}`）的句子沿用 2a 的拆 key 拼接方案，未引入 `<i18n-t>`；Companion 状态 title 拆「有版本/无版本」两 key 保中文逐字还原。
+4. ImageLibrary 排序标签复用 `settings.batch.sortName/sortTime`，sortSize 不存在故新建 `library.shell.sortSize`；跨域复用 settings 键属首次，可接受（含义一致）。
+
 ### 2026-10-12 · 阶段 2a · settings 面板文案抽取 · ✅ 门禁通过
 
 **验收结论**

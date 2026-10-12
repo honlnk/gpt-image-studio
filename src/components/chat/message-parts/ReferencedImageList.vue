@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import type { ImageAsset } from "../../../types/studio";
+
+const { t } = useI18n();
 
 defineProps<{
   imageById: (id: string) => ImageAsset | undefined;
@@ -26,7 +29,7 @@ const emit = defineEmits<{
       :disabled="!imageById(imageId)"
       @click="imageById(imageId) && emit('attachImage', imageId)"
     >
-      {{ imageById(imageId)?.name || "图片已删除，无法显示" }}
+      {{ imageById(imageId)?.name || $t("chat.references.deletedImage") }}
     </button>
   </div>
 </template>

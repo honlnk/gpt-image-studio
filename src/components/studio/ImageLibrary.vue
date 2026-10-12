@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { track } from "../../features/analytics/useAnalyticsTracker";
 import { useComposerStore } from "../../stores/composerStore";
 import { useConversationsStore } from "../../stores/conversationsStore";
@@ -19,6 +20,8 @@ import {
 } from "../image-library/imageTagColors";
 import StorageUsagePanel from "../image-library/StorageUsagePanel.vue";
 import DropdownSelect from "../ui/DropdownSelect.vue";
+
+const { t } = useI18n();
 
 type SortKey = "time" | "name" | "size";
 type SortDirection = "asc" | "desc";
@@ -69,22 +72,30 @@ const availableFormats = computed(() => {
 });
 
 // 三个筛选下拉的选项（自绘 DropdownSelect 需要 {value,label} 数组）。
-const sourceOptions = [
-  { value: "all", label: "全部来源" },
-  ...Object.entries(SOURCE_CLASS_LABELS).map(([value, label]) => ({
+// 来源/排序/格式标签走 i18n，保证切换语言时下拉选项响应更新。
+const SOURCE_LABEL_KEYS: Record<ImageSourceClass, string> = {
+  generated: "library.shell.sourceGenerated",
+  edited: "library.shell.sourceEdited",
+  imported: "library.shell.sourceImported",
+};
+const sourceOptions = computed(() => [
+  { value: "all", label: t("library.shell.sourceAll") },
+  ...Object.entries(SOURCE_CLASS_LABELS).map(([value]) => ({
     value,
-    label,
+    label: t(SOURCE_LABEL_KEYS[value as ImageSourceClass]),
   })),
-];
+]);
 const formatOptions = computed(() => [
-  { value: "all", label: "全部格式" },
+  { value: "all", label: t("library.shell.formatAll") },
   ...availableFormats.value,
 ]);
-const SORT_OPTIONS: ReadonlyArray<{ value: SortKey; label: string }> = [
-  { value: "time", label: "时间" },
-  { value: "name", label: "名称" },
-  { value: "size", label: "大小" },
-];
+const sortOptions = computed<ReadonlyArray<{ value: SortKey; label: string }>>(
+  () => [
+    { value: "time", label: t("settings.batch.sortTime") },
+    { value: "name", label: t("settings.batch.sortName") },
+    { value: "size", label: t("library.shell.sortSize") },
+  ],
+);
 
 const trimmedSearch = computed(() => searchText.value.trim().toLowerCase());
 
@@ -332,15 +343,15 @@ function setImageTagColor(
         ? 'max-lg:translate-x-0'
         : 'max-lg:translate-x-full',
     ]"
-    aria-label="图片库"
+    :aria-label="$t('library.shell.ariaLabel')"
   >
     <div class="border-b border-gray-200 px-4 py-3">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <span class="text-base font-semibold text-gray-800">图片库</span>
-          <span class="text-sm text-gray-500"
-            >{{ imageCountLabel }} 张图片</span
-          >
+          <span class="text-base font-semibold text-gray-800">{{ $t("library.shell.title") }}</span>
+          <span class="text-sm text-gray-500">{{
+            $t("library.shell.imageCount", { count: imageCountLabel })
+          }}</span>
         </div>
         <div class="flex items-center gap-1">
           <button
@@ -348,11 +359,11 @@ function setImageTagColor(
             type="button"
             @click="emit('openBatchOperations')"
           >
-            批量下载
+            {{ $t("library.shell.batchDownload") }}
           </button>
           <button
             class="cursor-pointer rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 lg:hidden"
-            aria-label="关闭图片库"
+            :aria-label="$t('library.shell.closeLibrary')"
             type="button"
             @click="composer.setLibraryOpen(false)"
           >
@@ -386,7 +397,7 @@ function setImageTagColor(
           v-track="{ name: 'library.filter_changed', payload: { scope: 'current' } }"
           @click="activeFilter = 'current'"
         >
-          当前会话
+          {{ $t("library.shell.scopeCurrent") }}
         </button>
         <button
           :class="[
@@ -399,12 +410,12 @@ function setImageTagColor(
           v-track="{ name: 'library.filter_changed', payload: { scope: 'all' } }"
           @click="activeFilter = 'all'"
         >
-          全部图片
+          {{ $t("library.shell.scopeAll") }}
         </button>
       </div>
       <div class="mt-2 flex items-center gap-2 rounded-lg bg-gray-50 px-2 py-2">
         <button
-          aria-label="不过滤颜色"
+          :aria-label="$t('library.shell.filterNoColor')"
           :class="[
             'h-3 w-3 cursor-pointer rounded-full border transition-transform hover:scale-105',
             activeColorFilter === 'all'
@@ -419,7 +430,7 @@ function setImageTagColor(
         <button
           v-for="color in IMAGE_TAG_COLORS"
           :key="color"
-          :aria-label="`筛选${color}`"
+          :aria-label="$t('library.shell.filterByColor', { color })"
           :class="[
             'h-3 w-3 cursor-pointer rounded-full border transition-transform hover:scale-105',
             activeColorFilter === color
@@ -449,13 +460,13 @@ function setImageTagColor(
         <input
           v-model="searchText"
           class="min-w-0 flex-1 bg-transparent text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none"
-          placeholder="搜索图片名"
+          :placeholder="$t('library.shell.searchPlaceholder')"
           type="search"
           @input="onSearchInput"
         />
         <button
           v-if="searchText"
-          aria-label="清除搜索"
+          :aria-label="$t('library.shell.clearSearch')"
           class="shrink-0 cursor-pointer rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           type="button"
           @click="searchText = ''"
@@ -470,14 +481,14 @@ function setImageTagColor(
 
       <div class="mt-2 grid grid-cols-3 gap-1.5">
         <DropdownSelect
-          aria-label="按来源筛选"
+          :aria-label="$t('library.shell.filterBySource')"
           :model-value="sourceFilter"
           :options="sourceOptions"
           size="sm"
           @update:model-value="onSourceFilterChange"
         />
         <DropdownSelect
-          aria-label="按格式筛选"
+          :aria-label="$t('library.shell.filterByFormat')"
           :disabled="availableFormats.length === 0"
           :model-value="formatFilter"
           :options="formatOptions"
@@ -486,15 +497,15 @@ function setImageTagColor(
         />
         <div class="flex min-w-0 items-center gap-0.5">
           <DropdownSelect
-            aria-label="排序方式"
+            :aria-label="$t('library.shell.sortBy')"
             class="min-w-0 flex-1"
             :model-value="sortKey"
-            :options="SORT_OPTIONS"
+            :options="sortOptions"
             size="sm"
             @update:model-value="onSortKeyChange"
           />
           <button
-            :aria-label="sortDirection === 'asc' ? '升序' : '降序'"
+            :aria-label="sortDirection === 'asc' ? $t('library.shell.sortAsc') : $t('library.shell.sortDesc')"
             class="shrink-0 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-1 text-gray-600 hover:bg-gray-50"
             type="button"
             @click="toggleSortDirection"
@@ -522,7 +533,7 @@ function setImageTagColor(
         type="button"
         @click="resetFilters"
       >
-        清除筛选/排序
+        {{ $t("library.shell.clearFilters") }}
       </button>
     </div>
 
@@ -531,9 +542,12 @@ function setImageTagColor(
         v-if="isScopeIncomplete"
         class="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-700"
       >
-        筛选仅作用于已载入图片（{{ filteredImages.length }}/{{
-          libraryImages.length
-        }} 条），向下滚动加载更多
+        {{
+          $t("library.shell.partialScopeHint", {
+            loaded: filteredImages.length,
+            total: libraryImages.length,
+          })
+        }}
       </p>
       <ImageGrid
         :active-filter="activeFilter"

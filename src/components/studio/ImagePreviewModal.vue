@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ImageAsset } from "../../types/studio";
 import { useImagesStore } from "../../stores/imagesStore";
 import { imageDownloadName } from "../../shared/fileFormatters";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   image?: ImageAsset;
@@ -145,7 +148,7 @@ function handleEdit() {
             <span
               class="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white"
             ></span>
-            <span class="text-sm text-white/70">加载中…</span>
+            <span class="text-sm text-white/70">{{ $t("common.loading") }}</span>
           </div>
           <div
             v-if="maskUrl"
@@ -181,37 +184,37 @@ function handleEdit() {
           <button
             class="cursor-pointer rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-white/15"
             type="button"
-            title="编辑"
+            :title="$t('library.preview.edit')"
             @click="handleEdit"
           >
-            编辑
+            {{ $t("library.preview.edit") }}
           </button>
           <a
             v-if="image.previewUrl"
             class="rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-white/15"
-            title="下载"
+            :title="$t('library.preview.download')"
             :download="imageDownloadName(image)"
             :href="image.previewUrl"
           >
-            下载
+            {{ $t("library.preview.download") }}
           </a>
           <button
             class="cursor-pointer rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-white/15"
             :class="isTransformed ? 'text-white' : 'text-white/40'"
             type="button"
-            title="重置视图"
+            :title="$t('library.preview.resetView')"
             :disabled="!isTransformed"
             @click="resetView"
           >
-            重置
+            {{ $t("library.preview.reset") }}
           </button>
           <button
             class="cursor-pointer rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-white/15"
             type="button"
-            title="关闭"
+            :title="$t('common.close')"
             @click="emit('close')"
           >
-            关闭
+            {{ $t("common.close") }}
           </button>
         </div>
       </div>
