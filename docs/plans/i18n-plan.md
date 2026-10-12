@@ -233,7 +233,7 @@ flowchart TD
 
 ## 施工日志
 
-### 2026-10-12 · 阶段 6 · 收尾（README / 嵌入协议 / AGENTS.md / .DirIcon） · ✅ 门禁通过（发布与 PR 回复待用户确认）
+### 2026-10-12 · 阶段 6 · 收尾（README / 嵌入协议 / AGENTS.md / .DirIcon） · ✅ 门禁通过（发布链路已执行）
 
 **验收结论**
 
@@ -250,6 +250,8 @@ flowchart TD
 1. **桌面端英文环境冒烟未在本机执行**：桌面 webview 语言跟随系统（用户系统为中文），macOS 本地无法构建 Linux AppImage，也无法不改系统语言模拟 en 桌面环境。替代验证：web 侧 en-US 全走查 + i18n 解析链路两端同一 `main.ts` bootstrap（桌面与 web 仅 navigator 来源不同，检测逻辑有单测）。真正的 en 桌面冒烟随 v0.4.0 发布后的产物复检一并做。
 2. **`.DirIcon` 修复的产物级验证顺延**：本地无法产 AppImage，守门检查在 CI 构建时生效；v0.4.0 发布后下载产物复检（同本次 v0.3.2 的解包方法）再回复 PR #9068。
 3. qiankun-host 的 locale 注入走 `?locale=` URL 参数（demo 宿主无独立语言 UI），宿主正式实现时直接传 props 即可——协议与测试均按 props 契约。
+
+**发布记录（用户确认后执行）**：desktop-v0.4.0 tag 触发三平台 CI 全绿（含新增 .DirIcon 守门步骤）；产物复检——v0.4.0 AppImage 内 `.DirIcon -> GPT Image Studio.png` 相对链接、目标真实存在（v0.3.2 为 `/home/runner/...` 绝对死链）；PR AppImage/appimage.github.io#9068 已回复说明双语策略与 .DirIcon 修复并请维护者重跑 CI；下载页兜底版本同步 0.4.0（515c053）。
 
 ### 2026-10-12 · 阶段 5 · /download 双语 + SEO · ✅ 门禁通过
 

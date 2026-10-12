@@ -18,7 +18,7 @@
 | :--- | :--- | :--- |
 | [产品路线图](roadmap.md) | 持续 | 业务功能演进（聊天 UI、图片编辑、备份、分析、提示词模式等），第一到第五阶段已完成 |
 | [架构演进路线图](evolution-roadmap.md) | 持续 | 四阶段纲领（存储抽象 / Companion 后端化 / 子项目化 / APP 化），阶段一至三已完成，阶段四待启动 |
-| [中英双语 i18n 改造计划](i18n-plan.md) | 已落地（阶段 0–6 完成；desktop-v0.4.0 发布与 PR #9068 回复待用户确认） | vue-i18n 中英双语（主应用 + Companion 管理页 + /download），语言跟随系统 locale，源自 AppImage 目录收录需求 |
+| [中英双语 i18n 改造计划](i18n-plan.md) | 已落地（阶段 0–6 完成；desktop-v0.4.0 已发布并复检 .DirIcon 修复，PR #9068 已回复） | vue-i18n 中英双语（主应用 + Companion 管理页 + /download），语言跟随系统 locale，源自 AppImage 目录收录需求 |
 | [SEO 策略与可搜索性改进](../guides/seo-strategy.md) | 调研完成，待执行 | 公网可搜索性诊断、竞品分析、技术方案选型、关键词策略、外链与分发计划 |
 
 ## 已归档
