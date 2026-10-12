@@ -131,7 +131,7 @@
     }
     </script>
 
-    <!-- 启动画面关键样式：必须 inline——要在外部 CSS/JS bundle 加载完成前就生效 -->
+    <!-- Splash critical styles: must stay inline so they take effect before external CSS/JS bundles load -->
     <style>
       #app-splash {
         position: fixed;
@@ -183,9 +183,10 @@
   </head>
   <body>
     <div id="app"></div>
-    <!-- 启动画面：纯 HTML + inline CSS，页面解析即呈现（不依赖 JS bundle），
-         盖住预渲染的空工作台；JS 就绪后由 main.ts 淡出并移除。
-         Logo 内联自 public/favicon.svg（改图标需同步此处）。 -->
+    <!-- Splash markup: plain HTML + inline CSS, rendered as the page parses (no JS
+         bundle dependency); covers the empty prerendered workbench until main.ts
+         fades it out and removes it. Logo inlined from public/favicon.svg (keep in
+         sync when the icon changes). -->
     <div id="app-splash" role="status" aria-label="应用加载中">
       <div id="app-splash-inner">
         <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 64 64" fill="none" role="img" aria-label="GPT Image Studio">
@@ -213,9 +214,10 @@
         <div class="splash-tagline">本地优先的 AI 图片创作工作台</div>
       </div>
     </div>
-    <!-- 首帧语言脚本（i18n 改造）：在 JS bundle 加载前按 localStorage 镜像 + 系统
-         locale 替换 splash 文案与 html lang。键与 src/i18n/index.ts 的
-         LANGUAGE_MIRROR_KEY 保持一致；无中文偏好时英文用户不再看到中文启动画面。 -->
+    <!-- First-frame language script (i18n): swaps splash copy and html lang based on
+         the localStorage mirror + system locale before the JS bundle loads. Key must
+         match LANGUAGE_MIRROR_KEY in src/i18n/index.ts; non-zh users no longer see a
+         Chinese splash. -->
     <script>
       (function () {
         try {

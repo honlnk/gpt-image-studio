@@ -68,8 +68,8 @@ const chat: ZhChat = {
   },
   "input": {
     "label": "Image request",
-    "placeholderGenerate": "Describe the image you want to generate... Type @ to insert a favorite prompt",
-    "placeholderEdit": "Describe what to change based on the reference images... Type @ to insert a favorite prompt",
+    "placeholderGenerate": "Describe the image you want to generate... Type {'@'} to insert a favorite prompt",
+    "placeholderEdit": "Describe what to change based on the reference images... Type {'@'} to insert a favorite prompt",
     "uploadImage": "Upload image",
     "send": "Send",
     "sendAnyway": "Send anyway",

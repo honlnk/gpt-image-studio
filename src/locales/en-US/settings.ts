@@ -289,7 +289,7 @@ const settings: ZhSettings = {
   },
   "favoritePrompts": {
     "title": "Favorite Prompts",
-    "usageHint": "Type @ in the composer, pick with the arrow keys, then press Space or Enter to insert.",
+    "usageHint": "Type {'@'} in the composer, pick with the arrow keys, then press Space or Enter to insert.",
     "create": "New",
     "empty": "No favorite prompts yet",
     "edit": "Edit",

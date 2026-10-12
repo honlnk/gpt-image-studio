@@ -17,6 +17,7 @@ import {
   type DesktopPlatformKey,
   type DesktopReleaseInfo,
 } from "../../shared/downloads";
+import { t } from "../../i18n";
 
 const RELEASES_API =
   "https://api.github.com/repos/honlnk/gpt-image-studio/releases?per_page=20";
@@ -134,8 +135,10 @@ export function detectPlatform(
   return "unknown";
 }
 
-/** 把字节数格式化为「约 x.x MB」（下载按钮旁的体积提示）。 */
+/** 把字节数格式化为本地化的体积提示（下载按钮旁，词键 download.ui.approxSize）。 */
 export function formatAssetSize(sizeBytes: number): string {
   if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) return "";
-  return `约 ${(sizeBytes / 1024 / 1024).toFixed(1)} MB`;
+  return t("download.ui.approxSize", {
+    size: (sizeBytes / 1024 / 1024).toFixed(1),
+  });
 }

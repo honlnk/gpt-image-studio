@@ -12,7 +12,7 @@ const EMBEDDED_CSS_FILE = '__EMBEDDED_CSS_FILE__'
 import { trackDirective } from './directives/track'
 import { useSettingsStore } from './stores/settingsStore'
 import { configureEmbedding, listenHostMessages } from './services/embeddedBridge'
-import { i18n, t } from './i18n'
+import { i18n, setAppLocale, t } from './i18n'
 import {
   getDesktopCompanionConfig,
   initDesktopCompanion,
@@ -266,12 +266,21 @@ function injectEmbeddedCss(container: HTMLElement | string) {
 // splash 标记已在 SSG 模板改写时剔除（ssgTemplate.ts），这里无需处理 splash。
 // 下载页组件经动态 import 代码分割，主页路径的加载不受影响。
 function isDownloadPagePath(pathname: string): boolean {
-  return pathname === '/download' || pathname === '/download/'
+  return (
+    pathname === '/download' ||
+    pathname === '/download/' ||
+    pathname === '/en/download' ||
+    pathname === '/en/download/'
+  )
 }
 
 async function mountDownloadPage() {
+  // 页面语言由路由决定（/download → zh-CN，/en/download → en-US），与 SSG 产物一致；
+  // 文案走 i18n 词库 download.* 域（词表见 src/locales/{zh-CN,en-US}/download.ts）。
   const { default: DownloadPage } = await import('./pages/download/DownloadPage.vue')
   app = createApp(DownloadPage)
+  app.use(i18n)
+  setAppLocale(window.location.pathname.startsWith('/en/') ? 'en-US' : 'zh-CN')
   app.mount('#app', false)
 }
 

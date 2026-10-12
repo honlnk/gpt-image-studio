@@ -1,9 +1,1 @@
-[
-  "src/pages/download/DownloadPage.vue",
-  "src/pages/download/FaqSection.vue",
-  "src/pages/download/MacInstallGuide.vue",
-  "src/pages/download/PlatformCards.vue",
-  "src/pages/download/content.ts",
-  "src/pages/download/releaseClient.ts",
-  "src/pages/download/ssgTemplate.ts"
-]
+[]

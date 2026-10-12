@@ -165,7 +165,8 @@ flowchart TD
 1. **key 完整性测试**：`src/i18n/i18n-keys.test.ts` 深遍历 zh-CN / en-US 词库，断言 key 集合相等。
 2. **同构类型**：en-US 词库类型为 `typeof zhCN`，缺模块 / 缺 key 直接 typecheck 失败。
 3. **CJK 硬编码扫描**：脚本剥离注释后扫描 `src/**/*.{vue,ts}` 与 `companion/src/admin/` 的中文字符串字面量（白名单：`locales/`、`*.test.ts`），挂进 `pnpm test`；阶段 2 收尾起作为常驻门禁。
-4. **AGENTS.md 约定**：新文案必须走词库（阶段 6 写入）。
+4. **消息语法编译测试**（阶段 5 新增）：`src/i18n/messageSyntax.test.ts` 强制编译两词库全部叶子键，拦截裸 `@`、不配对花括号、复数管道误用等 vue-i18n 消息编译错误（该类错误 typecheck / key 相等性均不覆盖，曾致 SSG build 失败）。
+5. **AGENTS.md 约定**：新文案必须走词库（阶段 6 写入）。
 
 ## 不做清单（本期显式排除）
 
@@ -231,6 +232,27 @@ flowchart TD
 - `docs/architecture/architecture.md` 如涉及文案 / 格式化模块描述，按需小改。
 
 ## 施工日志
+
+### 2026-10-12 · 阶段 5 · /download 双语 + SEO · ✅ 门禁通过
+
+**验收结论**
+
+- `pnpm typecheck` / `pnpm test` 全绿（1449 tests）；`pnpm build` 三页渲染（`/`、`/download`、`/en/download`）；`verify-refs` 79 处引用 / 6 文件全解析；CJK 基线 **7 → 0，src 全域中文硬编码清零**。
+- `content.ts` 重写为纯数据管道（Node 侧安全，不引 i18n 实例）：`DownloadLocale` / `DOWNLOAD_ROUTES` / `DOWNLOAD_URLS`（绝对生产 URL）/ `downloadLocaleFromRoute` / `downloadMeta` / `downloadFaqs` / `buildDownloadJsonLd` / `buildDownloadFaqJsonLd`；组件可见文案走词库 `$t("download.ui.*")`（83 叶子键 zh/en 同构），FAQ 结构化数据走 `downloadFaqs(locale)` 具名导出。
+- 路由三处布线：`vite.config.ts` includedRoutes 加 `/en/download`、`onBeforePageRender` 委托 `renderDownloadTemplate(indexHTML, locale)`；`entry-ssg.ts` download 两路由各自 `createSSRApp` + 显式 `setAppLocale`；`main.ts` `isDownloadPagePath` 兼容 `/en/download` 前缀。
+- `ssgTemplate.ts` 按 locale 改写：`<html lang>`、title / description / OG / Twitter 全 meta、canonical + zh-CN / en / x-default 三条 hreflang、JSON-LD 按 locale（SoftwareApplication + FAQPage）、splash 样式与标记剔除；每步 fail-loud。
+- 构建产物核验：两页 title / og:title / canonical / hreflang / FAQ JSON-LD 语言各自正确；`app-splash` 零残留；en 页 body 唯一 CJK 是页头「中文」互链（目标语言自称，符合惯例）。
+- `pnpm preview` + 浏览器实测：中文浏览器访问 `/en/download/` 出现中文提示条「本页提供中文版本。切换到中文」（指向生产 URL）；中文页不出条（语言匹配）；两页页头互链（English / 中文）均为绝对 URL 且方向正确。
+- `ssgTemplate.test.ts` 重写为 zh（8 例）+ en（4 例）双 describe，直接读真实 `index.html` 做回归契约。
+
+**偏差记录**
+
+1. **词库裸 `@` 触发 SSG build 失败**（计划未预见）：chat placeholder ×4 / settings favoritePrompts usageHint ×2 含裸 `@`，vue-i18n 消息语法中 `@` 是链接消息前缀，懒编译在 SSG 渲染 `/` 时抛 `parseLinked` 异常——typecheck / keys 相等性测试均不覆盖消息编译。修复：转义为 `{'@'}`；新增 `src/i18n/messageSyntax.test.ts`（守卫机制清单 +1：全量叶子键强制编译两词库）。
+2. **工作室路由 SSG 显式 `setAppLocale('zh-CN')`**：Node 侧无 `navigator`，i18n 默认解析 en-US，会破坏 `/` 的中文 SEO 基线（计划未提及 SSG 环境的语言解析）。
+3. **语言互链用绝对生产 URL**（`DOWNLOAD_URLS`）而非站点相对路径：SSG 模板侧无路由上下文，且营销页双语言即两个规范地址。
+4. **index.html 三个锚点注释英文化**（Splash critical styles / Splash markup: / First-frame language script）+ `ssgTemplate.ts` 锚点正则、构建抛错、注入注释同步英文化——基线清零的代价；fail-loud 契约测试读真实 index.html，两侧同步修改后即回归验证。
+5. `releaseClient.test.ts` 体积断言从字面量「约 1.9 MB」迁移为 `t("download.ui.approxSize", { size: "1.9" })`（沿用测试断言迁移模式）。
+6. `en-US/generation.ts` 的 `nounImage` / `nounEditResult` 含 `|` 复数管道，为 `t(key, count)` 合法用法（zh 无复数单字符串），非违规字符。
 
 ### 2026-10-12 · 阶段 4 · Companion 管理页双语 · ✅ 门禁通过
 

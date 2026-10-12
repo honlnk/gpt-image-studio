@@ -5,6 +5,7 @@ import { defineConfig, type Plugin, type Rollup, type UserConfig } from 'vite'
 import type { ViteSSGOptions } from 'vite-ssg'
 import { copyFileSync, existsSync, rmSync } from 'node:fs'
 import { renderDownloadTemplate } from './src/pages/download/ssgTemplate'
+import { downloadLocaleFromRoute } from './src/pages/download/content'
 
 // vite 的 UserConfig 没有声明 vite-ssg 的 ssgOptions 字段（vite-ssg 未做模块增强），
 // 用交叉类型补上，保持 defineConfig 的类型检查。
@@ -54,12 +55,14 @@ export default defineConfig(({ mode }): UserConfigWithSSG => ({
   // 否则所有路由都会带首页的 SEO 元信息。
   ssgOptions: {
     entry: 'src/entry-ssg.ts',
-    includedRoutes: () => ['/', '/download'],
-    // nested：产出 dist/download/index.html，GitHub Pages 对 /download 和 /download/
-    // 都能直接服务（flat 的 download.html 只覆盖前者，带尾斜杠会落进 404 fallback）。
+    includedRoutes: () => ['/', '/download', '/en/download'],
+    // nested：产出 dist/download/index.html（与 dist/en/download/index.html），
+    // GitHub Pages 对 /download 和 /download/ 都能直接服务（flat 的 download.html
+    // 只覆盖前者，带尾斜杠会落进 404 fallback）。
     dirStyle: 'nested',
     onBeforePageRender(route, indexHTML) {
-      return route === '/download' ? renderDownloadTemplate(indexHTML) : indexHTML
+      const locale = downloadLocaleFromRoute(route)
+      return locale ? renderDownloadTemplate(indexHTML, locale) : indexHTML
     },
     onFinished() {
       rmSync('dist/.vite', { recursive: true, force: true })

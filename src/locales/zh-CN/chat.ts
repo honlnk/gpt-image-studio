@@ -67,8 +67,8 @@ export default {
   },
   "input": {
     "label": "输入图片需求",
-    "placeholderGenerate": "描述你想生成的图片... 输入 @ 可插入常用提示词",
-    "placeholderEdit": "描述你想基于引用图修改什么... 输入 @ 可插入常用提示词",
+    "placeholderGenerate": "描述你想生成的图片... 输入 {'@'} 可插入常用提示词",
+    "placeholderEdit": "描述你想基于引用图修改什么... 输入 {'@'} 可插入常用提示词",
     "uploadImage": "上传图片",
     "send": "发送",
     "sendAnyway": "继续发送",

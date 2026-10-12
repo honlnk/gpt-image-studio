@@ -287,7 +287,7 @@ export default {
   },
   "favoritePrompts": {
     "title": "常用提示词",
-    "usageHint": "在输入框输入 @ 后，可以用上下键选择，按空格或回车插入。",
+    "usageHint": "在输入框输入 {'@'} 后，可以用上下键选择，按空格或回车插入。",
     "create": "新建",
     "empty": "还没有常用提示词",
     "edit": "编辑",
