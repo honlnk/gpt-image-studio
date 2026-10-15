@@ -111,7 +111,10 @@ jobs:
         include:
           - { name: macOS, os: macos-latest, bundles: dmg }
           - { name: Windows, os: windows-latest, bundles: nsis }
-          - { name: Linux, os: ubuntu-latest, bundles: "appimage,deb" }
+          # Linux 必须用最老支持基线构建（22.04 = GLIBC 2.35）：ubuntu-latest（24.04）
+          # 产出的二进制要求 GLIBC 2.38/2.39，在 Ubuntu 22.04 / Debian 12 上启动即崩
+          # （AppImage 目录测试机即 22.04，v0.4.0 曾因此启动失败）。
+          - { name: Linux, os: ubuntu-22.04, bundles: "appimage,deb" }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,11 +153,13 @@ jobs:
       - name: Build desktop bundles
         run: pnpm exec tauri build --bundles ${{ matrix.bundles }}
 
-      # AppImage 目录收录要求：.DirIcon 必须可用。tauri-cli ≤2.11.3 的 bundler
-      # 会把它打成指向构建机绝对路径的死链（图标在 AppImage 内丢失，
-      # AppImage/appimage.github.io lint 直接失败）；上游修复见 tauri PR #15596
-      # （cli 2.11.4+）。这里守门：解包校验 .DirIcon 既存在也不是绝对链接。
-      - name: Verify AppImage .DirIcon
+      # AppImage 产物守门（两项都是曾真实翻车的问题）：
+      # 1. .DirIcon 必须可用——tauri-cli ≤2.11.3 会把它打成指向构建机绝对路径的
+      #    死链（AppImage 目录 lint 失败项；上游修复见 tauri PR #15596，cli 2.11.4+）。
+      # 2. GLIBC 符号基线 ≤2.35（Ubuntu 22.04 LTS）——构建机若升到更新发行版
+      #    （如 ubuntu-latest=24.04 → GLIBC 2.39），产物在 22.04/Debian 12 上启动
+      #    即崩（v0.4.0 曾因此被目录测试机判为启动失败）。
+      - name: Verify AppImage (.DirIcon + GLIBC baseline)
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -162,10 +167,11 @@ jobs:
           BUNDLE=desktop/src-tauri/target/release/bundle
           APPIMAGE=$(ls "$BUNDLE"/appimage/*.AppImage | head -1)
           chmod +x "$APPIMAGE"
-          rm -rf /tmp/diricon-check && mkdir -p /tmp/diricon-check
+          rm -rf /tmp/appimage-check && mkdir -p /tmp/appimage-check
           # 全量解包（约 110MB，几秒）：pattern 模式在不同 runtime 版本行为不一致
-          (cd /tmp/diricon-check && "$GITHUB_WORKSPACE/$APPIMAGE" --appimage-extract >/dev/null 2>&1)
-          DIRICON=/tmp/diricon-check/squashfs-root/.DirIcon
+          (cd /tmp/appimage-check && "$GITHUB_WORKSPACE/$APPIMAGE" --appimage-extract >/dev/null 2>&1)
+          ROOT=/tmp/appimage-check/squashfs-root
+          DIRICON=$ROOT/.DirIcon
           if [ ! -e "$DIRICON" ]; then
             echo "::error::.DirIcon missing or dangling inside the AppImage"; exit 1
           fi
@@ -174,6 +180,18 @@ jobs:
             echo "::error::.DirIcon is an absolute symlink ($TARGET) — broken inside the AppImage (tauri-cli <2.11.4 bug)"; exit 1
           fi
           echo ".DirIcon OK (target: ${TARGET:-regular file})"
+          # 主二进制 + 顶层捆绑库的最大 GLIBC 符号版本不得高于构建基线
+          MAX_GLIBC=$(
+            { strings "$ROOT/usr/bin/gpt-image-studio";
+              find "$ROOT/usr/lib" -maxdepth 1 -name '*.so*' -exec strings {} + 2>/dev/null; } \
+            | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -uV | tail -1 | cut -d_ -f2
+          )
+          NEWEST=$(printf '%s\n' "2.35" "$MAX_GLIBC" | sort -uV | tail -1)
+          if [ "$NEWEST" != "2.35" ]; then
+            echo "::error::AppImage requires GLIBC $MAX_GLIBC (> 2.35 baseline) — it would fail to launch on Ubuntu 22.04. Pin the Linux build to ubuntu-22.04."
+            exit 1
+          fi
+          echo "GLIBC baseline OK (max symbol: $MAX_GLIBC)"
 
       - name: Collect & rename artifacts
         shell: bash
