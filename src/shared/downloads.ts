@@ -43,34 +43,34 @@ export type DesktopReleaseInfo = {
 };
 
 /**
- * 兜底 release（desktop-v0.4.0：中英双语 i18n + AppImage .DirIcon 修复）。
+ * 兜底 release（desktop-v0.4.1：Linux 构建基线改 ubuntu-22.04，修 GLIBC 兼容性）。
  * 资产命名遵循 desktop-release.yml 头部契约；releaseClient 的模式匹配对
  * 点/空格/连字符三种历史命名风格都兼容。
  */
 export const FALLBACK_RELEASE: DesktopReleaseInfo = {
-  version: "0.4.0",
-  tag: "desktop-v0.4.0",
-  publishedAt: "2026-10-12T12:38:49Z",
+  version: "0.4.1",
+  tag: "desktop-v0.4.1",
+  publishedAt: "2026-10-15T12:11:32Z",
   assets: {
     macArm64: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.4.0/GPT-Image-Studio_0.4.0_aarch64.dmg",
-      name: "GPT-Image-Studio_0.4.0_aarch64.dmg",
-      sizeBytes: 34535165,
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.4.1/GPT-Image-Studio_0.4.1_aarch64.dmg",
+      name: "GPT-Image-Studio_0.4.1_aarch64.dmg",
+      sizeBytes: 34521706,
     },
     windowsX64: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.4.0/GPT-Image-Studio_0.4.0_x64-setup.exe",
-      name: "GPT-Image-Studio_0.4.0_x64-setup.exe",
-      sizeBytes: 36751251,
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.4.1/GPT-Image-Studio_0.4.1_x64-setup.exe",
+      name: "GPT-Image-Studio_0.4.1_x64-setup.exe",
+      sizeBytes: 36743973,
     },
     linuxAppImage: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.4.0/GPT-Image-Studio_0.4.0_amd64.AppImage",
-      name: "GPT-Image-Studio_0.4.0_amd64.AppImage",
-      sizeBytes: 121625080,
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.4.1/GPT-Image-Studio_0.4.1_amd64.AppImage",
+      name: "GPT-Image-Studio_0.4.1_amd64.AppImage",
+      sizeBytes: 121383416,
     },
     linuxDeb: {
-      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.4.0/GPT-Image-Studio_0.4.0_amd64.deb",
-      name: "GPT-Image-Studio_0.4.0_amd64.deb",
-      sizeBytes: 46498936,
+      url: "https://github.com/honlnk/gpt-image-studio/releases/download/desktop-v0.4.1/GPT-Image-Studio_0.4.1_amd64.deb",
+      name: "GPT-Image-Studio_0.4.1_amd64.deb",
+      sizeBytes: 46498580,
     },
   },
 };
