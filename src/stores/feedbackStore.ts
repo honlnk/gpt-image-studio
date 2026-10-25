@@ -9,6 +9,20 @@ export type StudioNotice = {
   message: string;
 };
 
+/** 阻断性错误横幅上的可点动作（如「去设置」「重试」）。 */
+export type StudioNoticeAction = {
+  label: string;
+  /** solid=实底主按钮，outline=描边次按钮。 */
+  tone?: "solid" | "outline";
+  handler: () => void;
+};
+
+export type StudioErrorBanner = {
+  id: number;
+  message: string;
+  actions: StudioNoticeAction[];
+};
+
 export type StudioConfirmDialog = {
   title: string;
   description: string;
@@ -17,7 +31,10 @@ export type StudioConfirmDialog = {
 };
 
 export const useFeedbackStore = defineStore("feedback", () => {
+  // 底部轻提示：成功/常规信息等非阻断反馈，短时自动消失。
   const notice = ref<StudioNotice | null>(null);
+  // 顶部错误横幅：生成失败等阻断性错误，带动作按钮，常驻直到用户处理或关闭。
+  const errorBanner = ref<StudioErrorBanner | null>(null);
   const confirmDialog = ref<StudioConfirmDialog | null>(null);
   let noticeTimer: ReturnType<typeof setTimeout> | null = null;
   let confirmDialogResolver: ((confirmed: boolean) => void) | null = null;
@@ -28,6 +45,21 @@ export const useFeedbackStore = defineStore("feedback", () => {
       noticeTimer = null;
     }
     notice.value = null;
+  }
+
+  function dismissErrorBanner() {
+    errorBanner.value = null;
+  }
+
+  function notifyErrorBanner(
+    message: string,
+    actions: StudioNoticeAction[] = [],
+  ) {
+    errorBanner.value = {
+      id: Date.now(),
+      message,
+      actions,
+    };
   }
 
   function cancelConfirmDialog() {
@@ -86,15 +118,15 @@ export const useFeedbackStore = defineStore("feedback", () => {
     }, noticeDuration(type));
   }
 
+  // 底部轻提示宁短勿长：常规确认快速消失，失败/警示类略长保证能读完。
   function noticeDuration(type: StudioNoticeType) {
     switch (type) {
       case "error":
-        return 7000;
+        return 3000;
       case "warning":
-      case "info":
-        return 4500;
+        return 2500;
       default:
-        return 3500;
+        return 1500;
     }
   }
 
@@ -102,9 +134,12 @@ export const useFeedbackStore = defineStore("feedback", () => {
     acceptConfirmDialog,
     cancelConfirmDialog,
     confirmDialog,
+    dismissErrorBanner,
     dismissNotice,
+    errorBanner,
     notice,
     notifyError,
+    notifyErrorBanner,
     notifyInfo,
     notifySuccess,
     notifyWarning,

@@ -44,7 +44,12 @@ type UseStudioGenerationInput = {
   supportsEdit: ComputedRef<boolean>;
   /** provider 不支持图生图、但用户带了参考图时，提交前的提示回调。 */
   notifyUnsupportedEdit: () => void;
-  onApiConfigurationError?: (error: unknown) => void;
+  /** 生成整体失败（聚合后无图且无 pending）时上抛，供 UI 弹顶部错误横幅。 */
+  onGenerationError?: (
+    message: Message,
+    errorText: string,
+    isConfigurationError: boolean,
+  ) => void;
   onStorageError: (error: unknown) => void;
   conversationExists: (id: string) => boolean;
   persistConversation: (conversation: Conversation) => Promise<void>;

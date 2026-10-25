@@ -47,11 +47,8 @@ const chat: ZhChat = {
     "refresh": "Refresh",
     "download": "Download"
   },
-  "errorCard": {
-    "ariaLabel": "Image generation failed",
-    "interrupted": "Generation interrupted",
-    "noImage": "No image generated",
-    "failedWith": "Generation failed: {reason}"
+  "errorBanner": {
+    "title": "Generation interrupted"
   },
   "pendingCard": {
     "ariaLabel": "Generating image",

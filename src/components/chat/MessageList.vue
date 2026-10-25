@@ -27,7 +27,6 @@ const emit = defineEmits<{
   loadMessageConfig: [message: Message];
   previewImage: [id: string];
   refreshImage: [message: Message, imageId: string];
-  retryMessage: [message: Message];
 }>();
 
 const now = useNow();
@@ -114,7 +113,6 @@ watch(
         @refresh-image="
           (message, imageId) => emit('refreshImage', message, imageId)
         "
-        @retry-message="emit('retryMessage', $event)"
       />
     </div>
   </div>

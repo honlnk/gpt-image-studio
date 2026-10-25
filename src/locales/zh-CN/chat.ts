@@ -46,11 +46,8 @@ export default {
     "refresh": "刷新",
     "download": "下载"
   },
-  "errorCard": {
-    "ariaLabel": "图片生成失败",
-    "interrupted": "生成中断",
-    "noImage": "未生成图片",
-    "failedWith": "生成失败：{reason}"
+  "errorBanner": {
+    "title": "生成中断"
   },
   "pendingCard": {
     "ariaLabel": "图片生成中",

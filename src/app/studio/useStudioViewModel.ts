@@ -7,6 +7,7 @@ import { useStudioConversations } from "../../features/conversations";
 import { useStudioDrafts } from "../../features/drafts/useStudioDrafts";
 import { useStudioFeedback } from "../../features/feedback";
 import { useFeedbackStore } from "../../stores/feedbackStore";
+import type { StudioNoticeAction } from "../../stores/feedbackStore";
 import {
   createDirectImagesClient,
   createLocalCompanionImagesClient,
@@ -303,9 +304,10 @@ export function useStudioViewModel() {
       messages: services.messages,
     },
     supportsEdit: computed(() => settings.providerCapability.value.edit),
+    // 提交前校验（模型不支持图生图）属非阻断提醒，走底部轻提示即可。
     notifyUnsupportedEdit: () =>
-      feedback.notifyError(t("common.unsupportedEdit")),
-    onApiConfigurationError: openApiSettingsFromGenerationError,
+      feedback.notifyWarning(t("common.unsupportedEdit")),
+    onGenerationError: reportGenerationError,
     onStorageError: reportStorageError,
     conversationExists: (id: string) =>
       conversations.conversations.value.some((item) => item.id === id),
@@ -414,11 +416,36 @@ export function useStudioViewModel() {
     openSettings();
   }
 
-  function openApiSettingsFromGenerationError() {
-    settingsInitialTab.value = "api";
-    settingsInitialBatchPanel.value = "images";
-    openSettings();
-    feedback.notifyError(t("common.apiAuthFailed"));
+  // 生成整体失败：顶部横幅承载阻断性错误，附「去设置」「重试」动作，
+  // 不再自动弹设置弹窗（由用户主动点击）。
+  function reportGenerationError(
+    message: Message,
+    errorText: string,
+    isConfigurationError: boolean,
+  ) {
+    const actions: StudioNoticeAction[] = [];
+    if (isConfigurationError) {
+      actions.push({
+        label: t("common.goToSettings"),
+        tone: "solid",
+        handler: () => {
+          settingsInitialTab.value = "api";
+          settingsInitialBatchPanel.value = "images";
+          openSettings();
+        },
+      });
+    }
+    actions.push({
+      label: t("common.retry"),
+      tone: "outline",
+      handler: () => {
+        void generation.retryMessage(message);
+      },
+    });
+    feedback.notifyErrorBanner(
+      `${t("chat.errorBanner.title")}：${errorText}`,
+      actions,
+    );
   }
 
   onMounted(() => {
@@ -864,7 +891,6 @@ export function useStudioViewModel() {
 
       images.removeAttachment(id);
     },
-    retryMessage: generation.retryMessage,
     refreshImage: generation.refreshGeneratedImage,
     setEditModeEnabled: (value: boolean) => {
       if (!value) {
@@ -963,8 +989,11 @@ export function useStudioViewModel() {
     maskUrl: previewMaskUrl,
   });
   const noticeToast = proxyRefs({
-    close: feedback.dismissNotice,
     notice: feedback.notice,
+  });
+  const errorBanner = proxyRefs({
+    banner: feedback.errorBanner,
+    close: feedback.dismissErrorBanner,
   });
   const confirmDialog = proxyRefs({
     cancel: feedback.cancelConfirmDialog,
@@ -993,6 +1022,7 @@ export function useStudioViewModel() {
   return {
     chat,
     confirmDialog,
+    errorBanner,
     library,
     noticeToast,
     preview,

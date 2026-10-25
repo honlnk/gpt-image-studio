@@ -34,7 +34,7 @@ const common: ZhCommon = {
   "conversationRenamed": "Conversation renamed.",
   "imageRenamed": "Image renamed.",
   "renameFailed": "Rename failed due to a local save error. Please try again.",
-  "apiAuthFailed": "Image API authentication failed. Please check the API key and base URL.",
+  "goToSettings": "Go to settings",
   "unsupportedEdit": "The current model does not support image-to-image editing. Remove the reference images, or switch to a model that supports image editing.",
   "storageWriteFailed": "Failed to save locally. Some changes may not have been persisted (see the console for details).",
   "saveName": "Save Name",

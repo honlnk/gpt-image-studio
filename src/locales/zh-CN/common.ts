@@ -32,7 +32,7 @@ export default {
   "conversationRenamed": "会话已重命名。",
   "imageRenamed": "图片已重命名。",
   "renameFailed": "重命名失败，本地保存出错，请重试。",
-  "apiAuthFailed": "图片接口认证失败，请检查 API key 和接口地址。",
+  "goToSettings": "去设置",
   "unsupportedEdit": "当前模型不支持图生图编辑，请移除参考图，或切换到支持图片编辑的模型。",
   "storageWriteFailed": "本地保存失败，部分更改可能未持久化（详情见控制台）。",
   "saveName": "保存名称",

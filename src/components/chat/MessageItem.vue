@@ -4,7 +4,6 @@ import { useI18n } from "vue-i18n";
 import { formatRelativeTime } from "../../shared/dateTime";
 import { useGenerationStore } from "../../stores/generationStore";
 import type { ImageAsset, Message } from "../../types/studio";
-import ErrorGenerationCard from "./message-parts/ErrorGenerationCard.vue";
 import PendingGenerationCard from "./message-parts/PendingGenerationCard.vue";
 import ReferencedImageList from "./message-parts/ReferencedImageList.vue";
 import ResultImageCard from "./message-parts/ResultImageCard.vue";
@@ -27,7 +26,6 @@ const emit = defineEmits<{
   loadMessageConfig: [message: Message];
   previewImage: [id: string];
   refreshImage: [message: Message, imageId: string];
-  retryMessage: [message: Message];
 }>();
 
 const attachedImageIds = computed(() => new Set(props.attachedImageIds));
@@ -40,9 +38,8 @@ const pendingPreviewUrl = computed(() =>
 );
 const hasImagePanel = computed(
   () =>
-    props.message.resultImageIds.length ||
-    props.message.status === "pending" ||
-    props.message.status === "error",
+    props.message.resultImageIds.length > 0 ||
+    props.message.status === "pending",
 );
 const pendingNowMs = ref(Date.now());
 let pendingTimer: number | null = null;
@@ -129,6 +126,7 @@ function stopPendingTimer() {
         <span>{{ createdAtLabel }}</span>
       </div>
 
+      <!-- 失败消息只保留一行文字作为历史记录；阻断性错误由顶部横幅承载动作（去设置/重试） -->
       <p class="text-[15px] leading-relaxed text-gray-800">
         {{ message.content }}
       </p>
@@ -161,12 +159,6 @@ function stopPendingTimer() {
           :duration-label="pendingDurationLabel()"
           :preview-url="pendingPreviewUrl"
           :retry-attempt="message.networkRetryAttempt"
-        />
-
-        <ErrorGenerationCard
-          v-if="message.status === 'error'"
-          :message="message"
-          @retry-message="emit('retryMessage', $event)"
         />
       </div>
     </article>

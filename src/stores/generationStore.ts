@@ -65,7 +65,15 @@ type GenerationStoreContext = {
   supportsEdit: ComputedRef<boolean>;
   /** provider 不支持图生图、但用户带了参考图时，提交前的提示回调。 */
   notifyUnsupportedEdit: () => void;
-  onApiConfigurationError?: (error: unknown) => void;
+  /**
+   * 生成任务整体失败（聚合后无图且无 pending）时上抛，供 UI 弹顶部错误横幅。
+   * isConfigurationError=true 表示缺 API 配置，横幅可附「去设置」动作。
+   */
+  onGenerationError?: (
+    message: Message,
+    errorText: string,
+    isConfigurationError: boolean,
+  ) => void;
   onStorageError: (error: unknown) => void;
   conversationExists: (id: string) => boolean;
   persistConversation: (conversation: Conversation) => Promise<void>;
@@ -501,9 +509,6 @@ export const useGenerationStore = defineStore("generation", () => {
       await input.value.refreshStorageUsage();
     } catch (error) {
       const message = formatError(error);
-      if (isApiConfigurationError(error)) {
-        input.value.onApiConfigurationError?.(error);
-      }
       markJobError(job.id, message);
       const assistantMessage = applyJobAggregateToMessage(job, {
         errorMessage: message,
@@ -517,6 +522,14 @@ export const useGenerationStore = defineStore("generation", () => {
         "system",
       );
       if (assistantMessage) {
+        // 聚合后整体仍处 error（无图且无 pending）才打扰用户；部分失败留在消息里即可。
+        if (assistantMessage.status === "error") {
+          input.value.onGenerationError?.(
+            assistantMessage,
+            message,
+            isApiConfigurationError(error),
+          );
+        }
         await enqueueMessageSave(assistantMessage).catch(
           input.value.onStorageError,
         );
