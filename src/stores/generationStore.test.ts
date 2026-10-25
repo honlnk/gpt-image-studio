@@ -134,7 +134,7 @@ function buildContext(overrides: ContextOverrides = {}) {
     messages,
     supportsEdit: computed(() => supportsEdit),
     notifyUnsupportedEdit,
-    onApiConfigurationError: vi.fn(),
+    onGenerationError: vi.fn(),
     onStorageError,
     conversationExists: () => true,
     persistConversation: vi.fn().mockResolvedValue(undefined),

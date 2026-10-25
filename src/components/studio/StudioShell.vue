@@ -5,6 +5,7 @@ import ImageLibrary from "./ImageLibrary.vue";
 import ImagePreviewModal from "./ImagePreviewModal.vue";
 import SettingsModal from "./SettingsModal.vue";
 import ConfirmDialog from "../ui/ConfirmDialog.vue";
+import ErrorBanner from "../ui/ErrorBanner.vue";
 import NoticeToast from "../ui/NoticeToast.vue";
 import RenameDialog from "../ui/RenameDialog.vue";
 import { useStudioViewModel } from "../../app/studio";
@@ -110,10 +111,14 @@ const settings = useSettingsStore();
       @edit-image="studio.preview.editImage"
     />
 
-    <NoticeToast
-      :notice="studio.noticeToast.notice"
-      @close="studio.noticeToast.close"
+    <!-- 阻断性错误：顶部横幅，带「去设置/重试」动作，直到用户处理或关闭 -->
+    <ErrorBanner
+      :banner="studio.errorBanner.banner"
+      @close="studio.errorBanner.close"
     />
+
+    <!-- 非阻断反馈：底部轻提示，短时自动消失 -->
+    <NoticeToast :notice="studio.noticeToast.notice" />
 
     <RenameDialog
       :confirm-label="studio.renameModal.confirmLabel"

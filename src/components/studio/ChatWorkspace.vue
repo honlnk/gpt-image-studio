@@ -58,7 +58,6 @@ type ChatWorkspaceActions = {
   refreshImage: (message: Message, imageId: string) => void;
   removeAttachment: (id: string) => void;
   renameConversation: (id: string) => void;
-  retryMessage: (message: Message) => void;
   setEditModeEnabled: (value: boolean) => void;
   setLibraryOpen: (value: boolean) => void;
 };
@@ -390,7 +389,6 @@ function imageFilesFromTransfer(
       @load-message-config="actions.loadMessageConfig"
       @preview-image="actions.previewImage"
       @refresh-image="actions.refreshImage"
-      @retry-message="actions.retryMessage"
     />
 
     <ChatComposer
